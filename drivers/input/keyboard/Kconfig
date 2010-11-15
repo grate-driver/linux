@@ -433,6 +433,7 @@ config KEYBOARD_MAX7359
 config KEYBOARD_MCS
 	tristate "MELFAS MCS Touchkey"
 	depends on I2C
+	depends on LEDS_CLASS
 	help
 	  Say Y here if you have the MELFAS MCS5000/5080 touchkey controller
 	  chip in your system.
