@@ -17,18 +17,26 @@
 #include <linux/pm.h>
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
+#include <linux/workqueue.h>
+#include <linux/leds.h>
 
 /* MCS5000 Touchkey */
 #define MCS5000_TOUCHKEY_STATUS		0x04
 #define MCS5000_TOUCHKEY_STATUS_PRESS	7
 #define MCS5000_TOUCHKEY_FW		0x0a
 #define MCS5000_TOUCHKEY_BASE_VAL	0x61
+#define MCS5000_TOUCHKEY_LED_ON		0x1
+#define MCS5000_TOUCHKEY_LED_OFF	0x2
 
 /* MCS5080 Touchkey */
 #define MCS5080_TOUCHKEY_STATUS		0x00
 #define MCS5080_TOUCHKEY_STATUS_PRESS	3
 #define MCS5080_TOUCHKEY_FW		0x01
 #define MCS5080_TOUCHKEY_BASE_VAL	0x1
+#define MCS5080_TOUCHKEY_LED_ON		0x10
+#define MCS5080_TOUCHKEY_LED_OFF	0x20
+
+#define LED_TIME                       500
 
 enum mcs_touchkey_type {
 	MCS5000_TOUCHKEY,
@@ -40,6 +48,8 @@ struct mcs_touchkey_chip {
 	unsigned int pressbit;
 	unsigned int press_invert;
 	unsigned int baseval;
+	u8 led_on;
+	u8 led_off;
 };
 
 struct mcs_touchkey_data {
@@ -50,8 +60,24 @@ struct mcs_touchkey_data {
 	struct mcs_touchkey_chip chip;
 	unsigned int key_code;
 	unsigned int key_val;
+	struct led_classdev led_dev;
 	unsigned short keycodes[];
 };
+
+
+static void mcs_touchkey_led_brightness_set(struct led_classdev *led_dev,
+					    enum led_brightness brightness)
+{
+	struct mcs_touchkey_data *touchkey =
+		container_of(led_dev, struct mcs_touchkey_data, led_dev);
+	u8 buf;
+
+	if (brightness == LED_OFF)
+		buf = touchkey->chip.led_off;
+	else
+		buf = touchkey->chip.led_on;
+	i2c_master_send(touchkey->client, &buf, 1);
+}
 
 static irqreturn_t mcs_touchkey_interrupt(int irq, void *dev_id)
 {
@@ -61,12 +87,21 @@ static irqreturn_t mcs_touchkey_interrupt(int irq, void *dev_id)
 	struct input_dev *input = data->input_dev;
 	unsigned int key_val;
 	unsigned int pressed;
-	int val;
+	u8 val;
+	int ret;
 
-	val = i2c_smbus_read_byte_data(client, chip->status_reg);
-	if (val < 0) {
-		dev_err(&client->dev, "i2c read error [%d]\n", val);
-		goto out;
+	if (chip->status_reg != 0) {
+		val = i2c_smbus_read_byte_data(client, chip->status_reg);
+		if (val < 0) {
+			dev_err(&client->dev, "i2c read error [%d]\n", val);
+			goto out;
+		}
+	} else {
+		ret = i2c_master_recv(client, &val, 1);
+		if (ret < 0) {
+			dev_err(&client->dev, "i2c read error [%d]\n", val);
+			goto out;
+		}
 	}
 
 	pressed = (val & (1 << chip->pressbit)) >> chip->pressbit;
@@ -187,12 +222,16 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 		data->chip.status_reg = MCS5000_TOUCHKEY_STATUS;
 		data->chip.pressbit = MCS5000_TOUCHKEY_STATUS_PRESS;
 		data->chip.baseval = MCS5000_TOUCHKEY_BASE_VAL;
+		data->chip.led_on = MCS5000_TOUCHKEY_LED_ON;
+		data->chip.led_off = MCS5000_TOUCHKEY_LED_OFF;
 		fw_reg = MCS5000_TOUCHKEY_FW;
 	} else {
 		data->chip.status_reg = MCS5080_TOUCHKEY_STATUS;
 		data->chip.pressbit = MCS5080_TOUCHKEY_STATUS_PRESS;
 		data->chip.press_invert = 1;
 		data->chip.baseval = MCS5080_TOUCHKEY_BASE_VAL;
+		data->chip.led_on = MCS5080_TOUCHKEY_LED_ON;
+		data->chip.led_off = MCS5080_TOUCHKEY_LED_OFF;
 		fw_reg = MCS5080_TOUCHKEY_FW;
 	}
 
@@ -247,6 +286,18 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 		return error;
 
 	i2c_set_clientdata(client, data);
+
+	data->led_dev.name = "mcs_touchkey_led";
+	data->led_dev.brightness = LED_FULL;
+	data->led_dev.max_brightness = LED_ON;
+	data->led_dev.brightness_set = mcs_touchkey_led_brightness_set;
+
+	error = devm_led_classdev_register(&client->dev, &data->led_dev);
+	if (error) {
+		dev_err(&client->dev,
+			"failed to register touchkey led: %d\n", error);
+		return error;
+	}
 
 	return 0;
 }
