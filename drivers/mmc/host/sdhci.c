@@ -4611,11 +4611,13 @@ int sdhci_setup_host(struct sdhci_host *host)
 	} else {
 		mmc->max_blk_size = (host->caps & SDHCI_MAX_BLOCK_MASK) >>
 				SDHCI_MAX_BLOCK_SHIFT;
+#ifndef CONFIG_MMC_SDHCI_NATIVE_BLOCKSIZE
 		if (mmc->max_blk_size >= 3) {
 			pr_warn("%s: Invalid maximum block size, assuming 512 bytes\n",
 				mmc_hostname(mmc));
 			mmc->max_blk_size = 0;
 		}
+#endif
 	}
 
 	mmc->max_blk_size = 512 << mmc->max_blk_size;
@@ -4629,6 +4631,11 @@ int sdhci_setup_host(struct sdhci_host *host)
 		/* This may alter mmc->*_blk_* parameters */
 		sdhci_allocate_bounce_buffer(host);
 
+#ifdef CONFIG_MMC_SDHCI_NATIVE_BLOCKSIZE
+	printk(KERN_INFO "%s: mss %u mrs %u mbs %u mbc %u\n", mmc_hostname(mmc),
+		mmc->max_seg_size, mmc->max_req_size, mmc->max_blk_size,
+		mmc->max_blk_count);
+#endif
 	return 0;
 
 unreg:

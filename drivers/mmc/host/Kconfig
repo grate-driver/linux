@@ -89,6 +89,17 @@ config MMC_SDHCI_BIG_ENDIAN_32BIT_BYTE_SWAPPER
 
 	  This is the case for the Nintendo Wii SDHCI.
 
+config MMC_SDHCI_NATIVE_BLOCKSIZE
+	bool "Use Host Controller's actual blocksize"
+	depends on MMC_SDHCI
+	default n
+	help
+	  Normally, the SDHCI host controller will limit the xfer blocksize
+	  to 512 bytes, even if the hardware host controller can do more.
+	  This option uses the maximum blocksize supported by the hardware.
+
+	  I have seen no corruption on a Tegra2, but if unsure, say N.
+
 config MMC_SDHCI_PCI
 	tristate "SDHCI support on PCI bus"
 	depends on MMC_SDHCI && PCI
