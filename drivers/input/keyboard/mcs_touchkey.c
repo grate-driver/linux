@@ -15,6 +15,8 @@
 #include <linux/slab.h>
 #include <linux/platform_data/mcs.h>
 #include <linux/pm.h>
+#include <linux/of_platform.h>
+#include <linux/of_gpio.h>
 
 /* MCS5000 Touchkey */
 #define MCS5000_TOUCHKEY_STATUS		0x04
@@ -92,6 +94,61 @@ static irqreturn_t mcs_touchkey_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_OF
+static struct mcs_platform_data *mcs_touchkey_parse_dt(struct device *dev)
+{
+	struct mcs_platform_data *pdata;
+	struct device_node *np = dev->of_node;
+	u32 *keymap;
+	unsigned int len;
+	int i = 0;
+	const __be32 *prop;
+
+	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata) {
+		dev_err(dev, "Failed to allocate platform data\n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	prop = of_get_property(np, "linux,code", &len);
+	if (!prop) {
+		dev_err(dev, "Failed to get code\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (len % sizeof(u32)) {
+		dev_err(dev, "Malformed keycode property\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	pdata->keymap_size = len / sizeof(u32);
+	keymap = devm_kzalloc(dev, sizeof(*keymap) * pdata->keymap_size, GFP_KERNEL);
+
+	if (of_property_read_u32(np, "key_maxval", &pdata->key_maxval)) {
+		dev_err(dev, "Failed to get key max value data\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (pdata->keymap_size > pdata->key_maxval) {
+		dev_err(dev, "Key map size overflow\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	for (i = 0; i < pdata->keymap_size; i++) {
+		u32 code = be32_to_cpup(prop + i);
+		keymap[i] = MCS_KEY_MAP(i, code);
+	}
+	pdata->keymap = keymap;
+	return pdata;
+}
+#else
+static inline struct mcs_platform_data *mcs_touchkey_parse_dt
+						(struct device *dev)
+{
+	return NULL;
+}
+#endif
+
 static int mcs_touchkey_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
@@ -103,10 +160,14 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 	int error;
 	int i;
 
-	pdata = dev_get_platdata(&client->dev);
-	if (!pdata) {
-		dev_err(&client->dev, "no platform data defined\n");
-		return -EINVAL;
+	if (&client->dev.of_node)
+		pdata = mcs_touchkey_parse_dt(&client->dev);
+	else
+		pdata = dev_get_platdata(&client->dev);
+
+	if (IS_ERR(pdata)) {
+		dev_err(&client->dev, "Failed to get platform data\n");
+		return PTR_ERR(pdata);
 	}
 
 	data = kzalloc(struct_size(data, keycodes, pdata->key_maxval + 1),
@@ -257,10 +318,17 @@ static const struct i2c_device_id mcs_touchkey_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, mcs_touchkey_id);
 
+static struct of_device_id mcs_touchkey_dt_match[] = {
+	{ .compatible = "mcs5000_touchkey", },
+	{ .compatible = "mcs5080_touchkey", },
+	{ },
+};
+
 static struct i2c_driver mcs_touchkey_driver = {
 	.driver = {
 		.name	= "mcs_touchkey",
 		.pm	= &mcs_touchkey_pm_ops,
+		.of_match_table = of_match_ptr(mcs_touchkey_dt_match),
 	},
 	.probe		= mcs_touchkey_probe,
 	.remove		= mcs_touchkey_remove,
