@@ -1,0 +1,26 @@
+* mcs_touchkey MELFAS MCS5000/5080 controller
+
+Required properties:
+- compatible: must be "mcs5000_touchkey" or "mcs5080_touchkey"
+- reg : I2C address of the chip
+- interrupts: interrupt to which the chop is connected
+- key_maxval: size of keycode table
+- interrupts: interrupt to which the chip is connected
+- code: key code for this device
+
+Example:
+
+	i2c_touch_key: i2c-gpio-0 {
+	       /* ... */
+
+	       touch_key@20 {
+		       compatible = "mcs5080_touchkey";
+		       reg = <0x20>;
+		       interrupt-patrent = <gpj0>;
+		       key_maxval = <2>;
+		       linux, code = <0x0000009e
+			              0x000000a9>;
+	       };
+
+	       /* ... */
+	};
