@@ -1,0 +1,25 @@
+config ACER_A500_EC_MFD
+	bool "Embedded Controller driver for Acer Iconia Tab A500"
+	depends on I2C_TEGRA && ARCH_TEGRA_2x_SOC
+	select MFD_CORE
+	help
+	  Say Y to include support for Acer Iconia Tab A500 Embedded
+	  Controller.
+
+config ACER_A500_EC_LEGACY_SYSFS
+	tristate "Legacy Android compatibility for Acer Iconia Tab A500"
+	depends on ACER_A500_EC_MFD
+	help
+	  Say Y to include support for legacy Android sysfs.
+
+config ACER_A500_EC_BATTERY
+	tristate "Acer Iconia Tab A500 battery driver"
+	depends on ACER_A500_EC_MFD && POWER_SUPPLY
+	help
+	  Say Y to include support for battery driver.
+
+config ACER_A500_EC_LEDS
+	tristate "Power button LED support for Acer Iconia Tab A500"
+	depends on ACER_A500_EC_MFD && LEDS_CLASS
+	help
+	  Say Y to enable control of power button LED.
