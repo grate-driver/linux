@@ -145,8 +145,10 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	int err;
 
 	/* We don't yet support other than one syncpt_incr struct per submit */
-	if (args->num_syncpts != 1)
+	if (args->num_syncpts != 1) {
+		pr_err("submit requires exactly one syncpt\n");
 		return -EINVAL;
+	}
 
 	job = host1x_job_alloc(context->channel, args->num_cmdbufs,
 			       args->num_relocs, args->num_waitchks);

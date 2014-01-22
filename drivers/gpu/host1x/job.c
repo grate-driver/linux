@@ -294,11 +294,15 @@ struct host1x_firewall {
 static int check_register(struct host1x_firewall *fw, unsigned long offset)
 {
 	if (fw->job->is_addr_reg(fw->dev, fw->class, offset)) {
-		if (!fw->num_relocs)
+		if (!fw->num_relocs) {
+			pr_err("host1x offset %03lx needs reloc\n", offset);
 			return -EINVAL;
+		}
 
-		if (!check_reloc(fw->reloc, fw->cmdbuf, fw->offset))
+		if (!check_reloc(fw->reloc, fw->cmdbuf, fw->offset)) {
+			pr_err("host1x offset %03lx needs reloc\n", offset);
 			return -EINVAL;
+		}
 
 		fw->num_relocs--;
 		fw->reloc++;
@@ -495,8 +499,10 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 	}
 
 	/* No relocs should remain at this point */
-	if (fw.num_relocs)
+	if (fw.num_relocs) {
+		pr_err("%d relocs unconsumed\n", fw.num_relocs);
 		return -EINVAL;
+	}
 
 	return 0;
 }

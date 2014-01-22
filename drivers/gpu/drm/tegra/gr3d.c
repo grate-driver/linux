@@ -109,6 +109,9 @@ static int gr3d_is_addr_reg(struct device *dev, u32 class, u32 offset)
 			return 1;
 
 		break;
+
+	default:
+		pr_err("write to unknown class-id: %x\n", class);
 	}
 
 	return 0;
