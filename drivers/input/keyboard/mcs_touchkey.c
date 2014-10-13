@@ -170,13 +170,14 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 		return PTR_ERR(pdata);
 	}
 
-	data = kzalloc(struct_size(data, keycodes, pdata->key_maxval + 1),
+	data = devm_kzalloc(&client->dev,
+		       struct_size(data, keycodes, pdata->key_maxval + 1),
 		       GFP_KERNEL);
-	input_dev = input_allocate_device();
+	input_dev = devm_input_allocate_device(&client->dev);
 	if (!data || !input_dev) {
 		dev_err(&client->dev, "Failed to allocate memory\n");
 		error = -ENOMEM;
-		goto err_free_mem;
+		return error;
 	}
 
 	data->client = client;
@@ -199,7 +200,7 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 	if (fw_ver < 0) {
 		error = fw_ver;
 		dev_err(&client->dev, "i2c read error[%d]\n", error);
-		goto err_free_mem;
+		return error;
 	}
 	dev_info(&client->dev, "Firmware version: %d\n", fw_ver);
 
@@ -232,27 +233,22 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 		data->poweron(true);
 	}
 
-	error = request_threaded_irq(client->irq, NULL, mcs_touchkey_interrupt,
-				     IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-				     client->dev.driver->name, data);
+	error = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+					mcs_touchkey_interrupt,
+					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					client->dev.driver->name, data);
 	if (error) {
 		dev_err(&client->dev, "Failed to register interrupt\n");
-		goto err_free_mem;
+		return error;
 	}
 
 	error = input_register_device(input_dev);
 	if (error)
-		goto err_free_irq;
+		return error;
 
 	i2c_set_clientdata(client, data);
-	return 0;
 
-err_free_irq:
-	free_irq(client->irq, data);
-err_free_mem:
-	input_free_device(input_dev);
-	kfree(data);
-	return error;
+	return 0;
 }
 
 static int mcs_touchkey_remove(struct i2c_client *client)
