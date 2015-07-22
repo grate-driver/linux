@@ -31,6 +31,9 @@
 	.macro	act_mm, rd
 	bic	\rd, sp, #8128
 	bic	\rd, \rd, #63
+#ifdef CONFIG_KASAN
+	bic	\rd, \rd, #8192
+#endif
 	ldr	\rd, [\rd, #TI_TASK]
 	.if (TSK_ACTIVE_MM > IMM12_MASK)
 	add	\rd, \rd, #TSK_ACTIVE_MM & ~IMM12_MASK

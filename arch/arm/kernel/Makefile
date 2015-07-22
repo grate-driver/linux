@@ -12,7 +12,8 @@ CFLAGS_REMOVE_patch.o = -pg
 endif
 
 CFLAGS_REMOVE_return_address.o = -pg
-
+KASAN_SANITIZE_stacktrace.o := n
+KASAN_SANITIZE_unwind.o := n
 # Object file lists.
 
 obj-y		:= elf.o entry-common.o irq.o opcodes.o \

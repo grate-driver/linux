@@ -30,6 +30,8 @@ lib-$(CONFIG_SMP) += cpumask.o
 lib-$(CONFIG_DMA_NOOP_OPS) += dma-noop.o
 lib-$(CONFIG_DMA_VIRT_OPS) += dma-virt.o
 
+KASAN_SANITIZE_smp_processor_id.o := n
+
 lib-y	+= kobject.o klist.o
 obj-y	+= lockref.o
 

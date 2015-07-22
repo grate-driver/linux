@@ -11,6 +11,7 @@
 #include <linux/gfp.h>
 #include <linux/highmem.h>
 #include <linux/slab.h>
+#include <linux/kasan.h>
 
 #include <asm/cp15.h>
 #include <asm/pgalloc.h>
@@ -64,6 +65,13 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	new_pmd = pmd_alloc(mm, new_pud, 0);
 	if (!new_pmd)
 		goto no_pmd;
+
+#ifdef CONFIG_KASAN
+        memcpy(new_pmd + pmd_index(KASAN_SHADOW_START),
+               pmd_off_k(KASAN_SHADOW_START),
+               ((KASAN_SHADOW_END - KASAN_SHADOW_START)/PMD_SIZE)*sizeof(pmd_t));
+	clean_dcache_area(new_pmd, PTRS_PER_PMD * sizeof(pmd_t));
+#endif
 #endif
 
 	if (!vectors_high()) {

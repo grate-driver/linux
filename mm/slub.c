@@ -3470,6 +3470,9 @@ static void set_cpu_partial(struct kmem_cache *s)
 #endif
 }
 
+#ifndef CONFIG_KASAN
+#define KASAN_SHADOW_SCALE_SHIFT 0
+#endif
 /*
  * calculate_sizes() determines the order and the distribution of data within
  * a slab object.
@@ -3486,6 +3489,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	 * the possible location of the free pointer.
 	 */
 	size = ALIGN(size, sizeof(void *));
+	size = ALIGN(size, 1UL << KASAN_SHADOW_SCALE_SHIFT);
 
 #ifdef CONFIG_SLUB_DEBUG
 	/*
