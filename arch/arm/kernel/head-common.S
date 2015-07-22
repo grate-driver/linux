@@ -115,6 +115,9 @@ __mmap_switched:
 	cmp	r3, #0
 	strne	r10, [r3]			@ Save control register values
 	mov	lr, #0
+#ifdef CONFIG_KASAN
+	bl	kasan_early_init
+#endif
 	b	start_kernel
 ENDPROC(__mmap_switched)
 

@@ -149,7 +149,7 @@ extern int __get_user_64t_4(void *);
 #endif
 
 
-#define __get_user_check(x, p)						\
+#define __get_user_check(x, p, e)					\
 	({								\
 		unsigned long __limit = current_thread_info()->addr_limit - 1; \
 		register const typeof(*(p)) __user *__p asm("r0") = (p);\
@@ -184,15 +184,17 @@ extern int __get_user_64t_4(void *);
 			break;						\
 		default: __e = __get_user_bad(); break;			\
 		}							\
+		e = __e;						\
 		uaccess_restore(__ua_flags);				\
 		x = (typeof(*(p))) __r2;				\
-		__e;							\
 	})
 
 #define get_user(x, p)							\
 	({								\
+		int __gu_err = 0;					\
 		might_fault();						\
-		__get_user_check(x, p);					\
+		__get_user_check(x, p, __gu_err);			\
+		__gu_err;						\
 	 })
 
 extern int __put_user_1(void *, unsigned int);

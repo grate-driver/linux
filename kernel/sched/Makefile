@@ -14,7 +14,7 @@ ifneq ($(CONFIG_SCHED_OMIT_FRAME_POINTER),y)
 # to get a correct value for the wait-channel (WCHAN in ps). --davidm
 CFLAGS_core.o := $(PROFILING) -fno-omit-frame-pointer
 endif
-
+KASAN_SANITIZE := n
 obj-y += core.o loadavg.o clock.o cputime.o
 obj-y += idle_task.o fair.o rt.o deadline.o
 obj-y += wait.o wait_bit.o swait.o completion.o idle.o

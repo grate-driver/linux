@@ -37,6 +37,8 @@
 #include <linux/vmalloc.h>
 #include <linux/bug.h>
 
+#include <asm/unaligned.h>
+
 #include "kasan.h"
 #include "../slab.h"
 
@@ -224,6 +226,20 @@ static __always_inline bool memory_is_poisoned_n(unsigned long addr,
 static __always_inline bool memory_is_poisoned(unsigned long addr, size_t size)
 {
 	if (__builtin_constant_p(size)) {
+		if (IS_ENABLED(CONFIG_ARM)) { /* avoid alignment faults. */
+			switch (size) {
+			case 1:
+			case 2:
+			case 4:
+			case 8:
+				return memory_is_poisoned_1(addr);
+			case 16:
+				return memory_is_poisoned_1(addr)
+					|| memory_is_poisoned_1(addr + 8);
+			default:
+				BUILD_BUG();
+			}
+		}
 		switch (size) {
 		case 1:
 			return memory_is_poisoned_1(addr);

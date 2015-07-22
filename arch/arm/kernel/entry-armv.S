@@ -187,7 +187,12 @@ ENDPROC(__und_invalid)
 
 	get_thread_info tsk
 	ldr	r0, [tsk, #TI_ADDR_LIMIT]
-	mov	r1, #TASK_SIZE
+#ifdef CONFIG_KASAN
+	movw r1, #:lower16:TASK_SIZE
+	movt r1, #:upper16:TASK_SIZE
+#else
+	mov r1, #TASK_SIZE
+#endif
 	str	r1, [tsk, #TI_ADDR_LIMIT]
 	str	r0, [sp, #SVC_ADDR_LIMIT]
 
