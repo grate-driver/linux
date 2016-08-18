@@ -1,0 +1,5 @@
+TODO:
+	- Figure out how generic V4L2 API could be utilized by this driver,
+	  implement it.
+
+Contact: Dmitry Osipenko <digetx@gmail.com>

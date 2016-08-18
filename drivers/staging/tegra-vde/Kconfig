@@ -1,0 +1,6 @@
+config TEGRA_VDE
+	tristate "NVIDIA Tegra Video Decoder Engine driver"
+	depends on ARCH_TEGRA_2x_SOC || COMPILE_TEST
+	help
+	    Say Y here to enable support for the NVIDIA Tegra video decoder
+	    driver.

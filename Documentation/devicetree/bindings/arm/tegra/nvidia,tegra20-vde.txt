@@ -1,0 +1,44 @@
+NVIDIA Tegra Video Decoder Engine
+
+Required properties:
+- compatible : "nvidia,tegra20-vde"
+- reg : Must contain 2 register ranges: registers and IRAM region that
+        VDE uses for its internal needs and for passing some of decoding
+        parameters.
+- reg-names : Must include the following entries:
+  - regs
+  - iram
+- interrupts : Must contain an entry for each entry in interrupt-names.
+- interrupt-names : Must include the following entries:
+  - ucq-error
+  - sync-token
+  - bsev
+  - bsea
+  - sxe
+- clocks : Must contain an entry for each entry in clock-names.
+  See ../clocks/clock-bindings.txt for details.
+- clock-names : Must include the following entries:
+  - vde
+- resets : Must contain an entry for each entry in reset-names.
+  See ../reset/reset.txt for details.
+- reset-names : Must include the following entries:
+  - vde
+
+Example:
+
+vde@6001a000 {
+	compatible = "nvidia,tegra20-vde";
+	reg = <0x6001a000 0x3D00    /* VDE registers */
+		0x40000400 0x3FC00>; /* IRAM region */
+	reg-names = "regs", "iram";
+	interrupts = <GIC_SPI  8 IRQ_TYPE_LEVEL_HIGH>, /* UCQ error interrupt */
+			<GIC_SPI  9 IRQ_TYPE_LEVEL_HIGH>, /* Sync token interrupt */
+			<GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>, /* BSE-V interrupt */
+			<GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>, /* BSE-A interrupt */
+			<GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>; /* SXE interrupt */
+	interrupt-names = "ucq-error", "sync-token", "bsev", "bsea", "sxe";
+	clocks = <&tegra_car TEGRA20_CLK_VDE>;
+	clock-names = "vde";
+	resets = <&tegra_car 61>;
+	reset-names = "vde";
+};
