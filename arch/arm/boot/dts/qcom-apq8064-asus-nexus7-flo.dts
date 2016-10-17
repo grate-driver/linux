@@ -3,6 +3,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+#include <dt-bindings/power/summit,smb347-charger.h>
 / {
 	model = "Asus Nexus7(flo)";
 	compatible = "asus,nexus7-flo", "qcom,apq8064";
@@ -293,11 +294,30 @@
 					pagesize = <32>;
 				};
 
-				bq27541@55 {
+				bat: battery@55 {
 					compatible = "ti,bq27541";
 					reg = <0x55>;
+					power-supplies = <&power_supply>;
 				};
 
+				power_supply: charger@6a {
+					compatible = "summit,smb345";
+					reg = <0x6a>;
+
+					interrupt-parent = <&tlmm_pinmux>;
+					interrupts = <23 IRQ_TYPE_EDGE_BOTH>;
+
+					summit,max-chg-curr = <1800000>;
+					summit,usb-curr-limit = <500000>;
+
+					summit,chip-temp-threshold = <110>;
+
+					summit,enable-usb-charging;
+					summit,enable-otg-charging;
+
+					summit,enable-chg-ctrl =
+						<SMB3XX_CHG_ENABLE_SW>;
+				};
 			};
 		};
 
