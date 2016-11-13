@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/dma-fence-array.h>
 #include <linux/host1x.h>
 #include <linux/slab.h>
 
@@ -25,6 +26,7 @@
 #include "../dev.h"
 #include "../intr.h"
 #include "../job.h"
+#include "../fence.h"
 
 #define HOST1X_CHANNEL_SIZE 16384
 #define TRACE_MAX_LENGTH 128U
@@ -70,6 +72,41 @@ static void submit_gathers(struct host1x_job *job)
 
 		trace_write_gather(cdma, g->bo, g->offset, op1 & 0xffff);
 		host1x_cdma_push(cdma, op1, op2);
+	}
+}
+
+static void channel_push_fence(struct host1x_channel *ch,
+			       struct dma_fence *fence)
+{
+	struct host1x_fence *f = to_host1x_fence(fence);
+	u32 thresh = f->thresh;
+	u32 id = f->sp->id;
+
+	if (dma_fence_is_signaled(fence))
+		return;
+
+	host1x_cdma_push(&ch->cdma,
+			 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+				host1x_uclass_wait_syncpt_r(), 1),
+			 host1x_class_host_wait_syncpt(id, thresh));
+}
+
+static void push_fences(struct host1x_channel *ch, struct host1x_job *job)
+{
+	struct dma_fence_array *array;
+	struct dma_fence *fence;
+	unsigned int i, k;
+
+	for (i = 0; i < job->num_fences; i++) {
+		fence = job->fences[i];
+		array = to_dma_fence_array(fence);
+		if (!array) {
+			channel_push_fence(ch, fence);
+			continue;
+		}
+
+		for (k = 0; k < array->num_fences; k++)
+			channel_push_fence(ch, array->fences[k]);
 	}
 }
 
@@ -140,6 +177,8 @@ static int channel_submit(struct host1x_job *job)
 				 host1x_class_host_wait_syncpt(job->syncpt_id,
 					host1x_syncpt_read_max(sp)));
 	}
+
+	push_fences(ch, job);
 
 	/* Synchronize base register to allow using it for relative waiting */
 	if (sp->base)
