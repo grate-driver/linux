@@ -69,6 +69,7 @@ struct host1x_client {
  * host1x buffer objects
  */
 
+struct dma_fence;
 struct host1x_bo;
 struct sg_table;
 
@@ -168,6 +169,8 @@ void host1x_syncpt_free(struct host1x_syncpt *sp);
 struct host1x_syncpt_base *host1x_syncpt_get_base(struct host1x_syncpt *sp);
 u32 host1x_syncpt_base_id(struct host1x_syncpt_base *base);
 
+u64 host1x_syncpt_get_fence_context(struct host1x_syncpt *sp);
+
 /*
  * host1x channel
  */
@@ -262,6 +265,10 @@ struct host1x_job {
 
 	/* Add a channel wait for previous ops to complete */
 	bool serialize;
+
+	/* Wait for fences to complete before submitting */
+	struct dma_fence **fences;
+	unsigned int num_fences;
 };
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
@@ -273,6 +280,7 @@ struct host1x_job *host1x_job_get(struct host1x_job *job);
 void host1x_job_put(struct host1x_job *job);
 int host1x_job_pin(struct host1x_job *job, struct device *dev);
 void host1x_job_unpin(struct host1x_job *job);
+int host1x_job_add_fence(struct host1x_job *job, struct dma_fence *fence);
 
 /*
  * subdevice probe infrastructure
@@ -346,5 +354,9 @@ void tegra_mipi_free(struct tegra_mipi_device *device);
 int tegra_mipi_enable(struct tegra_mipi_device *device);
 int tegra_mipi_disable(struct tegra_mipi_device *device);
 int tegra_mipi_calibrate(struct tegra_mipi_device *device);
+
+struct dma_fence *host1x_fence_create(struct host1x_syncpt *sp, u32 threshold,
+				      u64 context, u64 seqno);
+bool host1x_fence_is_waitable(struct dma_fence *fence);
 
 #endif

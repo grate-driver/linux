@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/dma-fence.h>
 #include <linux/dma-mapping.h>
 #include <linux/err.h>
 #include <linux/host1x.h>
@@ -92,7 +93,12 @@ EXPORT_SYMBOL(host1x_job_get);
 static void job_free(struct kref *ref)
 {
 	struct host1x_job *job = container_of(ref, struct host1x_job, ref);
+	unsigned int i;
 
+	for (i = 0; i < job->num_fences; i++)
+		dma_fence_put(job->fences[i]);
+
+	kfree(job->fences);
 	kfree(job);
 }
 
@@ -113,6 +119,24 @@ void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *bo,
 	job->num_gathers++;
 }
 EXPORT_SYMBOL(host1x_job_add_gather);
+
+int host1x_job_add_fence(struct host1x_job *job, struct dma_fence *fence)
+{
+	struct dma_fence **fences;
+
+	fences = krealloc(job->fences, (job->num_fences + 1) * sizeof(*fence),
+			  GFP_KERNEL);
+	if (!fences)
+		return -ENOMEM;
+
+	fences[job->num_fences] = dma_fence_get(fence);
+
+	job->fences = fences;
+	job->num_fences++;
+
+	return 0;
+}
+EXPORT_SYMBOL(host1x_job_add_fence);
 
 /*
  * NULL an already satisfied WAIT_SYNCPT host method, by patching its
