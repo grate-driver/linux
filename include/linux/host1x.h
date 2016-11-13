@@ -69,6 +69,7 @@ struct host1x_client {
  * host1x buffer objects
  */
 
+struct dma_fence;
 struct host1x_bo;
 struct sg_table;
 
@@ -167,6 +168,8 @@ void host1x_syncpt_free(struct host1x_syncpt *sp);
 
 struct host1x_syncpt_base *host1x_syncpt_get_base(struct host1x_syncpt *sp);
 u32 host1x_syncpt_base_id(struct host1x_syncpt_base *base);
+
+u64 host1x_syncpt_get_fence_context(struct host1x_syncpt *sp);
 
 /*
  * host1x channel
@@ -346,5 +349,8 @@ void tegra_mipi_free(struct tegra_mipi_device *device);
 int tegra_mipi_enable(struct tegra_mipi_device *device);
 int tegra_mipi_disable(struct tegra_mipi_device *device);
 int tegra_mipi_calibrate(struct tegra_mipi_device *device);
+
+struct dma_fence *host1x_fence_create(struct host1x_client *client,
+				      struct host1x_syncpt *sp, u32 threshold);
 
 #endif

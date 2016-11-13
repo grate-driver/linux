@@ -18,6 +18,7 @@
 
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/dma-fence.h>
 #include <linux/slab.h>
 
 #include <trace/events/host1x.h>
@@ -422,6 +423,9 @@ int host1x_syncpt_init(struct host1x *host)
 	if (!host->nop_sp)
 		return -ENOMEM;
 
+	/* Reserve dma_fence contexts */
+	host->fence_ctx_base = dma_fence_context_alloc(host->info->nb_pts);
+
 	return 0;
 }
 
@@ -569,3 +573,13 @@ u32 host1x_syncpt_base_id(struct host1x_syncpt_base *base)
 	return base->id;
 }
 EXPORT_SYMBOL(host1x_syncpt_base_id);
+
+/**
+ * host1x_syncpt_get_fence_context() - get dma_fence context ID of a syncpoint
+ * @sp: host1x syncpoint
+ */
+u64 host1x_syncpt_get_fence_context(struct host1x_syncpt *sp)
+{
+	return sp->host->fence_ctx_base + sp->id;
+}
+EXPORT_SYMBOL(host1x_syncpt_get_fence_context);

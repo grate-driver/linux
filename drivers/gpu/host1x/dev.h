@@ -145,6 +145,8 @@ struct host1x {
 	struct list_head devices;
 
 	struct list_head list;
+
+	u64 fence_ctx_base;
 };
 
 void host1x_hypervisor_writel(struct host1x *host1x, u32 r, u32 v);
