@@ -11,6 +11,7 @@
 #include <linux/host1x.h>
 #include <linux/idr.h>
 #include <linux/iommu.h>
+#include <linux/sync_file.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -770,6 +771,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	struct tegra_bo_reservation *reservations;
 	struct ww_acquire_ctx acquire_ctx;
 	struct dma_fence *out_fence;
+	struct dma_fence *in_fence;
 	unsigned int num_bos;
 	u64 context_value;
 	int err;
@@ -797,6 +799,26 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	job->client = &context->client->base;
 	job->class = context->client->base.class;
 	job->serialize = true;
+
+	/* Get and await the in-fence if needed */
+	if (args->flags & DRM_TEGRA_SUBMIT_WAIT_FENCE_FD) {
+		in_fence = sync_file_get_fence(args->fence);
+		if (!in_fence) {
+			err = -ENOENT;
+			goto put;
+		}
+
+		if (host1x_fence_is_waitable(in_fence))
+			err = host1x_job_add_fence(job, in_fence);
+		else
+			err = dma_fence_wait(in_fence, true);
+
+		/* balance in-fence reference counter */
+		dma_fence_put(in_fence);
+
+		if (err)
+			goto put;
+	}
 
 	num_bos = num_cmdbufs + num_relocs * 2 + num_waitchks;
 
@@ -949,7 +971,42 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	/* attach fence to BO's for the further submission reservations */
 	tegra_attach_fence(reservations, num_bos, out_fence);
 
-	args->fence = job->syncpt_end;
+	/* add out-fence into Sync File if needed */
+	if (args->flags & DRM_TEGRA_SUBMIT_CREATE_FENCE_FD) {
+		struct sync_file *sync_file;
+		int fence_fd;
+
+		if (!out_fence) {
+			err = -ENOMEM;
+			goto fail_unlock;
+		}
+
+		fence_fd = get_unused_fd_flags(O_CLOEXEC);
+		if (fence_fd < 0) {
+			err = fence_fd;
+			goto fail_put_fence;
+		}
+
+		sync_file = sync_file_create(out_fence);
+		if (!sync_file) {
+			put_unused_fd(fence_fd);
+			err = -ENOMEM;
+			goto fail_put_fence;
+		}
+
+		/*
+		 * Bump fences reference counter in order to keep it
+		 * alive till sync file get closed.
+		 */
+		dma_fence_get(out_fence);
+
+		fd_install(fence_fd, sync_file->file);
+		args->fence = fence_fd;
+	} else
+		args->fence = job->syncpt_end;
+
+fail_put_fence:
+	dma_fence_put(out_fence);
 
 fail_unlock:
 	tegra_unlock_bo_reservations(&acquire_ctx, reservations, num_bos);
