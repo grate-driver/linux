@@ -3125,6 +3125,7 @@ const struct file_operations btrfs_file_operations = {
 #endif
 	.clone_file_range = btrfs_clone_file_range,
 	.dedupe_file_range = btrfs_dedupe_file_range,
+	.integrity_read = generic_file_read_iter,
 };
 
 void btrfs_auto_defrag_exit(void)

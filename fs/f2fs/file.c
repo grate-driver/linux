@@ -2514,4 +2514,5 @@ const struct file_operations f2fs_file_operations = {
 #endif
 	.splice_read	= generic_file_splice_read,
 	.splice_write	= iter_file_splice_write,
+	.integrity_read	= generic_file_read_iter,
 };

@@ -1699,6 +1699,7 @@ struct file_operations {
 			u64);
 	ssize_t (*dedupe_file_range)(struct file *, u64, u64, struct file *,
 			u64);
+	ssize_t (*integrity_read)(struct kiocb *, struct iov_iter *);
 } __randomize_layout;
 
 struct inode_operations {

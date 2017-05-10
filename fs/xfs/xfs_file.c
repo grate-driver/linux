@@ -292,6 +292,26 @@ xfs_file_read_iter(
 	return ret;
 }
 
+static ssize_t
+xfs_integrity_read(
+	struct kiocb		*iocb,
+	struct iov_iter		*to)
+{
+	struct inode		*inode = file_inode(iocb->ki_filp);
+	struct xfs_mount	*mp = XFS_I(inode)->i_mount;
+
+	lockdep_assert_held(&inode->i_rwsem);
+
+	XFS_STATS_INC(mp, xs_read_calls);
+
+	if (XFS_FORCED_SHUTDOWN(mp))
+		return -EIO;
+
+	if (IS_DAX(inode))
+		return dax_iomap_rw(iocb, to, &xfs_iomap_ops);
+	return generic_file_read_iter(iocb, to);
+}
+
 /*
  * Zero any on disk space between the current EOF and the new, larger EOF.
  *
@@ -1175,6 +1195,7 @@ const struct file_operations xfs_file_operations = {
 	.fallocate	= xfs_file_fallocate,
 	.clone_file_range = xfs_file_clone_range,
 	.dedupe_file_range = xfs_file_dedupe_range,
+	.integrity_read	= xfs_integrity_read,
 };
 
 const struct file_operations xfs_dir_file_operations = {

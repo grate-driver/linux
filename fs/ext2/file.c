@@ -192,6 +192,22 @@ static ssize_t ext2_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	return generic_file_read_iter(iocb, to);
 }
 
+static ssize_t ext2_file_integrity_read_iter(struct kiocb *iocb,
+					     struct iov_iter *to)
+{
+	struct inode *inode = file_inode(iocb->ki_filp);
+
+	lockdep_assert_held(&inode->i_rwsem);
+#ifdef CONFIG_FS_DAX
+	if (!iov_iter_count(to))
+		return 0; /* skip atime */
+
+	if (IS_DAX(iocb->ki_filp->f_mapping->host))
+		return dax_iomap_rw(iocb, to, &ext2_iomap_ops);
+#endif
+	return generic_file_read_iter(iocb, to);
+}
+
 static ssize_t ext2_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 #ifdef CONFIG_FS_DAX
@@ -216,6 +232,7 @@ const struct file_operations ext2_file_operations = {
 	.get_unmapped_area = thp_get_unmapped_area,
 	.splice_read	= generic_file_splice_read,
 	.splice_write	= iter_file_splice_write,
+	.integrity_read	= ext2_file_integrity_read_iter,
 };
 
 const struct inode_operations ext2_file_inode_operations = {

@@ -1747,4 +1747,5 @@ const struct file_operations ubifs_file_operations = {
 #ifdef CONFIG_COMPAT
 	.compat_ioctl   = ubifs_compat_ioctl,
 #endif
+	.integrity_read = generic_file_read_iter,
 };
