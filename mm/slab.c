@@ -4408,7 +4408,9 @@ module_init(slab_proc_init);
 
 #ifdef CONFIG_HARDENED_USERCOPY
 /*
- * Rejects objects that are incorrectly sized.
+ * Rejects incorrectly sized objects and objects that are to be copied
+ * to/from userspace but do not fall entirely within the containing slab
+ * cache's usercopy region.
  *
  * Returns NULL if check passes, otherwise const char * to name of cache
  * to indicate an error.
@@ -4428,11 +4430,14 @@ const char *__check_heap_object(const void *ptr, unsigned long n,
 	/* Find offset within object. */
 	offset = ptr - index_to_obj(cachep, page, objnr) - obj_offset(cachep);
 
-	/* Allow address range falling entirely within object size. */
-	if (offset <= cachep->object_size && n <= cachep->object_size - offset)
-		return NULL;
+	/* Make sure object falls entirely within cache's usercopy region. */
+	if (offset < cachep->useroffset ||
+	    offset - cachep->useroffset > cachep->usersize ||
+	    n > cachep->useroffset - offset + cachep->usersize) {
+		return cachep->name;
+	}
 
-	return cachep->name;
+	return NULL;
 }
 #endif /* CONFIG_HARDENED_USERCOPY */
 
