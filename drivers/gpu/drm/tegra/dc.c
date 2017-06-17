@@ -27,6 +27,16 @@
 struct tegra_plane {
 	struct drm_plane base;
 	unsigned int index;
+
+	struct {
+		struct drm_property *legacy_cursor;
+		struct drm_property *cursor_fg;
+		struct drm_property *cursor_bg;
+	} props;
+
+	u32 cursor_mode;
+	u32 cursor_fg;
+	u32 cursor_bg;
 };
 
 static inline struct tegra_plane *to_tegra_plane(struct drm_plane *plane)
@@ -677,15 +687,63 @@ static const u32 tegra_cursor_plane_formats[] = {
 	DRM_FORMAT_ARGB8888,
 };
 
+static int tegra_cursor_atomic_set_property(struct drm_plane *plane,
+					    struct drm_plane_state *state,
+					    struct drm_property *property,
+					    uint64_t value)
+{
+	struct tegra_plane *tegra = to_tegra_plane(plane);
+
+	if (property == tegra->props.legacy_cursor)
+		tegra->cursor_mode =
+			value ? CURSOR_MODE_LEGACY : CURSOR_MODE_NORMAL;
+	else if (property == tegra->props.cursor_fg)
+		tegra->cursor_fg = value;
+	else if (property == tegra->props.cursor_bg)
+		tegra->cursor_bg = value;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
+static int tegra_cursor_atomic_get_property(struct drm_plane *plane,
+					    const struct drm_plane_state *state,
+					    struct drm_property *property,
+					    uint64_t *value)
+{
+	struct tegra_plane *tegra = to_tegra_plane(plane);
+
+	if (property == tegra->props.legacy_cursor)
+		*value = (tegra->cursor_mode == CURSOR_MODE_LEGACY);
+	else if (property == tegra->props.cursor_fg)
+		*value = tegra->cursor_fg;
+	else if (property == tegra->props.cursor_bg)
+		*value = tegra->cursor_bg;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
 static int tegra_cursor_atomic_check(struct drm_plane *plane,
 				     struct drm_plane_state *state)
 {
 	struct tegra_plane *tegra = to_tegra_plane(plane);
+	struct tegra_dc *dc = to_tegra_dc(state->crtc);
 	int err;
 
 	/* no need for further checks if the plane is being disabled */
 	if (!state->crtc)
 		return 0;
+
+	/*
+	 * Legacy cursor must be enabled explicitly by userspace to
+	 * avoid mistreating its format (by modesetting driver) as ARGB.
+	 */
+	if (tegra->cursor_mode == CURSOR_MODE_NORMAL &&
+	    !dc->soc->supports_argb_cursor)
+		return -EINVAL;
 
 	/* scaling not supported for cursor */
 	if ((state->src_w >> 16 != state->crtc_w) ||
@@ -698,6 +756,10 @@ static int tegra_cursor_atomic_check(struct drm_plane *plane,
 
 	if (state->crtc_w != 32 && state->crtc_w != 64 &&
 	    state->crtc_w != 128 && state->crtc_w != 256)
+		return -EINVAL;
+
+	/* legacy cursor supports 32x32 and 64x64 sizes only */
+	if (state->crtc_w > 64 && tegra->cursor_mode == CURSOR_MODE_LEGACY)
 		return -EINVAL;
 
 	err = tegra_plane_state_add(tegra, state);
@@ -727,6 +789,7 @@ static void tegra_cursor_atomic_disable(struct drm_plane *plane,
 static void tegra_cursor_atomic_update(struct drm_plane *plane,
 				       struct drm_plane_state *old_state)
 {
+	struct tegra_plane *tegra = to_tegra_plane(plane);
 	struct tegra_bo *bo = tegra_fb_get_plane(plane->state->fb, 0);
 	struct tegra_dc *dc = to_tegra_dc(plane->state->crtc);
 	struct drm_plane_state *state = plane->state;
@@ -775,10 +838,7 @@ static void tegra_cursor_atomic_update(struct drm_plane *plane,
 	value |= CURSOR_ENABLE;
 	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
 
-	value = tegra_dc_readl(dc, DC_DISP_BLEND_CURSOR_CONTROL);
-	value &= ~CURSOR_DST_BLEND_MASK;
-	value &= ~CURSOR_SRC_BLEND_MASK;
-	value |= CURSOR_MODE_NORMAL;
+	value = tegra->cursor_mode;
 	value |= CURSOR_DST_BLEND_NEG_K1_TIMES_SRC;
 	value |= CURSOR_SRC_BLEND_K1_TIMES_SRC;
 	value |= CURSOR_ALPHA;
@@ -787,6 +847,10 @@ static void tegra_cursor_atomic_update(struct drm_plane *plane,
 	/* position the cursor */
 	value = (state->crtc_y & 0x3fff) << 16 | (state->crtc_x & 0x3fff);
 	tegra_dc_writel(dc, value, DC_DISP_CURSOR_POSITION);
+
+	/* set legacy cursor colors */
+	tegra_dc_writel(dc, tegra->cursor_fg, DC_DISP_CURSOR_FOREGROUND);
+	tegra_dc_writel(dc, tegra->cursor_bg, DC_DISP_CURSOR_BACKGROUND);
 }
 
 static const struct drm_plane_funcs tegra_cursor_plane_funcs = {
@@ -796,6 +860,8 @@ static const struct drm_plane_funcs tegra_cursor_plane_funcs = {
 	.reset = tegra_plane_reset,
 	.atomic_duplicate_state = tegra_plane_atomic_duplicate_state,
 	.atomic_destroy_state = tegra_plane_atomic_destroy_state,
+	.atomic_set_property = tegra_cursor_atomic_set_property,
+	.atomic_get_property = tegra_cursor_atomic_get_property,
 };
 
 static const struct drm_plane_helper_funcs tegra_cursor_plane_helper_funcs = {
@@ -827,6 +893,9 @@ static struct drm_plane *tegra_dc_cursor_plane_create(struct drm_device *drm,
 	 */
 	plane->index = 6;
 
+	/* prefer ARGB cursor by default */
+	plane->cursor_mode = CURSOR_MODE_NORMAL;
+
 	num_formats = ARRAY_SIZE(tegra_cursor_plane_formats);
 	formats = tegra_cursor_plane_formats;
 
@@ -838,6 +907,31 @@ static struct drm_plane *tegra_dc_cursor_plane_create(struct drm_device *drm,
 		kfree(plane);
 		return ERR_PTR(err);
 	}
+
+	/* legacy cursor and its background/foreground 24bit BGR888 colors */
+	plane->props.legacy_cursor = drm_property_create_bool(
+			drm, 0, "legacy cursor");
+	plane->props.cursor_fg = drm_property_create_range(
+			drm, 0, "cursor foreground color", 0, 0xffffff);
+	plane->props.cursor_bg = drm_property_create_range(
+			drm, 0, "cursor background color", 0, 0xffffff);
+
+	if (!plane->props.legacy_cursor ||
+	    !plane->props.cursor_fg ||
+	    !plane->props.cursor_bg)
+		return ERR_PTR(-ENOMEM);
+
+	drm_object_attach_property(&plane->base.base,
+				   plane->props.legacy_cursor,
+				   false);
+
+	drm_object_attach_property(&plane->base.base,
+				   plane->props.cursor_fg,
+				   plane->cursor_fg);
+
+	drm_object_attach_property(&plane->base.base,
+				   plane->props.cursor_bg,
+				   plane->cursor_bg);
 
 	drm_plane_helper_add(&plane->base, &tegra_cursor_plane_helper_funcs);
 
@@ -1767,12 +1861,10 @@ static int tegra_dc_init(struct host1x_client *client)
 		goto cleanup;
 	}
 
-	if (dc->soc->supports_cursor) {
-		cursor = tegra_dc_cursor_plane_create(drm, dc);
-		if (IS_ERR(cursor)) {
-			err = PTR_ERR(cursor);
-			goto cleanup;
-		}
+	cursor = tegra_dc_cursor_plane_create(drm, dc);
+	if (IS_ERR(cursor)) {
+		err = PTR_ERR(cursor);
+		goto cleanup;
 	}
 
 	err = drm_crtc_init_with_planes(drm, &dc->base, primary, cursor,
@@ -1867,7 +1959,7 @@ static const struct host1x_client_ops dc_client_ops = {
 static const struct tegra_dc_soc_info tegra20_dc_soc_info = {
 	.supports_border_color = true,
 	.supports_interlacing = false,
-	.supports_cursor = false,
+	.supports_argb_cursor = false,
 	.supports_block_linear = false,
 	.pitch_align = 8,
 	.has_powergate = false,
@@ -1877,7 +1969,7 @@ static const struct tegra_dc_soc_info tegra20_dc_soc_info = {
 static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
 	.supports_border_color = true,
 	.supports_interlacing = false,
-	.supports_cursor = false,
+	.supports_argb_cursor = false,
 	.supports_block_linear = false,
 	.pitch_align = 8,
 	.has_powergate = false,
@@ -1887,7 +1979,7 @@ static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
 static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
 	.supports_border_color = true,
 	.supports_interlacing = false,
-	.supports_cursor = false,
+	.supports_argb_cursor = false,
 	.supports_block_linear = false,
 	.pitch_align = 64,
 	.has_powergate = true,
@@ -1897,7 +1989,7 @@ static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
 static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
 	.supports_border_color = false,
 	.supports_interlacing = true,
-	.supports_cursor = true,
+	.supports_argb_cursor = true,
 	.supports_block_linear = true,
 	.pitch_align = 64,
 	.has_powergate = true,
@@ -1907,7 +1999,7 @@ static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
 static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
 	.supports_border_color = false,
 	.supports_interlacing = true,
-	.supports_cursor = true,
+	.supports_argb_cursor = true,
 	.supports_block_linear = true,
 	.pitch_align = 64,
 	.has_powergate = true,

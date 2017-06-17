@@ -28,7 +28,7 @@ struct tegra_dc_stats {
 struct tegra_dc_soc_info {
 	bool supports_border_color;
 	bool supports_interlacing;
-	bool supports_cursor;
+	bool supports_argb_cursor;
 	bool supports_block_linear;
 	unsigned int pitch_align;
 	bool has_powergate;
