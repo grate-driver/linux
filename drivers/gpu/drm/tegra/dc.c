@@ -674,7 +674,7 @@ static struct drm_plane *tegra_dc_primary_plane_create(struct drm_device *drm,
 }
 
 static const u32 tegra_cursor_plane_formats[] = {
-	DRM_FORMAT_RGBA8888,
+	DRM_FORMAT_ARGB8888,
 };
 
 static int tegra_cursor_atomic_check(struct drm_plane *plane,
