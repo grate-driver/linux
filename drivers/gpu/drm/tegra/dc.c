@@ -1331,9 +1331,12 @@ static void tegra_crtc_atomic_flush(struct drm_crtc *crtc,
 {
 	struct tegra_dc_state *state = to_dc_state(crtc->state);
 	struct tegra_dc *dc = to_tegra_dc(crtc);
+	u32 act_req;
 
-	tegra_dc_writel(dc, state->planes << 8, DC_CMD_STATE_CONTROL);
-	tegra_dc_writel(dc, state->planes, DC_CMD_STATE_CONTROL);
+	act_req = GENERAL_ACT_REQ | state->planes;
+
+	tegra_dc_writel(dc, act_req << 8, DC_CMD_STATE_CONTROL);
+	tegra_dc_writel(dc, act_req, DC_CMD_STATE_CONTROL);
 }
 
 static const struct drm_crtc_helper_funcs tegra_crtc_helper_funcs = {
