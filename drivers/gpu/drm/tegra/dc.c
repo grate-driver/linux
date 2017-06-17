@@ -804,6 +804,8 @@ static const struct drm_plane_helper_funcs tegra_cursor_plane_helper_funcs = {
 static struct drm_plane *tegra_dc_cursor_plane_create(struct drm_device *drm,
 						      struct tegra_dc *dc)
 {
+	/* See comment in the tegra_dc_primary_plane_create() */
+	unsigned long possible_crtcs = 1 << drm->mode_config.num_crtc;
 	struct tegra_plane *plane;
 	unsigned int num_formats;
 	const u32 *formats;
@@ -825,7 +827,7 @@ static struct drm_plane *tegra_dc_cursor_plane_create(struct drm_device *drm,
 	num_formats = ARRAY_SIZE(tegra_cursor_plane_formats);
 	formats = tegra_cursor_plane_formats;
 
-	err = drm_universal_plane_init(drm, &plane->base, 1 << dc->pipe,
+	err = drm_universal_plane_init(drm, &plane->base, possible_crtcs,
 				       &tegra_cursor_plane_funcs, formats,
 				       num_formats, NULL,
 				       DRM_PLANE_TYPE_CURSOR, NULL);
