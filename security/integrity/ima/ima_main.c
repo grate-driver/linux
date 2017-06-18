@@ -38,6 +38,12 @@ int ima_appraise;
 int ima_hash_algo = HASH_ALGO_SHA1;
 static int hash_setup_done;
 
+static bool ima_failsafe = 1;
+void set_failsafe(bool flag)
+{
+	ima_failsafe = flag;
+}
+
 static int __init hash_setup(char *str)
 {
 	struct ima_template_desc *template_desc = ima_template_desc_current();
@@ -260,8 +266,12 @@ out_free:
 		__putname(pathbuf);
 out:
 	inode_unlock(inode);
-	if ((rc && must_appraise) && (ima_appraise & IMA_APPRAISE_ENFORCE))
+	if ((rc && must_appraise) && (ima_appraise & IMA_APPRAISE_ENFORCE)) {
+		if (!ima_failsafe && rc == -EBADF)
+			return 0;
+
 		return -EACCES;
+	}
 	return 0;
 }
 

@@ -224,6 +224,7 @@ void *ima_policy_start(struct seq_file *m, loff_t *pos);
 void *ima_policy_next(struct seq_file *m, void *v, loff_t *pos);
 void ima_policy_stop(struct seq_file *m, void *v);
 int ima_policy_show(struct seq_file *m, void *v);
+void set_failsafe(bool flag);
 
 /* Appraise integrity measurements */
 #define IMA_APPRAISE_ENFORCE	0x01
