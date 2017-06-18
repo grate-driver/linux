@@ -169,6 +169,10 @@ static struct ima_rule_entry secure_boot_rules[] __ro_after_init = {
 	 .flags = IMA_FUNC | IMA_DIGSIG_REQUIRED},
 };
 
+static struct ima_rule_entry dont_failsafe_rules[] __ro_after_init = {
+	{.action = DONT_FAILSAFE}
+};
+
 static LIST_HEAD(ima_default_rules);
 static LIST_HEAD(ima_policy_rules);
 static LIST_HEAD(ima_temp_rules);
@@ -188,6 +192,7 @@ __setup("ima_tcb", default_measure_policy_setup);
 
 static bool ima_use_appraise_tcb __initdata;
 static bool ima_use_secure_boot __initdata;
+static bool ima_use_dont_failsafe __initdata;
 static int __init policy_setup(char *str)
 {
 	char *p;
@@ -201,6 +206,10 @@ static int __init policy_setup(char *str)
 			ima_use_appraise_tcb = 1;
 		else if (strcmp(p, "secure_boot") == 0)
 			ima_use_secure_boot = 1;
+		else if (strcmp(p, "fs_unsafe") == 0) {
+			ima_use_dont_failsafe = 1;
+			set_failsafe(0);
+		}
 	}
 
 	return 1;
@@ -469,6 +478,9 @@ void __init ima_init_policy(void)
 		if (default_appraise_rules[i].func == POLICY_CHECK)
 			temp_ima_appraise |= IMA_APPRAISE_POLICY;
 	}
+
+	if (ima_use_dont_failsafe)
+		list_add_tail(&dont_failsafe_rules[0].list, &ima_default_rules);
 
 	ima_rules = &ima_default_rules;
 	ima_update_policy_flag();

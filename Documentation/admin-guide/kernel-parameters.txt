@@ -1502,7 +1502,7 @@
 
 	ima_policy=	[IMA]
 			The builtin policies to load during IMA setup.
-			Format: "tcb | appraise_tcb | secure_boot"
+			Format: "tcb | appraise_tcb | secure_boot | fs_unsafe"
 
 			The "tcb" policy measures all programs exec'd, files
 			mmap'd for exec, and all files opened with the read
@@ -1516,6 +1516,12 @@
 			The "secure_boot" policy appraises the integrity
 			of files (eg. kexec kernel image, kernel modules,
 			firmware, policy, etc) based on file signatures.
+
+			The "fs_unsafe" policy permits normally denied
+			access/execute permission for files in policy on IMA
+			unsupported filesystems.  Note this option, as the
+			name implies, is not safe and not recommended for
+			any environments other than testing.
 
 	ima_tcb		[IMA] Deprecated.  Use ima_policy= instead.
 			Load a policy which meets the needs of the Trusted
