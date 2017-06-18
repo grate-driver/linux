@@ -707,6 +707,23 @@ static int tegra_cursor_atomic_check(struct drm_plane *plane,
 	return 0;
 }
 
+static void tegra_cursor_atomic_disable(struct drm_plane *plane,
+					struct drm_plane_state *old_state)
+{
+	struct tegra_dc *dc;
+	u32 value;
+
+	/* rien ne va plus */
+	if (!old_state || !old_state->crtc)
+		return;
+
+	dc = to_tegra_dc(old_state->crtc);
+
+	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
+	value &= ~CURSOR_ENABLE;
+	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
+}
+
 static void tegra_cursor_atomic_update(struct drm_plane *plane,
 				       struct drm_plane_state *old_state)
 {
@@ -742,6 +759,9 @@ static void tegra_cursor_atomic_update(struct drm_plane *plane,
 		return;
 	}
 
+	if (!plane->state->visible)
+		return tegra_cursor_atomic_disable(plane, old_state);
+
 	value |= (bo->paddr >> 10) & 0x3fffff;
 	tegra_dc_writel(dc, value, DC_DISP_CURSOR_START_ADDR);
 
@@ -767,23 +787,6 @@ static void tegra_cursor_atomic_update(struct drm_plane *plane,
 	/* position the cursor */
 	value = (state->crtc_y & 0x3fff) << 16 | (state->crtc_x & 0x3fff);
 	tegra_dc_writel(dc, value, DC_DISP_CURSOR_POSITION);
-}
-
-static void tegra_cursor_atomic_disable(struct drm_plane *plane,
-					struct drm_plane_state *old_state)
-{
-	struct tegra_dc *dc;
-	u32 value;
-
-	/* rien ne va plus */
-	if (!old_state || !old_state->crtc)
-		return;
-
-	dc = to_tegra_dc(old_state->crtc);
-
-	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
-	value &= ~CURSOR_ENABLE;
-	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
 }
 
 static const struct drm_plane_funcs tegra_cursor_plane_funcs = {
