@@ -32,11 +32,15 @@ struct tegra_plane {
 		struct drm_property *legacy_cursor;
 		struct drm_property *cursor_fg;
 		struct drm_property *cursor_bg;
+		struct drm_property *color_key0_enabled;
+		struct drm_property *color_key1_enabled;
 	} props;
 
 	u32 cursor_mode;
 	u32 cursor_fg;
 	u32 cursor_bg;
+	bool ckey0_enb;
+	bool ckey1_enb;
 };
 
 static inline struct tegra_plane *to_tegra_plane(struct drm_plane *plane)
@@ -392,9 +396,22 @@ static void tegra_dc_setup_window(struct tegra_dc *dc, unsigned int index,
 
 	switch (index) {
 	case 0:
-		tegra_dc_writel(dc, 0x000000, DC_WIN_BLEND_2WIN_X);
-		tegra_dc_writel(dc, 0x000000, DC_WIN_BLEND_2WIN_Y);
-		tegra_dc_writel(dc, 0x000000, DC_WIN_BLEND_3WIN_XY);
+		value = 0x000000;
+
+		/*
+		 * All pixel of the primary plane non-matching the
+		 * color key ranges will be topmost regardless of
+		 * overlay plane state.
+		 */
+		if (window->ckey0)
+			value |= CKEY0;
+
+		if (window->ckey1)
+			value |= CKEY1;
+
+		tegra_dc_writel(dc, value, DC_WIN_BLEND_2WIN_X);
+		tegra_dc_writel(dc, value, DC_WIN_BLEND_2WIN_Y);
+		tegra_dc_writel(dc, value, DC_WIN_BLEND_3WIN_XY);
 		break;
 
 	case 1:
@@ -473,6 +490,40 @@ static void tegra_plane_atomic_destroy_state(struct drm_plane *plane,
 	kfree(state);
 }
 
+static int tegra_primary_plane_set_property(struct drm_plane *plane,
+					    struct drm_plane_state *state,
+					    struct drm_property *property,
+					    uint64_t value)
+{
+	struct tegra_plane *tegra = to_tegra_plane(plane);
+
+	if (property == tegra->props.color_key0_enabled)
+		tegra->ckey0_enb = value;
+	else if (property == tegra->props.color_key1_enabled)
+		tegra->ckey1_enb = value;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
+static int tegra_primary_plane_get_property(struct drm_plane *plane,
+					    const struct drm_plane_state *state,
+					    struct drm_property *property,
+					    uint64_t *value)
+{
+	struct tegra_plane *tegra = to_tegra_plane(plane);
+
+	if (property == tegra->props.color_key0_enabled)
+		*value = tegra->ckey0_enb;
+	else if (property == tegra->props.color_key1_enabled)
+		*value = tegra->ckey1_enb;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
 static const struct drm_plane_funcs tegra_primary_plane_funcs = {
 	.update_plane = drm_atomic_helper_update_plane,
 	.disable_plane = drm_atomic_helper_disable_plane,
@@ -480,6 +531,8 @@ static const struct drm_plane_funcs tegra_primary_plane_funcs = {
 	.reset = tegra_plane_reset,
 	.atomic_duplicate_state = tegra_plane_atomic_duplicate_state,
 	.atomic_destroy_state = tegra_plane_atomic_destroy_state,
+	.atomic_set_property = tegra_primary_plane_set_property,
+	.atomic_get_property = tegra_primary_plane_get_property,
 };
 
 static int tegra_plane_state_add(struct tegra_plane *plane,
@@ -612,6 +665,8 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	window.dst.h = drm_rect_height(&plane->state->dst);
 	window.bits_per_pixel = fb->format->cpp[0] * 8;
 	window.bottom_up = tegra_fb_is_bottom_up(fb);
+	window.ckey0 = p->ckey0_enb;
+	window.ckey1 = p->ckey1_enb;
 
 	/* copy from state */
 	window.tiling = state->tiling;
@@ -678,6 +733,26 @@ static struct drm_plane *tegra_dc_primary_plane_create(struct drm_device *drm,
 		return ERR_PTR(err);
 	}
 
+	if (!dc->soc->legacy_blending_contols)
+		goto helper_add;
+
+	plane->props.color_key0_enabled = drm_property_create_bool(
+			drm, 0, "color key 0 enabled");
+	plane->props.color_key1_enabled  = drm_property_create_bool(
+			drm, 0, "color key 1 enabled");
+
+	if (!plane->props.color_key0_enabled ||
+	    !plane->props.color_key1_enabled)
+		return ERR_PTR(-ENOMEM);
+
+	drm_object_attach_property(&plane->base.base,
+				   plane->props.color_key0_enabled,
+				   plane->ckey0_enb);
+
+	drm_object_attach_property(&plane->base.base,
+				   plane->props.color_key1_enabled,
+				   plane->ckey1_enb);
+helper_add:
 	drm_plane_helper_add(&plane->base, &tegra_plane_helper_funcs);
 
 	return &plane->base;
@@ -1134,6 +1209,48 @@ static void tegra_crtc_atomic_destroy_state(struct drm_crtc *crtc,
 	kfree(state);
 }
 
+static int tegra_crtc_atomic_set_property(struct drm_crtc *crtc,
+					  struct drm_crtc_state *state,
+					  struct drm_property *property,
+					  uint64_t value)
+{
+	struct tegra_dc *dc = to_tegra_dc(crtc);
+
+	if (property == dc->props.color_key0_lower)
+		dc->color_key0.lower = value;
+	else if (property == dc->props.color_key0_upper)
+		dc->color_key0.upper = value;
+	else if (property == dc->props.color_key1_lower)
+		dc->color_key1.lower = value;
+	else if (property == dc->props.color_key1_upper)
+		dc->color_key1.upper = value;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
+static int tegra_crtc_atomic_get_property(struct drm_crtc *crtc,
+					  const struct drm_crtc_state *state,
+					  struct drm_property *property,
+					  uint64_t *value)
+{
+	struct tegra_dc *dc = to_tegra_dc(crtc);
+
+	if (property == dc->props.color_key0_lower)
+		*value = dc->color_key0.lower;
+	else if (property == dc->props.color_key0_upper)
+		*value = dc->color_key0.upper;
+	else if (property == dc->props.color_key1_lower)
+		*value = dc->color_key1.lower;
+	else if (property == dc->props.color_key1_upper)
+		*value = dc->color_key1.upper;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
 static const struct drm_crtc_funcs tegra_crtc_funcs = {
 	.page_flip = drm_atomic_helper_page_flip,
 	.set_config = drm_atomic_helper_set_config,
@@ -1144,6 +1261,8 @@ static const struct drm_crtc_funcs tegra_crtc_funcs = {
 	.get_vblank_counter = tegra_dc_get_vblank_counter,
 	.enable_vblank = tegra_dc_enable_vblank,
 	.disable_vblank = tegra_dc_disable_vblank,
+	.atomic_set_property = tegra_crtc_atomic_set_property,
+	.atomic_get_property = tegra_crtc_atomic_get_property,
 };
 
 static int tegra_dc_set_timings(struct tegra_dc *dc,
@@ -1429,6 +1548,11 @@ static void tegra_crtc_atomic_flush(struct drm_crtc *crtc,
 	struct tegra_dc_state *state = to_dc_state(crtc->state);
 	struct tegra_dc *dc = to_tegra_dc(crtc);
 	u32 act_req;
+
+	tegra_dc_writel(dc, dc->color_key0.lower, DC_DISP_COLOR_KEY0_LOWER);
+	tegra_dc_writel(dc, dc->color_key0.upper, DC_DISP_COLOR_KEY0_UPPER);
+	tegra_dc_writel(dc, dc->color_key1.lower, DC_DISP_COLOR_KEY1_LOWER);
+	tegra_dc_writel(dc, dc->color_key1.upper, DC_DISP_COLOR_KEY1_UPPER);
 
 	act_req = GENERAL_ACT_REQ | state->planes;
 
@@ -1872,6 +1996,34 @@ static int tegra_dc_init(struct host1x_client *client)
 	if (err < 0)
 		goto cleanup;
 
+	/*
+	 * Each color key value is represented in ABGR8888 format.
+	 * Planes are free to choose among key0 and key1.
+	 */
+	dc->props.color_key0_lower = drm_property_create_range(
+			drm, 0, "color key 0 lower margin", 0, 0xffffffff);
+	dc->props.color_key0_upper = drm_property_create_range(
+			drm, 0, "color key 0 upper margin", 0, 0xffffffff);
+	dc->props.color_key1_lower = drm_property_create_range(
+			drm, 0, "color key 1 lower margin", 0, 0xffffffff);
+	dc->props.color_key1_upper = drm_property_create_range(
+			drm, 0, "color key 1 upper margin", 0, 0xffffffff);
+
+	if (!dc->props.color_key0_lower ||
+	    !dc->props.color_key0_upper ||
+	    !dc->props.color_key1_lower ||
+	    !dc->props.color_key1_upper)
+		goto cleanup;
+
+	drm_object_attach_property(&dc->base.base, dc->props.color_key0_lower,
+				   0x00000000);
+	drm_object_attach_property(&dc->base.base, dc->props.color_key0_upper,
+				   0x00000000);
+	drm_object_attach_property(&dc->base.base, dc->props.color_key1_lower,
+				   0x00000000);
+	drm_object_attach_property(&dc->base.base, dc->props.color_key1_upper,
+				   0x00000000);
+
 	drm_crtc_helper_add(&dc->base, &tegra_crtc_helper_funcs);
 
 	/*
@@ -1964,6 +2116,7 @@ static const struct tegra_dc_soc_info tegra20_dc_soc_info = {
 	.pitch_align = 8,
 	.has_powergate = false,
 	.broken_reset = true,
+	.legacy_blending_contols = true,
 };
 
 static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
@@ -1974,6 +2127,7 @@ static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
 	.pitch_align = 8,
 	.has_powergate = false,
 	.broken_reset = false,
+	.legacy_blending_contols = true,
 };
 
 static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
@@ -1984,6 +2138,7 @@ static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
 	.pitch_align = 64,
 	.has_powergate = true,
 	.broken_reset = false,
+	.legacy_blending_contols = true,
 };
 
 static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
@@ -1994,6 +2149,7 @@ static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
 	.pitch_align = 64,
 	.has_powergate = true,
 	.broken_reset = false,
+	.legacy_blending_contols = false,
 };
 
 static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
@@ -2004,6 +2160,7 @@ static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
 	.pitch_align = 64,
 	.has_powergate = true,
 	.broken_reset = false,
+	.legacy_blending_contols = false,
 };
 
 static const struct of_device_id tegra_dc_of_match[] = {

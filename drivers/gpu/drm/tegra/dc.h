@@ -33,6 +33,12 @@ struct tegra_dc_soc_info {
 	unsigned int pitch_align;
 	bool has_powergate;
 	bool broken_reset;
+	bool legacy_blending_contols;
+};
+
+struct tegra_dc_color_key {
+	u32 lower;
+	u32 upper;
 };
 
 struct tegra_dc {
@@ -65,6 +71,16 @@ struct tegra_dc {
 	const struct tegra_dc_soc_info *soc;
 
 	struct iommu_domain *domain;
+
+	struct {
+		struct drm_property *color_key0_lower;
+		struct drm_property *color_key0_upper;
+		struct drm_property *color_key1_lower;
+		struct drm_property *color_key1_upper;
+	} props;
+
+	struct tegra_dc_color_key color_key0;
+	struct tegra_dc_color_key color_key1;
 };
 
 static inline struct tegra_dc *
@@ -115,6 +131,8 @@ struct tegra_dc_window {
 	struct tegra_bo_tiling tiling;
 	u32 format;
 	u32 swap;
+	bool ckey0;
+	bool ckey1;
 };
 
 /* from dc.c */
@@ -553,6 +571,12 @@ int tegra_dc_rgb_exit(struct tegra_dc *dc);
 #define DC_WIN_BLEND_2WIN_X			0x711
 #define DC_WIN_BLEND_2WIN_Y			0x712
 #define DC_WIN_BLEND_3WIN_XY			0x713
+#define CKEY0                  (1 << 0)
+#define CKEY1                  (1 << 1)
+#define BLEND_CONTROL(x)       ((x) <<  2)
+#define BLEND_CONTROL_NOKEY(x) ((x) <<  0)
+#define BLEND_WEIGHT0(x)       ((x) <<  8)
+#define BLEND_WEIGHT1(x)       ((x) << 16)
 
 #define DC_WIN_HP_FETCH_CONTROL			0x714
 
