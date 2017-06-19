@@ -433,6 +433,12 @@
 #define DC_WIN_BLEND_2WIN_X			0x711
 #define DC_WIN_BLEND_2WIN_Y			0x712
 #define DC_WIN_BLEND_3WIN_XY			0x713
+#define CKEY0                  (1 << 0)
+#define CKEY1                  (1 << 1)
+#define BLEND_CONTROL(x)       ((x) <<  2)
+#define BLEND_CONTROL_NOKEY(x) ((x) <<  0)
+#define BLEND_WEIGHT0(x)       ((x) <<  8)
+#define BLEND_WEIGHT1(x)       ((x) << 16)
 
 #define DC_WIN_HP_FETCH_CONTROL			0x714
 
