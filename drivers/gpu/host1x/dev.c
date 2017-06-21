@@ -137,6 +137,40 @@ static const struct of_device_id host1x_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, host1x_of_match);
 
+static int host1x_iommu_init(struct host1x *host)
+{
+	struct iommu_domain_geometry *geometry;
+	unsigned long order;
+	int err;
+
+	if (!iommu_present(&platform_bus_type))
+		return 0;
+
+	host->domain = iommu_domain_alloc(&platform_bus_type);
+	if (!host->domain)
+		return -ENOMEM;
+
+	err = iommu_attach_device(host->domain, host->dev);
+	if (err == -ENODEV) {
+		iommu_domain_free(host->domain);
+		host->domain = NULL;
+		return 0;
+	}
+
+	err = iommu_attach_device(host->domain, host->dev);
+	if (err)
+		return err;
+
+	geometry = &host->domain->geometry;
+
+	order = __ffs(host->domain->pgsize_bitmap);
+	init_iova_domain(&host->iova, 1UL << order,
+			 geometry->aperture_start >> order);
+	host->iova_end = geometry->aperture_end;
+
+	return 0;
+}
+
 static int host1x_probe(struct platform_device *pdev)
 {
 	struct host1x *host;
@@ -218,32 +252,10 @@ static int host1x_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	if (iommu_present(&platform_bus_type)) {
-		struct iommu_domain_geometry *geometry;
-		unsigned long order;
+	err = host1x_iommu_init(host);
+	if (err)
+		goto fail_free_domain;
 
-		host->domain = iommu_domain_alloc(&platform_bus_type);
-		if (!host->domain)
-			return -ENOMEM;
-
-		err = iommu_attach_device(host->domain, &pdev->dev);
-		if (err == -ENODEV) {
-			iommu_domain_free(host->domain);
-			host->domain = NULL;
-			goto skip_iommu;
-		} else if (err) {
-			goto fail_free_domain;
-		}
-
-		geometry = &host->domain->geometry;
-
-		order = __ffs(host->domain->pgsize_bitmap);
-		init_iova_domain(&host->iova, 1UL << order,
-				 geometry->aperture_start >> order);
-		host->iova_end = geometry->aperture_end;
-	}
-
-skip_iommu:
 	err = host1x_channel_list_init(&host->channel_list,
 				       host->info->nb_channels);
 	if (err) {
