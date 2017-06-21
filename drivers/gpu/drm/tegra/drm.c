@@ -131,6 +131,9 @@ static int tegra_drm_iova_init(struct tegra_drm *tegra,
 {
 	unsigned long order = __ffs(tegra->domain->pgsize_bitmap);
 
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		return 0;
+
 	tegra->carveout = kzalloc(sizeof(*tegra->carveout), GFP_KERNEL);
 	if (!tegra)
 		return -ENOMEM;
@@ -161,7 +164,11 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 
 	geometry = &tegra->domain->geometry;
 	gem_start = geometry->aperture_start;
-	gem_end = geometry->aperture_end - CARVEOUT_SZ;
+	gem_end = geometry->aperture_end;
+
+	/* the whole GART aperture is smaller than CARVEOUT_SZ on Tegra20 */
+	if (!of_machine_is_compatible("nvidia,tegra20"))
+		gem_end -= CARVEOUT_SZ;
 
 	drm_mm_init(&tegra->mm, gem_start, gem_end - gem_start + 1);
 	mutex_init(&tegra->mm_lock);
