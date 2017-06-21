@@ -36,6 +36,12 @@ struct tegra_fbdev {
 };
 #endif
 
+struct tegra_drm_carveout {
+	struct iova_domain domain;
+	unsigned long shift;
+	unsigned long limit;
+};
+
 struct tegra_drm {
 	struct drm_device *drm;
 
@@ -44,11 +50,7 @@ struct tegra_drm {
 	struct mutex mm_lock;
 	struct drm_mm mm;
 
-	struct {
-		struct iova_domain domain;
-		unsigned long shift;
-		unsigned long limit;
-	} carveout;
+	struct tegra_drm_carveout *carveout;
 
 	struct mutex clients_lock;
 	struct list_head clients;
