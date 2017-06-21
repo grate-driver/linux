@@ -154,6 +154,60 @@ static const struct of_device_id host1x_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, host1x_of_match);
 
+static int host1x_iommu_init(struct host1x *host)
+{
+	struct iommu_domain_geometry *geometry;
+	unsigned long order;
+	int err;
+
+#if IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)
+	if (host->dev->archdata.mapping) {
+		struct dma_iommu_mapping *mapping =
+				to_dma_iommu_mapping(host->dev);
+		arm_iommu_detach_device(host->dev);
+		arm_iommu_release_mapping(mapping);
+	}
+#endif
+	if (IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL))
+		return 0;
+
+	host->group = iommu_group_get(host->dev);
+	if (!host->group)
+		return 0;
+
+	err = iova_cache_get();
+	if (err < 0)
+		goto put_group;
+
+	host->domain = iommu_domain_alloc(&platform_bus_type);
+	if (!host->domain) {
+		err = -ENOMEM;
+		goto put_cache;
+	}
+
+	err = iommu_attach_group(host->domain, host->group);
+	if (err < 0)
+		goto domain;
+
+	geometry = &host->domain->geometry;
+
+	order = __ffs(host->domain->pgsize_bitmap);
+	init_iova_domain(&host->iova, 1UL << order,
+			 geometry->aperture_start >> order);
+	host->iova_end = geometry->aperture_end;
+
+	return 0;
+
+domain:
+	iommu_domain_free(host->domain);
+put_cache:
+	iova_cache_put();
+put_group:
+	iommu_group_put(host->group);
+
+	return err;
+}
+
 static int host1x_probe(struct platform_device *pdev)
 {
 	struct host1x *host;
@@ -234,60 +288,16 @@ static int host1x_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to get reset: %d\n", err);
 		return err;
 	}
-#if IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)
-	if (host->dev->archdata.mapping) {
-		struct dma_iommu_mapping *mapping =
-				to_dma_iommu_mapping(host->dev);
-		arm_iommu_detach_device(host->dev);
-		arm_iommu_release_mapping(mapping);
-	}
-#endif
-	if (IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL))
-		goto skip_iommu;
 
-	host->group = iommu_group_get(&pdev->dev);
-	if (host->group) {
-		struct iommu_domain_geometry *geometry;
-		unsigned long order;
+	err = host1x_iommu_init(host);
+	if (err)
+		return err;
 
-		err = iova_cache_get();
-		if (err < 0)
-			goto put_group;
-
-		host->domain = iommu_domain_alloc(&platform_bus_type);
-		if (!host->domain) {
-			err = -ENOMEM;
-			goto put_cache;
-		}
-
-		err = iommu_attach_group(host->domain, host->group);
-		if (err) {
-			if (err == -ENODEV) {
-				iommu_domain_free(host->domain);
-				host->domain = NULL;
-				iova_cache_put();
-				iommu_group_put(host->group);
-				host->group = NULL;
-				goto skip_iommu;
-			}
-
-			goto fail_free_domain;
-		}
-
-		geometry = &host->domain->geometry;
-
-		order = __ffs(host->domain->pgsize_bitmap);
-		init_iova_domain(&host->iova, 1UL << order,
-				 geometry->aperture_start >> order);
-		host->iova_end = geometry->aperture_end;
-	}
-
-skip_iommu:
 	err = host1x_channel_list_init(&host->channel_list,
 				       host->info->nb_channels);
 	if (err) {
 		dev_err(&pdev->dev, "failed to initialize channel list\n");
-		goto fail_detach_device;
+		goto fail_release_iommu;
 	}
 
 	err = clk_prepare_enable(host->clk);
@@ -332,19 +342,14 @@ fail_unprepare_disable:
 	clk_disable_unprepare(host->clk);
 fail_free_channels:
 	host1x_channel_list_free(&host->channel_list);
-fail_detach_device:
-	if (host->group && host->domain) {
+fail_release_iommu:
+	if (host->domain) {
 		put_iova_domain(&host->iova);
 		iommu_detach_group(host->domain, host->group);
-	}
-fail_free_domain:
-	if (host->domain)
 		iommu_domain_free(host->domain);
-put_cache:
-	if (host->group)
 		iova_cache_put();
-put_group:
-	iommu_group_put(host->group);
+		iommu_group_put(host->group);
+	}
 
 	return err;
 }
