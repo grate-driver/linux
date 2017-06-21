@@ -56,6 +56,12 @@ to_tegra_atomic_state(struct drm_atomic_state *state)
 	return container_of(state, struct tegra_atomic_state, base);
 }
 
+struct tegra_drm_carveout {
+	struct iova_domain domain;
+	unsigned long shift;
+	unsigned long limit;
+};
+
 struct tegra_drm {
 	struct drm_device *drm;
 
@@ -64,11 +70,7 @@ struct tegra_drm {
 	struct mutex mm_lock;
 	struct drm_mm mm;
 
-	struct {
-		struct iova_domain domain;
-		unsigned long shift;
-		unsigned long limit;
-	} carveout;
+	struct tegra_drm_carveout *carveout;
 
 	struct mutex clients_lock;
 	struct list_head clients;
