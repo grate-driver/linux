@@ -143,6 +143,9 @@ static int host1x_iommu_init(struct host1x *host)
 	unsigned long order;
 	int err;
 
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		return 0;
+
 	if (!iommu_present(&platform_bus_type))
 		return 0;
 
