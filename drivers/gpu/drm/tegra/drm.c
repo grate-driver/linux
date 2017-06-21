@@ -126,23 +126,31 @@ static const struct drm_mode_config_funcs tegra_drm_mode_funcs = {
 	.atomic_commit = tegra_atomic_commit,
 };
 
-static void tegra_drm_iova_init(struct tegra_drm *tegra,
-				u64 carveout_start, u64 carveout_end)
+static int tegra_drm_iova_init(struct tegra_drm *tegra,
+			       u64 carveout_start, u64 carveout_end)
 {
 	unsigned long order = __ffs(tegra->domain->pgsize_bitmap);
-	init_iova_domain(&tegra->carveout.domain, 1UL << order,
+
+	tegra->carveout = kzalloc(sizeof(*tegra->carveout), GFP_KERNEL);
+	if (!tegra)
+		return -ENOMEM;
+
+	init_iova_domain(&tegra->carveout->domain, 1UL << order,
 			 carveout_start >> order);
 
-	tegra->carveout.shift = iova_shift(&tegra->carveout.domain);
-	tegra->carveout.limit = carveout_end >> tegra->carveout.shift;
+	tegra->carveout->shift = iova_shift(&tegra->carveout->domain);
+	tegra->carveout->limit = carveout_end >> tegra->carveout->shift;
 
 	DRM_DEBUG("  Carveout: %#llx-%#llx\n", carveout_start, carveout_end);
+
+	return 0;
 }
 
 static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 {
 	struct iommu_domain_geometry *geometry;
 	u64 gem_start, gem_end;
+	int err;
 
 	if (!iommu_present(&platform_bus_type))
 		return 0;
@@ -161,7 +169,11 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 	DRM_DEBUG("IOMMU apertures:\n");
 	DRM_DEBUG("  GEM: %#llx-%#llx\n", gem_start, gem_end);
 
-	tegra_drm_iova_init(tegra, gem_end + 1, geometry->aperture_end);
+	err = tegra_drm_iova_init(tegra, gem_end + 1, geometry->aperture_end);
+	if (err) {
+		iommu_domain_free(tegra->domain);
+		return err;
+	}
 
 	return 0;
 }
@@ -245,8 +257,13 @@ config:
 		iommu_domain_free(tegra->domain);
 		drm_mm_takedown(&tegra->mm);
 		mutex_destroy(&tegra->mm_lock);
-		put_iova_domain(&tegra->carveout.domain);
 	}
+
+	if (tegra->carveout) {
+		put_iova_domain(&tegra->carveout->domain);
+		kfree(tegra->carveout);
+	}
+
 free:
 	kfree(tegra);
 	return err;
@@ -270,7 +287,11 @@ static void tegra_drm_unload(struct drm_device *drm)
 		iommu_domain_free(tegra->domain);
 		drm_mm_takedown(&tegra->mm);
 		mutex_destroy(&tegra->mm_lock);
-		put_iova_domain(&tegra->carveout.domain);
+	}
+
+	if (tegra->carveout) {
+		put_iova_domain(&tegra->carveout->domain);
+		kfree(tegra->carveout);
 	}
 
 	kfree(tegra);
@@ -1167,13 +1188,13 @@ void *tegra_drm_alloc(struct tegra_drm *tegra, size_t size,
 	gfp_t gfp;
 	int err;
 
-	if (tegra->domain)
-		size = iova_align(&tegra->carveout.domain, size);
+	if (tegra->carveout)
+		size = iova_align(&tegra->carveout->domain, size);
 	else
 		size = PAGE_ALIGN(size);
 
 	gfp = GFP_KERNEL | __GFP_ZERO;
-	if (!tegra->domain) {
+	if (!tegra->carveout) {
 		/*
 		 * Many units only support 32-bit addresses, even on 64-bit
 		 * SoCs. If there is no IOMMU to translate into a 32-bit IO
@@ -1187,7 +1208,7 @@ void *tegra_drm_alloc(struct tegra_drm *tegra, size_t size,
 	if (!virt)
 		return ERR_PTR(-ENOMEM);
 
-	if (!tegra->domain) {
+	if (!tegra->carveout) {
 		/*
 		 * If IOMMU is disabled, devices address physical memory
 		 * directly.
@@ -1196,15 +1217,15 @@ void *tegra_drm_alloc(struct tegra_drm *tegra, size_t size,
 		return virt;
 	}
 
-	alloc = alloc_iova(&tegra->carveout.domain,
-			   size >> tegra->carveout.shift,
-			   tegra->carveout.limit, true);
+	alloc = alloc_iova(&tegra->carveout->domain,
+			   size >> tegra->carveout->shift,
+			   tegra->carveout->limit, true);
 	if (!alloc) {
 		err = -EBUSY;
 		goto free_pages;
 	}
 
-	*dma = iova_dma_addr(&tegra->carveout.domain, alloc);
+	*dma = iova_dma_addr(&tegra->carveout->domain, alloc);
 	err = iommu_map(tegra->domain, *dma, virt_to_phys(virt),
 			size, IOMMU_READ | IOMMU_WRITE);
 	if (err < 0)
@@ -1213,7 +1234,7 @@ void *tegra_drm_alloc(struct tegra_drm *tegra, size_t size,
 	return virt;
 
 free_iova:
-	__free_iova(&tegra->carveout.domain, alloc);
+	__free_iova(&tegra->carveout->domain, alloc);
 free_pages:
 	free_pages((unsigned long)virt, get_order(size));
 
@@ -1223,15 +1244,15 @@ free_pages:
 void tegra_drm_free(struct tegra_drm *tegra, size_t size, void *virt,
 		    dma_addr_t dma)
 {
-	if (tegra->domain)
-		size = iova_align(&tegra->carveout.domain, size);
+	if (tegra->carveout)
+		size = iova_align(&tegra->carveout->domain, size);
 	else
 		size = PAGE_ALIGN(size);
 
-	if (tegra->domain) {
+	if (tegra->carveout) {
 		iommu_unmap(tegra->domain, dma, size);
-		free_iova(&tegra->carveout.domain,
-			  iova_pfn(&tegra->carveout.domain, dma));
+		free_iova(&tegra->carveout->domain,
+			  iova_pfn(&tegra->carveout->domain, dma));
 	}
 
 	free_pages((unsigned long)virt, get_order(size));
