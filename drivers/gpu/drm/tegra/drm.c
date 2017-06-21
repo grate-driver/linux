@@ -126,6 +126,46 @@ static const struct drm_mode_config_funcs tegra_drm_mode_funcs = {
 	.atomic_commit = tegra_atomic_commit,
 };
 
+static void tegra_drm_iova_init(struct tegra_drm *tegra,
+				u64 carveout_start, u64 carveout_end)
+{
+	unsigned long order = __ffs(tegra->domain->pgsize_bitmap);
+	init_iova_domain(&tegra->carveout.domain, 1UL << order,
+			 carveout_start >> order);
+
+	tegra->carveout.shift = iova_shift(&tegra->carveout.domain);
+	tegra->carveout.limit = carveout_end >> tegra->carveout.shift;
+
+	DRM_DEBUG("  Carveout: %#llx-%#llx\n", carveout_start, carveout_end);
+}
+
+static int tegra_drm_iommu_init(struct tegra_drm *tegra)
+{
+	struct iommu_domain_geometry *geometry;
+	u64 gem_start, gem_end;
+
+	if (!iommu_present(&platform_bus_type))
+		return 0;
+
+	tegra->domain = iommu_domain_alloc(&platform_bus_type);
+	if (!tegra->domain)
+		return -ENOMEM;
+
+	geometry = &tegra->domain->geometry;
+	gem_start = geometry->aperture_start;
+	gem_end = geometry->aperture_end - CARVEOUT_SZ;
+
+	drm_mm_init(&tegra->mm, gem_start, gem_end - gem_start + 1);
+	mutex_init(&tegra->mm_lock);
+
+	DRM_DEBUG("IOMMU apertures:\n");
+	DRM_DEBUG("  GEM: %#llx-%#llx\n", gem_start, gem_end);
+
+	tegra_drm_iova_init(tegra, gem_end + 1, geometry->aperture_end);
+
+	return 0;
+}
+
 static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 {
 	struct host1x_device *device = to_host1x_device(drm->dev);
@@ -136,38 +176,9 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 	if (!tegra)
 		return -ENOMEM;
 
-	if (iommu_present(&platform_bus_type)) {
-		u64 carveout_start, carveout_end, gem_start, gem_end;
-		struct iommu_domain_geometry *geometry;
-		unsigned long order;
-
-		tegra->domain = iommu_domain_alloc(&platform_bus_type);
-		if (!tegra->domain) {
-			err = -ENOMEM;
-			goto free;
-		}
-
-		geometry = &tegra->domain->geometry;
-		gem_start = geometry->aperture_start;
-		gem_end = geometry->aperture_end - CARVEOUT_SZ;
-		carveout_start = gem_end + 1;
-		carveout_end = geometry->aperture_end;
-
-		order = __ffs(tegra->domain->pgsize_bitmap);
-		init_iova_domain(&tegra->carveout.domain, 1UL << order,
-				 carveout_start >> order);
-
-		tegra->carveout.shift = iova_shift(&tegra->carveout.domain);
-		tegra->carveout.limit = carveout_end >> tegra->carveout.shift;
-
-		drm_mm_init(&tegra->mm, gem_start, gem_end - gem_start + 1);
-		mutex_init(&tegra->mm_lock);
-
-		DRM_DEBUG("IOMMU apertures:\n");
-		DRM_DEBUG("  GEM: %#llx-%#llx\n", gem_start, gem_end);
-		DRM_DEBUG("  Carveout: %#llx-%#llx\n", carveout_start,
-			  carveout_end);
-	}
+	err = tegra_drm_iommu_init(tegra);
+	if (err)
+		goto free;
 
 	mutex_init(&tegra->clients_lock);
 	INIT_LIST_HEAD(&tegra->clients);
