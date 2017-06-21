@@ -139,9 +139,13 @@ MODULE_DEVICE_TABLE(of, host1x_of_match);
 
 static int host1x_iommu_init(struct host1x *host)
 {
+	struct device_node *np = host->dev->of_node;
 	struct iommu_domain_geometry *geometry;
 	unsigned long order;
 	int err;
+
+	if (of_device_is_compatible(np, "nvidia,tegra20-host1x"))
+		return 0;
 
 	host->group = iommu_group_get(host->dev);
 	if (!host->group)
