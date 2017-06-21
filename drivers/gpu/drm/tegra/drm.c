@@ -115,6 +115,7 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 {
 	struct iommu_domain_geometry *geometry;
 	u64 gem_start, gem_end;
+	bool carveout = true;
 	int err;
 
 	if (!iommu_present(&platform_bus_type))
@@ -126,7 +127,19 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 
 	geometry = &tegra->domain->geometry;
 	gem_start = geometry->aperture_start;
-	gem_end = geometry->aperture_end - CARVEOUT_SZ;
+	gem_end = geometry->aperture_end;
+
+	/*
+	 * Carveout isn't needed on pre-Tegra124, especially on Tegra20
+	 * as it uses GART that has very limited amount of IOVA space.
+	 */
+	if (of_machine_is_compatible("nvidia,tegra20") ||
+	    of_machine_is_compatible("nvidia,tegra30") ||
+	    of_machine_is_compatible("nvidia,tegra114"))
+		carveout = false;
+
+	if (carveout)
+		gem_end -= CARVEOUT_SZ;
 
 	drm_mm_init(&tegra->mm, gem_start, gem_end - gem_start + 1);
 	mutex_init(&tegra->mm_lock);
@@ -134,9 +147,12 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 	DRM_DEBUG("IOMMU apertures:\n");
 	DRM_DEBUG("  GEM: %#llx-%#llx\n", gem_start, gem_end);
 
-	err = tegra_drm_iova_init(tegra, gem_end + 1, geometry->aperture_end);
-	if (err)
-		goto domain;
+	if (carveout) {
+		err = tegra_drm_iova_init(tegra,
+					  gem_end + 1, geometry->aperture_end);
+		if (err)
+			goto domain;
+	}
 
 	return 0;
 
