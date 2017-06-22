@@ -84,6 +84,8 @@ struct tegra_drm {
 	struct tegra_display_hub *hub;
 
 	struct drm_atomic_state *state;
+
+	bool dynamic_iommu_mapping;
 };
 
 struct tegra_drm_client;
