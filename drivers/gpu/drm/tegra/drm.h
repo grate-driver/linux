@@ -71,6 +71,8 @@ struct tegra_drm {
 	} commit;
 
 	struct drm_atomic_state *state;
+
+	bool dynamic_iommu_mapping;
 };
 
 struct tegra_drm_client;
