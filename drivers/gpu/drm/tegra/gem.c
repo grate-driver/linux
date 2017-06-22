@@ -30,14 +30,71 @@ static void tegra_bo_put(struct host1x_bo *bo)
 static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 {
 	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
+	struct tegra_drm *tegra = obj->gem.dev->dev_private;
+	int prot = IOMMU_READ | IOMMU_WRITE;
+	int err = 0;
 
 	*sgt = obj->sgt;
+
+	if (obj->vaddr || !tegra->dynamic_iommu_mapping)
+		return obj->paddr;
+
+	/* IOMMU mapping below is relevant for Tegra20 only */
+	mutex_lock(&tegra->mm_lock);
+
+	/* check whether BO is already mapped */
+	if (++obj->mapcnt > 1)
+		goto mm_unlock;
+
+	err = drm_mm_insert_node_generic(&tegra->mm, obj->mm, obj->gem.size,
+					 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
+	if (err < 0) {
+		dev_err(tegra->drm->dev, "out of I/O virtual memory: %zd\n",
+			err);
+		goto mm_err;
+	}
+
+	obj->paddr = obj->mm->start;
+
+	obj->size = iommu_map_sg(tegra->domain, obj->paddr, obj->sgt->sgl,
+				 obj->sgt->nents, prot);
+	if (!obj->size) {
+		dev_err(tegra->drm->dev, "IOMMU mapping failed\n");
+		drm_mm_remove_node(obj->mm);
+		err = -ENOMEM;
+	}
+
+mm_err:
+	if (err < 0) {
+		obj->paddr = 0;
+		obj->mapcnt = 0;
+	}
+
+mm_unlock:
+	mutex_unlock(&tegra->mm_lock);
 
 	return obj->paddr;
 }
 
 static void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)
 {
+	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
+	struct tegra_drm *tegra = obj->gem.dev->dev_private;
+
+	if (obj->vaddr || !tegra->dynamic_iommu_mapping)
+		return;
+
+	mutex_lock(&tegra->mm_lock);
+
+	if (obj->mapcnt == 0)
+		WARN(1, "Imbalanced BO unpinning\n");
+
+	if (--obj->mapcnt == 0) {
+		iommu_unmap(tegra->domain, obj->paddr, obj->size);
+		drm_mm_remove_node(obj->mm);
+	}
+
+	mutex_unlock(&tegra->mm_lock);
 }
 
 static void *tegra_bo_mmap(struct host1x_bo *bo)
@@ -123,6 +180,13 @@ static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 	if (!bo->mm)
 		return -ENOMEM;
 
+	/*
+	 * On Tegra20, due to a small GART aperture size, GEM would be
+	 * mapped to GART only on an as-needed basis, i.e. on BO pinning.
+	 */
+	if (tegra->dynamic_iommu_mapping)
+		return 0;
+
 	mutex_lock(&tegra->mm_lock);
 
 	err = drm_mm_insert_node_generic(&tegra->mm,
@@ -160,11 +224,15 @@ static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 	if (!bo->mm)
 		return 0;
 
+	if (tegra->dynamic_iommu_mapping)
+		goto free_mm;
+
 	mutex_lock(&tegra->mm_lock);
 	iommu_unmap(tegra->domain, bo->paddr, bo->size);
 	drm_mm_remove_node(bo->mm);
 	mutex_unlock(&tegra->mm_lock);
 
+free_mm:
 	kfree(bo->mm);
 
 	return 0;
