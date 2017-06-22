@@ -161,6 +161,8 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 			goto domain;
 	}
 
+	INIT_LIST_HEAD(&tegra->mm_eviction_list);
+
 	return 0;
 
 domain:
