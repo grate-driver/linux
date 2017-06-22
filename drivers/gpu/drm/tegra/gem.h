@@ -43,6 +43,8 @@ struct tegra_bo {
 	struct page **pages;
 	/* size of IOMMU mapping */
 	size_t size;
+	/* IOMMU mapping reference counter */
+	unsigned int mapcnt;
 
 	struct tegra_bo_tiling tiling;
 };
