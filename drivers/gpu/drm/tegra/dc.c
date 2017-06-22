@@ -735,6 +735,51 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	tegra_dc_setup_window(p, &window);
 }
 
+static int tegra_plane_prepare_fb(struct drm_plane *plane,
+				  struct drm_plane_state *new_state)
+{
+	struct drm_framebuffer *fb = new_state->fb;
+	struct tegra_bo *bo;
+	unsigned int i;
+
+	if (!fb)
+		return 0;
+
+	for (i = 0; i < fb->format->num_planes; i++) {
+		bo = tegra_fb_get_plane(fb, i);
+
+		bo->paddr = host1x_bo_pin(&bo->base, &bo->sgt);
+		if (!bo->paddr)
+			goto err_cleanup;
+	}
+
+	return 0;
+
+err_cleanup:
+	while (i--) {
+		bo = tegra_fb_get_plane(fb, i);
+		host1x_bo_unpin(&bo->base, bo->sgt);
+	}
+
+	return -ENOMEM;
+}
+
+static void tegra_plane_cleanup_fb(struct drm_plane *plane,
+				   struct drm_plane_state *old_state)
+{
+	struct drm_framebuffer *fb = old_state->fb;
+	struct tegra_bo *bo;
+	unsigned int i;
+
+	if (!fb)
+		return;
+
+	for (i = 0; i < fb->format->num_planes; i++) {
+		bo = tegra_fb_get_plane(fb, i);
+		host1x_bo_unpin(&bo->base, bo->sgt);
+	}
+}
+
 static int tegra_plane_atomic_async_check(struct drm_plane *plane,
 					  struct drm_plane_state *state)
 {
@@ -790,6 +835,8 @@ static const struct drm_plane_helper_funcs tegra_plane_helper_funcs = {
 	.atomic_update = tegra_plane_atomic_update,
 	.atomic_async_check = tegra_plane_atomic_async_check,
 	.atomic_async_update = tegra_plane_atomic_async_update,
+	.prepare_fb = tegra_plane_prepare_fb,
+	.cleanup_fb = tegra_plane_cleanup_fb,
 };
 
 static unsigned long tegra_plane_get_possible_crtcs(struct drm_device *drm)
@@ -977,6 +1024,8 @@ static const struct drm_plane_helper_funcs tegra_cursor_plane_helper_funcs = {
 	.atomic_check = tegra_cursor_atomic_check,
 	.atomic_update = tegra_cursor_atomic_update,
 	.atomic_disable = tegra_cursor_atomic_disable,
+	.prepare_fb = tegra_plane_prepare_fb,
+	.cleanup_fb = tegra_plane_cleanup_fb,
 };
 
 static struct drm_plane *tegra_dc_cursor_plane_create(struct drm_device *drm,
