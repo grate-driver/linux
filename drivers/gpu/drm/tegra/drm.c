@@ -141,6 +141,13 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 	if (carveout)
 		gem_end -= CARVEOUT_SZ;
 
+	/*
+	 * On Tegra20, due to small GART aperture, BO's would be mapped
+	 * dynamically.
+	 */
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		tegra->dynamic_iommu_mapping = true;
+
 	drm_mm_init(&tegra->mm, gem_start, gem_end - gem_start + 1);
 	mutex_init(&tegra->mm_lock);
 

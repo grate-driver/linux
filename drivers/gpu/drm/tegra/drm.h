@@ -62,6 +62,8 @@ struct tegra_drm {
 	unsigned int pitch_align;
 
 	struct tegra_display_hub *hub;
+
+	bool dynamic_iommu_mapping;
 };
 
 struct tegra_drm_client;
