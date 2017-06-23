@@ -276,13 +276,13 @@ static int gart_iommu_map(struct iommu_domain *domain, unsigned long iova,
 	if (!gart_iova_range_valid(gart, iova, bytes))
 		return -EINVAL;
 
-	spin_lock_irqsave(&gart->pte_lock, flags);
 	pfn = __phys_to_pfn(pa);
 	if (!pfn_valid(pfn)) {
 		dev_err(gart->dev, "Invalid page: %pa\n", &pa);
-		spin_unlock_irqrestore(&gart->pte_lock, flags);
 		return -EINVAL;
 	}
+
+	spin_lock_irqsave(&gart->pte_lock, flags);
 	if (IS_ENABLED(TEGRA_IOMMU_GART_DEBUG)) {
 		pte = gart_read_pte(gart, iova);
 		if (pte & GART_ENTRY_PHYS_ADDR_VALID) {
