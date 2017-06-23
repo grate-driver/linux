@@ -242,6 +242,15 @@ config TEGRA_IOMMU_GART
 	  space through the GART (Graphics Address Relocation Table)
 	  hardware included on Tegra SoCs.
 
+config TEGRA_IOMMU_GART_DEBUG
+	bool "Debug Tegra GART IOMMU"
+	depends on TEGRA_IOMMU_GART
+	help
+	  Properly unmap pages and check whether page is already mapped
+	  during of mapping in expense of performance. This allows to
+	  catch double page remappings, caused by a bug in the IOVA
+	  allocator for example.
+
 config TEGRA_IOMMU_SMMU
 	bool "NVIDIA Tegra SMMU Support"
 	depends on ARCH_TEGRA
