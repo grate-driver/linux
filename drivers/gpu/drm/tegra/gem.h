@@ -39,6 +39,7 @@ struct tegra_bo {
 	void *vaddr;
 
 	struct drm_mm_node *mm;
+	struct list_head mm_eviction_entry;
 	unsigned long num_pages;
 	struct page **pages;
 	/* size of IOMMU mapping */

@@ -52,6 +52,7 @@ struct tegra_drm {
 	struct iommu_domain *domain;
 	struct mutex mm_lock;
 	struct drm_mm mm;
+	struct list_head mm_eviction_list;
 
 	struct tegra_drm_carveout *carveout;
 
