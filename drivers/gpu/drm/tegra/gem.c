@@ -93,30 +93,23 @@ static bool tegra_bo_mm_evict_something(struct tegra_drm *tegra, size_t size)
 	return found;
 }
 
-static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
+static dma_addr_t tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
+					    struct tegra_bo *bo)
 {
-	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
-	struct tegra_drm *tegra = obj->gem.dev->dev_private;
 	int prot = IOMMU_READ | IOMMU_WRITE;
 	int err = 0;
 
-	*sgt = obj->sgt;
-
-	if (obj->vaddr || !tegra->dynamic_iommu_mapping)
-		return obj->paddr;
-
-	/* IOMMU mapping below is relevant for Tegra20 only */
 	mutex_lock(&tegra->mm_lock);
 
 	/* check whether BO is already mapped */
-	if (++obj->mapcnt > 1)
+	if (++bo->mapcnt > 1)
 		goto mm_unlock;
 
 	/* if BO has been put on eviction list, remove BO from the list */
-	if (tegra_bo_mm_evict_bo(tegra, obj, false))
+	if (tegra_bo_mm_evict_bo(tegra, bo, false))
 		goto mm_unlock;
 
-	err = drm_mm_insert_node_generic(&tegra->mm, obj->mm, obj->gem.size,
+	err = drm_mm_insert_node_generic(&tegra->mm, bo->mm, bo->gem.size,
 					 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
 	if (!err)
 		goto mm_ok;
@@ -129,25 +122,25 @@ static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 	 * Scan for a suitable hole conjointly with a cached mappings
 	 * and release mappings from cache if needed.
 	 */
-	if (!tegra_bo_mm_evict_something(tegra, obj->gem.size))
+	if (!tegra_bo_mm_evict_something(tegra, bo->gem.size))
 		goto mm_err;
 
 	/*
 	 * We have freed some of the cached mappings and now reservation
 	 * should succeed.
 	 */
-	err = drm_mm_insert_node_generic(&tegra->mm, obj->mm, obj->gem.size,
+	err = drm_mm_insert_node_generic(&tegra->mm, bo->mm, bo->gem.size,
 					 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
 	if (err < 0)
 		goto mm_err;
 mm_ok:
-	obj->paddr = obj->mm->start;
+	bo->paddr = bo->mm->start;
 
-	obj->size = iommu_map_sg(tegra->domain, obj->paddr, obj->sgt->sgl,
-				 obj->sgt->nents, prot);
-	if (!obj->size) {
+	bo->size = iommu_map_sg(tegra->domain, bo->paddr, bo->sgt->sgl,
+				bo->sgt->nents, prot);
+	if (!bo->size) {
 		dev_err(tegra->drm->dev, "IOMMU mapping failed\n");
-		drm_mm_remove_node(obj->mm);
+		drm_mm_remove_node(bo->mm);
 		err = -ENOMEM;
 	}
 
@@ -155,14 +148,43 @@ mm_err:
 	if (err < 0) {
 		dev_err(tegra->drm->dev, "out of I/O virtual memory: %d\n",
 			err);
-		obj->paddr = 0;
-		obj->mapcnt = 0;
+		bo->paddr = 0;
+		bo->mapcnt = 0;
 	}
 
 mm_unlock:
 	mutex_unlock(&tegra->mm_lock);
 
-	return obj->paddr;
+	return bo->paddr;
+}
+
+static void tegra_bo_iommu_cached_unmap(struct tegra_drm *tegra,
+					struct tegra_bo *bo)
+{
+	mutex_lock(&tegra->mm_lock);
+
+	if (bo->mapcnt == 0)
+		WARN(1, "Imbalanced BO unmapping\n");
+
+	/* we don't unmap IOVA mapping here, but put it into eviction cache */
+	if (--bo->mapcnt == 0)
+		list_add(&bo->mm_eviction_entry, &tegra->mm_eviction_list);
+
+	mutex_unlock(&tegra->mm_lock);
+}
+
+static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
+{
+	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
+	struct tegra_drm *tegra = obj->gem.dev->dev_private;
+
+	*sgt = obj->sgt;
+
+	if (obj->vaddr || !tegra->dynamic_iommu_mapping)
+		return obj->paddr;
+
+	/* dynamic IOMMU mapping is relevant for Tegra20 only */
+	return tegra_bo_iommu_cached_map(tegra, obj);
 }
 
 static void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)
@@ -173,16 +195,8 @@ static void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)
 	if (obj->vaddr || !tegra->dynamic_iommu_mapping)
 		return;
 
-	mutex_lock(&tegra->mm_lock);
-
-	if (obj->mapcnt == 0)
-		WARN(1, "Imbalanced BO unpinning\n");
-
-	/* we don't unmap IOVA mapping here, but put it into eviction cache */
-	if (--obj->mapcnt == 0)
-		list_add(&obj->mm_eviction_entry, &tegra->mm_eviction_list);
-
-	mutex_unlock(&tegra->mm_lock);
+	/* dynamic IOMMU mapping is relevant for Tegra20 only */
+	tegra_bo_iommu_cached_unmap(tegra, obj);
 }
 
 static void *tegra_bo_mmap(struct host1x_bo *bo)
