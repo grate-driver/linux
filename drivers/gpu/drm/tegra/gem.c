@@ -27,6 +27,72 @@ static void tegra_bo_put(struct host1x_bo *bo)
 	drm_gem_object_put_unlocked(&obj->gem);
 }
 
+static bool tegra_bo_mm_evict_bo(struct tegra_drm *tegra, struct tegra_bo *bo,
+				 bool release)
+{
+	if (!tegra->dynamic_iommu_mapping)
+		return true;
+
+	if (list_empty(&bo->mm_eviction_entry))
+		return false;
+
+	if (release) {
+		iommu_unmap(tegra->domain, bo->paddr, bo->size);
+		drm_mm_remove_node(bo->mm);
+	}
+
+	list_del_init(&bo->mm_eviction_entry);
+
+	return true;
+}
+
+static bool tegra_bo_mm_evict_something(struct tegra_drm *tegra, size_t size)
+{
+	LIST_HEAD(scan_list);
+	LIST_HEAD(victims_list);
+	struct list_head *eviction_list;
+	struct drm_mm_scan scan;
+	struct tegra_bo *tmp;
+	struct tegra_bo *bo;
+	bool found = false;
+
+	eviction_list = &tegra->mm_eviction_list;
+
+	if (list_empty(eviction_list))
+		return false;
+
+	drm_mm_scan_init(&scan, &tegra->mm, size,
+			 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
+
+	list_for_each_entry_safe(bo, tmp, eviction_list, mm_eviction_entry) {
+		/* move BO from eviction to scan list */
+		list_move(&bo->mm_eviction_entry, &scan_list);
+
+		/* check whether hole has been found */
+		if (drm_mm_scan_add_block(&scan, bo->mm)) {
+			found = true;
+			break;
+		}
+	}
+
+	list_for_each_entry_safe(bo, tmp, &scan_list, mm_eviction_entry) {
+		/*
+		 * We can't release BO's mm node here, see comments to
+		 * drm_mm_scan_remove_block() in drm_mm.c
+		 */
+		if (drm_mm_scan_remove_block(&scan, bo->mm))
+			list_move(&bo->mm_eviction_entry, &victims_list);
+		else
+			list_move(&bo->mm_eviction_entry, eviction_list);
+	}
+
+	/* release victims from the cache */
+	list_for_each_entry_safe(bo, tmp, &victims_list, mm_eviction_entry)
+		tegra_bo_mm_evict_bo(tegra, bo, true);
+
+	return found;
+}
+
 static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 {
 	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
@@ -46,14 +112,35 @@ static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 	if (++obj->mapcnt > 1)
 		goto mm_unlock;
 
+	/* if BO has been put on eviction list, remove BO from the list */
+	if (tegra_bo_mm_evict_bo(tegra, obj, false))
+		goto mm_unlock;
+
 	err = drm_mm_insert_node_generic(&tegra->mm, obj->mm, obj->gem.size,
 					 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
-	if (err < 0) {
-		dev_err(tegra->drm->dev, "out of I/O virtual memory: %zd\n",
-			err);
-		goto mm_err;
-	}
+	if (!err)
+		goto mm_ok;
 
+	/* there is not enough room in GART, try to free up cached mappings */
+	if (err != -ENOSPC)
+		goto mm_err;
+
+	/*
+	 * Scan for a suitable hole conjointly with a cached mappings
+	 * and release mappings from cache if needed.
+	 */
+	if (!tegra_bo_mm_evict_something(tegra, obj->gem.size))
+		goto mm_err;
+
+	/*
+	 * We have freed some of the cached mappings and now reservation
+	 * should succeed.
+	 */
+	err = drm_mm_insert_node_generic(&tegra->mm, obj->mm, obj->gem.size,
+					 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
+	if (err < 0)
+		goto mm_err;
+mm_ok:
 	obj->paddr = obj->mm->start;
 
 	obj->size = iommu_map_sg(tegra->domain, obj->paddr, obj->sgt->sgl,
@@ -66,6 +153,8 @@ static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 
 mm_err:
 	if (err < 0) {
+		dev_err(tegra->drm->dev, "out of I/O virtual memory: %d\n",
+			err);
 		obj->paddr = 0;
 		obj->mapcnt = 0;
 	}
@@ -89,10 +178,9 @@ static void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)
 	if (obj->mapcnt == 0)
 		WARN(1, "Imbalanced BO unpinning\n");
 
-	if (--obj->mapcnt == 0) {
-		iommu_unmap(tegra->domain, obj->paddr, obj->size);
-		drm_mm_remove_node(obj->mm);
-	}
+	/* we don't unmap IOVA mapping here, but put it into eviction cache */
+	if (--obj->mapcnt == 0)
+		list_add(&obj->mm_eviction_entry, &tegra->mm_eviction_list);
 
 	mutex_unlock(&tegra->mm_lock);
 }
@@ -224,15 +312,13 @@ static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 	if (!bo->mm)
 		return 0;
 
-	if (tegra->dynamic_iommu_mapping)
-		goto free_mm;
-
 	mutex_lock(&tegra->mm_lock);
-	iommu_unmap(tegra->domain, bo->paddr, bo->size);
-	drm_mm_remove_node(bo->mm);
+	if (tegra_bo_mm_evict_bo(tegra, bo, false)) {
+		iommu_unmap(tegra->domain, bo->paddr, bo->size);
+		drm_mm_remove_node(bo->mm);
+	}
 	mutex_unlock(&tegra->mm_lock);
 
-free_mm:
 	kfree(bo->mm);
 
 	return 0;
@@ -319,6 +405,8 @@ static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo,
 {
 	struct tegra_drm *tegra = drm->dev_private;
 	int err;
+
+	INIT_LIST_HEAD(&bo->mm_eviction_entry);
 
 	if (scattered) {
 		err = tegra_bo_get_pages(drm, bo);

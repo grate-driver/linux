@@ -180,6 +180,8 @@ static int tegra_drm_iommu_init(struct tegra_drm *tegra)
 		return err;
 	}
 
+	INIT_LIST_HEAD(&tegra->mm_eviction_list);
+
 	return 0;
 }
 
