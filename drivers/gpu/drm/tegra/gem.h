@@ -35,6 +35,8 @@ struct tegra_bo {
 	struct host1x_bo base;
 	unsigned long flags;
 	struct sg_table *sgt;
+	dma_addr_t dmaaddr;
+	dma_addr_t iovaddr;
 	dma_addr_t paddr;
 	void *vaddr;
 
