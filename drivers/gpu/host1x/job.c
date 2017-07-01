@@ -295,12 +295,16 @@ struct host1x_firewall {
 	u32 count;
 };
 
-static int check_register(struct host1x_firewall *fw, unsigned long offset)
+static int check_register(struct host1x_firewall *fw, unsigned long offset,
+			  bool immediate)
 {
 	if (!fw->job->is_addr_reg)
 		return 0;
 
 	if (fw->job->is_addr_reg(fw->dev, fw->class, offset)) {
+		if (immediate)
+			return -EINVAL;
+
 		if (!fw->num_relocs)
 			return -EINVAL;
 
@@ -338,7 +342,7 @@ static int check_mask(struct host1x_firewall *fw)
 			return -EINVAL;
 
 		if (mask & 1) {
-			ret = check_register(fw, reg);
+			ret = check_register(fw, reg, false);
 			if (ret < 0)
 				return ret;
 
@@ -362,7 +366,7 @@ static int check_incr(struct host1x_firewall *fw)
 		if (fw->words == 0)
 			return -EINVAL;
 
-		ret = check_register(fw, reg);
+		ret = check_register(fw, reg, false);
 		if (ret < 0)
 			return ret;
 
@@ -384,7 +388,7 @@ static int check_nonincr(struct host1x_firewall *fw)
 		if (fw->words == 0)
 			return -EINVAL;
 
-		ret = check_register(fw, fw->reg);
+		ret = check_register(fw, fw->reg, false);
 		if (ret < 0)
 			return ret;
 
@@ -452,6 +456,11 @@ static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g)
 				goto out;
 			break;
 		case 4:
+			fw->reg = word >> 16 & 0x1fff;
+			err = check_register(fw, fw->reg, true);
+			if (err)
+				goto out;
+			break;
 		case 14:
 			break;
 		default:
