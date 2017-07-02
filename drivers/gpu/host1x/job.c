@@ -31,6 +31,7 @@
 #include "job.h"
 #include "syncpt.h"
 
+#define HOST1X_INCR_SYNCPT_OFFSET 0x0
 #define HOST1X_WAIT_SYNCPT_OFFSET 0x8
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
@@ -365,11 +366,16 @@ struct host1x_firewall {
 	struct host1x_bo *cmdbuf;
 	unsigned int offset;
 
+	unsigned int syncpt_incrs;
+
+	u32 *cmdbuf_base;
 	u32 words;
 	u32 class;
 	u32 reg;
 	u32 mask;
 	u32 count;
+
+	bool last;
 };
 
 static int check_register(struct host1x_firewall *fw, unsigned long offset,
@@ -390,6 +396,47 @@ static int check_register(struct host1x_firewall *fw, unsigned long offset,
 
 		fw->num_relocs--;
 		fw->reloc++;
+	}
+
+	/* assume that all modules have INCR_SYNCPT at the same offset */
+	if (offset == HOST1X_INCR_SYNCPT_OFFSET) {
+		u32 word = fw->cmdbuf_base[fw->offset];
+		unsigned int cond = (word >> 8) & 0xff;
+		unsigned int syncpt_id = word & 0xff;
+		unsigned int i;
+
+		if (!fw->syncpt_incrs)
+			return -EINVAL;
+
+		/*
+		 * Syncpoint increment must be the last command of the
+		 * stream in order to ensure that all outstanding HW
+		 * operations complete before jobs fence would signal.
+		 */
+		if (fw->syncpt_incrs == 1) {
+			if (!fw->last)
+				return -EINVAL;
+
+			if (fw->words != (immediate ? 0 : 1))
+				return -EINVAL;
+
+			/* condition must be OP_DONE */
+			if (cond != 1)
+				return -EINVAL;
+		}
+
+		/* Check whether syncpoint belongs to jobs client */
+		for (i = 0; i < fw->job->client->num_syncpts; i++) {
+			struct host1x_syncpt *sp = fw->job->client->syncpts[i];
+
+			if (host1x_syncpt_id(sp) == syncpt_id)
+				goto valid_syncpt;
+		}
+
+		return -EINVAL;
+
+valid_syncpt:
+		fw->syncpt_incrs--;
 	}
 
 	if (offset == HOST1X_WAIT_SYNCPT_OFFSET) {
@@ -491,16 +538,22 @@ static int check_nonincr(struct host1x_firewall *fw)
 	return 0;
 }
 
-static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g)
+static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g,
+		    bool last_gather)
 {
 	u32 *cmdbuf_base = (u32 *)fw->job->gather_copy_mapped +
 		(g->offset / sizeof(u32));
 	u32 job_class = fw->class;
 	int err = 0;
 
+	fw->cmdbuf_base = cmdbuf_base;
+	fw->last = last_gather;
 	fw->words = g->words;
 	fw->cmdbuf = g->bo;
 	fw->offset = 0;
+
+	if (!fw->syncpt_incrs)
+		return -EINVAL;
 
 	while (fw->words && !err) {
 		u32 word = cmdbuf_base[fw->offset];
@@ -577,6 +630,7 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 	fw.num_relocs = job->num_relocs;
 	fw.waitchk = job->waitchk;
 	fw.num_waitchks = job->num_waitchk;
+	fw.syncpt_incrs = job->syncpt_incrs;
 	fw.class = job->class;
 
 	for (i = 0; i < job->num_gathers; i++) {
@@ -617,14 +671,14 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 		g->offset = offset;
 
 		/* Validate the job */
-		if (validate(&fw, g))
+		if (validate(&fw, g, i == job->num_gathers - 1))
 			return -EINVAL;
 
 		offset += g->words * sizeof(u32);
 	}
 
-	/* No relocs and waitchks should remain at this point */
-	if (fw.num_relocs || fw.num_waitchks)
+	/* No relocs, waitchks and syncpts should remain at this point */
+	if (fw.num_relocs || fw.num_waitchks || fw.syncpt_incrs)
 		return -EINVAL;
 
 	return 0;
