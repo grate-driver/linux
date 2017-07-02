@@ -31,6 +31,7 @@
 #include "job.h"
 #include "syncpt.h"
 
+#define HOST1X_INCR_SYNCPT_OFFSET 0x0
 #define HOST1X_WAIT_SYNCPT_OFFSET 0x8
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
@@ -288,6 +289,9 @@ struct host1x_firewall {
 	struct host1x_bo *cmdbuf;
 	unsigned int offset;
 
+	unsigned int syncpt_incrs;
+
+	u32 *cmdbuf_base;
 	u32 words;
 	u32 class;
 	u32 reg;
@@ -298,10 +302,8 @@ struct host1x_firewall {
 static int check_register(struct host1x_firewall *fw, unsigned long offset,
 			  bool immediate)
 {
-	if (!fw->job->is_addr_reg)
-		return 0;
-
-	if (fw->job->is_addr_reg(fw->dev, fw->class, offset)) {
+	if (fw->job->is_addr_reg &&
+	    fw->job->is_addr_reg(fw->dev, fw->class, offset)) {
 		if (immediate)
 			return -EINVAL;
 
@@ -313,6 +315,20 @@ static int check_register(struct host1x_firewall *fw, unsigned long offset,
 
 		fw->num_relocs--;
 		fw->reloc++;
+	}
+
+	/* assume that all modules have INCR_SYNCPT at the same offset */
+	if (offset == HOST1X_INCR_SYNCPT_OFFSET) {
+		u32 word = fw->cmdbuf_base[fw->offset];
+		unsigned int syncpt_id = word & 0xff;
+
+		if (!fw->syncpt_incrs)
+			return -EINVAL;
+
+		if (syncpt_id != fw->job->syncpt_id)
+			return -EINVAL;
+
+		fw->syncpt_incrs--;
 	}
 
 	return 0;
@@ -407,6 +423,7 @@ static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g)
 	u32 job_class = fw->class;
 	int err = 0;
 
+	fw->cmdbuf_base = cmdbuf_base;
 	fw->words = g->words;
 	fw->cmdbuf = g->bo;
 	fw->offset = 0;
@@ -484,6 +501,7 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 	fw.dev = dev;
 	fw.reloc = job->relocs;
 	fw.num_relocs = job->num_relocs;
+	fw.syncpt_incrs = job->syncpt_incrs;
 	fw.class = job->class;
 
 	for (i = 0; i < job->num_gathers; i++) {
@@ -530,8 +548,8 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 		offset += g->words * sizeof(u32);
 	}
 
-	/* No relocs should remain at this point */
-	if (fw.num_relocs)
+	/* No relocs and syncpts should remain at this point */
+	if (fw.num_relocs || fw.syncpt_incrs)
 		return -EINVAL;
 
 	return 0;
