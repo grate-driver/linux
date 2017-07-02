@@ -318,6 +318,9 @@ struct drm_tegra_cmdbuf {
 	__u32 pad;
 };
 
+#define DRM_TEGRA_RELOC_READ_MADV	(1 << 0)
+#define DRM_TEGRA_RELOC_FLAGS		(DRM_TEGRA_RELOC_READ_MADV)
+
 /**
  * struct drm_tegra_reloc - GEM object relocation structure
  */
@@ -364,11 +367,11 @@ struct drm_tegra_reloc {
 	__u32 shift;
 
 	/**
-	 * @pad:
+	 * @flags:
 	 *
-	 * Structure padding that may be used in the future. Must be 0.
+	 * Relocation flags.
 	 */
-	__u32 pad;
+	__u32 flags;
 };
 
 /**
