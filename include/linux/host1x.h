@@ -265,6 +265,9 @@ struct host1x_job {
 
 	/* Add a channel wait for previous ops to complete */
 	bool serialize;
+
+	/* dma_fence for this job */
+	struct dma_fence *out_fence;
 };
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
