@@ -27,9 +27,32 @@
 
 #define CARVEOUT_SZ SZ_64M
 
+#define TEGRA_HOST1X_MODULES_MAX_NUM		32
+#define TEGRA_DRM_CONTEXTS_MAX_NUM		128
+
+#define TEGRA_CONTEXTS_MAX_NUM						\
+	(TEGRA_DRM_CONTEXTS_MAX_NUM * TEGRA_HOST1X_MODULES_MAX_NUM)
+
+#define TEGRA_CONTEXT_DRM(ctx, base)					\
+	((ctx - base) & (TEGRA_DRM_CONTEXTS_MAX_NUM - 1))
+
+#define TEGRA_CONTEXT_MODULE(ctx, base)					\
+	((ctx - base) & ~(TEGRA_DRM_CONTEXTS_MAX_NUM - 1))
+
+#define TEGRA_CONTEXT_VALUE(drm_ctx, base, modid)			\
+	(base + modid * TEGRA_DRM_CONTEXTS_MAX_NUM + drm_ctx)
+
 struct tegra_drm_file {
 	struct idr contexts;
 	struct mutex lock;
+	unsigned int drm_context;
+};
+
+struct tegra_bo_reservation {
+	struct tegra_bo *bo;
+	bool cmdbuf;
+	bool write;
+	bool skip;
 };
 
 static void tegra_atomic_schedule(struct tegra_drm *tegra,
@@ -204,7 +227,7 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 	if (err)
 		goto free;
 
-	mutex_init(&tegra->clients_lock);
+	mutex_init(&tegra->lock);
 	INIT_LIST_HEAD(&tegra->clients);
 
 	mutex_init(&tegra->commit.lock);
@@ -254,6 +277,26 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 	err = tegra_drm_fb_init(drm);
 	if (err < 0)
 		goto device;
+
+	/*
+	 * We need to differentiate BO's coming from a different DRM context
+	 * (shared BO's) and we also need to differentiate Host1x module
+	 * that uses BO, because BO's within the same module do not need
+	 * to be awaited since they will be 'naturally' serialized. We
+	 * do not need to wait for BO's within the same DRM context, because
+	 * we need flexibility of manual BO's synchronization using waitchecks
+	 * to reduce channels blocking and jobs submission overhead.
+	 *
+	 * The Host1x's module ID gives the context base value, so that:
+	 *
+	 * ctx = module_id * TEGRA_DRM_CONTEXTS_MAX_NUM + drm_ctx
+	 *
+	 */
+	tegra->drm_contexts = kcalloc(BITS_TO_LONGS(TEGRA_DRM_CONTEXTS_MAX_NUM),
+				      sizeof(unsigned long), GFP_KERNEL);
+
+	tegra->fence_context_base =
+			dma_fence_context_alloc(TEGRA_CONTEXTS_MAX_NUM);
 
 	return 0;
 
@@ -311,11 +354,24 @@ static void tegra_drm_unload(struct drm_device *drm)
 
 static int tegra_drm_open(struct drm_device *drm, struct drm_file *filp)
 {
+	struct tegra_drm *tegra = drm->dev_private;
 	struct tegra_drm_file *fpriv;
 
 	fpriv = kzalloc(sizeof(*fpriv), GFP_KERNEL);
 	if (!fpriv)
 		return -ENOMEM;
+
+	mutex_lock(&tegra->lock);
+	fpriv->drm_context = find_first_zero_bit(tegra->drm_contexts,
+						 TEGRA_DRM_CONTEXTS_MAX_NUM);
+	if (fpriv->drm_context < TEGRA_DRM_CONTEXTS_MAX_NUM)
+		set_bit(fpriv->drm_context, tegra->drm_contexts);
+	mutex_unlock(&tegra->lock);
+
+	if (fpriv->drm_context >= TEGRA_DRM_CONTEXTS_MAX_NUM) {
+		kfree(fpriv);
+		return -EBUSY;
+	}
 
 	idr_init(&fpriv->contexts);
 	mutex_init(&fpriv->lock);
@@ -353,7 +409,7 @@ host1x_bo_lookup(struct drm_file *file, u32 handle)
 	return &bo->base;
 }
 
-static int host1x_reloc_copy_from_user(struct host1x_reloc *dest,
+static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 				       struct drm_tegra_reloc __user *src,
 				       struct drm_device *drm,
 				       struct drm_file *file)
@@ -378,6 +434,10 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest,
 		return err;
 
 	err = get_user(dest->shift, &src->shift);
+	if (err < 0)
+		return err;
+
+	err = get_user(*flags, &src->flags);
 	if (err < 0)
 		return err;
 
@@ -422,6 +482,274 @@ static int host1x_waitchk_copy_from_user(struct host1x_waitchk *dest,
 	return 0;
 }
 
+static int tegra_append_bo_reservations(struct tegra_bo_reservation *resv,
+					struct tegra_bo *bo, unsigned int index,
+					bool write, bool cmdbuf, bool skip)
+{
+	if (bo->resv_pending) {
+		if (resv[bo->resv_index].cmdbuf != cmdbuf)
+			return -EINVAL;
+
+		resv[index].bo = bo;
+		resv[index].skip = true;
+		resv[index].cmdbuf = cmdbuf;
+		resv[bo->resv_index].write |= write;
+	} else {
+		bo->resv_index = index;
+		bo->resv_pending = true;
+
+		resv[index].bo = bo;
+		resv[index].skip = skip;
+		resv[index].write = write;
+		resv[index].cmdbuf = cmdbuf;
+	}
+
+	return 0;
+}
+
+static int tegra_lock_bo_reservations(struct ww_acquire_ctx *acquire_ctx,
+				      struct tegra_bo_reservation *bos,
+				      unsigned int num_bos)
+{
+	struct reservation_object *resv;
+	int i, k, contended_lock = -1;
+	int ret = 0;
+
+	/*
+	 * Documentation/locking/ww-mutex-design.txt recommends to avoid
+	 * context setup overhead in a case of a single mutex.
+	 */
+	if (num_bos <= 1)
+		acquire_ctx = NULL;
+	else
+		ww_acquire_init(acquire_ctx, &reservation_ww_class);
+retry:
+	if (contended_lock != -1) {
+		resv = bos[contended_lock].bo->resv;
+		ret = ww_mutex_lock_slow_interruptible(&resv->lock,
+						       acquire_ctx);
+		if (ret)
+			goto done;
+	}
+
+	for (i = 0; i < num_bos; i++) {
+		/*
+		 * Duplicated reservations cause a crash on the
+		 * ww_mutex locking, so let's avoid these duplicates.
+		 */
+		if (bos[i].skip)
+			continue;
+
+		if (i == contended_lock)
+			continue;
+
+		ret = ww_mutex_lock_interruptible(&bos[i].bo->resv->lock,
+						  acquire_ctx);
+		if (ret) {
+			for (k = 0; k < i; k++) {
+				if (!bos[i].skip) {
+					resv = bos[k].bo->resv;
+					ww_mutex_unlock(&resv->lock);
+				}
+			}
+
+			if (contended_lock >= i) {
+				resv = bos[contended_lock].bo->resv;
+				ww_mutex_unlock(&resv->lock);
+			}
+
+			if (ret == -EDEADLK) {
+				contended_lock = i;
+				goto retry;
+			}
+
+			goto done;
+		}
+	}
+done:
+	if (num_bos > 1)
+		ww_acquire_done(acquire_ctx);
+
+	return ret;
+}
+
+static void tegra_unlock_bo_reservations(struct ww_acquire_ctx *acquire_ctx,
+					 struct tegra_bo_reservation *bos,
+					 unsigned int num_bos)
+{
+	unsigned int i;
+
+	for (i = 0; i < num_bos; i++) {
+		if (bos[i].skip)
+			continue;
+
+		ww_mutex_unlock(&bos[i].bo->resv->lock);
+	}
+
+	if (num_bos > 1)
+		ww_acquire_fini(acquire_ctx);
+}
+
+static int tegra_prealloc_reservations_space(struct tegra_bo_reservation *bos,
+					     unsigned int num_bos)
+{
+	unsigned int i;
+	int err;
+
+	for (i = 0; i < num_bos; i++) {
+		if (bos[i].skip)
+			continue;
+
+		/* write is exclusive, it doesn't need to be reserved */
+		if (bos[i].write)
+			continue;
+
+		/* read is shared */
+		err = reservation_object_reserve_shared(bos[i].bo->resv);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
+static bool tegra_fence_context_match(u64 drm_context, u64 fence_context_base,
+				      u64 fence_context)
+{
+	/* Check whether fence was produced by Tegra's DRM */
+	if (fence_context - fence_context_base >= TEGRA_CONTEXTS_MAX_NUM)
+		return false;
+
+	/* Check whether fence belongs to the same Tegra's DRM context */
+	if (TEGRA_CONTEXT_DRM(drm_context, fence_context_base) ==
+	    TEGRA_CONTEXT_DRM(fence_context, fence_context_base))
+		return true;
+
+	/*
+	 * We don't need to wait for fence if it is in-use by the same
+	 * Host1x module because BO's are naturally serialized.
+	 */
+	if (TEGRA_CONTEXT_MODULE(drm_context, fence_context_base) ==
+	    TEGRA_CONTEXT_MODULE(fence_context, fence_context_base))
+		return true;
+
+	return false;
+}
+
+static int tegra_await_bo(struct host1x_job *job, struct tegra_bo *bo,
+			  struct host1x_client *client, bool write,
+			  u64 drm_context, u64 fence_context_base)
+{
+	struct reservation_object *resv = bo->resv;
+	struct reservation_object_list *fobj;
+	struct dma_fence *f;
+	unsigned int i;
+	int err;
+
+	fobj = reservation_object_get_list(resv);
+
+	/* exclusive (write) fence supersedes all shared (read) fences */
+	if (!fobj || !fobj->shared_count) {
+		f = reservation_object_get_excl(resv);
+
+		/* this BO doesn't have any fences at all */
+		if (!f)
+			return 0;
+
+		if (!tegra_fence_context_match(drm_context,
+					       fence_context_base,
+					       f->context))
+		{
+			if (host1x_fence_is_waitable(f))
+				err = host1x_job_add_fence(job, f);
+			else
+				err = dma_fence_wait(f, true);
+
+			if (err)
+				return err;
+		}
+	}
+
+	if (!fobj)
+		return 0;
+
+	/*
+	 * On read:  BO waits for all previous writes completion.
+	 * On write: BO waits for all previous writes and reads completion.
+	 */
+	if (!write)
+		return 0;
+
+	for (i = 0; i < fobj->shared_count; i++) {
+		f = rcu_dereference_protected(fobj->shared[i],
+					      reservation_object_held(resv));
+
+		if (!tegra_fence_context_match(drm_context,
+					       fence_context_base,
+					       f->context))
+		{
+			if (host1x_fence_is_waitable(f))
+				err = host1x_job_add_fence(job, f);
+			else
+				err = dma_fence_wait(f, true);
+
+			if (err)
+				return err;
+		}
+	}
+
+	return 0;
+}
+
+static int tegra_await_bo_fences(struct host1x_job *job,
+				 struct tegra_bo_reservation *bos,
+				 unsigned int num_bos,
+				 struct host1x_client *client,
+				 u64 drm_context, u64 fence_context_base)
+{
+	unsigned int i;
+	int err;
+
+	for (i = 0; i < num_bos; i++) {
+		if (bos[i].skip)
+			continue;
+
+		err = tegra_await_bo(job, bos[i].bo, client, bos[i].write,
+				     drm_context, fence_context_base);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
+static void tegra_attach_fence(struct tegra_bo_reservation *bos,
+			       unsigned int num_bos,
+			       struct dma_fence *fence)
+{
+	unsigned int i;
+
+	for (i = 0; i < num_bos; i++) {
+		if (bos[i].skip)
+			continue;
+
+		/*
+		 * Fence could signal during the 'attaching', in that case
+		 * we won't attach the expired fence to the rest of the BO's,
+		 * optimizing things a tad.
+		 */
+		if (fence && dma_fence_is_signaled(fence))
+			fence = NULL;
+
+		if (bos[i].write)
+			reservation_object_add_excl_fence(bos[i].bo->resv,
+							  fence);
+		else if (fence)
+			reservation_object_add_shared_fence(bos[i].bo->resv,
+							    fence);
+	}
+}
+
 int tegra_drm_submit(struct tegra_drm_context *context,
 		     struct drm_tegra_submit *args, struct drm_device *drm,
 		     struct drm_file *file)
@@ -429,14 +757,21 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	unsigned int num_cmdbufs = args->num_cmdbufs;
 	unsigned int num_relocs = args->num_relocs;
 	unsigned int num_waitchks = args->num_waitchks;
+	struct tegra_drm_file *fpriv = file->driver_priv;
+	struct tegra_drm *tegra = drm->dev_private;
 	struct drm_tegra_cmdbuf __user *user_cmdbufs;
 	struct drm_tegra_reloc __user *user_relocs;
 	struct drm_tegra_waitchk __user *user_waitchks;
 	struct drm_tegra_syncpt __user *user_syncpt;
 	struct drm_tegra_syncpt syncpt;
-	struct drm_gem_object **refs;
+	struct host1x_syncpt *sp;
 	struct host1x_job *job;
-	unsigned int num_refs;
+	struct host1x *host1x;
+	struct tegra_bo_reservation *reservations;
+	struct ww_acquire_ctx acquire_ctx;
+	struct dma_fence *out_fence;
+	unsigned int num_bos;
+	u64 context_value;
 	int err;
 
 	user_cmdbufs = u64_to_user_ptr(args->cmdbufs);
@@ -463,25 +798,23 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	job->class = context->client->base.class;
 	job->serialize = true;
 
-	/*
-	 * Track referenced BOs so that they can be unreferenced after the
-	 * submission is complete.
-	 */
-	num_refs = num_cmdbufs + num_relocs * 2 + num_waitchks;
+	num_bos = num_cmdbufs + num_relocs * 2 + num_waitchks;
 
-	refs = kmalloc_array(num_refs, sizeof(*refs), GFP_KERNEL);
-	if (!refs) {
+	reservations = kmalloc_array(num_bos, sizeof(*reservations),
+				     GFP_KERNEL);
+	if (!reservations) {
 		err = -ENOMEM;
 		goto put;
 	}
 
 	/* reuse as an iterator later */
-	num_refs = 0;
+	num_bos = 0;
 
 	while (num_cmdbufs) {
 		struct drm_tegra_cmdbuf cmdbuf;
 		struct host1x_bo *bo;
 		struct tegra_bo *obj;
+		bool skip;
 
 		if (copy_from_user(&cmdbuf, user_cmdbufs, sizeof(cmdbuf))) {
 			err = -EFAULT;
@@ -495,30 +828,52 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		}
 
 		obj = host1x_to_tegra_bo(bo);
-		refs[num_refs++] = &obj->gem;
 
 		host1x_job_add_gather(job, bo, cmdbuf.words, cmdbuf.offset);
 		num_cmdbufs--;
 		user_cmdbufs++;
+
+		/*
+		 * We don't care about cmdbufs reservation if firewall
+		 * is enabled because their BOs will be cloned.
+		 */
+		skip = IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL);
+
+		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
+						   false, true, skip);
+		if (err)
+			goto fail;
 	}
 
 	/* copy and resolve relocations from submit */
 	while (num_relocs--) {
 		struct host1x_reloc *reloc;
 		struct tegra_bo *obj;
+		u32 reloc_flags;
 
 		err = host1x_reloc_copy_from_user(&job->relocarray[num_relocs],
-						  &user_relocs[num_relocs], drm,
-						  file);
+						  &reloc_flags,
+						  &user_relocs[num_relocs],
+						  drm, file);
 		if (err < 0)
 			goto fail;
 
 		reloc = &job->relocarray[num_relocs];
 		obj = host1x_to_tegra_bo(reloc->cmdbuf.bo);
-		refs[num_refs++] = &obj->gem;
+
+		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
+					!(reloc_flags & DRM_TEGRA_RELOC_READ_MADV),
+					true, true);
+		if (err)
+			goto fail;
 
 		obj = host1x_to_tegra_bo(reloc->target.bo);
-		refs[num_refs++] = &obj->gem;
+
+		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
+					!(reloc_flags & DRM_TEGRA_RELOC_READ_MADV),
+					false, false);
+		if (err)
+			goto fail;
 	}
 
 	/* copy and resolve waitchks from submit */
@@ -526,13 +881,18 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		struct host1x_waitchk *wait = &job->waitchk[num_waitchks];
 		struct tegra_bo *obj;
 
-		err = host1x_waitchk_copy_from_user(
-			wait, &user_waitchks[num_waitchks], file);
+		err = host1x_waitchk_copy_from_user(wait,
+						    &user_waitchks[num_waitchks],
+						    file);
 		if (err < 0)
 			goto fail;
 
 		obj = host1x_to_tegra_bo(wait->bo);
-		refs[num_refs++] = &obj->gem;
+
+		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
+						   false, true, true);
+		if (err)
+			goto fail;
 	}
 
 	if (copy_from_user(&syncpt, user_syncpt, sizeof(syncpt))) {
@@ -549,23 +909,58 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	if (args->timeout && args->timeout < 10000)
 		job->timeout = args->timeout;
 
-	err = host1x_job_pin(job, context->client->base.dev);
+	/* acquire every BO reservation lock */
+	err = tegra_lock_bo_reservations(&acquire_ctx, reservations, num_bos);
 	if (err)
 		goto fail;
+
+	/* reserve space for the fences */
+	err = tegra_prealloc_reservations_space(reservations, num_bos);
+	if (err)
+		goto fail_unlock;
+
+	/* derive DRM's client context value */
+	context_value = TEGRA_CONTEXT_VALUE(fpriv->drm_context,
+					    tegra->fence_context_base,
+					    context->client->base.module);
+
+	/* await every fence of every BO */
+	err = tegra_await_bo_fences(job, reservations, num_bos, job->client,
+				    context_value, tegra->fence_context_base);
+	if (err)
+		goto fail_unlock;
+
+	err = host1x_job_pin(job, context->client->base.dev);
+	if (err)
+		goto fail_unlock;
 
 	err = host1x_job_submit(job);
 	if (err) {
 		host1x_job_unpin(job);
-		goto fail;
+		goto fail_unlock;
 	}
+
+	/* create dma_fence for this job */
+	host1x = dev_get_drvdata(drm->dev->parent);
+	sp = host1x_syncpt_get(host1x, syncpt.id);
+	out_fence = host1x_fence_create(sp, job->syncpt_end, context_value,
+					tegra->fence_seqno++);
+
+	/* attach fence to BO's for the further submission reservations */
+	tegra_attach_fence(reservations, num_bos, out_fence);
 
 	args->fence = job->syncpt_end;
 
-fail:
-	while (num_refs--)
-		drm_gem_object_put_unlocked(refs[num_refs]);
+fail_unlock:
+	tegra_unlock_bo_reservations(&acquire_ctx, reservations, num_bos);
 
-	kfree(refs);
+fail:
+	while (num_bos--) {
+		drm_gem_object_put_unlocked(&reservations[num_bos].bo->gem);
+		reservations[num_bos].bo->resv_pending = false;
+	}
+
+	kfree(reservations);
 
 put:
 	host1x_job_put(job);
@@ -1020,10 +1415,15 @@ static int tegra_drm_context_cleanup(int id, void *p, void *data)
 static void tegra_drm_postclose(struct drm_device *drm, struct drm_file *file)
 {
 	struct tegra_drm_file *fpriv = file->driver_priv;
+	struct tegra_drm *tegra = drm->dev_private;
 
 	mutex_lock(&fpriv->lock);
 	idr_for_each(&fpriv->contexts, tegra_drm_context_cleanup, NULL);
 	mutex_unlock(&fpriv->lock);
+
+	mutex_lock(&tegra->lock);
+	clear_bit(fpriv->drm_context, tegra->drm_contexts);
+	mutex_unlock(&tegra->lock);
 
 	idr_destroy(&fpriv->contexts);
 	mutex_destroy(&fpriv->lock);
@@ -1119,9 +1519,9 @@ static struct drm_driver tegra_drm_driver = {
 int tegra_drm_register_client(struct tegra_drm *tegra,
 			      struct tegra_drm_client *client)
 {
-	mutex_lock(&tegra->clients_lock);
+	mutex_lock(&tegra->lock);
 	list_add_tail(&client->list, &tegra->clients);
-	mutex_unlock(&tegra->clients_lock);
+	mutex_unlock(&tegra->lock);
 
 	return 0;
 }
@@ -1129,9 +1529,9 @@ int tegra_drm_register_client(struct tegra_drm *tegra,
 int tegra_drm_unregister_client(struct tegra_drm *tegra,
 				struct tegra_drm_client *client)
 {
-	mutex_lock(&tegra->clients_lock);
+	mutex_lock(&tegra->lock);
 	list_del_init(&client->list);
-	mutex_unlock(&tegra->clients_lock);
+	mutex_unlock(&tegra->lock);
 
 	return 0;
 }

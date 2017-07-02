@@ -98,6 +98,9 @@ struct drm_tegra_cmdbuf {
 	__u32 pad;
 };
 
+#define DRM_TEGRA_RELOC_READ_MADV	(1 << 0)
+#define DRM_TEGRA_RELOC_FLAGS		(DRM_TEGRA_RELOC_READ_MADV)
+
 struct drm_tegra_reloc {
 	struct {
 		__u32 handle;
@@ -108,7 +111,7 @@ struct drm_tegra_reloc {
 		__u32 offset;
 	} target;
 	__u32 shift;
-	__u32 pad;
+	__u32 flags;
 };
 
 struct drm_tegra_waitchk {

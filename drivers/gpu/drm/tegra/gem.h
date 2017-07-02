@@ -12,6 +12,7 @@
 #define __HOST1X_GEM_H
 
 #include <linux/host1x.h>
+#include <linux/reservation.h>
 
 #include <drm/drm.h>
 #include <drm/drmP.h>
@@ -48,6 +49,12 @@ struct tegra_bo {
 	unsigned int mapcnt;
 
 	struct tegra_bo_tiling tiling;
+
+	/* normally (resv == &_resv) except for imported bo's */
+	struct reservation_object *resv;
+	struct reservation_object _resv;
+	unsigned int resv_index;
+	bool resv_pending;
 };
 
 static inline struct tegra_bo *to_tegra_bo(struct drm_gem_object *gem)

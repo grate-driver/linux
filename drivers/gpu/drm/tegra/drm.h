@@ -56,7 +56,7 @@ struct tegra_drm {
 
 	struct tegra_drm_carveout *carveout;
 
-	struct mutex clients_lock;
+	struct mutex lock;
 	struct list_head clients;
 
 #ifdef CONFIG_DRM_FBDEV_EMULATION
@@ -74,6 +74,10 @@ struct tegra_drm {
 	struct drm_atomic_state *state;
 
 	bool dynamic_iommu_mapping;
+
+	unsigned long *drm_contexts;
+	u64 fence_context_base;
+	u64 fence_seqno;
 };
 
 struct tegra_drm_client;

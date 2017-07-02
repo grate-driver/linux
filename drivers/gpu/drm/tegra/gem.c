@@ -496,6 +496,9 @@ struct tegra_bo *tegra_bo_create(struct drm_device *drm, size_t size,
 	if (flags & DRM_TEGRA_GEM_CREATE_BOTTOM_UP)
 		bo->flags |= TEGRA_BO_BOTTOM_UP;
 
+	bo->resv = &bo->_resv;
+	reservation_object_init(bo->resv);
+
 	return bo;
 
 release:
@@ -568,6 +571,7 @@ static struct tegra_bo *tegra_bo_import(struct drm_device *drm,
 	}
 
 	bo->gem.import_attach = attach;
+	bo->resv = buf->resv;
 
 	return bo;
 
@@ -597,6 +601,7 @@ void tegra_bo_free_object(struct drm_gem_object *gem)
 		drm_prime_gem_destroy(gem, NULL);
 	} else {
 		tegra_bo_free(gem->dev, bo);
+		reservation_object_fini(bo->resv);
 	}
 
 	drm_gem_object_release(gem);
