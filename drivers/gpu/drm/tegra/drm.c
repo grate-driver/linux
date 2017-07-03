@@ -1356,6 +1356,38 @@ static int tegra_gem_get_flags(struct drm_device *drm, void *data,
 
 	return 0;
 }
+
+static int tegra_gem_cpu_prep(struct drm_device *drm, void *data,
+			      struct drm_file *file)
+{
+	struct drm_tegra_gem_cpu_prep *args = data;
+	struct drm_gem_object *gem;
+	struct tegra_bo *bo;
+	unsigned long timeout;
+	bool write;
+	int ret;
+
+	gem = drm_gem_object_lookup(file, args->handle);
+	if (!gem)
+		return -ENOENT;
+
+	bo = to_tegra_bo(gem);
+	write = args->flags & DRM_TEGRA_CPU_PREP_WRITE;
+	timeout = msecs_to_jiffies(args->timeout);
+
+	ret = reservation_object_wait_timeout_rcu(bo->resv, write,
+						  true, timeout);
+
+	drm_gem_object_put_unlocked(gem);
+
+	if (ret == 0)
+		return timeout == 0 ? -EBUSY : -ETIMEDOUT;
+
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
 #endif
 
 static const struct drm_ioctl_desc tegra_drm_ioctls[] = {
@@ -1387,6 +1419,8 @@ static const struct drm_ioctl_desc tegra_drm_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(TEGRA_GEM_SET_FLAGS, tegra_gem_set_flags,
 			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(TEGRA_GEM_GET_FLAGS, tegra_gem_get_flags,
+			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(TEGRA_GEM_CPU_PREP, tegra_gem_cpu_prep,
 			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
 #endif
 };
