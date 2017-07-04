@@ -26,7 +26,6 @@
 #define DRIVER_PATCHLEVEL 0
 
 #define CARVEOUT_SZ SZ_64M
-#define CDMA_GATHER_FETCHES_MAX_NB 16383
 
 struct tegra_drm_file {
 	struct idr contexts;
@@ -435,9 +434,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	struct drm_tegra_waitchk __user *user_waitchks;
 	struct drm_tegra_syncpt __user *user_syncpt;
 	struct drm_tegra_syncpt syncpt;
-	struct host1x *host1x = dev_get_drvdata(drm->dev->parent);
 	struct drm_gem_object **refs;
-	struct host1x_syncpt *sp;
 	struct host1x_job *job;
 	unsigned int num_refs;
 	int err;
@@ -485,19 +482,9 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		struct drm_tegra_cmdbuf cmdbuf;
 		struct host1x_bo *bo;
 		struct tegra_bo *obj;
-		u64 offset;
 
 		if (copy_from_user(&cmdbuf, user_cmdbufs, sizeof(cmdbuf))) {
 			err = -EFAULT;
-			goto fail;
-		}
-
-		/*
-		 * The maximum number of CDMA gather fetches is 16383, a higher
-		 * value means the words count is malformed.
-		 */
-		if (cmdbuf.words > CDMA_GATHER_FETCHES_MAX_NB) {
-			err = -EINVAL;
 			goto fail;
 		}
 
@@ -507,19 +494,8 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 			goto fail;
 		}
 
-		offset = (u64)cmdbuf.offset + (u64)cmdbuf.words * sizeof(u32);
 		obj = host1x_to_tegra_bo(bo);
 		refs[num_refs++] = &obj->gem;
-
-		/*
-		 * Gather buffer base address must be 4-bytes aligned,
-		 * unaligned offset is malformed and cause commands stream
-		 * corruption on the buffer address relocation.
-		 */
-		if (offset & 3 || offset >= obj->gem.size) {
-			err = -EINVAL;
-			goto fail;
-		}
 
 		host1x_job_add_gather(job, bo, cmdbuf.words, cmdbuf.offset);
 		num_cmdbufs--;
@@ -541,24 +517,8 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		obj = host1x_to_tegra_bo(reloc->cmdbuf.bo);
 		refs[num_refs++] = &obj->gem;
 
-		/*
-		 * The unaligned cmdbuf offset will cause an unaligned write
-		 * during of the relocations patching, corrupting the commands
-		 * stream.
-		 */
-		if (reloc->cmdbuf.offset & 3 ||
-		    reloc->cmdbuf.offset >= obj->gem.size) {
-			err = -EINVAL;
-			goto fail;
-		}
-
 		obj = host1x_to_tegra_bo(reloc->target.bo);
 		refs[num_refs++] = &obj->gem;
-
-		if (reloc->target.offset >= obj->gem.size) {
-			err = -EINVAL;
-			goto fail;
-		}
 	}
 
 	/* copy and resolve waitchks from submit */
@@ -573,27 +533,10 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 
 		obj = host1x_to_tegra_bo(wait->bo);
 		refs[num_refs++] = &obj->gem;
-
-		/*
-		 * The unaligned offset will cause an unaligned write during
-		 * of the waitchks patching, corrupting the commands stream.
-		 */
-		if (wait->offset & 3 ||
-		    wait->offset >= obj->gem.size) {
-			err = -EINVAL;
-			goto fail;
-		}
 	}
 
 	if (copy_from_user(&syncpt, user_syncpt, sizeof(syncpt))) {
 		err = -EFAULT;
-		goto fail;
-	}
-
-	/* check whether syncpoint ID is valid */
-	sp = host1x_syncpt_get(host1x, syncpt.id);
-	if (!sp) {
-		err = -ENOENT;
 		goto fail;
 	}
 
