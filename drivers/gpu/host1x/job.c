@@ -34,6 +34,9 @@
 #define HOST1X_INCR_SYNCPT_OFFSET 0x0
 #define HOST1X_WAIT_SYNCPT_OFFSET 0x8
 
+#define FW_ERR(fmt, args...) \
+	pr_err("HOST1X firewall: %s: " fmt, __func__, ##args)
+
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
 				    u32 num_cmdbufs, u32 num_relocs,
 				    u32 num_waitchks)
@@ -332,12 +335,22 @@ static bool check_reloc(struct host1x_reloc *reloc, struct host1x_bo *cmdbuf,
 {
 	offset *= sizeof(u32);
 
-	if (reloc->cmdbuf.bo != cmdbuf || reloc->cmdbuf.offset != offset)
+	if (reloc->cmdbuf.bo != cmdbuf) {
+		FW_ERR("Doesn't belong to cmdbuf\n");
 		return false;
+	}
+
+	if (reloc->cmdbuf.offset != offset) {
+		FW_ERR("Invalid command buffer offset 0x%lX\n",
+		       reloc->cmdbuf.offset);
+		return false;
+	}
 
 	/* relocation shift value validation isn't implemented yet */
-	if (reloc->shift)
+	if (reloc->shift) {
+		FW_ERR("Shifting is forbidden\n");
 		return false;
+	}
 
 	return true;
 }
@@ -347,8 +360,15 @@ static bool check_wait(struct host1x_waitchk *wait, struct host1x_bo *cmdbuf,
 {
 	offset *= sizeof(u32);
 
-	if (wait->bo != cmdbuf || wait->offset != offset)
+	if (wait->bo != cmdbuf) {
+		FW_ERR("Doesn't belong to cmdbuf\n");
 		return false;
+	}
+
+	if (wait->offset != offset) {
+		FW_ERR("Invalid offset 0x%X\n", wait->offset);
+		return false;
+	}
 
 	return true;
 }
@@ -381,11 +401,16 @@ static int check_register(struct host1x_firewall *fw, unsigned long offset,
 {
 	if (fw->job->is_addr_reg &&
 	    fw->job->is_addr_reg(fw->dev, fw->class, offset)) {
-		if (immediate)
+		if (immediate) {
+			FW_ERR("Writing an immediate value to address "
+			       "register\n");
 			return -EINVAL;
+		}
 
-		if (!fw->num_relocs)
+		if (!fw->num_relocs) {
+			FW_ERR("Invalid number of relocations\n");
 			return -EINVAL;
+		}
 
 		if (!check_reloc(fw->reloc, fw->cmdbuf, fw->offset))
 			return -EINVAL;
@@ -399,21 +424,30 @@ static int check_register(struct host1x_firewall *fw, unsigned long offset,
 		u32 word = fw->cmdbuf_base[fw->offset];
 		unsigned int syncpt_id = word & 0xff;
 
-		if (!fw->syncpt_incrs)
+		if (!fw->syncpt_incrs) {
+			FW_ERR("Invalid number of syncpoints\n");
 			return -EINVAL;
+		}
 
-		if (syncpt_id != fw->job->syncpt_id)
+		if (syncpt_id != fw->job->syncpt_id) {
+			FW_ERR("Invalid syncpoint ID %u, should be %u\n",
+			       syncpt_id, fw->job->syncpt_id);
 			return -EINVAL;
+		}
 
 		fw->syncpt_incrs--;
 	}
 
 	if (offset == HOST1X_WAIT_SYNCPT_OFFSET) {
-		if (fw->class != HOST1X_CLASS_HOST1X)
+		if (fw->class != HOST1X_CLASS_HOST1X) {
+			FW_ERR("Jobs class must be 'host1x' for a waitcheck\n");
 			return -EINVAL;
+		}
 
-		if (!fw->num_waitchks)
+		if (!fw->num_waitchks) {
+			FW_ERR("Invalid number of a waitchecks\n");
 			return -EINVAL;
+		}
 
 		if (!check_wait(fw->waitchk, fw->cmdbuf, fw->offset))
 			return -EINVAL;
@@ -428,11 +462,16 @@ static int check_register(struct host1x_firewall *fw, unsigned long offset,
 static int check_class(struct host1x_firewall *fw, u32 class)
 {
 	if (!fw->job->is_valid_class) {
-		if (fw->class != class)
+		if (fw->class != class) {
+			FW_ERR("Invalid class ID 0x%X, should be 0x%X\n",
+			       fw->class, class);
 			return -EINVAL;
+		}
 	} else {
-		if (!fw->job->is_valid_class(fw->class))
+		if (!fw->job->is_valid_class(fw->class)) {
+			FW_ERR("Invalid class ID 0x%X\n", fw->class);
 			return -EINVAL;
+		}
 	}
 
 	return 0;
@@ -445,8 +484,10 @@ static int check_mask(struct host1x_firewall *fw)
 	int ret;
 
 	while (mask) {
-		if (fw->words == 0)
+		if (fw->words == 0) {
+			FW_ERR("Invalid write mask\n");
 			return -EINVAL;
+		}
 
 		if (mask & 1) {
 			ret = check_register(fw, reg, false);
@@ -470,8 +511,10 @@ static int check_incr(struct host1x_firewall *fw)
 	int ret;
 
 	while (count) {
-		if (fw->words == 0)
+		if (fw->words == 0) {
+			FW_ERR("Invalid words count\n");
 			return -EINVAL;
+		}
 
 		ret = check_register(fw, reg, false);
 		if (ret < 0)
@@ -492,8 +535,10 @@ static int check_nonincr(struct host1x_firewall *fw)
 	int ret;
 
 	while (count) {
-		if (fw->words == 0)
+		if (fw->words == 0) {
+			FW_ERR("Invalid words count\n");
 			return -EINVAL;
+		}
 
 		ret = check_register(fw, fw->reg, false);
 		if (ret < 0)
@@ -566,11 +611,22 @@ static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g)
 		case 4:
 			fw->reg = word >> 16 & 0x1fff;
 			err = check_register(fw, fw->reg, true);
-			if (err)
+			if (err) {
+				fw->offset--;
 				goto out;
+			}
+			break;
+		case 5:
+		case 6:
+		case 14:
+			FW_ERR("Forbidden command\n");
+			err = -EINVAL;
+			fw->offset--;
 			break;
 		default:
+			FW_ERR("Invalid command\n");
 			err = -EINVAL;
+			fw->offset--;
 			break;
 		}
 	}
@@ -633,17 +689,33 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 		g->offset = offset;
 
 		/* Validate the job */
-		if (validate(&fw, g))
+		if (validate(&fw, g)) {
+			dev_err(dev, "Command stream validation failed at word "
+				"%u of gather #%d, checked %zu words totally\n",
+				fw.offset, i, offset / sizeof(u32) + fw.offset);
 			return -EINVAL;
+		}
 
 		offset += g->words * sizeof(u32);
 	}
 
 	/* No relocs, waitchks and syncpts should remain at this point */
-	if (fw.num_relocs || fw.num_waitchks || fw.syncpt_incrs)
-		return -EINVAL;
+	if (!fw.num_relocs && !fw.num_waitchks && !fw.syncpt_incrs)
+		return 0;
 
-	return 0;
+	if (fw.num_relocs)
+		FW_ERR("Job has invalid number of relocations, %u left\n",
+		       fw.num_relocs);
+
+	if (fw.num_waitchks)
+		FW_ERR("Job has invalid number of waitchecks, %u left\n",
+		       fw.num_waitchks);
+
+	if (fw.syncpt_incrs)
+		FW_ERR("Job has invalid number of syncpoint increments, "
+		       "%u left\n", fw.syncpt_incrs);
+
+	return -EINVAL;
 }
 
 int host1x_job_pin(struct host1x_job *job, struct device *dev)
