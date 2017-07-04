@@ -34,6 +34,8 @@
 #define HOST1X_INCR_SYNCPT_OFFSET 0x0
 #define HOST1X_WAIT_SYNCPT_OFFSET 0x8
 
+#define CDMA_GATHER_MAX_FETCHES_NB 16383
+
 #define FW_ERR(fmt, args...) \
 	pr_err("HOST1X firewall: %s: " fmt, __func__, ##args)
 
@@ -718,12 +720,127 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 	return -EINVAL;
 }
 
+static int check_job(struct host1x_job *job, struct host1x *host,
+		     struct device *dev)
+{
+	struct host1x_syncpt *sp;
+	unsigned int i;
+
+	sp = host1x_syncpt_get(host, job->syncpt_id);
+	if (!sp) {
+		FW_ERR("Jobs syncpoint ID %u is invalid\n", job->syncpt_id);
+		goto fail;
+	}
+
+	for (i = 0; i < job->num_gathers; i++) {
+		struct host1x_job_gather *g = &job->gathers[i];
+		u64 gather_size = g->words * sizeof(u32);
+
+		/*
+		 * Gather buffer base address must be 4-bytes aligned,
+		 * unaligned offset is malformed and cause commands stream
+		 * corruption on the buffers address relocation.
+		 */
+		if (g->offset & 3) {
+			FW_ERR("Gather #%u has unaligned offset %u\n",
+			       i, g->offset);
+			goto fail;
+		}
+
+		/*
+		 * The maximum number of CDMA gather fetches is 16383, a higher
+		 * value means the words count is malformed.
+		 */
+		if (g->words > CDMA_GATHER_MAX_FETCHES_NB) {
+			FW_ERR("Gather #%u has too many words %u, max %u\n",
+			       i, g->words, CDMA_GATHER_MAX_FETCHES_NB);
+			goto fail;
+		}
+
+		/* Verify that gather is inside of its BO bounds */
+		if (g->offset + gather_size > host1x_bo_size(g->bo)) {
+			FW_ERR("Gather #%u is malformed: offset %u, "
+			       "words %u, BO size %zu\n",
+			       i, g->offset, g->words, host1x_bo_size(g->bo));
+			goto fail;
+		}
+	}
+
+	for (i = 0; i < job->num_relocs; i++) {
+		struct host1x_reloc *reloc = &job->relocarray[i];
+
+		if (reloc->target.offset & 3) {
+			FW_ERR("Relocation #%u has unaligned target "
+			       "offset %lu\n", i, reloc->target.offset);
+			goto fail;
+		}
+
+		if (reloc->target.offset >= host1x_bo_size(reloc->target.bo)) {
+			FW_ERR("Relocation #%u has invalid target "
+			       "offset %lu, max %zu\n",
+			       i, reloc->target.offset,
+			       host1x_bo_size(reloc->target.bo) - sizeof(u32));
+			goto fail;
+		}
+
+		if (reloc->cmdbuf.offset & 3) {
+			FW_ERR("Relocation #%u has unaligned cmdbuf "
+			       "offset %lu\n", i, reloc->cmdbuf.offset);
+			goto fail;
+		}
+
+		if (reloc->cmdbuf.offset >= host1x_bo_size(reloc->cmdbuf.bo)) {
+			FW_ERR("Relocation #%u has invalid cmdbuf "
+			       "offset %lu, max %zu\n",
+			       i, reloc->cmdbuf.offset,
+			       host1x_bo_size(reloc->cmdbuf.bo) - sizeof(u32));
+			goto fail;
+		}
+	}
+
+	for (i = 0; i < job->num_waitchk; i++) {
+		struct host1x_waitchk *wait = &job->waitchk[i];
+
+		sp = host1x_syncpt_get(host, wait->syncpt_id);
+		if (!sp) {
+			FW_ERR("Waitcheck #%u has invalid syncpoint ID %u\n",
+			       i, wait->syncpt_id);
+			goto fail;
+		}
+
+		if (wait->offset & 3) {
+			FW_ERR("Waitcheck #%u has unaligned offset 0x%X\n",
+			       i, wait->offset);
+			goto fail;
+		}
+
+		if (wait->offset >= host1x_bo_size(wait->bo)) {
+			FW_ERR("Waitcheck #%u has invalid offset 0x%X, "
+			       "max %zu\n", i, wait->offset,
+			       host1x_bo_size(wait->bo) - sizeof(u32));
+			goto fail;
+		}
+	}
+
+	return 0;
+
+fail:
+	/* print final error message, giving a clue about jobs client */
+	dev_err(dev, "Job checking failed\n");
+	return -EINVAL;
+}
+
 int host1x_job_pin(struct host1x_job *job, struct device *dev)
 {
 	int err;
 	unsigned int i, j;
 	struct host1x *host = dev_get_drvdata(dev->parent);
 	DECLARE_BITMAP(waitchk_mask, host1x_syncpt_nb_pts(host));
+
+	/* perform basic validations */
+	err = check_job(job, host, dev);
+	if (err)
+		goto out;
 
 	bitmap_zero(waitchk_mask, host1x_syncpt_nb_pts(host));
 	for (i = 0; i < job->num_waitchk; i++) {
