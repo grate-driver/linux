@@ -34,6 +34,8 @@
 #define HOST1X_INCR_SYNCPT_OFFSET 0x0
 #define HOST1X_WAIT_SYNCPT_OFFSET 0x8
 
+#define CDMA_GATHER_MAX_FETCHES_NB 16383
+
 #define FW_ERR(fmt, args...) \
 	pr_err("HOST1X firewall: %s: " fmt, __func__, ##args)
 
@@ -318,8 +320,7 @@ static int check_register(struct host1x_firewall *fw, unsigned long offset,
 	if (fw->job->is_addr_reg &&
 	    fw->job->is_addr_reg(fw->dev, fw->class, offset)) {
 		if (immediate) {
-			FW_ERR("Writing an immediate value to address "
-			       "register\n");
+			FW_ERR("Writing an immediate value to address register\n");
 			return -EINVAL;
 		}
 
@@ -591,8 +592,7 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 
 		/* Validate the job */
 		if (validate(&fw, g)) {
-			dev_err(dev, "Command stream validation failed at word "
-				"%u of gather #%d, checked %zu words totally\n",
+			dev_err(dev, "Command stream validation failed at word %u of gather #%d, checked %zu words totally\n",
 				fw.offset, i, offset / sizeof(u32) + fw.offset);
 			return -EINVAL;
 		}
@@ -609,9 +609,92 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 		       fw.num_relocs);
 
 	if (fw.syncpt_incrs)
-		FW_ERR("Job has invalid number of syncpoint increments, "
-		       "%u left\n", fw.syncpt_incrs);
+		FW_ERR("Job has invalid number of syncpoint increments, %u left\n",
+		       fw.syncpt_incrs);
 
+	return -EINVAL;
+}
+
+static int check_job(struct host1x_job *job, struct host1x *host,
+		     struct device *dev)
+{
+	struct host1x_syncpt *sp;
+	unsigned int i;
+
+	sp = host1x_syncpt_get(host, job->syncpt_id);
+	if (!sp) {
+		FW_ERR("Jobs syncpoint ID %u is invalid\n", job->syncpt_id);
+		goto fail;
+	}
+
+	for (i = 0; i < job->num_gathers; i++) {
+		struct host1x_job_gather *g = &job->gathers[i];
+		u64 gather_size = g->words * sizeof(u32);
+
+		/*
+		 * Gather buffer base address must be 4-bytes aligned,
+		 * unaligned offset is malformed and cause commands stream
+		 * corruption on the buffers address relocation.
+		 */
+		if (g->offset & 3) {
+			FW_ERR("Gather #%u has unaligned offset %u\n",
+			       i, g->offset);
+			goto fail;
+		}
+
+		/*
+		 * The maximum number of CDMA gather fetches is 16383, a higher
+		 * value means the words count is malformed.
+		 */
+		if (g->words > CDMA_GATHER_MAX_FETCHES_NB) {
+			FW_ERR("Gather #%u has too many words %u, max %u\n",
+			       i, g->words, CDMA_GATHER_MAX_FETCHES_NB);
+			goto fail;
+		}
+
+		/* Verify that gather is inside of its BO bounds */
+		if (g->offset + gather_size > host1x_bo_size(g->bo)) {
+			FW_ERR("Gather #%u is malformed: offset %u, words %u, BO size %zu\n",
+			       i, g->offset, g->words, host1x_bo_size(g->bo));
+			goto fail;
+		}
+	}
+
+	for (i = 0; i < job->num_relocs; i++) {
+		struct host1x_reloc *reloc = &job->relocs[i];
+
+		if (reloc->target.offset & 3) {
+			FW_ERR("Relocation #%u has unaligned target offset %lu\n",
+			       i, reloc->target.offset);
+			goto fail;
+		}
+
+		if (reloc->target.offset >= host1x_bo_size(reloc->target.bo)) {
+			FW_ERR("Relocation #%u has invalid target offset %lu, max %zu\n",
+			       i, reloc->target.offset,
+			       host1x_bo_size(reloc->target.bo) - sizeof(u32));
+			goto fail;
+		}
+
+		if (reloc->cmdbuf.offset & 3) {
+			FW_ERR("Relocation #%u has unaligned cmdbuf offset %lu\n",
+			       i, reloc->cmdbuf.offset);
+			goto fail;
+		}
+
+		if (reloc->cmdbuf.offset >= host1x_bo_size(reloc->cmdbuf.bo)) {
+			FW_ERR("Relocation #%u has invalid cmdbuf offset %lu, max %zu\n",
+			       i, reloc->cmdbuf.offset,
+			       host1x_bo_size(reloc->cmdbuf.bo) - sizeof(u32));
+			goto fail;
+		}
+	}
+
+	return 0;
+
+fail:
+	/* print final error message, giving a clue about jobs client */
+	dev_err(dev, "Job checking failed\n");
 	return -EINVAL;
 }
 
@@ -621,6 +704,10 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 	unsigned int i, j;
 	struct host1x *host = dev_get_drvdata(dev->parent);
 
+	/* perform basic validations */
+	err = check_job(job, host, dev);
+	if (err)
+		goto out;
 	/* pin memory */
 	err = pin_job(host, job);
 	if (err)

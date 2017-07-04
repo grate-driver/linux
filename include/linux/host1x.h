@@ -82,6 +82,7 @@ struct host1x_bo_ops {
 	void (*munmap)(struct host1x_bo *bo, void *addr);
 	void *(*kmap)(struct host1x_bo *bo, unsigned int pagenum);
 	void (*kunmap)(struct host1x_bo *bo, unsigned int pagenum, void *addr);
+	size_t (*size)(struct host1x_bo *bo);
 };
 
 struct host1x_bo {
@@ -134,6 +135,11 @@ static inline void host1x_bo_kunmap(struct host1x_bo *bo,
 				    unsigned int pagenum, void *addr)
 {
 	bo->ops->kunmap(bo, pagenum, addr);
+}
+
+static inline size_t host1x_bo_size(struct host1x_bo *bo)
+{
+	return bo->ops->size(bo);
 }
 
 /*
