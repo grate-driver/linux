@@ -259,6 +259,13 @@ static struct host1x_bo *tegra_bo_get(struct host1x_bo *bo)
 	return bo;
 }
 
+static size_t tegra_bo_size(struct host1x_bo *bo)
+{
+	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
+
+	return obj->gem.size;
+}
+
 static const struct host1x_bo_ops tegra_bo_ops = {
 	.get = tegra_bo_get,
 	.put = tegra_bo_put,
@@ -268,6 +275,7 @@ static const struct host1x_bo_ops tegra_bo_ops = {
 	.munmap = tegra_bo_munmap,
 	.kmap = tegra_bo_kmap,
 	.kunmap = tegra_bo_kunmap,
+	.size = tegra_bo_size,
 };
 
 static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
