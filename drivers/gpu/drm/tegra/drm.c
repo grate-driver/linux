@@ -336,6 +336,14 @@ static void tegra_drm_context_free(struct tegra_drm_context *context)
 	kfree(context);
 }
 
+static void tegra_drm_context_release(struct kref *ref)
+{
+	struct tegra_drm_context *context =
+			container_of(ref, struct tegra_drm_context, refcount);
+
+	tegra_drm_context_free(context);
+}
+
 static void tegra_drm_lastclose(struct drm_device *drm)
 {
 #ifdef CONFIG_DRM_FBDEV_EMULATION
@@ -1025,6 +1033,7 @@ static int tegra_client_open(struct tegra_drm_file *fpriv,
 		return err;
 	}
 
+	kref_init(&context->refcount);
 	context->client = client;
 	context->id = err;
 
@@ -1081,7 +1090,7 @@ static int tegra_close_channel(struct drm_device *drm, void *data,
 	}
 
 	idr_remove(&fpriv->contexts, context->id);
-	tegra_drm_context_free(context);
+	kref_put(&context->refcount, tegra_drm_context_release);
 
 unlock:
 	mutex_unlock(&fpriv->lock);
@@ -1129,15 +1138,18 @@ static int tegra_submit(struct drm_device *drm, void *data,
 	mutex_lock(&fpriv->lock);
 
 	context = idr_find(&fpriv->contexts, args->context);
-	if (!context) {
-		err = -ENODEV;
-		goto unlock;
-	}
+	if (context)
+		kref_get(&context->refcount);
+
+	mutex_unlock(&fpriv->lock);
+
+	if (!context)
+		return -ENODEV;
 
 	err = context->client->ops->submit(context, args, drm, file);
 
-unlock:
-	mutex_unlock(&fpriv->lock);
+	kref_put(&context->refcount, tegra_drm_context_release);
+
 	return err;
 }
 
