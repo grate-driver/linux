@@ -17,6 +17,8 @@
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <linux/cma.h>
+#include <linux/dma-contiguous.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -40,6 +42,7 @@
 #define MC_GART_ERROR_REQ		0x30
 #define MC_DECERR_EMEM_OTHERS_STATUS	0x58
 #define MC_SECURITY_VIOLATION_STATUS	0x74
+#define MC_SECURITY_CFG2		0x7c
 
 #define SECURITY_VIOLATION_TYPE		BIT(30)	/* 0=TRUSTZONE, 1=CARVEOUT */
 
@@ -70,6 +73,23 @@ static inline void mc_writel(struct tegra20_mc *mc, u32 val, u32 offs)
 		writel(val, mc->regs[0] + offs);
 	else if (offs < 0x400)
 		writel(val, mc->regs[1] + offs - 0x3c);
+}
+
+static void setup_memory_protection(struct tegra20_mc *mc)
+{
+	struct cma *cma = dev_get_cma_area(mc->dev);
+
+	/* CMA might be disabled in the kernel config */
+	if (!cma)
+		return;
+
+	/*
+	 * Protect memory from improperly configured devices, so that
+	 * all read/write memory accesses performed by MC clients other
+	 * than CPU that are below the default CMA region would be trapped
+	 * and reported by the MC driver instead of trashing the memory.
+	 */
+	mc_writel(mc, cma_get_base(cma), MC_SECURITY_CFG2);
 }
 
 static const char * const tegra20_mc_client[] = {
@@ -236,6 +256,8 @@ static int tegra20_mc_probe(struct platform_device *pdev)
 	intmask = MC_INT_INVALID_GART_PAGE |
 		MC_INT_DECERR_EMEM | MC_INT_SECURITY_VIOLATION;
 	mc_writel(mc, intmask, MC_INTMASK);
+
+	setup_memory_protection(mc);
 	return 0;
 }
 
