@@ -13,6 +13,7 @@
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 
+#include <soc/tegra/mc.h>
 #include <soc/tegra/pmc.h>
 
 #include "drm.h"
@@ -72,9 +73,35 @@ static int gr3d_exit(struct host1x_client *client)
 	return 0;
 }
 
+static int gr3d_reset(struct host1x_client *client)
+{
+	struct tegra_drm_client *drm = host1x_to_drm_client(client);
+	struct gr3d *gr3d = to_gr3d(drm);
+	int err;
+
+	err = tegra_memory_client_hot_reset(TEGRA_MEMORY_CLIENT_3D0,
+					    gr3d->rst, 10);
+	if (err) {
+		dev_err(client->dev, "Failed to reset HW: %d\n", err);
+		return err;
+	}
+
+	if (gr3d->clk_secondary) {
+		err = tegra_memory_client_hot_reset(TEGRA_MEMORY_CLIENT_3D1,
+						   gr3d->rst_secondary, 10);
+		if (err) {
+			dev_err(client->dev, "Failed to reset HW2: %d\n", err);
+			return err;
+		}
+	}
+
+	return 0;
+}
+
 static const struct host1x_client_ops gr3d_client_ops = {
 	.init = gr3d_init,
 	.exit = gr3d_exit,
+	.reset = gr3d_reset,
 };
 
 static int gr3d_open_channel(struct tegra_drm_client *client,
@@ -303,6 +330,7 @@ static int gr3d_probe(struct platform_device *pdev)
 	gr3d->client.base.ops = &gr3d_client_ops;
 	gr3d->client.base.dev = &pdev->dev;
 	gr3d->client.base.class = HOST1X_CLASS_GR3D;
+	gr3d->client.base.module = HOST1X_MODULE_GR3D;
 	gr3d->client.base.syncpts = syncpts;
 	gr3d->client.base.num_syncpts = 1;
 
