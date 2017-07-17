@@ -712,7 +712,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 
 	job->num_relocs = args->num_relocs;
 	job->num_waitchk = args->num_waitchks;
-	job->client = (u32)args->context;
+	job->client = &context->client->base;
 	job->class = context->client->base.class;
 	job->serialize = true;
 
@@ -844,8 +844,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		goto fail_unlock;
 
 	/* await every fence of every BO */
-	err = tegra_await_bo_fences(reservations, num_bos,
-				    &context->client->base);
+	err = tegra_await_bo_fences(reservations, num_bos, job->client);
 	if (err)
 		goto fail_unlock;
 
@@ -862,8 +861,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	/* create dma_fence for this job */
 	host1x = dev_get_drvdata(drm->dev->parent);
 	sp = host1x_syncpt_get(host1x, syncpt.id);
-	out_fence = host1x_fence_create(&context->client->base, sp,
-					job->syncpt_end);
+	out_fence = host1x_fence_create(job->client, sp, job->syncpt_end);
 
 	/*
 	 * We have to wait for a jobs completion if fence creation fails,
