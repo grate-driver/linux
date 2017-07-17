@@ -196,6 +196,34 @@ static void cdma_hw_teardown(struct host1x *host, struct host1x_channel *ch)
 #endif
 }
 
+static void cdma_hw_reset(struct host1x *host, struct host1x_client *client)
+{
+	/*
+	 * HW unit may hang, in that case all further jobs would fail too.
+	 * Reset the unit in order to recover.
+	 */
+	if (client->ops && client->ops->reset) {
+		dev_dbg(client->dev, "%s: resetting HW unit\n", __func__);
+
+		client->ops->reset(client);
+	}
+
+	/*
+	 * Host1x module might get into a bad state and needs to be reset
+	 * too.
+	 */
+#if HOST1X_HW >= 6
+	/* TODO */
+#else
+	if (client->module) {
+		dev_dbg(host->dev, "%s: resetting module\n", __func__);
+
+		host1x_sync_writel(host, BIT(client->module),
+				   HOST1X_SYNC_MOD_TEARDOWN);
+	}
+#endif
+}
+
 /*
  * Stops both channel's command processor and CDMA immediately.
  * Also, tears down the channel and resets corresponding module.
@@ -204,6 +232,7 @@ static void cdma_freeze(struct host1x_cdma *cdma)
 {
 	struct host1x *host = cdma_to_host1x(cdma);
 	struct host1x_channel *ch = cdma_to_channel(cdma);
+	struct host1x_client *client = cdma->timeout.client;
 
 	if (cdma->torndown && !cdma->running) {
 		dev_warn(host->dev, "Already torn down\n");
@@ -223,6 +252,7 @@ static void cdma_freeze(struct host1x_cdma *cdma)
 			 HOST1X_CHANNEL_DMACTRL);
 
 	cdma_hw_teardown(host, ch);
+	cdma_hw_reset(host, client);
 
 	cdma->running = false;
 	cdma->torndown = true;
