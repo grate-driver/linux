@@ -31,8 +31,8 @@ struct gr3d {
 	struct host1x_channel *channel;
 	struct clk *clk_secondary;
 	struct clk *clk;
-	struct reset_control *rst_secondary;
-	struct reset_control *rst;
+	struct reset_control *rst_secondary, *rst_mc_secondary;
+	struct reset_control *rst, *rst_mc;
 
 	const struct gr3d_soc *soc;
 
@@ -105,9 +105,63 @@ static int gr3d_exit(struct host1x_client *client)
 	return 0;
 }
 
+static int gr3d_reset(struct host1x_client *client)
+{
+	struct tegra_drm_client *drm = host1x_to_drm_client(client);
+	struct gr3d *gr3d = to_gr3d(drm);
+	int err;
+
+	/* reset first GPU */
+	err = reset_control_assert(gr3d->rst_mc);
+	if (err) {
+		dev_err(client->dev, "Failed to assert MC reset: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_reset(gr3d->rst);
+	if (err) {
+		dev_err(client->dev, "Failed to reset HW: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_deassert(gr3d->rst_mc);
+	if (err) {
+		dev_err(client->dev, "Failed to deassert MC reset: %d\n", err);
+		return err;
+	}
+
+	if (!gr3d->clk_secondary)
+		return 0;
+
+	/* reset second GPU */
+	err = reset_control_assert(gr3d->rst_mc_secondary);
+	if (err) {
+		dev_err(client->dev,
+			"Failed to assert secondary MC reset: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_reset(gr3d->rst_secondary);
+	if (err) {
+		dev_err(client->dev,
+			"Failed to reset secondary HW: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_deassert(gr3d->rst_mc_secondary);
+	if (err) {
+		dev_err(client->dev,
+			"Failed to deassert secondary MC reset: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
 static const struct host1x_client_ops gr3d_client_ops = {
 	.init = gr3d_init,
 	.exit = gr3d_exit,
+	.reset = gr3d_reset,
 };
 
 static int gr3d_open_channel(struct tegra_drm_client *client,
@@ -313,6 +367,12 @@ static int gr3d_probe(struct platform_device *pdev)
 		return PTR_ERR(gr3d->rst);
 	}
 
+	gr3d->rst_mc = devm_reset_control_get_optional(&pdev->dev, "mc");
+	if (IS_ERR(gr3d->rst_mc)) {
+		dev_err(&pdev->dev, "cannot get MC reset\n");
+		return PTR_ERR(gr3d->rst_mc);
+	}
+
 	if (of_device_is_compatible(np, "nvidia,tegra30-gr3d")) {
 		gr3d->clk_secondary = devm_clk_get(&pdev->dev, "3d2");
 		if (IS_ERR(gr3d->clk_secondary)) {
@@ -325,6 +385,13 @@ static int gr3d_probe(struct platform_device *pdev)
 		if (IS_ERR(gr3d->rst_secondary)) {
 			dev_err(&pdev->dev, "cannot get secondary reset\n");
 			return PTR_ERR(gr3d->rst_secondary);
+		}
+
+		gr3d->rst_mc_secondary = devm_reset_control_get_optional(
+							&pdev->dev, "mc2");
+		if (IS_ERR(gr3d->rst_mc_secondary)) {
+			dev_err(&pdev->dev, "cannot get secondary MC reset\n");
+			return PTR_ERR(gr3d->rst_mc_secondary);
 		}
 	}
 
@@ -350,6 +417,7 @@ static int gr3d_probe(struct platform_device *pdev)
 	gr3d->client.base.ops = &gr3d_client_ops;
 	gr3d->client.base.dev = &pdev->dev;
 	gr3d->client.base.class = HOST1X_CLASS_GR3D;
+	gr3d->client.base.module = HOST1X_MODULE_GR3D;
 	gr3d->client.base.syncpts = syncpts;
 	gr3d->client.base.num_syncpts = 1;
 
