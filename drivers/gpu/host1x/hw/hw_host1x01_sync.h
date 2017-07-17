@@ -107,6 +107,12 @@ static inline u32 host1x_sync_ch_teardown_r(void)
 }
 #define HOST1X_SYNC_CH_TEARDOWN \
 	host1x_sync_ch_teardown_r()
+static inline u32 host1x_sync_mod_teardown_r(void)
+{
+	return 0xb4;
+}
+#define HOST1X_SYNC_MOD_TEARDOWN \
+	host1x_sync_mod_teardown_r()
 static inline u32 host1x_sync_usec_clk_r(void)
 {
 	return 0x1a4;
