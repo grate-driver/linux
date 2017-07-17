@@ -72,9 +72,47 @@ static int gr3d_exit(struct host1x_client *client)
 	return 0;
 }
 
+static int gr3d_reset(struct host1x_client *client)
+{
+	struct tegra_drm_client *drm = host1x_to_drm_client(client);
+	struct gr3d *gr3d = to_gr3d(drm);
+	int err;
+
+	err = reset_control_assert(gr3d->rst);
+	if (err) {
+		dev_err(client->dev, "Failed to assert reset: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_assert(gr3d->rst_secondary);
+	if (err) {
+		dev_err(client->dev, "Failed to assert secondary reset: %d\n",
+			err);
+		return err;
+	}
+
+	usleep_range(1000, 2000);
+
+	err = reset_control_deassert(gr3d->rst_secondary);
+	if (err) {
+		dev_err(client->dev, "Failed to deassert secondary reset: %d\n",
+			err);
+		return err;
+	}
+
+	err = reset_control_deassert(gr3d->rst);
+	if (err) {
+		dev_err(client->dev, "Failed to deassert reset: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
 static const struct host1x_client_ops gr3d_client_ops = {
 	.init = gr3d_init,
 	.exit = gr3d_exit,
+	.reset = gr3d_reset,
 };
 
 static int gr3d_open_channel(struct tegra_drm_client *client,
@@ -303,6 +341,7 @@ static int gr3d_probe(struct platform_device *pdev)
 	gr3d->client.base.ops = &gr3d_client_ops;
 	gr3d->client.base.dev = &pdev->dev;
 	gr3d->client.base.class = HOST1X_CLASS_GR3D;
+	gr3d->client.base.module = HOST1X_MODULE_GR3D;
 	gr3d->client.base.syncpts = syncpts;
 	gr3d->client.base.num_syncpts = 1;
 
