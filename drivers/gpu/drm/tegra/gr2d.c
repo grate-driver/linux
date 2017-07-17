@@ -9,6 +9,7 @@
 #include <linux/clk.h>
 #include <linux/iommu.h>
 #include <linux/of_device.h>
+#include <linux/reset.h>
 
 #include "drm.h"
 #include "gem.h"
@@ -22,6 +23,7 @@ struct gr2d {
 	struct iommu_group *group;
 	struct tegra_drm_client client;
 	struct host1x_channel *channel;
+	struct reset_control *rst, *rst_mc;
 	struct clk *clk;
 
 	const struct gr2d_soc *soc;
@@ -96,9 +98,37 @@ static int gr2d_exit(struct host1x_client *client)
 	return 0;
 }
 
+static int gr2d_reset(struct host1x_client *client)
+{
+	struct tegra_drm_client *drm = host1x_to_drm_client(client);
+	struct gr2d *gr2d = to_gr2d(drm);
+	int err;
+
+	err = reset_control_assert(gr2d->rst_mc);
+	if (err) {
+		dev_err(client->dev, "Failed to assert MC reset: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_reset(gr2d->rst);
+	if (err) {
+		dev_err(client->dev, "Failed to reset HW: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_deassert(gr2d->rst_mc);
+	if (err) {
+		dev_err(client->dev, "Failed to deassert MC reset: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
 static const struct host1x_client_ops gr2d_client_ops = {
 	.init = gr2d_init,
 	.exit = gr2d_exit,
+	.reset = gr2d_reset,
 };
 
 static int gr2d_open_channel(struct tegra_drm_client *client,
@@ -219,16 +249,33 @@ static int gr2d_probe(struct platform_device *pdev)
 		return err;
 	}
 
+	gr2d->rst = devm_reset_control_get(dev, NULL);
+	if (IS_ERR(gr2d->rst)) {
+		dev_err(dev, "cannot get reset\n");
+		return PTR_ERR(gr2d->rst);
+	}
+
+	gr2d->rst_mc = devm_reset_control_get_optional(dev, "mc");
+	if (IS_ERR(gr2d->rst_mc)) {
+		dev_err(dev, "cannot get MC reset\n");
+		return PTR_ERR(gr2d->rst_mc);
+	}
+
 	INIT_LIST_HEAD(&gr2d->client.base.list);
 	gr2d->client.base.ops = &gr2d_client_ops;
 	gr2d->client.base.dev = dev;
 	gr2d->client.base.class = HOST1X_CLASS_GR2D;
+	gr2d->client.base.module = HOST1X_MODULE_GR2D;
 	gr2d->client.base.syncpts = syncpts;
 	gr2d->client.base.num_syncpts = 1;
 
 	INIT_LIST_HEAD(&gr2d->client.list);
 	gr2d->client.version = gr2d->soc->version;
 	gr2d->client.ops = &gr2d_ops;
+
+	err = gr2d_reset(&gr2d->client.base);
+	if (err)
+		return err;
 
 	err = host1x_client_register(&gr2d->client.base);
 	if (err < 0) {
