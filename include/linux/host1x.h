@@ -30,16 +30,25 @@ enum host1x_class {
 	HOST1X_CLASS_GR3D = 0x60,
 };
 
+enum host1x_module {
+	HOST1X_MODULE_HOST1X = 0,
+	HOST1X_MODULE_GR2D = 5,
+	HOST1X_MODULE_GR3D = 6,
+	HOST1X_MODULE_VIC = 13,
+};
+
 struct host1x_client;
 
 /**
  * struct host1x_client_ops - host1x client operations
  * @init: host1x client initialization code
  * @exit: host1x client tear down code
+ * @reset: host1x client HW reset code
  */
 struct host1x_client_ops {
 	int (*init)(struct host1x_client *client);
 	int (*exit)(struct host1x_client *client);
+	int (*reset)(struct host1x_client *client);
 };
 
 /**
@@ -49,6 +58,7 @@ struct host1x_client_ops {
  * @dev: pointer to struct device backing this host1x client
  * @ops: host1x client operations
  * @class: host1x class represented by this client
+ * @module: host1x module ID associated with this client
  * @syncpts: array of syncpoints requested for this client
  * @num_syncpts: number of syncpoints requested for this client
  */
@@ -60,6 +70,7 @@ struct host1x_client {
 	const struct host1x_client_ops *ops;
 
 	enum host1x_class class;
+	enum host1x_module module;
 
 	struct host1x_syncpt **syncpts;
 	unsigned int num_syncpts;
