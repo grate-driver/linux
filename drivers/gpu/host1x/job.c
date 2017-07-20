@@ -27,6 +27,7 @@
 #include <trace/events/host1x.h>
 
 #include "channel.h"
+#include "debug.h"
 #include "dev.h"
 #include "job.h"
 #include "syncpt.h"
@@ -678,7 +679,8 @@ out:
 	return err;
 }
 
-static inline int copy_gathers(struct host1x_job *job, struct device *dev)
+static inline int copy_gathers(struct host1x *host, struct host1x_job *job,
+			       struct device *dev)
 {
 	struct host1x_firewall fw;
 	size_t size = 0;
@@ -733,9 +735,18 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 
 		/* Validate the job */
 		if (validate(&fw, g, i == job->num_gathers - 1)) {
+			/* convert offset to number of words */
+			offset /= sizeof(u32);
+			offset += fw.offset + 1;
+
+			FW_ERR("Debug dump:\n");
+
+			host1x_debug_dump_gather(host, g, offset);
+
 			dev_err(dev, "Command stream validation failed at word "
 				"%u of gather #%d, checked %zu words totally\n",
-				fw.offset, i, offset / sizeof(u32) + fw.offset);
+				fw.offset, i, offset);
+
 			return -EINVAL;
 		}
 
@@ -745,6 +756,12 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 	/* No relocs, waitchks and syncpts should remain at this point */
 	if (!fw.num_relocs && !fw.num_waitchks && !fw.syncpt_incrs)
 		return 0;
+
+	FW_ERR("Debug dump:\n");
+
+	for (i = 0; i < job->num_gathers; i++)
+		host1x_debug_dump_gather(host, &job->gathers[i],
+					 CDMA_GATHER_MAX_FETCHES_NB);
 
 	if (fw.num_relocs)
 		FW_ERR("Job has invalid number of relocations, %u left\n",
@@ -901,7 +918,7 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 		goto out;
 
 	if (IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL)) {
-		err = copy_gathers(job, dev);
+		err = copy_gathers(host, job, dev);
 		if (err)
 			goto out;
 	}
