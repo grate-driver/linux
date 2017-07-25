@@ -72,7 +72,6 @@ struct host1x_cdma {
 	struct semaphore sem;		/* signalled when event occurs */
 	enum cdma_event event;		/* event that sem is waiting for */
 	unsigned int slots_used;	/* pb slots used in current submit */
-	unsigned int slots_free;	/* pb slots free in current submit */
 	unsigned int first_get;		/* DMAGET value, where submit begins */
 	unsigned int last_pos;		/* last value written to DMAPUT */
 	struct push_buffer push_buffer;	/* channel's push buffer */
