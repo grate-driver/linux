@@ -476,7 +476,6 @@ int host1x_cdma_begin(struct host1x_cdma *cdma, struct host1x_job *job)
 	if (!cdma->running)
 		host1x_hw_cdma_start(host1x, cdma);
 
-	cdma->slots_free = 0;
 	cdma->slots_used = 0;
 	cdma->first_get = cdma->push_buffer.pos;
 
@@ -492,19 +491,16 @@ void host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2)
 {
 	struct host1x *host1x = cdma_to_host1x(cdma);
 	struct push_buffer *pb = &cdma->push_buffer;
-	u32 slots_free = cdma->slots_free;
 
 	if (host1x_debug_trace_cmdbuf)
 		trace_host1x_cdma_push(dev_name(cdma_to_channel(cdma)->dev),
 				       op1, op2);
 
-	if (slots_free == 0) {
+	if (host1x_pushbuffer_space(pb) == 0) {
 		host1x_hw_cdma_flush(host1x, cdma);
-		slots_free = host1x_cdma_wait_locked(cdma,
-						CDMA_EVENT_PUSH_BUFFER_SPACE);
+		host1x_cdma_wait_locked(cdma, CDMA_EVENT_PUSH_BUFFER_SPACE);
 	}
 
-	cdma->slots_free = slots_free - 1;
 	cdma->slots_used++;
 	host1x_pushbuffer_push(pb, op1, op2);
 }
