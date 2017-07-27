@@ -98,7 +98,6 @@ out:
 static void a5xx_submit(struct msm_gpu *gpu, struct msm_gem_submit *submit,
 	struct msm_file_private *ctx)
 {
-	struct adreno_gpu *adreno_gpu = to_adreno_gpu(gpu);
 	struct msm_drm_private *priv = gpu->dev->dev_private;
 	struct msm_ringbuffer *ring = gpu->rb;
 	unsigned int i, ibs = 0;
@@ -125,8 +124,8 @@ static void a5xx_submit(struct msm_gpu *gpu, struct msm_gem_submit *submit,
 
 	OUT_PKT7(ring, CP_EVENT_WRITE, 4);
 	OUT_RING(ring, CACHE_FLUSH_TS | (1 << 31));
-	OUT_RING(ring, lower_32_bits(rbmemptr(adreno_gpu, fence)));
-	OUT_RING(ring, upper_32_bits(rbmemptr(adreno_gpu, fence)));
+	OUT_RING(ring, lower_32_bits(rbmemptr(gpu, fence)));
+	OUT_RING(ring, upper_32_bits(rbmemptr(gpu, fence)));
 	OUT_RING(ring, submit->seqno);
 
 	gpu->funcs->flush(gpu);
@@ -802,9 +801,10 @@ static void a5xx_fault_detect_irq(struct msm_gpu *gpu)
 {
 	struct drm_device *dev = gpu->dev;
 	struct msm_drm_private *priv = dev->dev_private;
+	struct msm_ringbuffer *ring = gpu->funcs->active_ring(gpu);
 
-	dev_err(dev->dev, "gpu fault fence %x status %8.8X rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
-		gpu->funcs->last_fence(gpu),
+	dev_err(dev->dev, "gpu fault ring %d fence %x status %8.8X rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
+		ring ? ring->id : -1, ring ? ring->seqno : 0,
 		gpu_read(gpu, REG_A5XX_RBBM_STATUS),
 		gpu_read(gpu, REG_A5XX_CP_RB_RPTR),
 		gpu_read(gpu, REG_A5XX_CP_RB_WPTR),
@@ -992,7 +992,6 @@ static const struct adreno_gpu_funcs funcs = {
 		.pm_suspend = a5xx_pm_suspend,
 		.pm_resume = a5xx_pm_resume,
 		.recover = a5xx_recover,
-		.last_fence = adreno_last_fence,
 		.submit = a5xx_submit,
 		.flush = adreno_flush,
 		.irq = a5xx_irq,
