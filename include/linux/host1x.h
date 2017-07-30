@@ -49,7 +49,6 @@ struct host1x_client_ops {
  * @dev: pointer to struct device backing this host1x client
  * @ops: host1x client operations
  * @class: host1x class represented by this client
- * @channel: host1x channel associated with this client
  * @syncpts: array of syncpoints requested for this client
  * @num_syncpts: number of syncpoints requested for this client
  */
@@ -61,7 +60,6 @@ struct host1x_client {
 	const struct host1x_client_ops *ops;
 
 	enum host1x_class class;
-	struct host1x_channel *channel;
 
 	struct host1x_syncpt **syncpts;
 	unsigned int num_syncpts;
