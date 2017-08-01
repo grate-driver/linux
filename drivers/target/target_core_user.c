@@ -1985,7 +1985,7 @@ static struct target_backend_ops tcmu_ops = {
 
 static int unmap_thread_fn(void *data)
 {
-	struct tcmu_dev *udev;
+	struct tcmu_dev *udev, *tmp;
 	loff_t off;
 	uint32_t start, end, block;
 	static uint32_t free_blocks;
@@ -2056,7 +2056,7 @@ static int unmap_thread_fn(void *data)
 		 * for the global data pool blocks.
 		 */
 		mutex_lock(&root_udev_waiter_mutex);
-		list_for_each_entry(udev, &root_udev_waiter, waiter) {
+		list_for_each_entry_safe(udev, tmp, &root_udev_waiter, waiter) {
 			mutex_lock(&udev->cmdr_lock);
 			if (udev->waiting_blocks < free_blocks) {
 				mutex_unlock(&udev->cmdr_lock);
