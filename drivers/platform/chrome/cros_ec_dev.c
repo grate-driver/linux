@@ -376,8 +376,8 @@ static void cros_ec_sensors_register(struct cros_ec_dev *ec)
 		id++;
 	}
 
-	ret = mfd_add_devices(ec->dev, 0, sensor_cells, id,
-			      NULL, 0, NULL);
+	ret = devm_mfd_add_devices(ec->dev, 0, sensor_cells, id,
+				   NULL, 0, NULL);
 	if (ret)
 		dev_err(ec->dev, "failed to add EC sensors\n");
 
