@@ -64,9 +64,10 @@ out:
 	return bytes;
 }
 
-static ssize_t efivarfs_file_read(struct file *file, char __user *userbuf,
-		size_t count, loff_t *ppos)
+static ssize_t efivarfs_file_read_iter(struct kiocb *iocb,
+				       struct iov_iter *iter)
 {
+	struct file *file = iocb->ki_filp;
 	struct efivar_entry *var = file->private_data;
 	unsigned long datasize = 0;
 	u32 attributes;
@@ -96,8 +97,8 @@ static ssize_t efivarfs_file_read(struct file *file, char __user *userbuf,
 		goto out_free;
 
 	memcpy(data, &attributes, sizeof(attributes));
-	size = simple_read_from_buffer(userbuf, count, ppos,
-				       data, datasize + sizeof(attributes));
+	size = simple_read_iter_from_buffer(iocb, iter, data,
+					    datasize + sizeof(attributes));
 out_free:
 	kfree(data);
 
@@ -174,7 +175,7 @@ efivarfs_file_ioctl(struct file *file, unsigned int cmd, unsigned long p)
 
 const struct file_operations efivarfs_file_operations = {
 	.open	= simple_open,
-	.read	= efivarfs_file_read,
+	.read_iter = efivarfs_file_read_iter,
 	.write	= efivarfs_file_write,
 	.llseek	= no_llseek,
 	.unlocked_ioctl = efivarfs_file_ioctl,
