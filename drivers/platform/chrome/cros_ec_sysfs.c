@@ -116,15 +116,9 @@ static ssize_t store_ec_reboot(struct device *dev,
 	msg->command = EC_CMD_REBOOT_EC + ec->cmd_offset;
 	msg->outsize = sizeof(*param);
 	msg->insize = 0;
-	ret = cros_ec_cmd_xfer(ec->ec_dev, msg);
-	if (ret < 0) {
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
+	if (ret < 0)
 		count = ret;
-		goto exit;
-	}
-	if (msg->result != EC_RES_SUCCESS) {
-		dev_dbg(ec->dev, "EC result %d\n", msg->result);
-		count = -EINVAL;
-	}
 exit:
 	kfree(msg);
 	return count;
@@ -152,17 +146,11 @@ static ssize_t show_ec_version(struct device *dev,
 	msg->command = EC_CMD_GET_VERSION + ec->cmd_offset;
 	msg->insize = sizeof(*r_ver);
 	msg->outsize = 0;
-	ret = cros_ec_cmd_xfer(ec->ec_dev, msg);
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
 	if (ret < 0) {
 		count = ret;
 		goto exit;
 	}
-	if (msg->result != EC_RES_SUCCESS) {
-		count = scnprintf(buf, PAGE_SIZE,
-				  "ERROR: EC returned %d\n", msg->result);
-		goto exit;
-	}
-
 	r_ver = (struct ec_response_get_version *)msg->data;
 	/* Strings should be null-terminated, but let's be sure. */
 	r_ver->version_string_ro[sizeof(r_ver->version_string_ro) - 1] = '\0';
@@ -257,14 +245,9 @@ static ssize_t show_ec_flashinfo(struct device *dev,
 	msg->command = EC_CMD_FLASH_INFO + ec->cmd_offset;
 	msg->insize = sizeof(*resp);
 	msg->outsize = 0;
-	ret = cros_ec_cmd_xfer(ec->ec_dev, msg);
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
 	if (ret < 0)
 		goto exit;
-	if (msg->result != EC_RES_SUCCESS) {
-		ret = scnprintf(buf, PAGE_SIZE,
-				"ERROR: EC returned %d\n", msg->result);
-		goto exit;
-	}
 
 	resp = (struct ec_response_flash_info *)msg->data;
 
@@ -301,12 +284,9 @@ static ssize_t show_kb_wake_angle(struct device *dev,
 	param->kb_wake_angle.data = EC_MOTION_SENSE_NO_VALUE;
 	msg->outsize = sizeof(*param);
 	msg->insize = sizeof(*resp);
-	ret = cros_ec_cmd_xfer(ec->ec_dev, msg);
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
 	if (ret < 0)
 		return ret;
-	if (msg->result != EC_RES_SUCCESS)
-		return scnprintf(buf, PAGE_SIZE, "ERROR: EC returned %d\n",
-				 msg->result);
 	resp = (struct ec_response_motion_sense *)msg->data;
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
 			 resp->kb_wake_angle.ret);
