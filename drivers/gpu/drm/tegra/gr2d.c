@@ -121,8 +121,14 @@ static int gr2d_is_addr_reg(struct device *dev, u32 class, u32 offset)
 
 		break;
 
-	case HOST1X_CLASS_GR2D:
-	case HOST1X_CLASS_GR2D_SB:
+	case HOST1X_CLASS_GR2D_G2_CTX1:
+	case HOST1X_CLASS_GR2D_G2_CTX2:
+	case HOST1X_CLASS_GR2D_G2_CTX3:
+	case HOST1X_CLASS_GR2D_G2_CTX4:
+	case HOST1X_CLASS_GR2D_G2_CTX5:
+	case HOST1X_CLASS_GR2D_SB_CTX1:
+	case HOST1X_CLASS_GR2D_SB_CTX2:
+	case HOST1X_CLASS_GR2D_SB_CTX3:
 		if (offset >= GR2D_NUM_REGS)
 			break;
 
@@ -137,8 +143,14 @@ static int gr2d_is_addr_reg(struct device *dev, u32 class, u32 offset)
 
 static int gr2d_is_valid_class(u32 class)
 {
-	return (class == HOST1X_CLASS_GR2D ||
-		class == HOST1X_CLASS_GR2D_SB);
+	return (class == HOST1X_CLASS_GR2D_G2_CTX1 ||
+		class == HOST1X_CLASS_GR2D_G2_CTX2 ||
+		class == HOST1X_CLASS_GR2D_G2_CTX3 ||
+		class == HOST1X_CLASS_GR2D_G2_CTX4 ||
+		class == HOST1X_CLASS_GR2D_G2_CTX5 ||
+		class == HOST1X_CLASS_GR2D_SB_CTX1 ||
+		class == HOST1X_CLASS_GR2D_SB_CTX2 ||
+		class == HOST1X_CLASS_GR2D_SB_CTX3);
 }
 
 static const struct tegra_drm_client_ops gr2d_ops = {
@@ -210,7 +222,7 @@ static int gr2d_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&gr2d->client.base.list);
 	gr2d->client.base.ops = &gr2d_client_ops;
 	gr2d->client.base.dev = dev;
-	gr2d->client.base.class = HOST1X_CLASS_GR2D;
+	gr2d->client.base.class = HOST1X_CLASS_GR2D_G2_CTX2;
 	gr2d->client.base.module = HOST1X_MODULE_GR2D;
 	gr2d->client.base.syncpts = syncpts;
 	gr2d->client.base.num_syncpts = 1;
