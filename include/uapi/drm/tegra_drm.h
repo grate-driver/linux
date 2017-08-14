@@ -64,6 +64,13 @@ struct drm_tegra_syncpt_wait {
 
 #define DRM_TEGRA_NO_TIMEOUT	(0xffffffff)
 
+enum drm_tegra_client {
+	DRM_TEGRA_CLIENT_GR3D,
+	DRM_TEGRA_CLIENT_GR2D_G2,
+	DRM_TEGRA_CLIENT_GR2D_SB,
+	DRM_TEGRA_CLIENT_VIC,
+};
+
 struct drm_tegra_open_channel {
 	__u32 client;
 	__u32 pad;

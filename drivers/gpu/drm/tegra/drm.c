@@ -1017,11 +1017,12 @@ static int tegra_syncpt_wait(struct drm_device *drm, void *data,
 
 static int tegra_client_open(struct tegra_drm_file *fpriv,
 			     struct tegra_drm_client *client,
-			     struct tegra_drm_context *context)
+			     struct tegra_drm_context *context,
+			     enum drm_tegra_client clientid)
 {
 	int err;
 
-	err = client->ops->open_channel(client, context);
+	err = client->ops->open_channel(client, context, clientid);
 	if (err < 0)
 		return err;
 
@@ -1054,15 +1055,17 @@ static int tegra_open_channel(struct drm_device *drm, void *data,
 
 	mutex_lock(&fpriv->lock);
 
-	list_for_each_entry(client, &tegra->clients, list)
-		if (client->base.class == args->client) {
-			err = tegra_client_open(fpriv, client, context);
-			if (err < 0)
-				break;
+	list_for_each_entry(client, &tegra->clients, list) {
+		err = tegra_client_open(fpriv, client, context, args->client);
+		if (err == -ENODEV)
+			continue;
 
-			args->context = context->id;
+		if (err < 0)
 			break;
-		}
+
+		args->context = context->id;
+		break;
+	}
 
 	if (err < 0)
 		kfree(context);

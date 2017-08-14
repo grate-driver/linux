@@ -94,9 +94,14 @@ static const struct host1x_client_ops gr2d_client_ops = {
 };
 
 static int gr2d_open_channel(struct tegra_drm_client *client,
-			     struct tegra_drm_context *context)
+			     struct tegra_drm_context *context,
+			     enum drm_tegra_client clientid)
 {
 	struct gr2d *gr2d = to_gr2d(client);
+
+	if (clientid != DRM_TEGRA_CLIENT_GR2D_G2 &&
+	    clientid != DRM_TEGRA_CLIENT_GR2D_SB)
+		return -ENODEV;
 
 	context->channel = host1x_channel_get(gr2d->channel);
 	if (!context->channel)

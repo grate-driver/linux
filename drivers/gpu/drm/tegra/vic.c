@@ -219,10 +219,14 @@ static const struct host1x_client_ops vic_client_ops = {
 };
 
 static int vic_open_channel(struct tegra_drm_client *client,
-			    struct tegra_drm_context *context)
+			    struct tegra_drm_context *context,
+			    enum drm_tegra_client clientid)
 {
 	struct vic *vic = to_vic(client);
 	int err;
+
+	if (clientid != DRM_TEGRA_CLIENT_VIC)
+		return -ENODEV;
 
 	err = pm_runtime_get_sync(vic->dev);
 	if (err < 0)

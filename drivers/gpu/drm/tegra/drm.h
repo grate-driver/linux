@@ -87,7 +87,8 @@ struct tegra_drm_context {
 
 struct tegra_drm_client_ops {
 	int (*open_channel)(struct tegra_drm_client *client,
-			    struct tegra_drm_context *context);
+			    struct tegra_drm_context *context,
+			    enum drm_tegra_client clientid);
 	void (*close_channel)(struct tegra_drm_context *context);
 	int (*is_addr_reg)(struct device *dev, u32 class, u32 offset);
 	int (*is_valid_class)(u32 class);
