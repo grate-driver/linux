@@ -498,17 +498,10 @@ valid_syncpt:
 
 static int check_class(struct host1x_firewall *fw, u32 class)
 {
-	if (!fw->job->is_valid_class) {
-		if (fw->class != class) {
-			FW_ERR("Invalid class ID 0x%X, should be 0x%X\n",
-			       fw->class, class);
-			return -EINVAL;
-		}
-	} else {
-		if (!fw->job->is_valid_class(fw->class)) {
-			FW_ERR("Invalid class ID 0x%X\n", fw->class);
-			return -EINVAL;
-		}
+	if (fw->class != class) {
+		FW_ERR("Invalid class ID 0x%X, should be 0x%X\n",
+		       class, fw->class);
+		return -EINVAL;
 	}
 
 	return 0;
@@ -594,7 +587,6 @@ static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g,
 {
 	u32 *cmdbuf_base = (u32 *)fw->job->gather_copy_mapped +
 		(g->offset / sizeof(u32));
-	u32 job_class = fw->class;
 	int err = 0;
 
 	fw->cmdbuf_base = cmdbuf_base;
@@ -620,10 +612,9 @@ static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g,
 
 		switch (opcode) {
 		case 0:
-			fw->class = word >> 6 & 0x3ff;
 			fw->mask = word & 0x3f;
 			fw->reg = word >> 16 & 0xfff;
-			err = check_class(fw, job_class);
+			err = check_class(fw, word >> 6 & 0x3ff);
 			if (!err)
 				err = check_mask(fw);
 			if (err)
