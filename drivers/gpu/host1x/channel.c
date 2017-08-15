@@ -40,8 +40,6 @@ int host1x_channel_list_init(struct host1x_channel_list *chlist,
 		return -ENOMEM;
 	}
 
-	bitmap_zero(chlist->allocated_channels, num_channels);
-
 	return 0;
 }
 
