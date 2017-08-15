@@ -115,54 +115,23 @@ static void gr2d_close_channel(struct tegra_drm_context *context)
 	host1x_channel_put(context->channel);
 }
 
-static int gr2d_is_addr_reg(struct device *dev, u32 class, u32 offset)
+static int gr2d_is_addr_reg(struct device *dev, u32 offset)
 {
 	struct gr2d *gr2d = dev_get_drvdata(dev);
 
-	switch (class) {
-	case HOST1X_CLASS_HOST1X:
-		if (offset == 0x2b)
-			return 1;
+	if (offset >= GR2D_NUM_REGS)
+		return 0;
 
-		break;
-
-	case HOST1X_CLASS_GR2D_G2_CTX1:
-	case HOST1X_CLASS_GR2D_G2_CTX2:
-	case HOST1X_CLASS_GR2D_G2_CTX3:
-	case HOST1X_CLASS_GR2D_G2_CTX4:
-	case HOST1X_CLASS_GR2D_G2_CTX5:
-	case HOST1X_CLASS_GR2D_SB_CTX1:
-	case HOST1X_CLASS_GR2D_SB_CTX2:
-	case HOST1X_CLASS_GR2D_SB_CTX3:
-		if (offset >= GR2D_NUM_REGS)
-			break;
-
-		if (test_bit(offset, gr2d->addr_regs))
-			return 1;
-
-		break;
-	}
+	if (test_bit(offset, gr2d->addr_regs))
+		return 1;
 
 	return 0;
-}
-
-static int gr2d_is_valid_class(u32 class)
-{
-	return (class == HOST1X_CLASS_GR2D_G2_CTX1 ||
-		class == HOST1X_CLASS_GR2D_G2_CTX2 ||
-		class == HOST1X_CLASS_GR2D_G2_CTX3 ||
-		class == HOST1X_CLASS_GR2D_G2_CTX4 ||
-		class == HOST1X_CLASS_GR2D_G2_CTX5 ||
-		class == HOST1X_CLASS_GR2D_SB_CTX1 ||
-		class == HOST1X_CLASS_GR2D_SB_CTX2 ||
-		class == HOST1X_CLASS_GR2D_SB_CTX3);
 }
 
 static const struct tegra_drm_client_ops gr2d_ops = {
 	.open_channel = gr2d_open_channel,
 	.close_channel = gr2d_close_channel,
 	.is_addr_reg = gr2d_is_addr_reg,
-	.is_valid_class = gr2d_is_valid_class,
 	.submit = tegra_drm_submit,
 };
 

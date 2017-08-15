@@ -136,26 +136,15 @@ static void gr3d_close_channel(struct tegra_drm_context *context)
 	host1x_channel_put(context->channel);
 }
 
-static int gr3d_is_addr_reg(struct device *dev, u32 class, u32 offset)
+static int gr3d_is_addr_reg(struct device *dev, u32 offset)
 {
 	struct gr3d *gr3d = dev_get_drvdata(dev);
 
-	switch (class) {
-	case HOST1X_CLASS_HOST1X:
-		if (offset == 0x2b)
-			return 1;
+	if (offset >= GR3D_NUM_REGS)
+		return 0;
 
-		break;
-
-	case HOST1X_CLASS_GR3D:
-		if (offset >= GR3D_NUM_REGS)
-			break;
-
-		if (test_bit(offset, gr3d->addr_regs))
-			return 1;
-
-		break;
-	}
+	if (test_bit(offset, gr3d->addr_regs))
+		return 1;
 
 	return 0;
 }

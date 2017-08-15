@@ -407,7 +407,7 @@ static int check_register(struct host1x_firewall *fw, unsigned long offset,
 	if (!fw->job->is_addr_reg)
 		return 0;
 
-	if (fw->job->is_addr_reg(fw->dev, fw->class, offset)) {
+	if (fw->job->is_addr_reg(fw->dev, offset)) {
 		if (immediate) {
 			FW_ERR("Writing an immediate value to address "
 			       "register\n");
