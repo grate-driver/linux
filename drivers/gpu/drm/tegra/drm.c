@@ -1078,6 +1078,8 @@ static int tegra_open_channel(struct drm_device *drm, void *data,
 			break;
 
 		args->context = context->id;
+		args->client = host1x_context_class(
+					&client->base, context->hwctx);
 		break;
 	}
 
