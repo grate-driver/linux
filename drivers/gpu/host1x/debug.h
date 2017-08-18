@@ -22,6 +22,7 @@
 #include <linux/seq_file.h>
 
 struct host1x;
+struct host1x_job_gather;
 
 struct output {
 	void (*fn)(void *ctx, const char *str, size_t len, bool cont);
