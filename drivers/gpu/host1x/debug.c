@@ -228,3 +228,30 @@ void host1x_debug_dump_syncpts(struct host1x *host1x)
 
 	show_syncpts(host1x, &o);
 }
+
+void host1x_debug_dump_gather(struct host1x *host1x,
+			      struct host1x_job_gather *g,
+			      unsigned int max_words)
+{
+	struct output o = {
+		.fn = write_to_printk
+	};
+	unsigned int words;
+	u32 *mapped;
+
+	host1x_debug_output(&o, "GATHER at %pad+%#x, %d words\n",
+			    &g->base, g->offset, g->words);
+
+	mapped = host1x_bo_mmap(g->bo);
+	if (!mapped) {
+		dev_err(host1x->dev, "%s: Failed to mmap gather\n", __func__);
+		return;
+	}
+
+	words = min(g->words, max_words);
+
+	host1x_hw_show_gather(host1x, &o, g->base + g->offset, words, g->base,
+			      mapped);
+
+	host1x_bo_munmap(g->bo, mapped);
+}
