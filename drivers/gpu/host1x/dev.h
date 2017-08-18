@@ -69,7 +69,9 @@ struct host1x_debug_ops {
 				  struct host1x_channel *ch,
 				  struct output *o);
 	void (*show_mlocks)(struct host1x *host, struct output *output);
-
+	void (*show_gather)(struct output *o, phys_addr_t phys_addr,
+			    unsigned int words, phys_addr_t pin_addr,
+			    u32 *map_addr);
 };
 
 struct host1x_syncpt_ops {
@@ -331,6 +333,14 @@ static inline void host1x_hw_show_channel_fifo(struct host1x *host,
 static inline void host1x_hw_show_mlocks(struct host1x *host, struct output *o)
 {
 	host->debug_op->show_mlocks(host, o);
+}
+
+static inline void host1x_hw_show_gather(struct host1x *host, struct output *o,
+					 phys_addr_t phys_addr,
+					 unsigned int words,
+					 phys_addr_t pin_addr, u32 *map_addr)
+{
+	host->debug_op->show_gather(o, phys_addr, words, pin_addr, map_addr);
 }
 
 extern struct platform_driver tegra_mipi_driver;
