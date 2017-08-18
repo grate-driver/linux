@@ -166,8 +166,8 @@ static unsigned int show_channel_command(struct output *o, u32 val,
 }
 
 static void show_gather(struct output *o, phys_addr_t phys_addr,
-			unsigned int words, struct host1x_cdma *cdma,
-			phys_addr_t pin_addr, u32 *map_addr)
+			unsigned int words, phys_addr_t pin_addr,
+			u32 *map_addr)
 {
 	/* Map dmaget cursor to corresponding mem handle */
 	u32 offset = phys_addr - pin_addr;
@@ -228,8 +228,8 @@ static void show_channel_gathers(struct output *o, struct host1x_cdma *cdma)
 			host1x_debug_output(o, "    GATHER at %pad+%#x, %d words\n",
 					    &g->base, g->offset, g->words);
 
-			show_gather(o, g->base + g->offset, g->words, cdma,
-				    g->base, mapped);
+			show_gather(o, g->base + g->offset, g->words, g->base,
+				    mapped);
 
 			if (!job->gather_copy_mapped)
 				host1x_bo_munmap(g->bo, mapped);
