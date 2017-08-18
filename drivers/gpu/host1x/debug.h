@@ -22,6 +22,7 @@
 #include <linux/seq_file.h>
 
 struct host1x;
+struct host1x_job_gather;
 
 struct output {
 	void (*fn)(void *ctx, const char *str, size_t len, bool cont);
@@ -53,5 +54,8 @@ void host1x_debug_init(struct host1x *host1x);
 void host1x_debug_deinit(struct host1x *host1x);
 void host1x_debug_dump(struct host1x *host1x);
 void host1x_debug_dump_syncpts(struct host1x *host1x);
+void host1x_debug_dump_gather(struct host1x *host1x,
+			      struct host1x_job_gather *g,
+			      unsigned int max_words);
 
 #endif
