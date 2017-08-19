@@ -9,6 +9,7 @@ host1x-y = \
 	job.o \
 	debug.o \
 	mipi.o \
+	firewall.o \
 	hw/host1x01.o \
 	hw/host1x02.o \
 	hw/host1x04.o \
