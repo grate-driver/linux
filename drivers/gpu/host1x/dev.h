@@ -31,6 +31,7 @@
 
 struct host1x_syncpt;
 struct host1x_syncpt_base;
+struct host1x_firewall;
 struct host1x_channel;
 struct host1x_cdma;
 struct host1x_job;
@@ -97,6 +98,11 @@ struct host1x_intr_ops {
 	int (*free_syncpt_irq)(struct host1x *host);
 };
 
+struct host1x_firewall_ops {
+	int (*validate_gather)(struct host1x_firewall *fw,
+			       struct host1x_job_gather *g);
+};
+
 struct host1x_info {
 	unsigned int nb_channels; /* host1x: number of channels supported */
 	unsigned int nb_pts; /* host1x: number of syncpoints supported */
@@ -132,6 +138,7 @@ struct host1x {
 	const struct host1x_cdma_ops *cdma_op;
 	const struct host1x_pushbuffer_ops *cdma_pb_op;
 	const struct host1x_debug_ops *debug_op;
+	const struct host1x_firewall_ops *firewall_op;
 
 	struct host1x_syncpt *nop_sp;
 
@@ -341,6 +348,13 @@ static inline void host1x_hw_show_gather(struct host1x *host, struct output *o,
 					 phys_addr_t pin_addr, u32 *map_addr)
 {
 	host->debug_op->show_gather(o, phys_addr, words, pin_addr, map_addr);
+}
+
+static inline int host1x_hw_firewall_validate(struct host1x *host,
+					      struct host1x_firewall *fw,
+					      struct host1x_job_gather *g)
+{
+	return host->firewall_op->validate_gather(fw, g);
 }
 
 extern struct platform_driver tegra_mipi_driver;

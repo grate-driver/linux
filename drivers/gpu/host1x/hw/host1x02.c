@@ -26,6 +26,7 @@
 #include "cdma_hw.c"
 #include "channel_hw.c"
 #include "debug_hw.c"
+#include "firewall_hw.c"
 #include "intr_hw.c"
 #include "syncpt_hw.c"
 
@@ -39,6 +40,7 @@ int host1x02_init(struct host1x *host)
 	host->syncpt_op = &host1x_syncpt_ops;
 	host->intr_op = &host1x_intr_ops;
 	host->debug_op = &host1x_debug_ops;
+	host->firewall_op = &host1x_firewall_ops;
 
 	return 0;
 }
