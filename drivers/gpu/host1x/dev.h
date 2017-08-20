@@ -102,6 +102,11 @@ struct host1x_firewall_ops {
 	int (*validate_gather)(struct host1x_firewall *fw,
 			       struct host1x_job_gather *g, bool last_gather);
 	bool (*needs_validation)(bool iommu);
+	void (*enable_gather_filter)(struct host1x *host,
+				     struct host1x_channel *ch);
+	void (*syncpt_assign_to_channel)(struct host1x_syncpt *sp,
+					 struct host1x_channel *ch);
+	void (*enable_syncpt_protection)(struct host1x *host);
 };
 
 struct host1x_info {
@@ -199,18 +204,6 @@ static inline int host1x_hw_syncpt_patch_wait(struct host1x *host,
 					      void *patch_addr)
 {
 	return host->syncpt_op->patch_wait(sp, patch_addr);
-}
-
-static inline void host1x_hw_syncpt_assign_to_channel(
-	struct host1x *host, struct host1x_syncpt *sp,
-	struct host1x_channel *ch)
-{
-	return host->syncpt_op->assign_to_channel(sp, ch);
-}
-
-static inline void host1x_hw_syncpt_enable_protection(struct host1x *host)
-{
-	return host->syncpt_op->enable_protection(host);
 }
 
 static inline int host1x_hw_intr_init_host_sync(struct host1x *host, u32 cpm,
@@ -365,6 +358,34 @@ static inline bool host1x_hw_firewall_needs_validation(struct host1x *host,
 						       bool iommu)
 {
 	return host->firewall_op->needs_validation(iommu);
+}
+
+static inline void host1x_hw_firewall_enable_gather_filter(
+						struct host1x *host,
+						struct host1x_channel *ch)
+{
+	return host->firewall_op->enable_gather_filter(host, ch);
+}
+
+static inline void host1x_hw_firewall_syncpt_assign_to_channel(
+						struct host1x *host,
+						struct host1x_syncpt *sp,
+						struct host1x_channel *ch)
+{
+	return host->firewall_op->syncpt_assign_to_channel(sp, ch);
+}
+
+static inline void host1x_hw_firewall_syncpt_unassign(
+						struct host1x *host,
+						struct host1x_syncpt *sp)
+{
+	return host->firewall_op->syncpt_assign_to_channel(sp, NULL);
+}
+
+static inline void host1x_hw_firewall_enable_syncpt_protection(
+						struct host1x *host)
+{
+	return host->firewall_op->enable_syncpt_protection(host);
 }
 
 extern struct platform_driver tegra_mipi_driver;
