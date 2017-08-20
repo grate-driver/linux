@@ -152,6 +152,9 @@ struct host1x_channel *host1x_channel_request(struct device *dev)
 	if (err < 0)
 		goto fail;
 
+	/* enable HW firewall on Tegra124+ */
+	host1x_hw_firewall_enable_gather_filter(host, channel);
+
 	return channel;
 
 fail:
