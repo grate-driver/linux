@@ -82,9 +82,6 @@ struct host1x_syncpt_ops {
 	u32 (*load)(struct host1x_syncpt *syncpt);
 	int (*cpu_incr)(struct host1x_syncpt *syncpt);
 	int (*patch_wait)(struct host1x_syncpt *syncpt, void *patch_addr);
-	void (*assign_to_channel)(struct host1x_syncpt *syncpt,
-	                          struct host1x_channel *channel);
-	void (*enable_protection)(struct host1x *host);
 };
 
 struct host1x_intr_ops {
@@ -101,6 +98,11 @@ struct host1x_intr_ops {
 struct host1x_firewall_ops {
 	int (*validate_gather)(struct host1x_firewall *fw,
 			       struct host1x_job_gather *g);
+	void (*enable_gather_filter)(struct host1x *host,
+				     struct host1x_channel *ch);
+	void (*syncpt_assign_to_channel)(struct host1x_syncpt *sp,
+					 struct host1x_channel *ch);
+	void (*enable_syncpt_protection)(struct host1x *host);
 };
 
 struct host1x_info {
@@ -196,18 +198,6 @@ static inline int host1x_hw_syncpt_patch_wait(struct host1x *host,
 					      void *patch_addr)
 {
 	return host->syncpt_op->patch_wait(sp, patch_addr);
-}
-
-static inline void host1x_hw_syncpt_assign_to_channel(
-	struct host1x *host, struct host1x_syncpt *sp,
-	struct host1x_channel *ch)
-{
-	return host->syncpt_op->assign_to_channel(sp, ch);
-}
-
-static inline void host1x_hw_syncpt_enable_protection(struct host1x *host)
-{
-	return host->syncpt_op->enable_protection(host);
 }
 
 static inline int host1x_hw_intr_init_host_sync(struct host1x *host, u32 cpm,
@@ -355,6 +345,34 @@ static inline int host1x_hw_firewall_validate(struct host1x *host,
 					      struct host1x_job_gather *g)
 {
 	return host->firewall_op->validate_gather(fw, g);
+}
+
+static inline void host1x_hw_firewall_enable_gather_filter(
+						struct host1x *host,
+						struct host1x_channel *ch)
+{
+	return host->firewall_op->enable_gather_filter(host, ch);
+}
+
+static inline void host1x_hw_firewall_syncpt_assign_to_channel(
+						struct host1x *host,
+						struct host1x_syncpt *sp,
+						struct host1x_channel *ch)
+{
+	return host->firewall_op->syncpt_assign_to_channel(sp, ch);
+}
+
+static inline void host1x_hw_firewall_syncpt_unassign(
+						struct host1x *host,
+						struct host1x_syncpt *sp)
+{
+	return host->firewall_op->syncpt_assign_to_channel(sp, NULL);
+}
+
+static inline void host1x_hw_firewall_enable_syncpt_protection(
+						struct host1x *host)
+{
+	return host->firewall_op->enable_syncpt_protection(host);
 }
 
 extern struct platform_driver tegra_mipi_driver;

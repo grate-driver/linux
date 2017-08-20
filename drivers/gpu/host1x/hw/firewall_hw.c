@@ -17,6 +17,78 @@
 #include "../dev.h"
 #include "../firewall.h"
 
+/**
+ * firewall_enable_gather_filter() - Enable gather filter
+ * @sp: syncpoint
+ * @ch: channel
+ *
+ * On chips with the gather filter HW firewall feature (Tegra124+), enable
+ * basic HW firewall that would stop CDMA execution on trying to execute
+ * forbidden commands: SETCLASS, SETSTRMID and EXTEND.
+ *
+ * On older chips, do nothing.
+ */
+static void firewall_enable_gather_filter(struct host1x *host,
+					  struct host1x_channel *ch)
+{
+#if HOST1X_HW >= 6
+	u32 val;
+
+	if (!host->hv_regs)
+		return;
+
+	val = host1x_hypervisor_readl(
+		host, HOST1X_HV_CH_KERNEL_FILTER_GBUFFER(ch->id / 32));
+	val |= BIT(ch->id % 32);
+	host1x_hypervisor_writel(
+		host, val, HOST1X_HV_CH_KERNEL_FILTER_GBUFFER(ch->id / 32));
+#elif HOST1X_HW >= 4
+	host1x_ch_writel(ch,
+			 HOST1X_CHANNEL_CHANNELCTRL_KERNEL_FILTER_GBUFFER(1),
+			 HOST1X_CHANNEL_CHANNELCTRL);
+#endif
+}
+
+/**
+ * firewall_syncpt_assign_to_channel() - Assign syncpoint to channel
+ * @sp: syncpoint
+ * @ch: channel
+ *
+ * On chips with the syncpoint protection feature (Tegra186+), assign @sp to
+ * @ch, preventing other channels from incrementing the syncpoints. If @ch is
+ * NULL, unassigns the syncpoint.
+ *
+ * On older chips, do nothing.
+ */
+static void firewall_syncpt_assign_to_channel(struct host1x_syncpt *sp,
+					      struct host1x_channel *ch)
+{
+#if HOST1X_HW >= 6
+	host1x_sync_writel(sp->host,
+			   HOST1X_SYNC_SYNCPT_CH_APP_CH(ch ? ch->id : 0xff),
+			   HOST1X_SYNC_SYNCPT_CH_APP(sp->id));
+#endif
+}
+
+/**
+ * firewall_enable_syncpt_protection() - Enable syncpoint protection
+ * @host: host1x instance
+ *
+ * On chips with the syncpoint protection feature (Tegra186+), enable this
+ * feature. On older chips, do nothing.
+ */
+static void firewall_enable_syncpt_protection(struct host1x *host)
+{
+#if HOST1X_HW >= 6
+	if (!host->hv_regs)
+		return;
+
+	host1x_hypervisor_writel(host,
+				 HOST1X_HV_SYNCPT_PROT_EN_CH_EN,
+				 HOST1X_HV_SYNCPT_PROT_EN);
+#endif
+}
+
 static bool check_reloc(struct host1x_reloc *reloc, struct host1x_bo *cmdbuf,
 			unsigned int offset)
 {
@@ -287,4 +359,7 @@ static int firewall_validate_gather(struct host1x_firewall *fw,
 
 static const struct host1x_firewall_ops host1x_firewall_ops = {
 	.validate_gather = firewall_validate_gather,
+	.enable_gather_filter = firewall_enable_gather_filter,
+	.syncpt_assign_to_channel = firewall_syncpt_assign_to_channel,
+	.enable_syncpt_protection = firewall_enable_syncpt_protection,
 };
