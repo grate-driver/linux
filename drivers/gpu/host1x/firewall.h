@@ -49,6 +49,7 @@ struct host1x_firewall {
 	u32 mask;
 	u32 count;
 
+	bool iommu;
 	bool last;
 };
 

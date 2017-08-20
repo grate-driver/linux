@@ -101,6 +101,7 @@ struct host1x_intr_ops {
 struct host1x_firewall_ops {
 	int (*validate_gather)(struct host1x_firewall *fw,
 			       struct host1x_job_gather *g, bool last_gather);
+	bool (*needs_validation)(bool iommu);
 };
 
 struct host1x_info {
@@ -358,6 +359,12 @@ static inline int host1x_hw_firewall_validate(struct host1x *host,
 					      bool last_gather)
 {
 	return host->firewall_op->validate_gather(fw, g, last_gather);
+}
+
+static inline bool host1x_hw_firewall_needs_validation(struct host1x *host,
+						       bool iommu)
+{
+	return host->firewall_op->needs_validation(iommu);
 }
 
 extern struct platform_driver tegra_mipi_driver;

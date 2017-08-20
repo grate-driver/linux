@@ -137,9 +137,18 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 	size_t offset = 0;
 	size_t size = 0;
 	unsigned int i;
+	bool iommu;
+
+	/* note that in case of Tegra20 we skipped IOMMU initialization */
+	iommu = !!host->domain;
+
+	/* skip software firewall on Tegra186 + IOMMU */
+	if (!host1x_hw_firewall_needs_validation(host, iommu))
+		return 0;
 
 	fw.dev = dev;
 	fw.job = job;
+	fw.iommu = iommu;
 	fw.class = job->class;
 	fw.reloc = job->relocarray;
 	fw.waitchk = job->waitchk;

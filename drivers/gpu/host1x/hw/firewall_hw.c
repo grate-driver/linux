@@ -66,28 +66,6 @@ static bool check_wait(struct host1x_waitchk *wait, struct host1x_bo *cmdbuf,
 static int check_register(struct host1x_firewall *fw, unsigned long offset,
 			  bool immediate)
 {
-	if (!fw->job->is_addr_reg)
-		return 0;
-
-	if (fw->job->is_addr_reg(fw->dev, offset)) {
-		if (immediate) {
-			FW_ERR("Writing an immediate value to address "
-			       "register\n");
-			return -EINVAL;
-		}
-
-		if (!fw->num_relocs) {
-			FW_ERR("Invalid number of relocations\n");
-			return -EINVAL;
-		}
-
-		if (!check_reloc(fw->reloc, fw->cmdbuf, fw->offset))
-			return -EINVAL;
-
-		fw->num_relocs--;
-		fw->reloc++;
-	}
-
 	/* assume that all modules have INCR_SYNCPT at the same offset */
 	if (HOST1X_HW < 6 && offset == HOST1X_INCR_SYNCPT_OFFSET) {
 		u32 word = fw->cmdbuf_base[fw->offset];
@@ -137,6 +115,30 @@ valid_syncpt:
 		fw->syncpt_incrs--;
 	}
 
+	/* skip unnecessary validations on Tegra30+ */
+	if (fw->iommu)
+		return 0;
+
+	if (fw->job->is_addr_reg &&
+	    fw->job->is_addr_reg(fw->dev, offset)) {
+		if (immediate) {
+			FW_ERR("Writing an immediate value to address "
+			       "register\n");
+			return -EINVAL;
+		}
+
+		if (!fw->num_relocs) {
+			FW_ERR("Invalid number of relocations\n");
+			return -EINVAL;
+		}
+
+		if (!check_reloc(fw->reloc, fw->cmdbuf, fw->offset))
+			return -EINVAL;
+
+		fw->num_relocs--;
+		fw->reloc++;
+	}
+
 	if (offset == HOST1X_WAIT_SYNCPT_OFFSET) {
 		if (fw->class != HOST1X_CLASS_HOST1X) {
 			FW_ERR("Jobs class must be 'host1x' for a waitcheck\n");
@@ -160,12 +162,13 @@ valid_syncpt:
 
 static int check_class(struct host1x_firewall *fw, u32 class)
 {
+#if HOST1X_HW < 4
 	if (fw->class != class) {
 		FW_ERR("Invalid class ID 0x%X, should be 0x%X\n",
 		       class, fw->class);
 		return -EINVAL;
 	}
-
+#endif
 	return 0;
 }
 
@@ -326,6 +329,12 @@ static int firewall_validate_gather(struct host1x_firewall *fw,
 	return err;
 }
 
+static bool firewall_needs_validation(bool iommu)
+{
+	return HOST1X_HW < 6 || !iommu;
+}
+
 static const struct host1x_firewall_ops host1x_firewall_ops = {
 	.validate_gather = firewall_validate_gather,
+	.needs_validation = firewall_needs_validation,
 };
