@@ -359,9 +359,11 @@ host1x_bo_lookup(struct drm_file *file, u32 handle)
 	struct drm_gem_object *gem;
 	struct tegra_bo *bo;
 
-	gem = drm_gem_object_lookup(file, handle);
+	gem = idr_find(&file->object_idr, handle);
 	if (!gem)
 		return NULL;
+
+	drm_gem_object_get(gem);
 
 	bo = to_tegra_bo(gem);
 	return &bo->base;
@@ -756,6 +758,12 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	num_refs = 0;
 	num_bos = 0;
 
+	/*
+	 * In order to reduce BO lookup overhead, perform bulk lookup under
+	 * a single lock.
+	 */
+	spin_lock(&file->table_lock);
+
 	while (num_cmdbufs) {
 		struct drm_tegra_cmdbuf cmdbuf;
 		struct host1x_bo *bo;
@@ -763,13 +771,13 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 
 		if (copy_from_user(&cmdbuf, user_cmdbufs, sizeof(cmdbuf))) {
 			err = -EFAULT;
-			goto fail;
+			goto unlock_table;
 		}
 
 		bo = host1x_bo_lookup(file, cmdbuf.handle);
 		if (!bo) {
 			err = -ENOENT;
-			goto fail;
+			goto unlock_table;
 		}
 
 		obj = host1x_to_tegra_bo(bo);
@@ -799,7 +807,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 						  &user_relocs[num_relocs],
 						  drm, file);
 		if (err < 0)
-			goto fail;
+			goto unlock_table;
 
 		reloc = &job->relocarray[num_relocs];
 		obj = host1x_to_tegra_bo(reloc->cmdbuf.bo);
@@ -821,11 +829,17 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 						    &user_waitchks[num_waitchks],
 						    file);
 		if (err < 0)
-			goto fail;
+			goto unlock_table;
 
 		obj = host1x_to_tegra_bo(wait->bo);
 		refs[num_refs++] = &obj->gem;
 	}
+
+unlock_table:
+	spin_unlock(&file->table_lock);
+
+	if (err < 0)
+		goto fail;
 
 	if (copy_from_user(&syncpt, user_syncpt, sizeof(syncpt))) {
 		err = -EFAULT;
