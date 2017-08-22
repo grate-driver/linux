@@ -569,8 +569,6 @@ static int validate(struct host1x_firewall *fw, struct host1x_job_gather *g)
 			if (err)
 				goto out;
 			break;
-		case 14:
-			break;
 		default:
 			err = -EINVAL;
 			break;
