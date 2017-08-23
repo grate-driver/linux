@@ -85,6 +85,7 @@ struct audit_names {
 
 	unsigned long		ino;
 	dev_t			dev;
+	struct dentry		*dentry;
 	umode_t			mode;
 	kuid_t			uid;
 	kgid_t			gid;
