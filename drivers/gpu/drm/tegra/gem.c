@@ -314,12 +314,13 @@ put_pages:
 	return PTR_ERR(bo->sgt);
 }
 
-static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo)
+static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo,
+			  bool scattered)
 {
 	struct tegra_drm *tegra = drm->dev_private;
 	int err;
 
-	if (tegra->domain) {
+	if (scattered) {
 		err = tegra_bo_get_pages(drm, bo);
 		if (err < 0)
 			return err;
@@ -348,14 +349,34 @@ static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo)
 struct tegra_bo *tegra_bo_create(struct drm_device *drm, size_t size,
 				 unsigned long flags)
 {
+	struct tegra_drm *tegra = drm->dev_private;
 	struct tegra_bo *bo;
+	struct iommu_domain_geometry *geometry;
+	bool scattered = false;
 	int err;
 
 	bo = tegra_bo_alloc_object(drm, size);
 	if (IS_ERR(bo))
 		return bo;
 
-	err = tegra_bo_alloc(drm, bo);
+	if (!tegra->dynamic_iommu_mapping)
+		scattered = true;
+
+	if (flags & DRM_TEGRA_GEM_CREATE_SCATTERED)
+		scattered = true;
+
+	if (scattered && !tegra->domain)
+		scattered = false;
+
+	if (scattered) {
+		geometry = &tegra->domain->geometry;
+
+		/* check whether BO can fit IOVA space at all */
+		if (geometry->aperture_start + size >= geometry->aperture_end)
+			scattered = false;
+	}
+
+	err = tegra_bo_alloc(drm, bo, scattered);
 	if (err < 0)
 		goto release;
 
