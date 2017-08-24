@@ -806,7 +806,7 @@ void msm_gpu_cleanup(struct msm_gpu *gpu)
 		drm_gem_object_unreference_unlocked(gpu->memptrs_bo);
 	}
 
-	if (gpu->aspace) {
+	if (!IS_ERR_OR_NULL(gpu->aspace)) {
 		gpu->aspace->mmu->funcs->detach(gpu->aspace->mmu,
 			NULL, 0);
 		msm_gem_address_space_put(gpu->aspace);
