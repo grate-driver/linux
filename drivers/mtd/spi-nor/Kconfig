@@ -109,6 +109,7 @@ config SPI_INTEL_SPI_PLATFORM
 	tristate "Intel PCH/PCU SPI flash platform driver" if EXPERT
 	depends on X86
 	select SPI_INTEL_SPI
+	select LPC_ICH
 	help
 	  This enables platform support for the Intel PCH/PCU SPI
 	  controller in master mode. This controller is present in modern
