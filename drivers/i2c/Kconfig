@@ -98,6 +98,17 @@ config I2C_SMBUS
 source "drivers/i2c/algos/Kconfig"
 source "drivers/i2c/busses/Kconfig"
 
+config I2C_HOTPLUG_GPIO
+	tristate "Hot-plugged I2C bus detected by GPIO"
+	depends on GPIOLIB
+	depends on OF
+	help
+	  If you say yes to this option, support will be included for
+	  hot-plugging I2C devices with presence detected by GPIO pin value.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called i2c-hotplug-gpio.
+
 config I2C_STUB
 	tristate "I2C/SMBus Test Stub"
 	depends on m
