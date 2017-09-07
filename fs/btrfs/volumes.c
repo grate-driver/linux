@@ -443,13 +443,6 @@ loop_lock:
 		pending = pending->bi_next;
 		cur->bi_next = NULL;
 
-		/*
-		 * atomic_dec_return implies a barrier for waitqueue_active
-		 */
-		if (atomic_dec_return(&fs_info->nr_async_bios) < limit &&
-		    waitqueue_active(&fs_info->async_submit_wait))
-			wake_up(&fs_info->async_submit_wait);
-
 		BUG_ON(atomic_read(&cur->__bi_cnt) == 0);
 
 		/*
@@ -6069,13 +6062,6 @@ static noinline void btrfs_schedule_bio(struct btrfs_device *device,
 		return;
 	}
 
-	/*
-	 * nr_async_bios allows us to reliably return congestion to the
-	 * higher layers.  Otherwise, the async bio makes it appear we have
-	 * made progress against dirty pages when we've really just put it
-	 * on a queue for later
-	 */
-	atomic_inc(&fs_info->nr_async_bios);
 	WARN_ON(bio->bi_next);
 	bio->bi_next = NULL;
 
