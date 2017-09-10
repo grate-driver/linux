@@ -162,5 +162,4 @@ const struct file_operations jfs_file_operations = {
 #ifdef CONFIG_COMPAT
 	.compat_ioctl	= jfs_compat_ioctl,
 #endif
-	.integrity_read	= generic_file_read_iter,
 };

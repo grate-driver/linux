@@ -21,7 +21,6 @@
 #include <linux/rbtree.h>
 #include <linux/file.h>
 #include <linux/uaccess.h>
-#include <linux/uio.h>
 #include "integrity.h"
 
 static struct rb_root integrity_iint_tree = RB_ROOT;
@@ -185,25 +184,18 @@ security_initcall(integrity_iintcache_init);
 int integrity_kernel_read(struct file *file, loff_t offset,
 			  void *addr, unsigned long count)
 {
-	struct inode *inode = file_inode(file);
-	struct kvec iov = { .iov_base = addr, .iov_len = count };
-	struct kiocb kiocb;
-	struct iov_iter iter;
+	mm_segment_t old_fs;
+	char __user *buf = (char __user *)addr;
 	ssize_t ret;
-
-	lockdep_assert_held(&inode->i_rwsem);
 
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
-	if (!file->f_op->integrity_read)
-		return -EBADF;
 
-	init_sync_kiocb(&kiocb, file);
-	kiocb.ki_pos = offset;
-	iov_iter_kvec(&iter, READ | ITER_KVEC, &iov, 1, count);
+	old_fs = get_fs();
+	set_fs(get_ds());
+	ret = __vfs_read(file, buf, count, &offset);
+	set_fs(old_fs);
 
-	ret = file->f_op->integrity_read(&kiocb, &iter);
-	BUG_ON(ret == -EIOCBQUEUED);
 	return ret;
 }
 

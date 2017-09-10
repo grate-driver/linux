@@ -179,5 +179,4 @@ const struct file_operations efivarfs_file_operations = {
 	.write	= efivarfs_file_write,
 	.llseek	= no_llseek,
 	.unlocked_ioctl = efivarfs_file_ioctl,
-	.integrity_read	= efivarfs_file_read_iter,
 };
