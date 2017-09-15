@@ -1091,13 +1091,22 @@ int btrfs_compress_heuristic(struct inode *inode, u64 start, u64 end)
 
 unsigned int btrfs_compress_str2level(const char *str)
 {
-	if (strncmp(str, "zlib", 4) != 0)
+	long level;
+	int max;
+
+	if (strncmp(str, "zlib", 4) == 0)
+		max = 9;
+	else if (strncmp(str, "zstd", 4) == 0)
+		max = 15; // encoded on 4 bits, real max is 22
+	else
 		return 0;
 
-	if ('1' <= str[4] && str[4] <= '9' )
-		return str[4] - '0';
-	if (str[4] == ':' && '1' <= str[5] && str[5] <= '9')
-		return str[5] - '0';
+	str += 4;
+	if (*str == ':')
+		str++;
 
-	return 0;
+	if (kstrtoul(str, 10, &level))
+		return 0;
+
+	return (level > max) ? 0 : level;
 }
