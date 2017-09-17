@@ -8330,9 +8330,9 @@ bnx2_init_board(struct pci_dev *pdev, struct net_device *dev)
 		if (j < 32)
 			bp->fw_version[j++] = ' ';
 		for (i = 0; i < 3 && j < 28; i++) {
-			reg = bnx2_reg_rd_ind(bp, addr + i * 4);
-			reg = be32_to_cpu(reg);
-			memcpy(&bp->fw_version[j], &reg, 4);
+			__be32 v;
+			v = cpu_to_be32(bnx2_reg_rd_ind(bp, addr + i * 4));
+			memcpy(&bp->fw_version[j], &v, 4);
 			j += 4;
 		}
 	}
