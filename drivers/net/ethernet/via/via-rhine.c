@@ -995,8 +995,8 @@ static int rhine_init_one_common(struct device *hwdev, u32 quirks,
 	else
 		name = "Rhine III";
 
-	netdev_info(dev, "VIA %s at 0x%lx, %pM, IRQ %d\n",
-		    name, (long)ioaddr, dev->dev_addr, rp->irq);
+	netdev_info(dev, "VIA %s at 0x%p, %pM, IRQ %d\n",
+		    name, ioaddr, dev->dev_addr, rp->irq);
 
 	dev_set_drvdata(hwdev, dev);
 
@@ -1150,7 +1150,7 @@ static int rhine_init_one_platform(struct platform_device *pdev)
 		return -EINVAL;
 
 	return rhine_init_one_common(&pdev->dev, *quirks,
-				     (long)ioaddr, ioaddr, irq);
+				     (unsigned long)ioaddr, ioaddr, irq);
 }
 
 static int alloc_ring(struct net_device* dev)

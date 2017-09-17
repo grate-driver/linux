@@ -92,14 +92,14 @@ enum velocity_bus_type {
 static int velocity_nics;
 static int msglevel = MSG_LEVEL_INFO;
 
-static void velocity_set_power_state(struct velocity_info *vptr, char state)
+static void velocity_set_power_state(struct velocity_info *vptr, pci_power_t state)
 {
-	void *addr = vptr->mac_regs;
+	void __iomem *addr = vptr->mac_regs;
 
 	if (vptr->pdev)
 		pci_set_power_state(vptr->pdev, state);
 	else
-		writeb(state, addr + 0x154);
+		writeb((__force u8)state, addr + 0x154);
 }
 
 /**
