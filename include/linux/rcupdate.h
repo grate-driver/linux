@@ -523,7 +523,7 @@ static inline void rcu_preempt_sleep_check(void) { }
  * Return the value of the specified RCU-protected pointer, but omit
  * both the smp_read_barrier_depends() and the READ_ONCE().  This
  * is useful in cases where update-side locks prevent the value of the
- * pointer from changing.  Please note that this primitive does -not-
+ * pointer from changing.  Please note that this primitive does *not*
  * prevent the compiler from repeating this reference or combining it
  * with other references, so it should not be used without protection
  * of appropriate locks.
@@ -785,13 +785,14 @@ static inline notrace void rcu_read_unlock_sched_notrace(void)
  * do not need ordering constraints on the CPU or the compiler.  These
  * special cases are:
  *
- * 1.	This use of RCU_INIT_POINTER() is NULLing out the pointer -or-
+ * 1.	This use of RCU_INIT_POINTER() is NULLing out the pointer *or*
  * 2.	The caller has taken whatever steps are required to prevent
- *	RCU readers from concurrently accessing this pointer -or-
+ *	RCU readers from concurrently accessing this pointer *or*
  * 3.	The referenced data structure has already been exposed to
- *	readers either at compile time or via rcu_assign_pointer() -and-
- *	a.	You have not made -any- reader-visible changes to
- *		this structure since then -or-
+ *	readers either at compile time or via rcu_assign_pointer() *and*
+ *
+ *	a.	You have not made *any* reader-visible changes to
+ *		this structure since then *or*
  *	b.	It is OK for readers accessing this structure from its
  *		new location to see the old state of the structure.  (For
  *		example, the changes were to statistical counters or to
@@ -807,7 +808,7 @@ static inline notrace void rcu_read_unlock_sched_notrace(void)
  * by a single external-to-structure RCU-protected pointer, then you may
  * use RCU_INIT_POINTER() to initialize the internal RCU-protected
  * pointers, but you must use rcu_assign_pointer() to initialize the
- * external-to-structure pointer -after- you have completely initialized
+ * external-to-structure pointer *after* you have completely initialized
  * the reader-accessible portions of the linked structure.
  *
  * Note that unlike rcu_assign_pointer(), RCU_INIT_POINTER() provides no
