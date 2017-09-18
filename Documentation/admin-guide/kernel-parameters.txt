@@ -3211,8 +3211,10 @@
 			ratelimit - ratelimit the logging
 			Default: ratelimit
 
-	printk.time=	Show timing data prefixed to each printk message line
-			Format: <bool>  (1/Y/y=enable, 0/N/n=disable)
+	printk.time=	Show timestamp prefixed to each printk message line
+			Format: <string>
+				(0/N/n/disable, 1/Y/y/local,
+				 b/boot, m/monotonic, r/realtime (in UTC))
 
 	processor.max_cstate=	[HW,ACPI]
 			Limit processor to maximum C-state

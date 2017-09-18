@@ -576,6 +576,9 @@ static u32 truncate_msg(u16 *text_len, u16 *trunc_msg_len,
 	return msg_used_size(*text_len + *trunc_msg_len, 0, pad_len);
 }
 
+static u64 printk_get_first_ts(void);
+static u64 (*printk_get_ts)(void) = printk_get_first_ts;
+
 /* insert record into the buffer, discard old ones, update heads */
 static int log_store(int facility, int level,
 		     enum log_flags flags, u64 ts_nsec,
@@ -624,7 +627,7 @@ static int log_store(int facility, int level,
 	if (ts_nsec > 0)
 		msg->ts_nsec = ts_nsec;
 	else
-		msg->ts_nsec = local_clock();
+		msg->ts_nsec = printk_get_ts();
 	memset(log_dict(msg) + dict_len, 0, pad_len);
 	msg->len = size;
 
@@ -1201,14 +1204,130 @@ static inline void boot_delay_msec(int level)
 }
 #endif
 
-static bool printk_time = IS_ENABLED(CONFIG_PRINTK_TIME);
-module_param_named(time, printk_time, bool, S_IRUGO | S_IWUSR);
+/**
+ * enum timestamp_sources - Timestamp sources for printk() messages.
+ * @PRINTK_TIME_DISABLED: No time stamp.
+ * @PRINTK_TIME_LOCAL: Local hardware clock timestamp.
+ * @PRINTK_TIME_BOOT: Boottime clock timestamp.
+ * @PRINTK_TIME_MONO: Monotonic clock timestamp.
+ * @PRINTK_TIME_REAL: Realtime clock timestamp.
+ */
+enum timestamp_sources {
+	PRINTK_TIME_DISABLED = 0,
+	PRINTK_TIME_LOCAL = 1,
+	PRINTK_TIME_BOOT = 2,
+	PRINTK_TIME_MONO = 3,
+	PRINTK_TIME_REAL = 4,
+};
+
+static const char * const timestamp_sources_str[5] = {
+	"disabled",
+	"local",
+	"boottime",
+	"monotonic",
+	"realtime",
+};
+
+static int printk_time = CONFIG_PRINTK_TIME_TYPE;
+
+static int printk_set_ts_source(enum timestamp_sources ts_source)
+{
+	int err = 0;
+
+	switch (ts_source) {
+	case PRINTK_TIME_LOCAL:
+		printk_get_ts = local_clock;
+		break;
+	case PRINTK_TIME_BOOT:
+		printk_get_ts = ktime_get_boot_fast_ns;
+		break;
+	case PRINTK_TIME_MONO:
+		printk_get_ts = ktime_get_mono_fast_ns;
+		break;
+	case PRINTK_TIME_REAL:
+		printk_get_ts = ktime_get_real_fast_ns;
+		break;
+	case PRINTK_TIME_DISABLED:
+	/*
+	 * The timestamp is always stored into the log buffer.
+	 * Keep the current one.
+	 */
+		break;
+	default:
+		err = -EINVAL;
+		break;
+	}
+
+	if (!err)
+		printk_time = ts_source;
+	return err;
+}
+
+static u64 printk_get_first_ts(void)
+{
+	printk_set_ts_source(printk_time);
+
+	/* Fallback for invalid or disabled timestamp source */
+	if (printk_get_ts == printk_get_first_ts)
+		printk_get_ts = local_clock;
+
+	return printk_get_ts();
+}
+
+static int param_set_time(const char *val, const struct kernel_param *kp)
+{
+	char *param = strstrip((char *)val);
+	int time_source = -1;
+	int ts;
+	int err;
+
+	if (strlen(param) == 1) {
+		/* Preserve legacy boolean settings */
+		if ((param[0] == '0') || (param[0] == 'n') ||
+		    (param[0] == 'N'))
+			time_source = PRINTK_TIME_DISABLED;
+		if ((param[0] == '1') || (param[0] == 'y') ||
+		    (param[0] == 'Y'))
+			time_source = PRINTK_TIME_LOCAL;
+	}
+	if (time_source == -1) {
+		for (ts = 0; ts < ARRAY_SIZE(timestamp_sources_str); ts++) {
+			if (!strncmp(timestamp_sources_str[ts], param,
+				     strlen(param))) {
+				time_source = ts;
+				break;
+			}
+		}
+	}
+
+	err = printk_set_ts_source(time_source);
+	if (err) {
+		pr_warn("printk: invalid timestamp option %s\n", param);
+		return err;
+	}
+
+	pr_info("printk: timestamp set to %s\n",
+		timestamp_sources_str[printk_time]);
+	return 0;
+}
+
+static int param_get_time(char *buffer, const struct kernel_param *kp)
+{
+	return scnprintf(buffer, PAGE_SIZE, "%s",
+			 timestamp_sources_str[printk_time]);
+}
+
+static struct kernel_param_ops printk_time_ops = {
+	.set = param_set_time,
+	.get = param_get_time,
+};
+module_param_cb(time, &printk_time_ops, NULL, 0644);
 
 static size_t print_time(u64 ts, char *buf)
 {
 	unsigned long rem_nsec;
 
-	if (!printk_time)
+	if (printk_time == PRINTK_TIME_DISABLED)
 		return 0;
 
 	rem_nsec = do_div(ts, 1000000000);
@@ -1631,7 +1750,7 @@ static bool cont_add(int facility, int level, enum log_flags flags, const char *
 		cont.facility = facility;
 		cont.level = level;
 		cont.owner = current;
-		cont.ts_nsec = local_clock();
+		cont.ts_nsec = printk_get_ts();
 		cont.flags = flags;
 	}
 
@@ -1861,6 +1980,7 @@ static size_t msg_print_text(const struct printk_log *msg,
 			     bool syslog, char *buf, size_t size) { return 0; }
 static bool suppress_message_printing(int level) { return false; }
 
+static int printk_time;
 #endif /* CONFIG_PRINTK */
 
 #ifdef CONFIG_EARLY_PRINTK
