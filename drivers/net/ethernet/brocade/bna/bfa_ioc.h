@@ -60,8 +60,8 @@ struct bfa_dma {
 static inline void
 __bfa_dma_be_addr_set(union bfi_addr_u *dma_addr, u64 pa)
 {
-	dma_addr->a32.addr_lo = (u32) htonl(pa);
-	dma_addr->a32.addr_hi = (u32) htonl(upper_32_bits(pa));
+	dma_addr->a32.addr_lo = htonl(pa);
+	dma_addr->a32.addr_hi = htonl(upper_32_bits(pa));
 }
 
 #define bfa_alen_set(__alen, __len, __pa)	\

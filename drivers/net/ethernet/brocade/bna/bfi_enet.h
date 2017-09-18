@@ -55,8 +55,8 @@
 
 union bfi_addr_be_u {
 	struct {
-		u32	addr_hi;	/* Most Significant 32-bits */
-		u32	addr_lo;	/* Least Significant 32-Bits */
+		__be32	addr_hi;	/* Most Significant 32-bits */
+		__be32	addr_lo;	/* Least Significant 32-Bits */
 	} __packed a32;
 } __packed;
 
@@ -79,24 +79,24 @@ union bfi_addr_be_u {
 struct bfi_enet_txq_wi_base {
 	u8			reserved;
 	u8			num_vectors;	/* number of vectors present */
-	u16			opcode;
+	__be16			opcode;
 			/* BFI_ENET_TXQ_WI_SEND or BFI_ENET_TXQ_WI_SEND_LSO */
-	u16			flags;		/* OR of all the flags */
-	u16			l4_hdr_size_n_offset;
-	u16			vlan_tag;
-	u16			lso_mss;	/* Only 14 LSB are valid */
-	u32			frame_length;	/* Only 24 LSB are valid */
+	__be16			flags;		/* OR of all the flags */
+	__be16			l4_hdr_size_n_offset;
+	__be16			vlan_tag;
+	__be16			lso_mss;	/* Only 14 LSB are valid */
+	__be32			frame_length;	/* Only 24 LSB are valid */
 } __packed;
 
 struct bfi_enet_txq_wi_ext {
-	u16			reserved;
-	u16			opcode;		/* BFI_ENET_TXQ_WI_EXTENSION */
-	u32			reserved2[3];
+	__be16			reserved;
+	__be16			opcode;		/* BFI_ENET_TXQ_WI_EXTENSION */
+	__be32			reserved2[3];
 } __packed;
 
 struct bfi_enet_txq_wi_vector {			/* Tx Buffer Descriptor */
-	u16			reserved;
-	u16			length;		/* Only 14 LSB are valid */
+	__be16			reserved;
+	__be16			length;		/* Only 14 LSB are valid */
 	union bfi_addr_be_u	addr;
 } __packed;
 
@@ -151,10 +151,10 @@ struct bfi_enet_rxq_entry {
 
 /* CQ Entry Structure */
 struct bfi_enet_cq_entry {
-	u32 flags;
-	u16	vlan_tag;
-	u16	length;
-	u32	rss_hash;
+	__be32 flags;
+	__be16	vlan_tag;
+	__be16	length;
+	__be32	rss_hash;
 	u8	valid;
 	u8	reserved1;
 	u8	reserved2;
@@ -165,8 +165,8 @@ struct bfi_enet_cq_entry {
 struct bfi_enet_q {
 	union bfi_addr_u	pg_tbl;
 	union bfi_addr_u	first_entry;
-	u16		pages;	/* # of pages */
-	u16		page_sz;
+	__be16		pages;	/* # of pages */
+	__be16		page_sz;
 } __packed;
 
 struct bfi_enet_txq {
@@ -177,8 +177,8 @@ struct bfi_enet_txq {
 
 struct bfi_enet_rxq {
 	struct bfi_enet_q	q;
-	u16		rx_buffer_size;
-	u16		rsvd;
+	__be16		rx_buffer_size;
+	__be16		rsvd;
 } __packed;
 
 struct bfi_enet_cq {
@@ -192,8 +192,8 @@ struct bfi_enet_ib_cfg {
 	u8		continuous_coalescing;
 	u8		msix;
 	u8		rsvd[3];
-	u32	coalescing_timeout;
-	u32	inter_pkt_timeout;
+	__be32	coalescing_timeout;
+	__be32	inter_pkt_timeout;
 	u8		inter_pkt_count;
 	u8		rsvd1[3];
 } __packed;
@@ -201,10 +201,10 @@ struct bfi_enet_ib_cfg {
 struct bfi_enet_ib {
 	union bfi_addr_u	index_addr;
 	union {
-		u16	msix_index;
-		u16	intx_bitmask;
+		__be16	msix_index;
+		__be16	intx_bitmask;
 	} __packed intr;
-	u16		rsvd;
+	__be16		rsvd;
 } __packed;
 
 /* ENET command messages */
@@ -375,7 +375,7 @@ struct bfi_enet_rsp {
 	struct bfi_msgq_mhdr mh;
 	u8		error;		/*!< if error see cmd_offset */
 	u8		rsvd;
-	u16		cmd_offset;	/*!< offset to invalid parameter */
+	__be16		cmd_offset;	/*!< offset to invalid parameter */
 } __packed;
 
 /* GLOBAL CONFIGURATION */
@@ -394,10 +394,10 @@ struct bfi_enet_attr_rsp {
 	struct bfi_msgq_mhdr mh;
 	u8		error;		/*!< if error see cmd_offset */
 	u8		rsvd;
-	u16		cmd_offset;	/*!< offset to invalid parameter */
-	u32		max_cfg;
-	u32		max_ucmac;
-	u32		rit_size;
+	__be16		cmd_offset;	/*!< offset to invalid parameter */
+	__be32		max_cfg;
+	__be32		max_ucmac;
+	__be32		rit_size;
 } __packed;
 
 /* Tx Configuration
@@ -414,7 +414,7 @@ enum bfi_enet_tx_vlan_mode {
 struct bfi_enet_tx_cfg {
 	u8		vlan_mode;	/*!< processing mode */
 	u8		rsvd;
-	u16		vlan_id;
+	__be16		vlan_id;
 	u8		admit_tagged_frame;
 	u8		apply_vlan_filter;
 	u8		add_to_vswitch;
@@ -442,8 +442,8 @@ struct bfi_enet_tx_cfg_rsp {
 	u8		hw_id;		/* For debugging */
 	u8		rsvd[2];
 	struct {
-		u32	q_dbell;	/* PCI base address offset */
-		u32	i_dbell;	/* PCI base address offset */
+		__be32	q_dbell;	/* PCI base address offset */
+		__be32	i_dbell;	/* PCI base address offset */
 		u8	hw_qid;		/* For debugging */
 		u8	rsvd[3];
 	} __packed q_handles[BFI_ENET_TXQ_PRIO_MAX];
@@ -472,7 +472,7 @@ enum bfi_enet_hds_type {
 struct bfi_enet_rx_cfg {
 	u8		rxq_type;
 	u8		rsvd[1];
-	u16		frame_size;
+	__be16		frame_size;
 
 	struct {
 		u8			max_header_size;
@@ -515,9 +515,9 @@ struct bfi_enet_rx_cfg_rsp {
 	u8		hw_id;	 /* For debugging */
 	u8		rsvd[2];
 	struct {
-		u32	ql_dbell; /* PCI base address offset */
-		u32	qs_dbell; /* PCI base address offset */
-		u32	i_dbell;  /* PCI base address offset */
+		__be32	ql_dbell; /* PCI base address offset */
+		__be32	qs_dbell; /* PCI base address offset */
+		__be32	i_dbell;  /* PCI base address offset */
 		u8		hw_lqid;  /* For debugging */
 		u8		hw_sqid;  /* For debugging */
 		u8		hw_cqid;  /* For debugging */
@@ -532,7 +532,7 @@ struct bfi_enet_rx_cfg_rsp {
  */
 struct bfi_enet_rit_req {
 	struct	bfi_msgq_mhdr mh;
-	u16	size;			/* number of table-entries used */
+	__be16	size;			/* number of table-entries used */
 	u8	rsvd[2];
 	u8	table[BFI_ENET_RSS_RIT_MAX];
 } __packed;
@@ -553,7 +553,7 @@ struct bfi_enet_rss_cfg {
 	u8	type;
 	u8	mask;
 	u8	rsvd[2];
-	u32	key[BFI_ENET_RSS_KEY_LEN];
+	__be32	key[BFI_ENET_RSS_KEY_LEN];
 } __packed;
 
 struct bfi_enet_rss_cfg_req {
@@ -578,7 +578,7 @@ struct bfi_enet_ucast_req {
 /* MAC Unicast + VLAN */
 struct bfi_enet_mac_n_vlan_req {
 	struct bfi_msgq_mhdr	mh;
-	u16			vlan_id;
+	__be16			vlan_id;
 	u8			mac_addr[ETH_ALEN];
 } __packed;
 
@@ -600,8 +600,8 @@ struct bfi_enet_mcast_add_rsp {
 	struct bfi_msgq_mhdr	mh;
 	u8			error;
 	u8			rsvd;
-	u16			cmd_offset;
-	u16			handle;
+	__be16			cmd_offset;
+	__be16			handle;
 	u8			rsvd1[2];
 } __packed;
 
@@ -610,7 +610,7 @@ struct bfi_enet_mcast_add_rsp {
  */
 struct bfi_enet_mcast_del_req {
 	struct bfi_msgq_mhdr	mh;
-	u16			handle;
+	__be16			handle;
 	u8			rsvd[2];
 } __packed;
 
@@ -623,7 +623,7 @@ struct bfi_enet_rx_vlan_req {
 	struct bfi_msgq_mhdr	mh;
 	u8			block_idx;
 	u8			rsvd[3];
-	u32			bit_mask[BFI_ENET_VLAN_WORDS_MAX];
+	__be32			bit_mask[BFI_ENET_VLAN_WORDS_MAX];
 } __packed;
 
 /* PAUSE
@@ -664,10 +664,10 @@ enum {
  */
 struct bfi_enet_stats_req {
 	struct bfi_msgq_mhdr	mh;
-	u16			stats_mask;
+	__be16			stats_mask;
 	u8			rsvd[2];
-	u32			rx_enet_mask;
-	u32			tx_enet_mask;
+	__be32			rx_enet_mask;
+	__be32			tx_enet_mask;
 	union bfi_addr_u	host_buffer;
 } __packed;
 
