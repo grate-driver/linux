@@ -233,11 +233,6 @@ int host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
 	struct host1x_syncpt *syncpt;
 	int queue_was_empty;
 
-	if (waiter == NULL) {
-		pr_warn("%s: NULL waiter\n", __func__);
-		return -EINVAL;
-	}
-
 	/* initialize a new waiter */
 	INIT_LIST_HEAD(&waiter->list);
 	kref_init(&waiter->refcount);
