@@ -75,9 +75,9 @@ struct host1x_waitlist {
  *
  * This is a non-blocking api.
  */
-int host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
-	enum host1x_intr_action action, void *data,
-	struct host1x_waitlist *waiter, void **ref);
+void host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
+			    enum host1x_intr_action action, void *data,
+			    struct host1x_waitlist *waiter, void **ref);
 
 /*
  * Unreference an action submitted to host1x_intr_add_action().

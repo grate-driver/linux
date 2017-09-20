@@ -211,17 +211,12 @@ static void syncpt_thresh_work(struct work_struct *work)
 				host1x_syncpt_load(host->syncpt + id));
 }
 
-int host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
-			   enum host1x_intr_action action, void *data,
-			   struct host1x_waitlist *waiter, void **ref)
+void host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
+			    enum host1x_intr_action action, void *data,
+			    struct host1x_waitlist *waiter, void **ref)
 {
 	struct host1x_syncpt *syncpt;
 	int queue_was_empty;
-
-	if (waiter == NULL) {
-		pr_warn("%s: NULL waiter\n", __func__);
-		return -EINVAL;
-	}
 
 	/* initialize a new waiter */
 	INIT_LIST_HEAD(&waiter->list);
@@ -253,7 +248,6 @@ int host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
 
 	if (ref)
 		*ref = waiter;
-	return 0;
 }
 
 void host1x_intr_put_ref(struct host1x *host, unsigned int id, void *ref)
