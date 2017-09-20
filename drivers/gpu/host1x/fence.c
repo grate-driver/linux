@@ -76,7 +76,6 @@ struct dma_fence *host1x_fence_create(struct host1x_client *client,
 	struct host1x *host = sp->host;
 	struct host1x_fence *f;
 	struct dma_fence *fence;
-	int err;
 
 	f = kzalloc(sizeof(*f), GFP_KERNEL);
 	if (!f)
@@ -98,12 +97,9 @@ struct dma_fence *host1x_fence_create(struct host1x_client *client,
 	 */
 	fence = dma_fence_get(&f->base);
 
-	err = host1x_intr_add_action(host, sp->id, threshold,
-				     HOST1X_INTR_ACTION_SIGNAL_FENCE,
-				     fence, waiter, NULL);
-	if (err)
-		goto error_cleanup;
-
+	host1x_intr_add_action(host, sp->id, threshold,
+			       HOST1X_INTR_ACTION_SIGNAL_FENCE,
+			       fence, waiter, NULL);
 	/*
 	 * Avoid kernel module unloading while fence is alive because
 	 * backing syncpoint would be destroyed on host1x driver removal.
