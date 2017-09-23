@@ -91,7 +91,6 @@ static int syncpt_cpu_incr(struct host1x_syncpt *sp)
 
 	host1x_sync_writel(host, BIT(sp->id % 32),
 			   HOST1X_SYNC_SYNCPT_CPU_INCR(reg_offset));
-	wmb();
 
 	return 0;
 }
