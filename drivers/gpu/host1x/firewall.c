@@ -197,6 +197,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 			offset /= sizeof(u32);
 			offset += fw.offset + 1;
 
+			host1x_debug_output_lock();
+
 			FW_ERR("Debug dump:\n");
 
 			host1x_debug_dump_gather(host, g, offset);
@@ -204,6 +206,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 			dev_err(dev, "Command stream validation failed at word "
 				"%u of gather #%d, checked %zu words totally\n",
 				fw.offset, i, offset);
+
+			host1x_debug_output_unlock();
 
 			return -EINVAL;
 		}
@@ -214,6 +218,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 	/* No relocs, waitchks and syncpts should remain at this point */
 	if (!fw.num_relocs && !fw.num_waitchks && !fw.syncpt_incrs)
 		return 0;
+
+	host1x_debug_output_lock();
 
 	FW_ERR("Debug dump:\n");
 
@@ -232,6 +238,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 	if (fw.syncpt_incrs)
 		FW_ERR("Job has invalid number of syncpoint increments, "
 		       "%u left\n", fw.syncpt_incrs);
+
+	host1x_debug_output_unlock();
 
 	return -EINVAL;
 }
