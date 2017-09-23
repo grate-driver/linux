@@ -416,7 +416,6 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 out:
 	if (err)
 		host1x_job_unpin(job);
-	wmb();
 
 	return err;
 }

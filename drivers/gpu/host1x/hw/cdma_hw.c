@@ -150,6 +150,12 @@ static void cdma_flush(struct host1x_cdma *cdma)
 	struct host1x_channel *ch = cdma_to_channel(cdma);
 
 	if (cdma->push_buffer.pos != cdma->last_pos) {
+		/*
+		 * Ensure that all outstanding memory writes to
+		 * pushbuf have been flushed to main memory.
+		 */
+		wmb();
+
 		host1x_ch_writel(ch, cdma->push_buffer.pos,
 				 HOST1X_CHANNEL_DMAPUT);
 		cdma->last_pos = cdma->push_buffer.pos;
