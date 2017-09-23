@@ -50,6 +50,8 @@ void __printf(2, 3) host1x_debug_cont(struct output *o, const char *fmt, ...);
 
 extern unsigned int host1x_debug_trace_cmdbuf;
 
+void host1x_debug_output_lock(void);
+void host1x_debug_output_unlock(void);
 void host1x_debug_init(struct host1x *host1x);
 void host1x_debug_deinit(struct host1x *host1x);
 void host1x_debug_dump(struct host1x *host1x);
