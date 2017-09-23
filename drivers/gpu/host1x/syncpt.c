@@ -137,8 +137,6 @@ void host1x_syncpt_restore(struct host1x *host)
 
 	for (i = 0; i < host1x_syncpt_nb_bases(host); i++)
 		host1x_hw_syncpt_restore_wait_base(host, sp_base + i);
-
-	wmb();
 }
 
 /*
@@ -318,8 +316,6 @@ bool host1x_syncpt_is_expired(struct host1x_syncpt *sp, u32 thresh)
 	u32 current_val;
 	u32 future_val;
 
-	smp_rmb();
-
 	current_val = (u32)atomic_read(&sp->min_val);
 	future_val = (u32)atomic_read(&sp->max_val);
 
@@ -488,8 +484,6 @@ void host1x_syncpt_deinit(struct host1x *host)
  */
 u32 host1x_syncpt_read_max(struct host1x_syncpt *sp)
 {
-	smp_rmb();
-
 	return (u32)atomic_read(&sp->max_val);
 }
 EXPORT_SYMBOL(host1x_syncpt_read_max);
@@ -503,8 +497,6 @@ EXPORT_SYMBOL(host1x_syncpt_read_max);
  */
 u32 host1x_syncpt_read_min(struct host1x_syncpt *sp)
 {
-	smp_rmb();
-
 	return (u32)atomic_read(&sp->min_val);
 }
 EXPORT_SYMBOL(host1x_syncpt_read_min);

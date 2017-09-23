@@ -94,7 +94,6 @@ static inline bool host1x_syncpt_client_managed(struct host1x_syncpt *sp)
 static inline bool host1x_syncpt_idle(struct host1x_syncpt *sp)
 {
 	int min, max;
-	smp_rmb();
 	min = atomic_read(&sp->min_val);
 	max = atomic_read(&sp->max_val);
 	return (min == max);
