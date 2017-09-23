@@ -31,6 +31,18 @@ static pid_t host1x_debug_force_timeout_pid;
 static u32 host1x_debug_force_timeout_val;
 static u32 host1x_debug_force_timeout_channel;
 
+static DEFINE_MUTEX(dump_lock);
+
+void host1x_debug_output_lock(void)
+{
+	mutex_lock(&dump_lock);
+}
+
+void host1x_debug_output_unlock(void)
+{
+	mutex_unlock(&dump_lock);
+}
+
 void host1x_debug_output(struct output *o, const char *fmt, ...)
 {
 	va_list args;
@@ -217,7 +229,9 @@ void host1x_debug_dump(struct host1x *host1x)
 		.fn = write_to_printk
 	};
 
+	host1x_debug_output_lock();
 	show_all(host1x, &o, true);
+	host1x_debug_output_unlock();
 }
 
 void host1x_debug_dump_syncpts(struct host1x *host1x)
@@ -226,5 +240,7 @@ void host1x_debug_dump_syncpts(struct host1x *host1x)
 		.fn = write_to_printk
 	};
 
+	host1x_debug_output_lock();
 	show_syncpts(host1x, &o);
+	host1x_debug_output_unlock();
 }

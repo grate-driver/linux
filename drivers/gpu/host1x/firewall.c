@@ -65,6 +65,8 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 		goto fail;
 	}
 
+	host1x_debug_output_lock();
+
 	for (i = 0; i < job->num_gathers; i++) {
 		struct host1x_job_gather *g = &job->gathers[i];
 		u64 gather_size = g->words * sizeof(u32);
@@ -128,6 +130,8 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 		}
 	}
 
+	host1x_debug_output_unlock();
+
 	return 0;
 
 fail:
@@ -143,6 +147,9 @@ fail:
 
 	/* print final error message, giving a clue about jobs client */
 	dev_err(dev, "Job checking failed\n");
+
+	host1x_debug_output_unlock();
+
 	return -EINVAL;
 }
 
@@ -181,6 +188,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 
 	job->gather_copy_size = size;
 
+	host1x_debug_output_lock();
+
 	for (i = 0; i < job->num_gathers; i++) {
 		struct host1x_job_gather *g = &job->gathers[i];
 		void *gather;
@@ -211,6 +220,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 			dev_err(dev, "Command stream validation failed at word #%u of gather #%d, checked %zu words totally\n",
 				fw.offset, i, offset);
 
+			host1x_debug_output_unlock();
+
 			return -EINVAL;
 		}
 
@@ -220,6 +231,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 	/* No relocs and syncpts should remain at this point */
 	if (fw.num_relocs || fw.syncpt_incrs)
 		goto fw_err;
+
+	host1x_debug_output_unlock();
 
 	return 0;
 
@@ -237,6 +250,8 @@ fw_err:
 	if (fw.syncpt_incrs)
 		FW_ERR("Job has invalid number of syncpoint increments, %u left\n",
 		       fw.syncpt_incrs);
+
+	host1x_debug_output_unlock();
 
 	return -EINVAL;
 }
