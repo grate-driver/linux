@@ -59,6 +59,7 @@ struct gr3d {
 	struct clk *clk;
 	struct reset_control *rst_secondary;
 	struct reset_control *rst;
+	bool hw_store;
 
 	DECLARE_BITMAP(addr_regs, GR3D_NUM_REGS);
 };
@@ -105,6 +106,7 @@ static int gr3d_init(struct host1x_client *client)
 	struct drm_device *dev = dev_get_drvdata(client->parent);
 	unsigned long flags = HOST1X_SYNCPT_HAS_BASE;
 	struct gr3d *gr3d = to_gr3d(drm);
+	int err;
 
 	gr3d->channel = host1x_channel_request(client->dev);
 	if (!gr3d->channel)
@@ -115,6 +117,14 @@ static int gr3d_init(struct host1x_client *client)
 		host1x_channel_put(gr3d->channel);
 		return -ENOMEM;
 	}
+
+	/*
+	 * Enable Host1x's AHB DMA flow control for the 3d channel.
+	 * It may fail in a case of AHB DMA driver absence.
+	 */
+	err = host1x_channel_enable_dma_flowctrl(gr3d->channel);
+	if (!err)
+		gr3d->hw_store = true;
 
 	return tegra_drm_register_client(dev->dev_private, drm);
 }
@@ -129,6 +139,9 @@ static int gr3d_exit(struct host1x_client *client)
 	err = tegra_drm_unregister_client(dev->dev_private, drm);
 	if (err < 0)
 		return err;
+
+	if (gr3d->hw_store)
+		host1x_channel_disable_dma_flowctrl(gr3d->channel);
 
 	host1x_syncpt_free(client->syncpts[0]);
 	host1x_channel_put(gr3d->channel);
@@ -206,6 +219,8 @@ static int gr3d_initialize_ctx(struct host1x_client *client,
 			       unsigned int *restore_pushes,
 			       unsigned int *store_pushes)
 {
+	struct tegra_drm_client *drm = host1x_to_drm_client(client);
+	struct gr3d *gr3d = to_gr3d(drm);
 	struct host1x_context_push_data *restore;
 	struct host1x_context_push_data *store;
 	const struct gr3d_regs_desc *regs;
@@ -215,6 +230,7 @@ static int gr3d_initialize_ctx(struct host1x_client *client,
 	unsigned int count;
 	unsigned int words;
 	unsigned int i;
+	bool hw_store;
 	bool incr;
 
 	/* count the number of indirect registers */
@@ -222,7 +238,19 @@ static int gr3d_initialize_ctx(struct host1x_client *client,
 		if (!gr3d_regs[i].incr)
 			ind_regs++;
 
-	pushes_num = ARRAY_SIZE(gr3d_regs) * 2 + ind_regs * 2 + 1;
+	/*
+	 * In a case of HW-assisted context storing, make locking more
+	 * fine grained. Doing the same for software storing doesn't make
+	 * sense since it would significantly increase code complexity
+	 * and likely reduce overall performance due to jumping back
+	 * and forth between context storing workers.
+	 */
+	hw_store = gr3d->hw_store;
+
+	if (hw_store)
+		pushes_num = ARRAY_SIZE(gr3d_regs) * 2 + ind_regs * 3 + 1;
+	else
+		pushes_num = ARRAY_SIZE(gr3d_regs) * 2 + ind_regs * 2 + 1;
 
 	store = kmalloc_array(pushes_num, sizeof(*store), GFP_KERNEL);
 	if (!store)
@@ -281,6 +309,12 @@ static int gr3d_initialize_ctx(struct host1x_client *client,
 		store->word0 = OPCODE_GATHER(0x2e, 1, 0, count);
 		store->word1 = bo_dma;
 		store++;
+
+		if (!incr && hw_store) {
+			store->word0 = RELEASE_MLOCK(HOST1X_MODULE_HOST1X);
+			store->word1 = ACQUIRE_MLOCK(HOST1X_MODULE_HOST1X);
+			store++;
+		}
 
 		/* restore: reset indirect registers offset */
 		if (!incr) {
@@ -367,7 +401,7 @@ static int gr3d_open_channel(struct tegra_drm_client *client,
 	context->hwctx = host1x_create_context(&gr3d_context_ops,
 					       context->channel, cl, sp,
 					       HOST1X_CLASS_GR3D, true,
-					       false, true);
+					       gr3d->hw_store, !gr3d->hw_store);
 	if (IS_ERR(context->hwctx)) {
 		host1x_channel_put(context->channel);
 		return PTR_ERR(context->hwctx);
