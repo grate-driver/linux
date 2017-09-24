@@ -1,4 +1,5 @@
 #include <dt-bindings/clock/tegra20-car.h>
+#include <dt-bindings/dma/tegra-ahb-dma.h>
 #include <dt-bindings/gpio/tegra-gpio.h>
 #include <dt-bindings/pinctrl/pinctrl-tegra.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -17,6 +18,8 @@
 		clocks = <&tegra_car TEGRA20_CLK_HOST1X>;
 		resets = <&tegra_car 28>;
 		reset-names = "host1x";
+		dmas = <&ahbdma TEGRA_AHBDMA_REQ_HOST1X>;
+		dma-names = "host1x";
 
 		#address-cells = <1>;
 		#size-cells = <1>;
