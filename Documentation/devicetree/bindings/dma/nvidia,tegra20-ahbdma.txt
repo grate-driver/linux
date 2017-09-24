@@ -1,0 +1,23 @@
+* NVIDIA Tegra AHB DMA controller
+
+Required properties:
+- compatible:	Should be "nvidia,tegra20-ahbdma", "nvidia,tegra30-ahbdma".
+- reg:		Must contain registers base address and length.
+- interrupts:	Must contain one entry, DMA controller interrupt.
+- clocks:	Must contain one entry, DMA controller clock.
+- resets :	Must contain one entry, DMA controller reset.
+- #dma-cells:	Must be <1>. The cell represents DMA request select value
+		for the peripheral. For more details consult the Tegra TRM
+		documentation, in particular REQ_SEL field of the AHB DMA
+		channel control register.
+
+Example:
+
+dma-controller@60008000  {
+	compatible = "nvidia,tegra20-ahbdma";
+	reg = <0x60008000 0x2000>;
+	interrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
+	clocks = <&tegra_car TEGRA20_CLK_AHBDMA>;
+	resets = <&tegra_car 33>;
+	#dma-cells = <1>;
+};
