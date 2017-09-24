@@ -138,6 +138,13 @@ static inline u32 host1x_opcode_gather_incr(unsigned offset, unsigned count)
 	return (6 << 28) | (offset << 16) | BIT(15) | BIT(14) | count;
 }
 
-#define HOST1X_OPCODE_NOP host1x_opcode_nonincr(0, 0)
+static inline u32 host1x_opcode_extend(unsigned subop, unsigned value)
+{
+	return (14 << 28) | (subop << 24) | value;
+}
+
+#define HOST1X_OPCODE_NOP		host1x_opcode_nonincr(0, 0)
+#define HOST1X_OPCODE_ACQUIRE_MLOCK(id)	host1x_opcode_extend(0, id)
+#define HOST1X_OPCODE_RELEASE_MLOCK(id)	host1x_opcode_extend(1, id)
 
 #endif

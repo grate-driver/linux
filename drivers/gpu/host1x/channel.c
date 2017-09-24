@@ -142,6 +142,7 @@ struct host1x_channel *host1x_channel_request(struct device *dev)
 
 	kref_init(&channel->refcount);
 	mutex_init(&channel->submitlock);
+	spin_lock_init(&channel->context_lock);
 	channel->dev = dev;
 
 	err = host1x_hw_channel_init(host, channel, channel->id);

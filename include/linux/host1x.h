@@ -193,6 +193,7 @@ u64 host1x_syncpt_get_fence_context(struct host1x_syncpt *sp);
  */
 
 struct host1x_channel;
+struct host1x_context;
 struct host1x_job;
 
 struct host1x_channel *host1x_channel_request(struct device *dev);
@@ -222,6 +223,47 @@ struct host1x_waitchk {
 	u32 syncpt_id;
 	u32 thresh;
 };
+
+struct host1x_context_push_data {
+	u32 word0;
+	u32 word1;
+};
+
+/**
+ * struct host1x_context_ops - host1x client HW context operations
+ * @initialize: contexts store/restore data initialization code
+ * @allocate: contexts BO allocation code
+ * @debug: show contexts state debug info
+ */
+struct host1x_context_ops {
+	int (*initialize)(struct host1x_client *client,
+			  u32 class,
+			  u32 *bo_vaddr,
+			  dma_addr_t bo_dma,
+			  u32 *bo_offset,
+			  unsigned int *words_num,
+			  struct host1x_context_push_data **restore_data,
+			  struct host1x_context_push_data **store_data,
+			  unsigned int *restore_pushes,
+			  unsigned int *store_pushes);
+	int (*allocate)(struct host1x_client *client,
+			struct host1x_bo **bo);
+	void (*debug)(struct host1x_client *client, u32 *bo_vaddr);
+};
+
+struct host1x_context *host1x_create_context(
+			const struct host1x_context_ops *ops,
+			struct host1x_channel *channel,
+			struct host1x_client *client,
+			struct host1x_syncpt *sp,
+			enum host1x_class class,
+			bool hw_restore,
+			bool hw_store,
+			bool sw_store);
+struct host1x_context *host1x_context_get(struct host1x_context *ctx);
+void host1x_context_put(struct host1x_context *ctx);
+u32 host1x_context_class(struct host1x_client *client,
+			 struct host1x_context *ctx);
 
 struct host1x_job {
 	/* When refcount goes to zero, job can be freed */
@@ -282,9 +324,16 @@ struct host1x_job {
 
 	/* dma_fence for this job */
 	struct dma_fence *out_fence;
+
+	/* Client's HW context for this job */
+	struct host1x_context *hwctx;
+
+	/* Client's HW context stored by this job */
+	struct host1x_context *stored_hwctx;
 };
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
+				    struct host1x_context *ctx,
 				    u32 num_cmdbufs, u32 num_relocs,
 				    u32 num_waitchks);
 void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *mem_id,

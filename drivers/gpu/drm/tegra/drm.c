@@ -715,15 +715,16 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 			return err;
 	}
 
-	job = host1x_job_alloc(context->channel, args->num_cmdbufs,
-			       args->num_relocs, args->num_waitchks);
+	job = host1x_job_alloc(context->channel, context->hwctx,
+			       args->num_cmdbufs, args->num_relocs,
+			       args->num_waitchks);
 	if (!job)
 		return -ENOMEM;
 
 	job->num_relocs = args->num_relocs;
 	job->num_waitchk = args->num_waitchks;
 	job->client = &context->client->base;
-	job->class = context->client->base.class;
+	job->class = host1x_context_class(job->client, context->hwctx);
 	job->serialize = true;
 
 	/*

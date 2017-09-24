@@ -21,6 +21,7 @@
 
 #include <linux/io.h>
 #include <linux/kref.h>
+#include <linux/spinlock.h>
 
 #include "cdma.h"
 
@@ -39,6 +40,8 @@ struct host1x_channel {
 	void __iomem *regs;
 	struct device *dev;
 	struct host1x_cdma cdma;
+	struct host1x_context *recent_ctx;
+	struct spinlock context_lock;
 };
 
 /* channel list operations */

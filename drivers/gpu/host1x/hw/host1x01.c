@@ -24,6 +24,7 @@
 #define HOST1X_HW 1
 
 #include "cdma_hw.c"
+#include "context_hw.c"
 #include "channel_hw.c"
 #include "debug_hw.c"
 #include "firewall_hw.c"

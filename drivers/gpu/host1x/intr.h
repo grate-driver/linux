@@ -26,10 +26,16 @@ struct host1x;
 
 enum host1x_intr_action {
 	/*
+	 * Perform HW context store.
+	 * 'data' points to a host1x_context
+	 */
+	HOST1X_INTR_ACTION_CONTEXT_STORE,
+
+	/*
 	 * Perform cleanup after a submit has completed.
 	 * 'data' points to a channel
 	 */
-	HOST1X_INTR_ACTION_SUBMIT_COMPLETE = 0,
+	HOST1X_INTR_ACTION_SUBMIT_COMPLETE,
 
 	/*
 	 * Wake up a  task.

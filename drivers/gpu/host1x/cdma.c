@@ -29,6 +29,7 @@
 
 #include "cdma.h"
 #include "channel.h"
+#include "context.h"
 #include "dev.h"
 #include "debug.h"
 #include "job.h"
@@ -294,6 +295,9 @@ static void update_cdma_locked(struct host1x_cdma *cdma)
 		/* Unpin the memory */
 		host1x_job_unpin(job);
 
+		/* Release stored context */
+		host1x_context_put(job->stored_hwctx);
+
 		/* Pop push buffer slots */
 		if (job->num_slots) {
 			struct push_buffer *pb = &cdma->push_buffer;
@@ -324,6 +328,7 @@ void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
 	struct host1x *host1x = cdma_to_host1x(cdma);
 	u32 restart_addr, syncpt_incrs, syncpt_val;
 	struct host1x_job *job = NULL;
+	struct host1x_context *ctx;
 
 	syncpt_val = host1x_syncpt_load(cdma->timeout.syncpt);
 
@@ -370,10 +375,13 @@ void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
 	else
 		restart_addr = cdma->last_pos;
 
+	/* timed out jobs context */
+	ctx = job->hwctx;
+
 	/* do CPU increments as long as this context continues */
 	list_for_each_entry_from(job, &cdma->sync_queue, list) {
 		/* different context, gets us out of this loop */
-		if (job->client != cdma->timeout.client)
+		if (job->hwctx != ctx)
 			break;
 
 		/* won't need a timeout when replayed */

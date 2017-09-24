@@ -5,6 +5,7 @@ host1x-y = \
 	intr.o \
 	cdma.o \
 	channel.o \
+	context.o \
 	job.o \
 	debug.o \
 	mipi.o \

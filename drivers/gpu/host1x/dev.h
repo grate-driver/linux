@@ -43,6 +43,8 @@ struct host1x_channel_ops {
 	int (*init)(struct host1x_channel *channel, struct host1x *host,
 		    unsigned int id);
 	int (*submit)(struct host1x_job *job);
+	int (*read_inddata)(struct host1x_channel *ch, u32 *data,
+			    unsigned int num);
 };
 
 struct host1x_cdma_ops {
@@ -252,6 +254,14 @@ static inline int host1x_hw_channel_submit(struct host1x *host,
 					   struct host1x_job *job)
 {
 	return host->channel_op->submit(job);
+}
+
+static inline int host1x_hw_channel_read_inddata(
+					struct host1x *host,
+					struct host1x_channel *channel,
+					u32 *data, unsigned int words_num)
+{
+	return host->channel_op->read_inddata(channel, data, words_num);
 }
 
 static inline void host1x_hw_cdma_start(struct host1x *host,

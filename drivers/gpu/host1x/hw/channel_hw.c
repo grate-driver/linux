@@ -17,6 +17,7 @@
  */
 
 #include <linux/host1x.h>
+#include <linux/iopoll.h>
 #include <linux/slab.h>
 
 #include <trace/events/host1x.h>
@@ -145,6 +146,13 @@ static int channel_submit(struct host1x_job *job)
 	if (sp->base)
 		synchronize_syncpt_base(job);
 
+	/* handle context switching */
+	err = setup_context(host, ch, job->hwctx, &job->stored_hwctx);
+	if (err) {
+		mutex_unlock(&ch->submitlock);
+		goto error;
+	}
+
 	syncval = host1x_syncpt_incr_max(sp, user_syncpt_incrs);
 
 	/* assign syncpoint to channel */
@@ -186,7 +194,38 @@ static int host1x_channel_init(struct host1x_channel *ch, struct host1x *dev,
 	return 0;
 }
 
+static int read_inddata(struct host1x_channel *ch, u32 *data,
+			unsigned int words_num)
+{
+	int err = 0;
+#if HOST1X_HW < 6
+	void __iomem *fifostat = ch->regs + HOST1X_CHANNEL_FIFOSTAT;
+	void __iomem *inddata = ch->regs + HOST1X_CHANNEL_INDDATA;
+	unsigned int i, k;
+	u32 val;
+
+	for (i = 0; i < words_num; i += k) {
+		err = readl_relaxed_poll_timeout_atomic(fifostat, val,
+			HOST1X_CHANNEL_FIFOSTAT_OUTFENTRIES_V(val), 1, 10000);
+		if (err) {
+			dev_err(ch->dev, "%s: Failed to read indirect data %d "
+					  "left %u words\n",
+				__func__, err, words_num - i);
+			break;
+		}
+
+		for (k = 0; k < HOST1X_CHANNEL_FIFOSTAT_OUTFENTRIES_V(val);
+		     k++, data++)
+			*data = readl_relaxed(inddata);
+	}
+
+	wmb();
+#endif
+	return err;
+}
+
 static const struct host1x_channel_ops host1x_channel_ops = {
 	.init = host1x_channel_init,
 	.submit = channel_submit,
+	.read_inddata = read_inddata,
 };

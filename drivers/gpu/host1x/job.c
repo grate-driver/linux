@@ -27,6 +27,7 @@
 #include <trace/events/host1x.h>
 
 #include "channel.h"
+#include "context.h"
 #include "debug.h"
 #include "dev.h"
 #include "firewall.h"
@@ -34,6 +35,7 @@
 #include "syncpt.h"
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
+				    struct host1x_context *ctx,
 				    u32 num_cmdbufs, u32 num_relocs,
 				    u32 num_waitchks)
 {
@@ -75,6 +77,7 @@ struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
 	mem += num_cmdbufs * sizeof(struct host1x_job_gather);
 	job->addr_phys = num_unpins ? mem : NULL;
 
+	job->hwctx = host1x_context_get(ctx);
 	job->reloc_addr_phys = job->addr_phys;
 	job->gather_addr_phys = &job->addr_phys[num_relocs];
 
@@ -93,6 +96,7 @@ static void job_free(struct kref *ref)
 {
 	struct host1x_job *job = container_of(ref, struct host1x_job, ref);
 
+	host1x_context_put(job->hwctx);
 	kfree(job);
 }
 

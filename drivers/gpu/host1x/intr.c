@@ -24,6 +24,7 @@
 
 #include <trace/events/host1x.h>
 #include "channel.h"
+#include "context.h"
 #include "dev.h"
 #include "intr.h"
 
@@ -147,9 +148,17 @@ static void action_signal_fence(struct host1x_waitlist *waiter)
 	dma_fence_put(fence);
 }
 
+static void action_store_context(struct host1x_waitlist *waiter)
+{
+	struct host1x_context *ctx = waiter->data;
+
+	host1x_context_store(ctx);
+}
+
 typedef void (*action_handler)(struct host1x_waitlist *waiter);
 
 static const action_handler action_handlers[HOST1X_INTR_ACTION_COUNT] = {
+	action_store_context,
 	action_submit_complete,
 	action_wakeup,
 	action_wakeup_interruptible,

@@ -63,6 +63,18 @@ static inline u32 host1x_channel_fifostat_cfempty_v(u32 r)
 }
 #define HOST1X_CHANNEL_FIFOSTAT_CFEMPTY_V(r) \
 	host1x_channel_fifostat_cfempty_v(r)
+static inline u32 host1x_channel_fifostat_outfentries_v(u32 r)
+{
+	return (r >> 24) & 0x1f;
+}
+#define HOST1X_CHANNEL_FIFOSTAT_OUTFENTRIES_V(r) \
+	host1x_channel_fifostat_outfentries_v(r)
+static inline u32 host1x_channel_inddata_r(void)
+{
+	return 0xc;
+}
+#define HOST1X_CHANNEL_INDDATA \
+	host1x_channel_inddata_r()
 static inline u32 host1x_channel_dmastart_r(void)
 {
 	return 0x14;
