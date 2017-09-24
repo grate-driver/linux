@@ -200,6 +200,15 @@
 		reg = <0x60007000 0x1000>;
 	};
 
+	ahbdma: ahbdma@60008000 {
+		compatible = "nvidia,tegra20-ahbdma";
+		reg = <0x60008000 0x2000>;
+		interrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&tegra_car TEGRA20_CLK_AHBDMA>;
+		resets = <&tegra_car 33>;
+		#dma-cells = <1>;
+	};
+
 	apbdma: dma@6000a000 {
 		compatible = "nvidia,tegra20-apbdma";
 		reg = <0x6000a000 0x1200>;
