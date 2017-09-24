@@ -194,6 +194,38 @@ static int host1x_channel_init(struct host1x_channel *ch, struct host1x *dev,
 	return 0;
 }
 
+static int ahbdma_flowctrl(struct host1x_channel *channel,
+			   bool enable, unsigned int slots_num)
+{
+#if HOST1X_HW < 6
+	struct host1x *host = dev_get_drvdata(channel->dev->parent);
+	unsigned int slots;
+
+	switch (slots_num) {
+	case 1:
+		slots = 0;
+		break;
+	case 4:
+		slots = 1;
+		break;
+	case 8:
+		slots = 2;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	host1x_sync_writel(host,
+			HOST1X_SYNC_INDREG_DMA_CTRL_AHBDMA_ENABLE_V(enable) |
+			HOST1X_SYNC_INDREG_DMA_CTRL_AHBDMA_ATTN_LVL_V(slots) |
+			HOST1X_SYNC_INDREG_DMA_CTRL_AHBDMA_CHID_V(channel->id),
+			HOST1X_SYNC_INDREG_DMA_CTRL);
+	return 0;
+#else
+	return -ENODEV;
+#endif
+}
+
 static int read_inddata(struct host1x_channel *ch, u32 *data,
 			unsigned int words_num)
 {
@@ -227,5 +259,6 @@ static int read_inddata(struct host1x_channel *ch, u32 *data,
 static const struct host1x_channel_ops host1x_channel_ops = {
 	.init = host1x_channel_init,
 	.submit = channel_submit,
+	.flowctrl = ahbdma_flowctrl,
 	.read_inddata = read_inddata,
 };

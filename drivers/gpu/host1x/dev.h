@@ -18,6 +18,7 @@
 #define HOST1X_DEV_H
 
 #include <linux/device.h>
+#include <linux/dmaengine.h>
 #include <linux/iommu.h>
 #include <linux/iova.h>
 #include <linux/platform_device.h>
@@ -45,6 +46,8 @@ struct host1x_channel_ops {
 	int (*submit)(struct host1x_job *job);
 	int (*read_inddata)(struct host1x_channel *ch, u32 *data,
 			    unsigned int num);
+	int (*flowctrl)(struct host1x_channel *channel,
+			bool enable, unsigned int slots_num);
 };
 
 struct host1x_cdma_ops {
@@ -120,6 +123,7 @@ struct host1x_info {
 	unsigned int sync_offset; /* offset of syncpoint registers */
 	u64 dma_mask; /* mask of addressable memory */
 	bool has_hypervisor; /* has hypervisor registers */
+	bool has_dma_ctrl; /* integrated with AHB DMA engine */
 };
 
 struct host1x {
@@ -162,6 +166,8 @@ struct host1x {
 	struct list_head list;
 
 	u64 fence_ctx_base;
+
+	struct dma_chan *dma_chan;
 };
 
 void host1x_hypervisor_writel(struct host1x *host1x, u32 r, u32 v);
@@ -262,6 +268,14 @@ static inline int host1x_hw_channel_read_inddata(
 					u32 *data, unsigned int words_num)
 {
 	return host->channel_op->read_inddata(channel, data, words_num);
+}
+
+static inline int host1x_hw_channel_dma_flowctrl(
+					struct host1x *host,
+					struct host1x_channel *channel,
+					bool enable)
+{
+	return host->channel_op->flowctrl(channel, enable, 1);
 }
 
 static inline void host1x_hw_cdma_start(struct host1x *host,

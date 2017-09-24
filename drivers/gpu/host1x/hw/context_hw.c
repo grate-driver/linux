@@ -38,10 +38,23 @@ static int setup_context_store(struct host1x *host,
 	struct host1x_context *stored_ctx = ch->recent_ctx;
 	struct host1x_syncpt *sp = stored_ctx->sp;
 	struct host1x_waitlist *waiter = NULL;
+	bool hw_store = ctx->hw_store;
 	bool sw_store = ctx->sw_store;
 	u32 syncpt_id = sp->id;
 	u32 syncval = 0;
 	unsigned int i;
+	int err;
+
+	/*
+	 * Note that client should take care of Host1x locking, this gives
+	 * client opportunity to implement a fine-grained locking, reducing
+	 * overall locking contention.
+	 */
+	if (hw_store) {
+		err = host1x_context_schedule_dma_tx(stored_ctx);
+		if (err)
+			return err;
+	}
 
 	if (sw_store) {
 		waiter = kzalloc(sizeof(*waiter), GFP_KERNEL);

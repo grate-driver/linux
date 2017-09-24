@@ -23,6 +23,8 @@
 #include "dev.h"
 #include "job.h"
 
+#define INDDATA_FIFO_ADDR(ch)	(0x5000000c + (ch) * 0x4000)
+
 /* Constructor for the host1x device list */
 int host1x_channel_list_init(struct host1x_channel_list *chlist,
 			     unsigned int num_channels)
@@ -166,3 +168,59 @@ fail:
 	return NULL;
 }
 EXPORT_SYMBOL(host1x_channel_request);
+
+/**
+ * host1x_channel_enable_dma_flowctrl() - Setup DRQ to AHB DMA
+ * @channel: Host1x channel that will request DMA to read data
+ *
+ * Enables channel-to-DMA flow control.
+ */
+int host1x_channel_enable_dma_flowctrl(struct host1x_channel *channel)
+{
+	struct host1x *host = dev_get_drvdata(channel->dev->parent);
+	struct dma_slave_config dma_sconfig;
+	int ret = -ENODEV;
+
+	if (host->dma_chan) {
+		dma_sconfig.src_addr       = INDDATA_FIFO_ADDR(channel->id);
+		dma_sconfig.src_maxburst   = 1;
+		dma_sconfig.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		dma_sconfig.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		dma_sconfig.direction      = DMA_DEV_TO_MEM;
+		dma_sconfig.device_fc      = true;
+
+		ret = dmaengine_slave_config(host->dma_chan, &dma_sconfig);
+		if (ret) {
+			dev_err(channel->dev,
+				"Failed to change DMA config %d\n", ret);
+			return ret;
+		}
+
+		ret = host1x_hw_channel_dma_flowctrl(host, channel, true);
+		if (ret) {
+			dev_err(channel->dev,
+				"Failed to enable DMA flow control %d\n", ret);
+			return ret;
+		}
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(host1x_channel_enable_dma_flowctrl);
+
+/**
+ * host1x_channel_disable_dma_flowctrl() - Disable DRQ and terminate DMA TX's
+ * @channel: Host1x channel that requested DMA to read data
+ *
+ * Disables channel-to-DMA flow control and terminates all DMA transfers.
+ */
+void host1x_channel_disable_dma_flowctrl(struct host1x_channel *channel)
+{
+	struct host1x *host = dev_get_drvdata(channel->dev->parent);
+
+	if (host->dma_chan) {
+		host1x_hw_channel_dma_flowctrl(host, channel, false);
+		dmaengine_terminate_sync(host->dma_chan);
+	}
+}
+EXPORT_SYMBOL(host1x_channel_disable_dma_flowctrl);

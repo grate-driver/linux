@@ -186,6 +186,56 @@ bool host1x_context_store_required(struct host1x_context *ctx)
 }
 
 /*
+ * Finalize DMA transfer by a syncpoint increment that unblocks CDMA.
+ */
+static void host1x_context_dma_callback(void *data)
+{
+	struct host1x_context *ctx = data;
+
+	dev_dbg(ctx->channel->dev, "%s: CTX %p class 0x%X\n",
+		__func__, ctx, ctx->class);
+
+	if (ctx->ops->debug)
+		ctx->ops->debug(ctx->client, ctx->bo_vaddr);
+
+	host1x_syncpt_incr(ctx->sp);
+}
+
+/*
+ * Schedule DMA transfer that would store HW context.
+ */
+int host1x_context_schedule_dma_tx(struct host1x_context *ctx)
+{
+	struct host1x_channel *ch = ctx->channel;
+	struct host1x *host = dev_get_drvdata(ch->dev->parent);
+	struct dma_async_tx_descriptor *dma_desc;
+	struct dma_chan *chan;
+	dma_addr_t addr;
+	size_t size;
+
+	dev_dbg(ctx->channel->dev, "%s: CTX %p class 0x%X\n",
+		__func__, ctx, ctx->class);
+
+	chan = host->dma_chan;
+	addr = ctx->bo_phys + ctx->bo_offset;
+	size = ctx->words_num * sizeof(u32);
+
+	dma_desc = dmaengine_prep_slave_single(chan, addr, size,
+					       DMA_DEV_TO_MEM,
+					       DMA_PREP_INTERRUPT);
+	if (!dma_desc)
+		return -ENOMEM;
+
+	dma_desc->callback = host1x_context_dma_callback;
+	dma_desc->callback_param = ctx;
+
+	dmaengine_submit(dma_desc);
+	dma_async_issue_pending(host->dma_chan);
+
+	return 0;
+}
+
+/*
  * Returns Host1x class ID associated with this context or client's base
  * class ID.
  */

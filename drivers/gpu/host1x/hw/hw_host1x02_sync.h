@@ -125,6 +125,30 @@ static inline u32 host1x_sync_ctxsw_timeout_cfg_r(void)
 }
 #define HOST1X_SYNC_CTXSW_TIMEOUT_CFG \
 	host1x_sync_ctxsw_timeout_cfg_r()
+static inline u32 host1x_sync_indreg_dma_ctrl_r(void)
+{
+	return 0x1ac;
+}
+#define HOST1X_SYNC_INDREG_DMA_CTRL \
+	host1x_sync_indreg_dma_ctrl_r()
+static inline u32 host1x_sync_indreg_dma_ctrl_ahbdma_enable_v(u32 v)
+{
+	return (v & 0x1) << 7;
+}
+#define HOST1X_SYNC_INDREG_DMA_CTRL_AHBDMA_ENABLE_V(v) \
+	host1x_sync_indreg_dma_ctrl_ahbdma_enable_v(v)
+static inline u32 host1x_sync_indreg_dma_ctrl_ahbdma_attn_lvl_v(u32 v)
+{
+	return (v & 0x3) << 5;
+}
+#define HOST1X_SYNC_INDREG_DMA_CTRL_AHBDMA_ATTN_LVL_V(v) \
+	host1x_sync_indreg_dma_ctrl_ahbdma_attn_lvl_v(v)
+static inline u32 host1x_sync_indreg_dma_ctrl_ahbdma_chid_v(u32 v)
+{
+	return (v & 0xf) << 0;
+}
+#define HOST1X_SYNC_INDREG_DMA_CTRL_AHBDMA_CHID_V(v) \
+	host1x_sync_indreg_dma_ctrl_ahbdma_chid_v(v)
 static inline u32 host1x_sync_ip_busy_timeout_r(void)
 {
 	return 0x1bc;

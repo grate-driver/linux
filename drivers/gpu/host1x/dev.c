@@ -83,6 +83,7 @@ static const struct host1x_info host1x01_info = {
 	.init = host1x01_init,
 	.sync_offset = 0x3000,
 	.dma_mask = DMA_BIT_MASK(32),
+	.has_dma_ctrl = true,
 };
 
 static const struct host1x_info host1x02_info = {
@@ -93,6 +94,7 @@ static const struct host1x_info host1x02_info = {
 	.init = host1x02_init,
 	.sync_offset = 0x3000,
 	.dma_mask = DMA_BIT_MASK(32),
+	.has_dma_ctrl = true,
 };
 
 static const struct host1x_info host1x04_info = {
@@ -262,6 +264,14 @@ static int host1x_probe(struct platform_device *pdev)
 		return err;
 	}
 
+	if (info->has_dma_ctrl && IS_ENABLED(CONFIG_TEGRA20_AHB_DMA)) {
+		request_module("tegra20-ahb-dma");
+
+		host->dma_chan = dma_request_chan(host->dev, "host1x");
+		if (IS_ERR(host->dma_chan))
+			return PTR_ERR(host->dma_chan);
+	}
+
 	err = host1x_iommu_init(host);
 	if (err)
 		goto fail_free_domain;
@@ -324,6 +334,9 @@ fail_free_domain:
 	if (host->domain)
 		iommu_domain_free(host->domain);
 
+	if (host->dma_chan)
+		dma_release_channel(host->dma_chan);
+
 	return err;
 }
 
@@ -342,6 +355,9 @@ static int host1x_remove(struct platform_device *pdev)
 		iommu_detach_device(host->domain, &pdev->dev);
 		iommu_domain_free(host->domain);
 	}
+
+	if (host->dma_chan)
+		dma_release_channel(host->dma_chan);
 
 	return 0;
 }

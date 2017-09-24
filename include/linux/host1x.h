@@ -200,6 +200,8 @@ struct host1x_channel *host1x_channel_request(struct device *dev);
 struct host1x_channel *host1x_channel_get(struct host1x_channel *channel);
 void host1x_channel_put(struct host1x_channel *channel);
 int host1x_job_submit(struct host1x_job *job);
+int host1x_channel_enable_dma_flowctrl(struct host1x_channel *channel);
+void host1x_channel_disable_dma_flowctrl(struct host1x_channel *channel);
 
 /*
  * host1x job
