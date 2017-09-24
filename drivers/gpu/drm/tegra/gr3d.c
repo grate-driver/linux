@@ -19,6 +19,39 @@
 #include "gem.h"
 #include "gr3d.h"
 
+#define OPCODE_SETCL(classid)				\
+	((0x0 << 28) | (classid << 6))
+
+#define OPCODE_NONINCR(offset, count)			\
+	((0x2 << 28) | (offset << 16) | count)
+
+#define OPCODE_IMM(offset, data)			\
+	((0x4 << 28) | ((offset) << 16) | data)
+
+#define OPCODE_GATHER(offset, insert, incr, count)	\
+	((0x6 << 28) | (offset << 16) | (insert << 15) | (incr << 14) | count)
+
+#define OPCODE_EXTEND(subop, value)			\
+	((0xe << 28) | (subop << 24) | value)
+
+#define ACQUIRE_MLOCK(mlock)	OPCODE_EXTEND(0, mlock)
+#define RELEASE_MLOCK(mlock)	OPCODE_EXTEND(1, mlock)
+#define OPCODE_NOP		OPCODE_NONINCR(0, 0)
+
+#define INDREAD(modid, offset, autoinc)			\
+	((autoinc << 27) | (modid << 18) | ((offset) << 2) | 1)
+
+#define GR3D_REGS(offset, count, incr)			\
+{							\
+	offset, count, incr,				\
+}
+
+struct gr3d_regs_desc {
+	unsigned int offset;
+	unsigned int count;
+	bool incr;
+};
+
 struct gr3d {
 	struct tegra_drm_client client;
 	struct host1x_channel *channel;
@@ -28,6 +61,37 @@ struct gr3d {
 	struct reset_control *rst;
 
 	DECLARE_BITMAP(addr_regs, GR3D_NUM_REGS);
+};
+
+/*
+ * TODO: Add Tegra30/114 registers.
+ */
+static const struct gr3d_regs_desc gr3d_regs[] = {
+	GR3D_REGS(0x00c,   10, true),
+	GR3D_REGS(0x100,   35, true),
+	GR3D_REGS(0x124,    3, true),
+	GR3D_REGS(0x200,    5, true),
+	GR3D_REGS(0x209,    9, true),
+	GR3D_REGS(0x300,  102, true),
+	GR3D_REGS(0x400,   18, true),
+	GR3D_REGS(0x500,    4, true),
+	GR3D_REGS(0x520,   32, true),
+	GR3D_REGS(0x608,    4, true),
+	GR3D_REGS(0x710,   50, true),
+	GR3D_REGS(0x820,   32, true),
+	GR3D_REGS(0x902,    2, true),
+	GR3D_REGS(0xa00,   13, true),
+	GR3D_REGS(0xe00,   43, true),
+	GR3D_REGS(0x206, 1024, false),
+	GR3D_REGS(0x208, 1024, false),
+	GR3D_REGS(0x541,   64, false),
+	GR3D_REGS(0x601,   64, false),
+	GR3D_REGS(0x604,  128, false),
+	GR3D_REGS(0x701,   64, false),
+	GR3D_REGS(0x801,   64, false),
+	GR3D_REGS(0x804,  512, false),
+	GR3D_REGS(0x806,   64, false),
+	GR3D_REGS(0x901,   64, false),
 };
 
 static inline struct gr3d *to_gr3d(struct tegra_drm_client *client)
@@ -115,11 +179,174 @@ static const struct host1x_client_ops gr3d_client_ops = {
 	.reset = gr3d_reset,
 };
 
+static int gr3d_allocate_ctx(struct host1x_client *client,
+			     struct host1x_bo **bo)
+{
+	struct drm_device *dev = dev_get_drvdata(client->parent);
+	struct tegra_drm *tegra = dev->dev_private;
+	struct tegra_bo *obj;
+
+	obj = tegra_bo_create(tegra->drm, SZ_16K, 0);
+	if (!obj)
+		return -ENOMEM;
+
+	*bo =  &obj->base;
+
+	return 0;
+}
+
+static int gr3d_initialize_ctx(struct host1x_client *client,
+			       u32 class,
+			       u32 *bo_vaddr,
+			       dma_addr_t bo_dma,
+			       u32 *bo_offset,
+			       unsigned int *words_num,
+			       struct host1x_context_push_data **restore_data,
+			       struct host1x_context_push_data **store_data,
+			       unsigned int *restore_pushes,
+			       unsigned int *store_pushes)
+{
+	struct host1x_context_push_data *restore;
+	struct host1x_context_push_data *store;
+	const struct gr3d_regs_desc *regs;
+	unsigned int pushes_num;
+	unsigned int ind_regs;
+	unsigned int offset;
+	unsigned int count;
+	unsigned int words;
+	unsigned int i;
+	bool incr;
+
+	/* count the number of indirect registers */
+	for (i = 0, ind_regs = 0; i < ARRAY_SIZE(gr3d_regs); i++)
+		if (!gr3d_regs[i].incr)
+			ind_regs++;
+
+	pushes_num = ARRAY_SIZE(gr3d_regs) * 2 + ind_regs * 2 + 1;
+
+	store = kmalloc_array(pushes_num, sizeof(*store), GFP_KERNEL);
+	if (!store)
+		return -ENOMEM;
+
+	*store_data = store;
+	*store_pushes = pushes_num;
+
+	pushes_num = ARRAY_SIZE(gr3d_regs) + ind_regs + 1;
+
+	restore = kmalloc_array(pushes_num, sizeof(*restore), GFP_KERNEL);
+	if (!restore) {
+		kfree(store);
+		return -ENOMEM;
+	}
+
+	*restore_data = restore;
+	*restore_pushes = pushes_num;
+
+	store->word0 = OPCODE_SETCL(HOST1X_CLASS_HOST1X);
+	store->word1 = OPCODE_NOP;
+	store++;
+
+	restore->word0 = OPCODE_SETCL(class);
+	restore->word1 = OPCODE_NOP;
+	restore++;
+
+	for (i = words = 0, regs = gr3d_regs; i < ARRAY_SIZE(gr3d_regs);
+	     i++, regs++, words += count) {
+		offset = regs->offset;
+		count = regs->count;
+		incr = regs->incr;
+
+		/*
+		 * store: It is important to reset indirect registers offset
+		 *        right before reading them, seems it configures the
+		 *        IO port. Otherwise a couple of first read words
+		 *        could be skipped / clobbered.
+		 */
+		if (!incr) {
+			store->word0 = OPCODE_SETCL(class);
+			store->word1 = OPCODE_IMM(offset - 1, 0);
+			store++;
+
+			store->word0 = OPCODE_SETCL(HOST1X_CLASS_HOST1X);
+			store->word1 = OPCODE_NOP;
+			store++;
+		}
+
+		/* store: setup indirect registers access pointer */
+		store->word0 = OPCODE_NONINCR(0x2d, 1);
+		store->word1 = INDREAD(HOST1X_MODULE_GR3D, offset, incr);
+		store++;
+
+		/* store: indirectly read 3d regs and push them to 'out' FIFO */
+		store->word0 = OPCODE_GATHER(0x2e, 1, 0, count);
+		store->word1 = bo_dma;
+		store++;
+
+		/* restore: reset indirect registers offset */
+		if (!incr) {
+			restore->word0 = OPCODE_IMM(offset - 1, 0);
+			restore->word1 = OPCODE_NOP;
+			restore++;
+		}
+
+		/* restore: fetch data from BO and write it indirectly to 3d */
+		restore->word0 = OPCODE_GATHER(offset, 1, incr, count);
+		restore->word1 = bo_dma + words * sizeof(u32);
+		restore++;
+	}
+
+	*words_num = words;
+
+	return 0;
+}
+
+static void gr3d_debug_ctx(struct host1x_client *client, u32 *bo_vaddr)
+{
+	struct device *dev = client->dev;
+	const struct gr3d_regs_desc *regs;
+	unsigned int offset;
+	unsigned int count;
+	unsigned int words;
+	unsigned int i, k;
+	bool incr;
+
+	if (!(drm_debug & DRM_UT_DRIVER))
+		return;
+
+	for (i = 0, words = 0, regs = gr3d_regs; i < ARRAY_SIZE(gr3d_regs);
+	     i++, regs++, words += count) {
+		offset = regs->offset;
+		count = regs->count;
+		incr = regs->incr;
+
+		DRM_DEV_DEBUG_DRIVER(dev,
+				     "%p[%u] offset %03X count %u incr %d\n",
+				     bo_vaddr, words, offset, count, incr);
+
+		for (k = 0; k < count; k++) {
+			DRM_DEV_DEBUG_DRIVER(dev, "%p[%u] [%03X] <= %08X\n",
+					     bo_vaddr, words + k, offset,
+					     bo_vaddr[words + k]);
+			if (incr)
+				offset++;
+		}
+	}
+}
+
+static const struct host1x_context_ops gr3d_context_ops = {
+	.initialize = gr3d_initialize_ctx,
+	.allocate = gr3d_allocate_ctx,
+	.debug = gr3d_debug_ctx,
+};
+
 static int gr3d_open_channel(struct tegra_drm_client *client,
 			     struct tegra_drm_context *context,
 			     enum drm_tegra_client clientid)
 {
+	struct device_node *np = client->base.dev->of_node;
 	struct gr3d *gr3d = to_gr3d(client);
+	struct host1x_client *cl = &client->base;
+	struct host1x_syncpt *sp = cl->syncpts[0];
 
 	if (clientid != DRM_TEGRA_CLIENT_GR3D)
 		return -ENODEV;
@@ -128,11 +355,30 @@ static int gr3d_open_channel(struct tegra_drm_client *client,
 	if (!context->channel)
 		return -ENOMEM;
 
+	/*
+	 * Yet, context switching is implemented only for Tegra20,
+	 * this check should be removed once Tegra30+ would gain
+	 * context switching support.
+	 */
+	if (of_device_is_compatible(np, "nvidia,tegra30-gr3d") ||
+	    of_device_is_compatible(np, "nvidia,tegra114-gr3d"))
+		return 0;
+
+	context->hwctx = host1x_create_context(&gr3d_context_ops,
+					       context->channel, cl, sp,
+					       HOST1X_CLASS_GR3D, true,
+					       false, true);
+	if (IS_ERR(context->hwctx)) {
+		host1x_channel_put(context->channel);
+		return PTR_ERR(context->hwctx);
+	}
+
 	return 0;
 }
 
 static void gr3d_close_channel(struct tegra_drm_context *context)
 {
+	host1x_context_put(context->hwctx);
 	host1x_channel_put(context->channel);
 }
 
