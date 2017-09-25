@@ -86,28 +86,31 @@ static int show_channel(struct host1x_channel *ch, void *data, bool show_fifo)
 
 static void show_syncpts(struct host1x *m, struct output *o)
 {
+	struct host1x_syncpt *sp;
 	unsigned int i;
+	u32 base_val;
+	u32 max;
+	u32 min;
 
 	host1x_debug_output(o, "---- syncpts ----\n");
 
-	for (i = 0; i < host1x_syncpt_nb_pts(m); i++) {
-		u32 max = host1x_syncpt_read_max(m->syncpt + i);
-		u32 min = host1x_syncpt_load(m->syncpt + i);
+	for (i = 0, sp = m->syncpt; i < host1x_syncpt_nb_pts(m); i++, sp++) {
+		if (!sp->name)
+			continue;
+
+		base_val = host1x_syncpt_load_wait_base(sp);
+		max = host1x_syncpt_read_max(sp);
+		min = host1x_syncpt_load(sp);
 
 		if (!min && !max)
 			continue;
 
 		host1x_debug_output(o, "id %u (%s) min %d max %d\n",
 				    i, m->syncpt[i].name, min, max);
-	}
 
-	for (i = 0; i < host1x_syncpt_nb_bases(m); i++) {
-		u32 base_val;
-
-		base_val = host1x_syncpt_load_wait_base(m->syncpt + i);
 		if (base_val)
-			host1x_debug_output(o, "waitbase id %u val %d\n", i,
-					    base_val);
+			host1x_debug_output(o, "waitbase id %u val %d\n",
+					    sp->base->id, base_val);
 	}
 
 	host1x_debug_output(o, "\n");
