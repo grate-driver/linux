@@ -52,7 +52,7 @@ static irqreturn_t syncpt_thresh_isr(int irq, void *dev_id)
 			HOST1X_SYNC_SYNCPT_THRESH_CPU0_INT_STATUS(i));
 		for_each_set_bit(id, &reg, 32) {
 			struct host1x_syncpt *syncpt =
-				host->syncpt + (i * 32 + id);
+				host->syncpts + (i * 32 + id);
 			host1x_intr_syncpt_handle(syncpt);
 		}
 	}
@@ -99,7 +99,7 @@ _host1x_intr_init_host_sync(struct host1x *host, u32 cpm,
 	host1x_hw_intr_disable_all_syncpt_intrs(host);
 
 	for (i = 0; i < host->info->nb_pts; i++)
-		INIT_WORK(&host->syncpt[i].intr.work, syncpt_thresh_work);
+		INIT_WORK(&host->syncpts[i].intr.work, syncpt_thresh_work);
 
 	err = devm_request_irq(host->dev, host->intr_syncpt_irq,
 			       syncpt_thresh_isr, IRQF_SHARED,
@@ -144,7 +144,7 @@ static int _host1x_free_syncpt_irq(struct host1x *host)
 	devm_free_irq(host->dev, host->intr_syncpt_irq, host);
 
 	for (i = 0; i < host->info->nb_pts; i++)
-		cancel_work_sync(&host->syncpt[i].intr.work);
+		cancel_work_sync(&host->syncpts[i].intr.work);
 
 	return 0;
 }

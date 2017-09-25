@@ -168,8 +168,8 @@ static int vic_init(struct host1x_client *client)
 	}
 
 	client->syncpts[0] = host1x_syncpt_request(client, 0);
-	if (!client->syncpts[0]) {
-		err = -ENOMEM;
+	if (IS_ERR(client->syncpts[0])) {
+		err = PTR_ERR(client->syncpts[0]);
 		goto free_channel;
 	}
 

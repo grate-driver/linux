@@ -39,9 +39,9 @@ static int gr2d_init(struct host1x_client *client)
 		return -ENOMEM;
 
 	client->syncpts[0] = host1x_syncpt_request(client, flags);
-	if (!client->syncpts[0]) {
+	if (IS_ERR(client->syncpts[0])) {
 		host1x_channel_put(gr2d->channel);
-		return -ENOMEM;
+		return PTR_ERR(client->syncpts[0]);
 	}
 
 	return tegra_drm_register_client(dev->dev_private, drm);

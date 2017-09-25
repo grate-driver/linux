@@ -372,7 +372,7 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 
 	/* get current syncpt values for waitchk */
 	for_each_set_bit(i, waitchk_mask, host1x_syncpt_nb_pts(host))
-		host1x_syncpt_load(host->syncpt + i);
+		host1x_syncpt_load(host->syncpts + i);
 
 	/* pin memory */
 	err = pin_job(host, job);

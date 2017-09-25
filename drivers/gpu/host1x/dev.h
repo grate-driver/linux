@@ -76,12 +76,12 @@ struct host1x_debug_ops {
 };
 
 struct host1x_syncpt_ops {
-	void (*restore)(struct host1x_syncpt *syncpt);
-	void (*restore_wait_base)(struct host1x_syncpt *syncpt);
-	void (*load_wait_base)(struct host1x_syncpt *syncpt);
-	u32 (*load)(struct host1x_syncpt *syncpt);
-	int (*cpu_incr)(struct host1x_syncpt *syncpt);
-	int (*patch_wait)(struct host1x_syncpt *syncpt, void *patch_addr);
+	void (*restore)(struct host1x *host, u32 syncpt_id, u32 value);
+	void (*restore_wait_base)(struct host1x *host, u32 base_id, u32 value);
+	u32 (*load_wait_base)(struct host1x *host, u32 base_id);
+	u32 (*load)(struct host1x *host, u32 syncpt_id);
+	void (*cpu_incr)(struct host1x *host, u32 syncpt_id);
+	int (*patch_wait)(struct host1x_syncpt *sp, void *patch_addr);
 };
 
 struct host1x_intr_ops {
@@ -121,8 +121,6 @@ struct host1x {
 
 	void __iomem *regs;
 	void __iomem *hv_regs; /* hypervisor region */
-	struct host1x_syncpt *syncpt;
-	struct host1x_syncpt_base *bases;
 	struct device *dev;
 	struct clk *clk;
 	struct reset_control *rst;
@@ -142,9 +140,13 @@ struct host1x {
 	const struct host1x_debug_ops *debug_op;
 	const struct host1x_firewall_ops *firewall_op;
 
-	struct host1x_syncpt *nop_sp;
-
 	struct mutex syncpt_mutex;
+	struct host1x_syncpt *syncpts;
+	struct host1x_syncpt_base *bases;
+	struct semaphore syncpt_sema;
+	struct semaphore syncpt_base_sema;
+	unsigned long *requested_syncpts;
+	unsigned long *requested_bases;
 
 	struct host1x_channel_list channel_list;
 
@@ -164,33 +166,32 @@ void host1x_ch_writel(struct host1x_channel *ch, u32 r, u32 v);
 u32 host1x_ch_readl(struct host1x_channel *ch, u32 r);
 
 static inline void host1x_hw_syncpt_restore(struct host1x *host,
-					    struct host1x_syncpt *sp)
+					    u32 syncpt_id, u32 value)
 {
-	host->syncpt_op->restore(sp);
+	host->syncpt_op->restore(host, syncpt_id, value);
 }
 
 static inline void host1x_hw_syncpt_restore_wait_base(struct host1x *host,
-						      struct host1x_syncpt *sp)
+						      u32 base_id, u32 value)
 {
-	host->syncpt_op->restore_wait_base(sp);
+	host->syncpt_op->restore_wait_base(host, base_id, value);
 }
 
-static inline void host1x_hw_syncpt_load_wait_base(struct host1x *host,
-						   struct host1x_syncpt *sp)
+static inline u32 host1x_hw_syncpt_load_wait_base(struct host1x *host,
+						  u32 base_id)
 {
-	host->syncpt_op->load_wait_base(sp);
+	return host->syncpt_op->load_wait_base(host, base_id);
 }
 
-static inline u32 host1x_hw_syncpt_load(struct host1x *host,
-					struct host1x_syncpt *sp)
+static inline u32 host1x_hw_syncpt_load(struct host1x *host, u32 syncpt_id)
 {
-	return host->syncpt_op->load(sp);
+	return host->syncpt_op->load(host, syncpt_id);
 }
 
-static inline int host1x_hw_syncpt_cpu_incr(struct host1x *host,
-					    struct host1x_syncpt *sp)
+static inline void host1x_hw_syncpt_cpu_incr(struct host1x *host,
+					     u32 syncpt_id)
 {
-	return host->syncpt_op->cpu_incr(sp);
+	host->syncpt_op->cpu_incr(host, syncpt_id);
 }
 
 static inline int host1x_hw_syncpt_patch_wait(struct host1x *host,

@@ -22,7 +22,6 @@
 #include <linux/atomic.h>
 #include <linux/host1x.h>
 #include <linux/kernel.h>
-#include <linux/sched.h>
 
 #include "intr.h"
 
@@ -33,18 +32,16 @@ struct host1x;
 
 struct host1x_syncpt_base {
 	unsigned int id;
-	bool requested;
+	u32 value;
 };
 
 struct host1x_syncpt {
 	unsigned int id;
 	atomic_t min_val;
 	atomic_t max_val;
-	u32 base_val;
 	const char *name;
 	bool client_managed;
 	struct host1x *host;
-	struct host1x_client *client;
 	struct host1x_syncpt_base *base;
 
 	/* interrupt data */
@@ -66,39 +63,6 @@ unsigned int host1x_syncpt_nb_bases(struct host1x *host);
 /* Return number of mlocks supported. */
 unsigned int host1x_syncpt_nb_mlocks(struct host1x *host);
 
-/*
- * Check sync point sanity. If max is larger than min, there have too many
- * sync point increments.
- *
- * Client managed sync point are not tracked.
- * */
-static inline bool host1x_syncpt_check_max(struct host1x_syncpt *sp, u32 real)
-{
-	u32 max;
-	if (sp->client_managed)
-		return true;
-	max = host1x_syncpt_read_max(sp);
-	return (s32)(max - real) >= 0;
-}
-
-/* Return true if sync point is client managed. */
-static inline bool host1x_syncpt_client_managed(struct host1x_syncpt *sp)
-{
-	return sp->client_managed;
-}
-
-/*
- * Returns true if syncpoint min == max, which means that there are no
- * outstanding operations.
- */
-static inline bool host1x_syncpt_idle(struct host1x_syncpt *sp)
-{
-	int min, max;
-	min = atomic_read(&sp->min_val);
-	max = atomic_read(&sp->max_val);
-	return (min == max);
-}
-
 /* Load current value from hardware to the shadow register. */
 u32 host1x_syncpt_load(struct host1x_syncpt *sp);
 
@@ -116,12 +80,6 @@ u32 host1x_syncpt_load_wait_base(struct host1x_syncpt *sp);
 
 /* Indicate future operations by incrementing the sync point max. */
 u32 host1x_syncpt_incr_max(struct host1x_syncpt *sp, u32 incrs);
-
-/* Check if sync point id is valid. */
-static inline int host1x_syncpt_is_valid(struct host1x_syncpt *sp)
-{
-	return sp->id < host1x_syncpt_nb_pts(sp->host);
-}
 
 /* Patch a wait by replacing it with a wait for syncpt 0 value 0 */
 int host1x_syncpt_patch_wait(struct host1x_syncpt *sp, void *patch_addr);

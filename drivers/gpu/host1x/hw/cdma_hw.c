@@ -44,10 +44,7 @@ static void cdma_timeout_cpu_incr(struct host1x_cdma *cdma, u32 getptr,
 	unsigned int i;
 
 	for (i = 0; i < syncpt_incrs; i++)
-		host1x_syncpt_incr(cdma->timeout.syncpt);
-
-	/* after CPU incr, ensure shadow is up to date */
-	host1x_syncpt_load(cdma->timeout.syncpt);
+		host1x_hw_syncpt_cpu_incr(host1x, cdma->timeout.syncpt->id);
 
 	/* NOP all the PB slots */
 	while (nr_slots--) {
