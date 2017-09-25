@@ -49,8 +49,8 @@ static int gr2d_init(struct host1x_client *client)
 		return -ENOMEM;
 
 	client->syncpts[0] = host1x_syncpt_request(client, flags);
-	if (!client->syncpts[0]) {
-		err = -ENOMEM;
+	if (IS_ERR(client->syncpts[0])) {
+		err = PTR_ERR(client->syncpts[0]);
 		dev_err(client->dev, "failed to request syncpoint: %d\n", err);
 		goto put;
 	}
