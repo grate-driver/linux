@@ -223,7 +223,7 @@ static void syncpt_thresh_work(struct work_struct *work)
 	struct host1x *host = syncpt->host;
 
 	(void)process_wait_list(host, syncpt,
-				host1x_syncpt_load(host->syncpt + id));
+				host1x_syncpt_load(host->syncpts + id));
 }
 
 void host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
@@ -244,7 +244,7 @@ void host1x_intr_add_action(struct host1x *host, unsigned int id, u32 thresh,
 	waiter->data = data;
 	waiter->count = 1;
 
-	syncpt = host->syncpt + id;
+	syncpt = host->syncpts + id;
 
 	spin_lock(&syncpt->intr.lock);
 
@@ -274,9 +274,9 @@ void host1x_intr_put_ref(struct host1x *host, unsigned int id, void *ref)
 	       WLS_REMOVED)
 		schedule();
 
-	syncpt = host->syncpt + id;
+	syncpt = host->syncpts + id;
 	(void)process_wait_list(host, syncpt,
-				host1x_syncpt_load(host->syncpt + id));
+				host1x_syncpt_load(host->syncpts + id));
 
 	kref_put(&waiter->refcount, waiter_release);
 }
@@ -290,7 +290,7 @@ int host1x_intr_init(struct host1x *host, unsigned int irq_sync)
 	host->intr_syncpt_irq = irq_sync;
 
 	for (id = 0; id < nb_pts; ++id) {
-		struct host1x_syncpt *syncpt = host->syncpt + id;
+		struct host1x_syncpt *syncpt = host->syncpts + id;
 
 		spin_lock_init(&syncpt->intr.lock);
 		INIT_LIST_HEAD(&syncpt->intr.wait_head);
@@ -327,18 +327,18 @@ void host1x_intr_start(struct host1x *host)
 void host1x_intr_stop(struct host1x *host)
 {
 	unsigned int id;
-	struct host1x_syncpt *syncpt = host->syncpt;
+	struct host1x_syncpt *syncpt = host->syncpts;
 	u32 nb_pts = host1x_syncpt_nb_pts(host);
 
 	mutex_lock(&host->intr_mutex);
 
 	host1x_hw_intr_disable_all_syncpt_intrs(host);
 
-	for (id = 0; id < nb_pts; ++id) {
+	for (id = 0; id < nb_pts; ++id, ++syncpt) {
 		struct host1x_waitlist *waiter, *next;
 
 		list_for_each_entry_safe(waiter, next,
-			&syncpt[id].intr.wait_head, list) {
+			&syncpt->intr.wait_head, list) {
 			if (atomic_cmpxchg(&waiter->state,
 			    WLS_CANCELLED, WLS_HANDLED) == WLS_CANCELLED) {
 				list_del(&waiter->list);
@@ -346,7 +346,7 @@ void host1x_intr_stop(struct host1x *host)
 			}
 		}
 
-		if (!list_empty(&syncpt[id].intr.wait_head)) {
+		if (!list_empty(&syncpt->intr.wait_head)) {
 			/* output diagnostics */
 			mutex_unlock(&host->intr_mutex);
 			pr_warn("%s cannot stop syncpt intr id=%u\n",

@@ -22,77 +22,46 @@
 #include "../syncpt.h"
 
 /*
- * Write the current syncpoint value back to hw.
+ * Write the syncpoint value to hw.
  */
-static void syncpt_restore(struct host1x_syncpt *sp)
+static void syncpt_restore(struct host1x *host, u32 syncpt_id, u32 value)
 {
-	u32 min = host1x_syncpt_read_min(sp);
-	struct host1x *host = sp->host;
-
-	host1x_sync_writel(host, min, HOST1X_SYNC_SYNCPT(sp->id));
+	host1x_sync_writel(host, value, HOST1X_SYNC_SYNCPT(syncpt_id));
 }
 
 /*
- * Write the current waitbase value back to hw.
+ * Write the waitbase value to hw.
  */
-static void syncpt_restore_wait_base(struct host1x_syncpt *sp)
+static void syncpt_restore_wait_base(struct host1x *host,
+				     u32 base_id, u32 value)
 {
-	struct host1x *host = sp->host;
-
-	host1x_sync_writel(host, sp->base_val,
-			   HOST1X_SYNC_SYNCPT_BASE(sp->id));
+	host1x_sync_writel(host, value, HOST1X_SYNC_SYNCPT_BASE(base_id));
 }
 
 /*
  * Read waitbase value from hw.
  */
-static void syncpt_read_wait_base(struct host1x_syncpt *sp)
+static u32 syncpt_read_wait_base(struct host1x *host, u32 base_id)
 {
-	struct host1x *host = sp->host;
-
-	sp->base_val =
-		host1x_sync_readl(host, HOST1X_SYNC_SYNCPT_BASE(sp->id));
+	return host1x_sync_readl(host, HOST1X_SYNC_SYNCPT_BASE(base_id));
 }
 
 /*
- * Updates the last value read from hardware.
+ * Read syncpoint value from hw.
  */
-static u32 syncpt_load(struct host1x_syncpt *sp)
+static u32 syncpt_load(struct host1x *host, u32 syncpt_id)
 {
-	struct host1x *host = sp->host;
-	u32 old, live;
-
-	/* Loop in case there's a race writing to min_val */
-	do {
-		old = host1x_syncpt_read_min(sp);
-		live = host1x_sync_readl(host, HOST1X_SYNC_SYNCPT(sp->id));
-	} while ((u32)atomic_cmpxchg(&sp->min_val, old, live) != old);
-
-	if (!host1x_syncpt_check_max(sp, live))
-		dev_err(host->dev, "%s failed: id=%u, min=%d, max=%d\n",
-			__func__, sp->id, host1x_syncpt_read_min(sp),
-			host1x_syncpt_read_max(sp));
-
-	return live;
+	return host1x_sync_readl(host, HOST1X_SYNC_SYNCPT(syncpt_id));
 }
 
 /*
  * Write a cpu syncpoint increment to the hardware, without touching
  * the cache.
  */
-static int syncpt_cpu_incr(struct host1x_syncpt *sp)
+static void syncpt_cpu_incr(struct host1x *host, u32 syncpt_id)
 {
-	struct host1x *host = sp->host;
-	u32 reg_offset = sp->id / 32;
-
-	if (!host1x_syncpt_client_managed(sp) &&
-	    host1x_syncpt_idle(sp))
-		return -EINVAL;
-
-	host1x_sync_writel(host, BIT(sp->id % 32),
-			   HOST1X_SYNC_SYNCPT_CPU_INCR(reg_offset));
-
-	return 0;
+	host1x_sync_writel(host, BIT(syncpt_id % 32),
+			   HOST1X_SYNC_SYNCPT_CPU_INCR(syncpt_id / 32));
 }
 
 /* remove a wait pointed to by patch_addr */

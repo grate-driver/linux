@@ -1867,8 +1867,11 @@ static int tegra_dc_init(struct host1x_client *client)
 	int err;
 
 	dc->syncpt = host1x_syncpt_request(client, flags);
-	if (!dc->syncpt)
-		dev_warn(dc->dev, "failed to allocate syncpoint\n");
+	if (IS_ERR(dc->syncpt)) {
+		dev_warn(dc->dev, "failed to allocate syncpoint %ld\n",
+			 PTR_ERR(dc->syncpt));
+		dc->syncpt = NULL;
+	}
 
 	if (group && tegra->domain) {
 		if (group != tegra->group) {

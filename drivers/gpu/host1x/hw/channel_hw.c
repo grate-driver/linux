@@ -113,7 +113,7 @@ static void push_fences(struct host1x_channel *ch, struct host1x_job *job)
 static inline void synchronize_syncpt_base(struct host1x_job *job)
 {
 	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
-	struct host1x_syncpt *sp = host->syncpt + job->syncpt_id;
+	struct host1x_syncpt *sp = host->syncpts + job->syncpt_id;
 	unsigned int id;
 	u32 value;
 
@@ -138,7 +138,7 @@ static int channel_submit(struct host1x_job *job)
 	struct host1x_waitlist *completed_waiter = NULL;
 	struct host1x *host = dev_get_drvdata(ch->dev->parent);
 
-	sp = host->syncpt + job->syncpt_id;
+	sp = host->syncpts + job->syncpt_id;
 	trace_host1x_channel_submit(dev_name(ch->dev),
 				    job->num_gathers, job->num_relocs,
 				    job->num_waitchk, job->syncpt_id,
