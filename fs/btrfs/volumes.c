@@ -1760,20 +1760,30 @@ static int btrfs_rm_dev_item(struct btrfs_fs_info *fs_info,
 	key.offset = device->devid;
 
 	ret = btrfs_search_slot(trans, root, &key, path, -1, 1);
-	if (ret < 0)
+	if (ret < 0) {
+		btrfs_abort_transaction(trans, ret);
+		btrfs_end_transaction(trans);
 		goto out;
+	}
 
+	/* The caller is supposed to make sure the device is present */
 	if (ret > 0) {
 		ret = -ENOENT;
+		btrfs_abort_transaction(trans, ret);
+		btrfs_end_transaction(trans);
 		goto out;
 	}
 
 	ret = btrfs_del_item(trans, root, path);
-	if (ret)
+	if (ret) {
+		btrfs_abort_transaction(trans, ret);
+		btrfs_end_transaction(trans);
 		goto out;
+	}
+
+	ret = btrfs_commit_transaction(trans);
 out:
 	btrfs_free_path(path);
-	btrfs_commit_transaction(trans);
 	return ret;
 }
 
