@@ -1200,6 +1200,16 @@ int btrfs_decompress_buf2page(const char *buf, unsigned long buf_start,
 	return 1;
 }
 
+
+static bool sample_repeated_patterns(struct heuristic_ws *ws)
+{
+	u32 half_of_sample = ws->sample_size / 2;
+	u8 *p = ws->sample;
+
+	return !memcmp(&p[0], &p[half_of_sample], half_of_sample);
+}
+
+
 static void heuristic_collect_sample(struct inode *inode, u64 start, u64 end,
 				     struct heuristic_ws *ws)
 {
@@ -1278,6 +1288,11 @@ int btrfs_compress_heuristic(struct inode *inode, u64 start, u64 end)
 
 	heuristic_collect_sample(inode, start, end, ws);
 
+	if (sample_repeated_patterns(ws)) {
+		ret = 1;
+		goto out;
+	}
+
 	memset(ws->bucket, 0, sizeof(*ws->bucket)*BUCKET_SIZE);
 
 	for (i = 0; i < ws->sample_size; i++) {
@@ -1285,7 +1300,7 @@ int btrfs_compress_heuristic(struct inode *inode, u64 start, u64 end)
 		ws->bucket[byte].count++;
 	}
 
+out:
 	__free_workspace(0, ws_list, true);
-
 	return ret;
 }
