@@ -1917,7 +1917,7 @@ static void cleanup_transaction(struct btrfs_trans_handle *trans,
 static inline int btrfs_start_delalloc_flush(struct btrfs_fs_info *fs_info)
 {
 	if (btrfs_test_opt(fs_info, FLUSHONCOMMIT))
-		return btrfs_start_delalloc_roots(fs_info, 1, -1);
+		writeback_inodes_sb(fs_info->sb, WB_REASON_SYNC);
 	return 0;
 }
 
