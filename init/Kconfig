@@ -1400,6 +1400,9 @@ config MEMBARRIER
 
 	  If unsure, say Y.
 
+config ARCH_HAS_MEMBARRIER_HOOKS
+	bool
+
 config EMBEDDED
 	bool "Embedded system"
 	option allnoconfig_y

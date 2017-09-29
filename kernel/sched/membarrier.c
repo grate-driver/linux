@@ -26,21 +26,25 @@
  * except MEMBARRIER_CMD_QUERY.
  */
 #define MEMBARRIER_CMD_BITMASK	\
-	(MEMBARRIER_CMD_SHARED | MEMBARRIER_CMD_PRIVATE_EXPEDITED)
+	(MEMBARRIER_CMD_SHARED | MEMBARRIER_CMD_PRIVATE_EXPEDITED	\
+	| MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED)
 
 static void ipi_mb(void *info)
 {
 	smp_mb();	/* IPIs should be serializing but paranoid. */
 }
 
-static void membarrier_private_expedited(void)
+static int membarrier_private_expedited(void)
 {
 	int cpu;
 	bool fallback = false;
 	cpumask_var_t tmpmask;
 
+	if (!READ_ONCE(current->mm->membarrier_private_expedited))
+		return -EPERM;
+
 	if (num_online_cpus() == 1)
-		return;
+		return 0;
 
 	/*
 	 * Matches memory barriers around rq->curr modification in
@@ -94,6 +98,17 @@ static void membarrier_private_expedited(void)
 	 * rq->curr modification in scheduler.
 	 */
 	smp_mb();	/* exit from system call is not a mb */
+	return 0;
+}
+
+static void membarrier_register_private_expedited(void)
+{
+	struct task_struct *p = current;
+
+	if (READ_ONCE(p->mm->membarrier_private_expedited))
+		return;
+	membarrier_arch_register_private_expedited(p);
+	WRITE_ONCE(p->mm->membarrier_private_expedited, 1);
 }
 
 /**
@@ -144,7 +159,9 @@ SYSCALL_DEFINE2(membarrier, int, cmd, int, flags)
 			synchronize_sched();
 		return 0;
 	case MEMBARRIER_CMD_PRIVATE_EXPEDITED:
-		membarrier_private_expedited();
+		return membarrier_private_expedited();
+	case MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED:
+		membarrier_register_private_expedited();
 		return 0;
 	default:
 		return -EINVAL;
