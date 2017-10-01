@@ -1138,12 +1138,12 @@ static int tegra_get_syncpt(struct drm_device *drm, void *data,
 		goto unlock;
 	}
 
-	if (args->index >= context->client->base.num_syncpts) {
+	if (args->index >= 1) {
 		err = -EINVAL;
 		goto unlock;
 	}
 
-	syncpt = context->client->base.syncpts[args->index];
+	syncpt = context->syncpt;
 	args->id = host1x_syncpt_id(syncpt);
 
 unlock:
@@ -1192,12 +1192,12 @@ static int tegra_get_syncpt_base(struct drm_device *drm, void *data,
 		goto unlock;
 	}
 
-	if (args->syncpt >= context->client->base.num_syncpts) {
+	if (args->syncpt >= 1) {
 		err = -EINVAL;
 		goto unlock;
 	}
 
-	syncpt = context->client->base.syncpts[args->syncpt];
+	syncpt = context->syncpt;
 
 	base = host1x_syncpt_get_base(syncpt);
 	if (!base) {

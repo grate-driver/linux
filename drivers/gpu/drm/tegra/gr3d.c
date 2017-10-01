@@ -124,6 +124,8 @@ static int gr3d_open_channel(struct tegra_drm_client *client,
 	if (!context->channel)
 		return -ENOMEM;
 
+	context->syncpt = client->base.syncpts[0];
+
 	return 0;
 }
 
