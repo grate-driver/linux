@@ -131,5 +131,21 @@ static void host1x_debug_show_channel_fifo(struct host1x *host,
 
 static void host1x_debug_show_mlocks(struct host1x *host, struct output *o)
 {
-	/* TODO */
+	unsigned int i;
+
+	if (!host->hv_regs)
+		return;
+
+	host1x_debug_output(o, "---- mlocks ----\n");
+
+	for (i = 0; i < host1x_syncpt_nb_mlocks(host); i++) {
+		u32 val = host1x_hypervisor_readl(host, HOST1X_HV_MLOCK(i));
+		if (HOST1X_HV_MLOCK_LOCKED_V(val))
+			host1x_debug_output(o, "%u: locked by channel %u\n",
+					    i, HOST1X_HV_MLOCK_CH_V(val));
+		else
+			host1x_debug_output(o, "%u: unlocked\n", i);
+	}
+
+	host1x_debug_output(o, "\n");
 }
