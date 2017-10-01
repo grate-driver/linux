@@ -330,8 +330,11 @@ static int tegra_drm_open(struct drm_device *drm, struct drm_file *filp)
 	return 0;
 }
 
-static void tegra_drm_context_free(struct tegra_drm_context *context)
+static void tegra_drm_context_free(struct kref *ref)
 {
+	struct tegra_drm_context *context =
+		container_of(ref, struct tegra_drm_context, ref);
+
 	context->client->ops->close_channel(context);
 	kfree(context);
 }
@@ -432,6 +435,16 @@ static int host1x_waitchk_copy_from_user(struct host1x_waitchk *dest,
 		return -ENOENT;
 
 	return 0;
+}
+
+static void tegra_drm_job_done(struct host1x_job *job)
+{
+	struct tegra_drm_context *context = job->callback_data;
+
+	if (context->client->ops->submit_done)
+		context->client->ops->submit_done(context);
+
+	kref_put(&context->ref, tegra_drm_context_free);
 }
 
 static void tegra_append_bo_reservations(struct tegra_bo_reservation *bos,
@@ -844,6 +857,9 @@ unlock_table:
 	job->syncpt_id = syncpt.id;
 	job->timeout = 10000;
 
+	job->done = tegra_drm_job_done;
+	job->callback_data = context;
+
 	if (args->timeout && args->timeout < 10000)
 		job->timeout = args->timeout;
 
@@ -866,8 +882,11 @@ unlock_table:
 	if (err)
 		goto fail_unlock;
 
+	kref_get(&context->ref);
+
 	err = host1x_job_submit(job);
 	if (err) {
+		kref_put(&context->ref, tegra_drm_context_free);
 		host1x_job_unpin(job);
 		goto fail_unlock;
 	}
@@ -1072,6 +1091,8 @@ static int tegra_open_channel(struct drm_device *drm, void *data,
 	if (err < 0)
 		kfree(context);
 
+	kref_init(&context->ref);
+
 	mutex_unlock(&fpriv->lock);
 	return err;
 }
@@ -1093,7 +1114,7 @@ static int tegra_close_channel(struct drm_device *drm, void *data,
 	}
 
 	idr_remove(&fpriv->contexts, context->id);
-	tegra_drm_context_free(context);
+	kref_put(&context->ref, tegra_drm_context_free);
 
 unlock:
 	mutex_unlock(&fpriv->lock);
@@ -1415,7 +1436,7 @@ static int tegra_drm_context_cleanup(int id, void *p, void *data)
 {
 	struct tegra_drm_context *context = p;
 
-	tegra_drm_context_free(context);
+	kref_put(&context->ref, tegra_drm_context_free);
 
 	return 0;
 }

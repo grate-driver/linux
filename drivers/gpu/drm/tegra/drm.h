@@ -13,6 +13,7 @@
 #include <uapi/drm/tegra_drm.h>
 #include <linux/host1x.h>
 #include <linux/iova.h>
+#include <linux/kref.h>
 #include <linux/of_gpio.h>
 
 #include <drm/drmP.h>
@@ -79,6 +80,8 @@ struct tegra_drm {
 struct tegra_drm_client;
 
 struct tegra_drm_context {
+	struct kref ref;
+
 	struct tegra_drm_client *client;
 	struct host1x_channel *channel;
 	unsigned int id;
@@ -93,6 +96,7 @@ struct tegra_drm_client_ops {
 	int (*submit)(struct tegra_drm_context *context,
 		      struct drm_tegra_submit *args, struct drm_device *drm,
 		      struct drm_file *file);
+	void (*submit_done)(struct tegra_drm_context *context);
 };
 
 int tegra_drm_submit(struct tegra_drm_context *context,
