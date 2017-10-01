@@ -251,17 +251,24 @@ static void stop_cdma_timer_locked(struct host1x_cdma *cdma)
 	cdma->timeout.client = 0;
 }
 
-/*
- * For all sync queue entries that have already finished according to the
- * current sync point registers:
- *  - unpin & unref their mems
- *  - pop their push buffer slots
- *  - remove them from the sync queue
+/**
+ * update_cdma_locked() - Update CDMA sync queue
+ * @cdma: CDMA instance to update
+ * @done_jobs: List that finished jobs will be added to
+ *
+ * Go through the CDMA's sync queue, and for each job that has been finished,
+ * - unpin it
+ * - pop its push buffer slots
+ * - remove it from the sync queue
+ * - add it to the done_jobs list.
+ *
  * This is normally called from the host code's worker thread, but can be
  * called manually if necessary.
- * Must be called with the cdma lock held.
+ *
+ * Must be called with the CDMA lock held.
  */
-static void update_cdma_locked(struct host1x_cdma *cdma)
+static void update_cdma_locked(struct host1x_cdma *cdma,
+			       struct list_head *done_jobs)
 {
 	bool signal = false;
 	struct host1x *host1x = cdma_to_host1x(cdma);
@@ -306,7 +313,7 @@ static void update_cdma_locked(struct host1x_cdma *cdma)
 		}
 
 		list_del(&job->list);
-		host1x_job_put(job);
+		list_add_tail(&job->list, done_jobs);
 	}
 
 	if (cdma->event == CDMA_EVENT_SYNC_QUEUE_EMPTY &&
@@ -538,7 +545,23 @@ void host1x_cdma_end(struct host1x_cdma *cdma,
  */
 void host1x_cdma_update(struct host1x_cdma *cdma)
 {
+	struct host1x_job *job, *tmp;
+	LIST_HEAD(done_jobs);
+
 	mutex_lock(&cdma->lock);
-	update_cdma_locked(cdma);
+	update_cdma_locked(cdma, &done_jobs);
 	mutex_unlock(&cdma->lock);
+
+	/*
+	 * The done callback may want to free the channel, which requires
+	 * taking the CDMA lock, so we need to do it outside the above lock
+	 * region.
+	 */
+	list_for_each_entry_safe(job, tmp, &done_jobs, list) {
+		if (job->done)
+			job->done(job);
+
+		list_del(&job->list);
+		host1x_job_put(job);
+	}
 }

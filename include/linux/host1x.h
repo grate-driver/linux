@@ -276,6 +276,10 @@ struct host1x_job {
 
 	/* Add a channel wait for previous ops to complete */
 	bool serialize;
+
+	/* Job done callback */
+	void (*done)(struct host1x_job *job);
+	void *callback_data;
 };
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
