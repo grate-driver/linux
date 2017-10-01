@@ -437,6 +437,51 @@ static int host1x_waitchk_copy_from_user(struct host1x_waitchk *dest,
 	return 0;
 }
 
+/**
+ * tegra_drm_context_get_channel() - Get a channel for submissions
+ * @context: Context for which to get a channel for
+ *
+ * Request a free hardware host1x channel for this user context, or if the
+ * context already has one, bump its refcount.
+ *
+ * Returns 0 on success, or -EBUSY if there were no free hardware channels.
+ */
+int tegra_drm_context_get_channel(struct tegra_drm_context *context)
+{
+	struct host1x_client *client = &context->client->base;
+
+	mutex_lock(&context->lock);
+
+	if (context->pending_jobs == 0) {
+		context->channel = host1x_channel_request(client->dev);
+		if (!context->channel) {
+			mutex_unlock(&context->lock);
+			return -EBUSY;
+		}
+	}
+
+	context->pending_jobs++;
+
+	mutex_unlock(&context->lock);
+
+	return 0;
+}
+
+/**
+ * tegra_drm_context_put_channel() - Put a previously gotten channel
+ * @context: Context which channel is no longer needed
+ *
+ * Decrease the refcount of the channel associated with this context,
+ * freeing it if the refcount drops to zero.
+ */
+void tegra_drm_context_put_channel(struct tegra_drm_context *context)
+{
+	mutex_lock(&context->lock);
+	if (--context->pending_jobs == 0)
+		host1x_channel_put(context->channel);
+	mutex_unlock(&context->lock);
+}
+
 static void tegra_drm_job_done(struct host1x_job *job)
 {
 	struct tegra_drm_context *context = job->callback_data;
@@ -1092,6 +1137,7 @@ static int tegra_open_channel(struct drm_device *drm, void *data,
 		kfree(context);
 
 	kref_init(&context->ref);
+	mutex_init(&context->lock);
 
 	mutex_unlock(&fpriv->lock);
 	return err;

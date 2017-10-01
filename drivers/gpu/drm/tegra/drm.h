@@ -83,9 +83,12 @@ struct tegra_drm_context {
 	struct kref ref;
 
 	struct tegra_drm_client *client;
+	unsigned int id;
+
+	struct mutex lock;
 	struct host1x_channel *channel;
 	struct host1x_syncpt *syncpt;
-	unsigned int id;
+	unsigned int pending_jobs;
 };
 
 struct tegra_drm_client_ops {
@@ -100,6 +103,8 @@ struct tegra_drm_client_ops {
 	void (*submit_done)(struct tegra_drm_context *context);
 };
 
+int tegra_drm_context_get_channel(struct tegra_drm_context *context);
+void tegra_drm_context_put_channel(struct tegra_drm_context *context);
 int tegra_drm_submit(struct tegra_drm_context *context,
 		     struct drm_tegra_submit *args, struct drm_device *drm,
 		     struct drm_file *file);

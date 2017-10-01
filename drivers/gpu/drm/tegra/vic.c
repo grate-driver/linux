@@ -33,7 +33,6 @@ struct vic {
 
 	void __iomem *regs;
 	struct tegra_drm_client client;
-	struct host1x_channel *channel;
 	struct iommu_domain *domain;
 	struct device *dev;
 	struct clk *clk;
@@ -161,28 +160,12 @@ static int vic_init(struct host1x_client *client)
 			goto detach_device;
 	}
 
-	vic->channel = host1x_channel_request(client->dev);
-	if (!vic->channel) {
-		err = -ENOMEM;
-		goto detach_device;
-	}
-
-	client->syncpts[0] = host1x_syncpt_request(client->dev, 0);
-	if (!client->syncpts[0]) {
-		err = -ENOMEM;
-		goto free_channel;
-	}
-
 	err = tegra_drm_register_client(tegra, drm);
 	if (err < 0)
-		goto free_syncpt;
+		goto detach_device;
 
 	return 0;
 
-free_syncpt:
-	host1x_syncpt_free(client->syncpts[0]);
-free_channel:
-	host1x_channel_put(vic->channel);
 detach_device:
 	if (tegra->domain)
 		iommu_detach_device(tegra->domain, vic->dev);
@@ -202,9 +185,6 @@ static int vic_exit(struct host1x_client *client)
 	if (err < 0)
 		return err;
 
-	host1x_syncpt_free(client->syncpts[0]);
-	host1x_channel_put(vic->channel);
-
 	if (vic->domain) {
 		iommu_detach_device(vic->domain, vic->dev);
 		vic->domain = NULL;
@@ -221,7 +201,24 @@ static const struct host1x_client_ops vic_client_ops = {
 static int vic_open_channel(struct tegra_drm_client *client,
 			    struct tegra_drm_context *context)
 {
-	struct vic *vic = to_vic(client);
+	context->syncpt = host1x_syncpt_request(client->base.dev, 0);
+	if (!context->syncpt)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static void vic_close_channel(struct tegra_drm_context *context)
+{
+	host1x_syncpt_free(context->syncpt);
+}
+
+static int vic_submit(struct tegra_drm_context *context,
+		      struct drm_tegra_submit *args, struct drm_device *drm,
+		      struct drm_file *file)
+{
+	struct host1x_client *client = &context->client->base;
+	struct vic *vic = dev_get_drvdata(client->dev);
 	int err;
 
 	err = pm_runtime_get_sync(vic->dev);
@@ -229,35 +226,41 @@ static int vic_open_channel(struct tegra_drm_client *client,
 		return err;
 
 	err = vic_boot(vic);
-	if (err < 0) {
-		pm_runtime_put(vic->dev);
-		return err;
-	}
+	if (err < 0)
+		goto put_vic;
 
-	context->channel = host1x_channel_get(vic->channel);
-	if (!context->channel) {
-		pm_runtime_put(vic->dev);
-		return -ENOMEM;
-	}
+	err = tegra_drm_context_get_channel(context);
+	if (err < 0)
+		goto put_vic;
 
-	context->syncpt = client->base.syncpts[0];
+	err = tegra_drm_submit(context, args, drm, file);
+	if (err)
+		goto put_channel;
 
 	return 0;
+
+put_channel:
+	tegra_drm_context_put_channel(context);
+put_vic:
+	pm_runtime_put(vic->dev);
+
+	return err;
 }
 
-static void vic_close_channel(struct tegra_drm_context *context)
+static void vic_submit_done(struct tegra_drm_context *context)
 {
-	struct vic *vic = to_vic(context->client);
+	struct host1x_client *client = &context->client->base;
+	struct vic *vic = dev_get_drvdata(client->dev);
 
-	host1x_channel_put(context->channel);
-
+	tegra_drm_context_put_channel(context);
 	pm_runtime_put(vic->dev);
 }
 
 static const struct tegra_drm_client_ops vic_ops = {
 	.open_channel = vic_open_channel,
 	.close_channel = vic_close_channel,
-	.submit = tegra_drm_submit,
+	.submit = vic_submit,
+	.submit_done = vic_submit_done,
 };
 
 #define NVIDIA_TEGRA_124_VIC_FIRMWARE "nvidia/tegra124/vic03_ucode.bin"
@@ -340,8 +343,6 @@ static int vic_probe(struct platform_device *pdev)
 	vic->client.base.ops = &vic_client_ops;
 	vic->client.base.dev = dev;
 	vic->client.base.class = HOST1X_CLASS_VIC;
-	vic->client.base.syncpts = syncpts;
-	vic->client.base.num_syncpts = 1;
 	vic->dev = dev;
 	vic->config = vic_config;
 
