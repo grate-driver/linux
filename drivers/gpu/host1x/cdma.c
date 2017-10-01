@@ -232,6 +232,7 @@ static void cdma_start_timer_locked(struct host1x_cdma *cdma,
 	}
 
 	cdma->timeout.client = job->client;
+	cdma->timeout.class = job->class;
 	cdma->timeout.syncpt = host1x_syncpt_get(host, job->syncpt_id);
 	cdma->timeout.syncpt_val = job->syncpt_end;
 	cdma->timeout.start_ktime = ktime_get();

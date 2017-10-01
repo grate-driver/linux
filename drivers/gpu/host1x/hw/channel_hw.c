@@ -90,6 +90,34 @@ static inline void synchronize_syncpt_base(struct host1x_job *job)
 			 HOST1X_UCLASS_LOAD_SYNCPT_BASE_VALUE_F(value));
 }
 
+static void channel_submit_serialize(struct host1x_channel *ch,
+				     struct host1x_syncpt *sp)
+{
+#if HOST1X_HW >= 6
+	/*
+	 * On T186, due to a hw issue, we need to issue an mlock acquire
+	 * for HOST1X class. It is still interpreted as a no-op in
+	 * hardware.
+	 */
+	host1x_cdma_push(&ch->cdma,
+		host1x_opcode_acquire_mlock(HOST1X_CLASS_HOST1X),
+		host1x_opcode_setclass(HOST1X_CLASS_HOST1X, 0, 0));
+	host1x_cdma_push(&ch->cdma,
+		host1x_opcode_nonincr(host1x_uclass_wait_syncpt_r(), 1),
+		host1x_class_host_wait_syncpt(host1x_syncpt_id(sp),
+					      host1x_syncpt_read_max(sp)));
+	host1x_cdma_push(&ch->cdma,
+		host1x_opcode_release_mlock(HOST1X_CLASS_HOST1X),
+		HOST1X_OPCODE_NOP);
+#else
+	host1x_cdma_push(&ch->cdma,
+		host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+				       host1x_uclass_wait_syncpt_r(), 1),
+		host1x_class_host_wait_syncpt(host1x_syncpt_id(sp),
+					      host1x_syncpt_read_max(sp)));
+#endif
+}
+
 static int channel_submit(struct host1x_job *job)
 {
 	struct host1x_channel *ch = job->channel;
@@ -97,6 +125,7 @@ static int channel_submit(struct host1x_job *job)
 	u32 user_syncpt_incrs = job->syncpt_incrs;
 	u32 prev_max = 0;
 	u32 syncval;
+	u32 mlock;
 	int err;
 	struct host1x_waitlist *completed_waiter = NULL;
 	struct host1x *host = dev_get_drvdata(ch->dev->parent);
@@ -129,17 +158,12 @@ static int channel_submit(struct host1x_job *job)
 		goto error;
 	}
 
-	if (job->serialize) {
-		/*
-		 * Force serialization by inserting a host wait for the
-		 * previous job to finish before this one can commence.
-		 */
-		host1x_cdma_push(&ch->cdma,
-				 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
-					host1x_uclass_wait_syncpt_r(), 1),
-				 host1x_class_host_wait_syncpt(job->syncpt_id,
-					host1x_syncpt_read_max(sp)));
-	}
+	/*
+	 * Force serialization by inserting a host wait for the
+	 * previous job to finish before this one can commence.
+	 */
+	if (job->serialize)
+		channel_submit_serialize(ch, sp);
 
 	/* Synchronize base register to allow using it for relative waiting */
 	if (sp->base)
@@ -150,15 +174,28 @@ static int channel_submit(struct host1x_job *job)
 	/* assign syncpoint to channel */
 	host1x_hw_syncpt_assign_to_channel(host, sp, ch);
 
-	job->syncpt_end = syncval;
-
-	/* add a setclass for modules that require it */
-	if (job->class)
+	/* acquire MLOCK and set channel class to specified class */
+	mlock = HOST1X_HW >= 6 ? job->class : mlock_id_for_class(job->class);
+	if (job->class) {
 		host1x_cdma_push(&ch->cdma,
-				 host1x_opcode_setclass(job->class, 0, 0),
-				 HOST1X_OPCODE_NOP);
+				 host1x_opcode_acquire_mlock(mlock),
+				 host1x_opcode_setclass(job->class, 0, 0));
+	}
 
 	submit_gathers(job);
+
+	if (job->class) {
+		/*
+		 * Push additional increment to catch jobs that crash before
+		 * finishing their gather (and thus reaching the MLOCK release).
+		 */
+		syncval = host1x_syncpt_incr_max(sp, 1);
+		host1x_cdma_push(&ch->cdma,
+			host1x_opcode_imm_incr_syncpt(0, job->syncpt_id),
+			host1x_opcode_release_mlock(mlock));
+	}
+
+	job->syncpt_end = syncval;
 
 	/* end CDMA submit & stash pinned hMems into sync queue */
 	host1x_cdma_end(&ch->cdma, job);

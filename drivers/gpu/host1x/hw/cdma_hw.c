@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/iopoll.h>
 #include <linux/slab.h>
 #include <linux/scatterlist.h>
 #include <linux/dma-mapping.h>
@@ -279,6 +280,122 @@ static void cdma_resume(struct host1x_cdma *cdma, u32 getptr)
 	cdma_timeout_restart(cdma, getptr);
 }
 
+static int mlock_id_for_class(unsigned int class)
+{
+#if HOST1X_HW >= 6
+	switch (class)
+	{
+	case HOST1X_CLASS_HOST1X:
+		return 0;
+	case HOST1X_CLASS_VIC:
+		return 17;
+	default:
+		return -EINVAL;
+	}
+#else
+	switch (class)
+	{
+	case HOST1X_CLASS_HOST1X:
+		return 0;
+	case HOST1X_CLASS_GR2D:
+		return 1;
+	case HOST1X_CLASS_GR2D_SB:
+		return 2;
+	case HOST1X_CLASS_VIC:
+		return 3;
+	case HOST1X_CLASS_GR3D:
+		return 4;
+	default:
+		return -EINVAL;
+	}
+#endif
+}
+
+static void timeout_release_mlock(struct host1x_cdma *cdma)
+{
+#if HOST1X_HW >= 6
+	struct host1x_channel *ch = cdma_to_channel(cdma);
+	struct host1x *host = cdma_to_host1x(cdma);
+	u32 pb_pos, pb_temp[3], val;
+	int err, mlock_id;
+
+	if (!host->hv_regs)
+		return;
+
+	mlock_id = mlock_id_for_class(cdma->timeout.class);
+	if (WARN(mlock_id < 0, "Invalid class ID"))
+		return;
+
+	val = host1x_hypervisor_readl(host, HOST1X_HV_MLOCK(mlock_id));
+	if (!HOST1X_HV_MLOCK_LOCKED_V(val) ||
+	    HOST1X_HV_MLOCK_CH_V(val) != ch->id)
+	{
+		/* Channel is not holding the MLOCK, nothing to release. */
+		return;
+	}
+
+	/*
+	 * On Tegra186, there is no register to unlock an MLOCK (don't ask me
+	 * why). As such, we have to execute a release_mlock instruction to
+	 * do it. We do this by backing up just enough of the current push
+	 * buffer, replacing it with a opcode sequence to do the unlocking,
+	 * executing it, and again restoring the original contents.
+	 */
+
+	pb_pos = cdma->push_buffer.pos;
+	memcpy(pb_temp, cdma->push_buffer.mapped, ARRAY_SIZE(pb_temp) * 4);
+
+	{
+		u32 *pb = cdma->push_buffer.mapped;
+		pb[0] = host1x_opcode_acquire_mlock(cdma->timeout.class);
+		pb[1] = host1x_opcode_setclass(cdma->timeout.class, 0, 0);
+		pb[2] = host1x_opcode_release_mlock(cdma->timeout.class);
+	}
+
+	/* Flush writecombine buffer */
+	wmb();
+
+	cdma->push_buffer.pos = ARRAY_SIZE(pb_temp) * 4;
+
+	cdma_resume(cdma, 0);
+
+	/* Wait until the release_mlock opcode has been executed */
+	err = readl_poll_timeout(
+		host->hv_regs + HOST1X_HV_MLOCK(mlock_id), val,
+		!HOST1X_HV_MLOCK_LOCKED_V(val) ||
+			HOST1X_HV_MLOCK_CH_V(val) != ch->id,
+		10, 10000);
+	WARN(err, "Failed to unlock mlock %u\n", mlock_id);
+
+	cdma_freeze(cdma);
+
+	/* Restore original pushbuffer state */
+	cdma->push_buffer.pos = pb_pos;
+	memcpy(cdma->push_buffer.mapped, pb_temp, ARRAY_SIZE(pb_temp) * 4);
+	wmb();
+#else
+	struct host1x_channel *ch = cdma_to_channel(cdma);
+	struct host1x *host = cdma_to_host1x(cdma);
+	int mlock_id;
+	u32 val;
+
+	mlock_id = mlock_id_for_class(cdma->timeout.class);
+	if (WARN(mlock_id < 0, "Invalid class ID"))
+		return;
+
+	val = host1x_sync_readl(host, HOST1X_SYNC_MLOCK_OWNER(mlock_id));
+	if (!HOST1X_SYNC_MLOCK_OWNER_CH_OWNS_V(val) ||
+	    HOST1X_SYNC_MLOCK_OWNER_CHID_V(val) != ch->id)
+	{
+		/* Channel is not holding the MLOCK, nothing to release. */
+		return;
+	}
+
+	/* Unlock MLOCK */
+	host1x_sync_writel(host, 0x0, HOST1X_SYNC_MLOCK(mlock_id));
+#endif
+}
+
 /*
  * If this timeout fires, it indicates the current sync_queue entry has
  * exceeded its TTL and the userctx should be timed out and remaining
@@ -328,6 +445,8 @@ static void cdma_timeout_handler(struct work_struct *work)
 
 	/* stop HW, resetting channel/module */
 	host1x_hw_cdma_freeze(host1x, cdma);
+
+	timeout_release_mlock(cdma);
 
 	host1x_cdma_update_sync_queue(cdma, ch->dev);
 	mutex_unlock(&cdma->lock);

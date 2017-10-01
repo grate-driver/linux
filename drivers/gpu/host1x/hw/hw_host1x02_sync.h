@@ -131,6 +131,12 @@ static inline u32 host1x_sync_ip_busy_timeout_r(void)
 }
 #define HOST1X_SYNC_IP_BUSY_TIMEOUT \
 	host1x_sync_ip_busy_timeout_r()
+static inline u32 host1x_sync_mlock_r(unsigned int id)
+{
+	return 0x2c0 + id * REGISTER_STRIDE;
+}
+#define HOST1X_SYNC_MLOCK(id) \
+	host1x_sync_mlock_r(id)
 static inline u32 host1x_sync_mlock_owner_r(unsigned int id)
 {
 	return 0x340 + id * REGISTER_STRIDE;

@@ -18,6 +18,11 @@
 #define HOST1X_HV_SYNCPT_PROT_EN			0x1ac4
 #define HOST1X_HV_SYNCPT_PROT_EN_CH_EN			BIT(1)
 #define HOST1X_HV_CH_KERNEL_FILTER_GBUFFER(x)		(0x2020 + (x * 4))
+#define HOST1X_HV_MLOCK(x)				(0x2030 + (x * 4))
+#define HOST1X_HV_MLOCK_CH(x)				(((x) & 0x3f) << 2)
+#define HOST1X_HV_MLOCK_CH_V(x)				(((x) >> 2) & 0x3f)
+#define HOST1X_HV_MLOCK_LOCKED				BIT(0)
+#define HOST1X_HV_MLOCK_LOCKED_V(x)			((x) & 0x1)
 #define HOST1X_HV_CMDFIFO_PEEK_CTRL			0x233c
 #define HOST1X_HV_CMDFIFO_PEEK_CTRL_ADDR(x)		(x)
 #define HOST1X_HV_CMDFIFO_PEEK_CTRL_CHANNEL(x)		((x) << 16)
