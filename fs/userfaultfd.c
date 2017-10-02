@@ -109,27 +109,24 @@ static int userfaultfd_wake_function(wait_queue_entry_t *wq, unsigned mode,
 		goto out;
 	WRITE_ONCE(uwq->waken, true);
 	/*
-	 * The implicit smp_mb__before_spinlock in try_to_wake_up()
-	 * renders uwq->waken visible to other CPUs before the task is
-	 * waken.
+	 * The Program-Order guarantees provided by the scheduler
+	 * ensure uwq->waken is visible before the task is woken.
 	 */
 	ret = wake_up_state(wq->private, mode);
-	if (ret)
+	if (ret) {
 		/*
 		 * Wake only once, autoremove behavior.
 		 *
-		 * After the effect of list_del_init is visible to the
-		 * other CPUs, the waitqueue may disappear from under
-		 * us, see the !list_empty_careful() in
-		 * handle_userfault(). try_to_wake_up() has an
-		 * implicit smp_mb__before_spinlock, and the
-		 * wq->private is read before calling the extern
-		 * function "wake_up_state" (which in turns calls
-		 * try_to_wake_up). While the spin_lock;spin_unlock;
-		 * wouldn't be enough, the smp_mb__before_spinlock is
-		 * enough to avoid an explicit smp_mb() here.
+		 * After the effect of list_del_init is visible to the other
+		 * CPUs, the waitqueue may disappear from under us, see the
+		 * !list_empty_careful() in handle_userfault().
+		 *
+		 * try_to_wake_up() has an implicit smp_mb(), and the
+		 * wq->private is read before calling the extern function
+		 * "wake_up_state" (which in turns calls try_to_wake_up).
 		 */
 		list_del_init(&wq->entry);
+	}
 out:
 	return ret;
 }
@@ -853,6 +850,9 @@ wakeup:
 	__wake_up_locked_key(&ctx->fault_pending_wqh, TASK_NORMAL, &range);
 	__wake_up_locked_key(&ctx->fault_wqh, TASK_NORMAL, &range);
 	spin_unlock(&ctx->fault_pending_wqh.lock);
+
+	/* Flush pending events that may still wait on event_wqh */
+	wake_up_all(&ctx->event_wqh);
 
 	wake_up_poll(&ctx->fd_wqh, POLLHUP);
 	userfaultfd_ctx_put(ctx);
@@ -1597,7 +1597,7 @@ static int userfaultfd_copy(struct userfaultfd_ctx *ctx,
 				   uffdio_copy.len);
 		mmput(ctx->mm);
 	} else {
-		return -ENOSPC;
+		return -ESRCH;
 	}
 	if (unlikely(put_user(ret, &user_uffdio_copy->copy)))
 		return -EFAULT;
@@ -1643,6 +1643,8 @@ static int userfaultfd_zeropage(struct userfaultfd_ctx *ctx,
 		ret = mfill_zeropage(ctx->mm, uffdio_zeropage.range.start,
 				     uffdio_zeropage.range.len);
 		mmput(ctx->mm);
+	} else {
+		return -ESRCH;
 	}
 	if (unlikely(put_user(ret, &user_uffdio_zeropage->zeropage)))
 		return -EFAULT;

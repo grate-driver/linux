@@ -63,6 +63,7 @@
 #include <linux/cgroup.h>
 #include <linux/wait.h>
 
+DEFINE_STATIC_KEY_FALSE(cpusets_pre_enable_key);
 DEFINE_STATIC_KEY_FALSE(cpusets_enabled_key);
 
 /* See "Frequency meter" comments, below. */
@@ -574,6 +575,13 @@ static void update_domain_attr_tree(struct sched_domain_attr *dattr,
 			update_domain_attr(dattr, cp);
 	}
 	rcu_read_unlock();
+}
+
+/* Must be called with cpuset_mutex held.  */
+static inline int nr_cpusets(void)
+{
+	/* jump label reference count + the top-level cpuset */
+	return static_key_count(&cpusets_enabled_key.key) + 1;
 }
 
 /*
@@ -1891,6 +1899,7 @@ static struct cftype files[] = {
 	{
 		.name = "memory_pressure",
 		.read_u64 = cpuset_read_u64,
+		.private = FILE_MEMORY_PRESSURE,
 	},
 
 	{
@@ -2342,13 +2351,7 @@ void cpuset_update_active_cpus(void)
 	 * We're inside cpu hotplug critical region which usually nests
 	 * inside cgroup synchronization.  Bounce actual hotplug processing
 	 * to a work item to avoid reverse locking order.
-	 *
-	 * We still need to do partition_sched_domains() synchronously;
-	 * otherwise, the scheduler will get confused and put tasks to the
-	 * dead CPU.  Fall back to the default single domain.
-	 * cpuset_hotplug_workfn() will rebuild it as necessary.
 	 */
-	partition_sched_domains(1, NULL, NULL);
 	schedule_work(&cpuset_hotplug_work);
 }
 

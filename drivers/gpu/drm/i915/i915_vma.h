@@ -112,13 +112,9 @@ struct i915_vma {
 	/**
 	 * Used for performing relocations during execbuffer insertion.
 	 */
-	struct drm_i915_gem_exec_object2 *exec_entry;
+	unsigned int *exec_flags;
 	struct hlist_node exec_node;
 	u32 exec_handle;
-
-	struct i915_gem_context *ctx;
-	struct hlist_node ctx_node;
-	u32 ctx_handle;
 };
 
 struct i915_vma *
@@ -284,12 +280,12 @@ static inline void __i915_vma_pin(struct i915_vma *vma)
 
 static inline void __i915_vma_unpin(struct i915_vma *vma)
 {
-	GEM_BUG_ON(!i915_vma_is_pinned(vma));
 	vma->flags--;
 }
 
 static inline void i915_vma_unpin(struct i915_vma *vma)
 {
+	GEM_BUG_ON(!i915_vma_is_pinned(vma));
 	GEM_BUG_ON(!drm_mm_node_allocated(&vma->node));
 	__i915_vma_unpin(vma);
 }

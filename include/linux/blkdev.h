@@ -134,7 +134,7 @@ typedef __u32 __bitwise req_flags_t;
 struct request {
 	struct list_head queuelist;
 	union {
-		struct call_single_data csd;
+		call_single_data_t csd;
 		u64 fifo_time;
 	};
 
@@ -568,7 +568,6 @@ struct request_queue {
 
 #if defined(CONFIG_BLK_DEV_BSG)
 	bsg_job_fn		*bsg_job_fn;
-	int			bsg_job_size;
 	struct bsg_class_device bsg_dev;
 #endif
 

@@ -376,15 +376,15 @@ asmlinkage void start_secondary(void)
 	cpumask_set_cpu(cpu, &cpu_coherent_mask);
 	notify_cpu_starting(cpu);
 
-	complete(&cpu_running);
-	synchronise_count_slave(cpu);
-
 	set_cpu_online(cpu, true);
 
 	set_cpu_sibling_map(cpu);
 	set_cpu_core_map(cpu);
 
 	calculate_cpu_foreign_map();
+
+	complete(&cpu_running);
+	synchronise_count_slave(cpu);
 
 	/*
 	 * irq will be enabled in ->smp_finish(), enabling it too early
@@ -648,12 +648,12 @@ EXPORT_SYMBOL(flush_tlb_one);
 #ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST
 
 static DEFINE_PER_CPU(atomic_t, tick_broadcast_count);
-static DEFINE_PER_CPU(struct call_single_data, tick_broadcast_csd);
+static DEFINE_PER_CPU(call_single_data_t, tick_broadcast_csd);
 
 void tick_broadcast(const struct cpumask *mask)
 {
 	atomic_t *count;
-	struct call_single_data *csd;
+	call_single_data_t *csd;
 	int cpu;
 
 	for_each_cpu(cpu, mask) {
@@ -674,7 +674,7 @@ static void tick_broadcast_callee(void *info)
 
 static int __init tick_broadcast_init(void)
 {
-	struct call_single_data *csd;
+	call_single_data_t *csd;
 	int cpu;
 
 	for (cpu = 0; cpu < NR_CPUS; cpu++) {
