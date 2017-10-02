@@ -561,13 +561,9 @@ void blk_cleanup_queue(struct request_queue *q)
 	 * prevent that q->request_fn() gets invoked after draining finished.
 	 */
 	blk_freeze_queue(q);
-	if (!q->mq_ops) {
-		spin_lock_irq(lock);
+	spin_lock_irq(lock);
+	if (!q->mq_ops)
 		__blk_drain_queue(q, true);
-	} else {
-		blk_mq_debugfs_unregister_mq(q);
-		spin_lock_irq(lock);
-	}
 	queue_flag_set(QUEUE_FLAG_DEAD, q);
 	spin_unlock_irq(lock);
 
@@ -652,13 +648,19 @@ int blk_init_rl(struct request_list *rl, struct request_queue *q,
 	if (!rl->rq_pool)
 		return -ENOMEM;
 
+	if (rl != &q->root_rl)
+		WARN_ON_ONCE(!blk_get_queue(q));
+
 	return 0;
 }
 
-void blk_exit_rl(struct request_list *rl)
+void blk_exit_rl(struct request_queue *q, struct request_list *rl)
 {
-	if (rl->rq_pool)
+	if (rl->rq_pool) {
 		mempool_destroy(rl->rq_pool);
+		if (rl != &q->root_rl)
+			blk_put_queue(q);
+	}
 }
 
 struct request_queue *blk_alloc_queue(gfp_t gfp_mask)
@@ -2648,8 +2650,6 @@ bool blk_update_request(struct request *req, int error, unsigned int nr_bytes)
 		return false;
 	}
 
-	WARN_ON_ONCE(req->rq_flags & RQF_SPECIAL_PAYLOAD);
-
 	req->__data_len -= total_bytes;
 
 	/* update sector only for requests with clear definition of sector */
@@ -2662,17 +2662,19 @@ bool blk_update_request(struct request *req, int error, unsigned int nr_bytes)
 		req->cmd_flags |= req->bio->bi_opf & REQ_FAILFAST_MASK;
 	}
 
-	/*
-	 * If total number of sectors is less than the first segment
-	 * size, something has gone terribly wrong.
-	 */
-	if (blk_rq_bytes(req) < blk_rq_cur_bytes(req)) {
-		blk_dump_rq_flags(req, "request botched");
-		req->__data_len = blk_rq_cur_bytes(req);
-	}
+	if (!(req->rq_flags & RQF_SPECIAL_PAYLOAD)) {
+		/*
+		 * If total number of sectors is less than the first segment
+		 * size, something has gone terribly wrong.
+		 */
+		if (blk_rq_bytes(req) < blk_rq_cur_bytes(req)) {
+			blk_dump_rq_flags(req, "request botched");
+			req->__data_len = blk_rq_cur_bytes(req);
+		}
 
-	/* recalculate the number of segments */
-	blk_recalc_rq_segments(req);
+		/* recalculate the number of segments */
+		blk_recalc_rq_segments(req);
+	}
 
 	return true;
 }

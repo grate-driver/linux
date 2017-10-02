@@ -45,6 +45,8 @@
 #include <net/netfilter/nf_conntrack_zones.h>
 #include <net/netfilter/nf_conntrack_timestamp.h>
 #include <net/netfilter/nf_conntrack_labels.h>
+#include <net/netfilter/nf_conntrack_seqadj.h>
+#include <net/netfilter/nf_conntrack_synproxy.h>
 #ifdef CONFIG_NF_NAT_NEEDED
 #include <net/netfilter/nf_nat_core.h>
 #include <net/netfilter/nf_nat_l4proto.h>
@@ -417,8 +419,7 @@ nla_put_failure:
 	return -1;
 }
 
-static int ctnetlink_dump_ct_seq_adj(struct sk_buff *skb,
-				     const struct nf_conn *ct)
+static int ctnetlink_dump_ct_seq_adj(struct sk_buff *skb, struct nf_conn *ct)
 {
 	struct nf_conn_seqadj *seqadj = nfct_seqadj(ct);
 	struct nf_ct_seqadj *seq;
@@ -426,15 +427,20 @@ static int ctnetlink_dump_ct_seq_adj(struct sk_buff *skb,
 	if (!(ct->status & IPS_SEQ_ADJUST) || !seqadj)
 		return 0;
 
+	spin_lock_bh(&ct->lock);
 	seq = &seqadj->seq[IP_CT_DIR_ORIGINAL];
 	if (dump_ct_seq_adj(skb, seq, CTA_SEQ_ADJ_ORIG) == -1)
-		return -1;
+		goto err;
 
 	seq = &seqadj->seq[IP_CT_DIR_REPLY];
 	if (dump_ct_seq_adj(skb, seq, CTA_SEQ_ADJ_REPLY) == -1)
-		return -1;
+		goto err;
 
+	spin_unlock_bh(&ct->lock);
 	return 0;
+err:
+	spin_unlock_bh(&ct->lock);
+	return -1;
 }
 
 static int ctnetlink_dump_id(struct sk_buff *skb, const struct nf_conn *ct)
@@ -884,8 +890,13 @@ restart:
 	}
 out:
 	local_bh_enable();
-	if (last)
+	if (last) {
+		/* nf ct hash resize happened, now clear the leftover. */
+		if ((struct nf_conn *)cb->args[1] == last)
+			cb->args[1] = 0;
+
 		nf_ct_put(last);
+	}
 
 	while (i) {
 		i--;
@@ -1003,9 +1014,8 @@ static const struct nla_policy tuple_nla_policy[CTA_TUPLE_MAX+1] = {
 
 static int
 ctnetlink_parse_tuple(const struct nlattr * const cda[],
-		      struct nf_conntrack_tuple *tuple,
-		      enum ctattr_type type, u_int8_t l3num,
-		      struct nf_conntrack_zone *zone)
+		      struct nf_conntrack_tuple *tuple, u32 type,
+		      u_int8_t l3num, struct nf_conntrack_zone *zone)
 {
 	struct nlattr *tb[CTA_TUPLE_MAX+1];
 	int err;
@@ -1417,6 +1427,24 @@ ctnetlink_parse_nat_setup(struct nf_conn *ct,
 }
 #endif
 
+static void
+__ctnetlink_change_status(struct nf_conn *ct, unsigned long on,
+			  unsigned long off)
+{
+	unsigned int bit;
+
+	/* Ignore these unchangable bits */
+	on &= ~IPS_UNCHANGEABLE_MASK;
+	off &= ~IPS_UNCHANGEABLE_MASK;
+
+	for (bit = 0; bit < __IPS_MAX_BIT; bit++) {
+		if (on & (1 << bit))
+			set_bit(bit, &ct->status);
+		else if (off & (1 << bit))
+			clear_bit(bit, &ct->status);
+	}
+}
+
 static int
 ctnetlink_change_status(struct nf_conn *ct, const struct nlattr * const cda[])
 {
@@ -1436,10 +1464,7 @@ ctnetlink_change_status(struct nf_conn *ct, const struct nlattr * const cda[])
 		/* ASSURED bit can only be set */
 		return -EBUSY;
 
-	/* Be careful here, modifying NAT bits can screw up things,
-	 * so don't let users modify them directly if they don't pass
-	 * nf_nat_range. */
-	ct->status |= status & ~(IPS_NAT_DONE_MASK | IPS_NAT_MASK);
+	__ctnetlink_change_status(ct, status, 0);
 	return 0;
 }
 
@@ -1508,23 +1533,11 @@ static int ctnetlink_change_helper(struct nf_conn *ct,
 		return 0;
 	}
 
+	rcu_read_lock();
 	helper = __nf_conntrack_helper_find(helpname, nf_ct_l3num(ct),
 					    nf_ct_protonum(ct));
 	if (helper == NULL) {
-#ifdef CONFIG_MODULES
-		spin_unlock_bh(&nf_conntrack_expect_lock);
-
-		if (request_module("nfct-helper-%s", helpname) < 0) {
-			spin_lock_bh(&nf_conntrack_expect_lock);
-			return -EOPNOTSUPP;
-		}
-
-		spin_lock_bh(&nf_conntrack_expect_lock);
-		helper = __nf_conntrack_helper_find(helpname, nf_ct_l3num(ct),
-						    nf_ct_protonum(ct));
-		if (helper)
-			return -EAGAIN;
-#endif
+		rcu_read_unlock();
 		return -EOPNOTSUPP;
 	}
 
@@ -1533,13 +1546,16 @@ static int ctnetlink_change_helper(struct nf_conn *ct,
 			/* update private helper data if allowed. */
 			if (helper->from_nlattr)
 				helper->from_nlattr(helpinfo, ct);
-			return 0;
+			err = 0;
 		} else
-			return -EBUSY;
+			err = -EBUSY;
+	} else {
+		/* we cannot set a helper for an existing conntrack */
+		err = -EOPNOTSUPP;
 	}
 
-	/* we cannot set a helper for an existing conntrack */
-	return -EOPNOTSUPP;
+	rcu_read_unlock();
+	return err;
 }
 
 static int ctnetlink_change_timeout(struct nf_conn *ct,
@@ -1630,25 +1646,30 @@ ctnetlink_change_seq_adj(struct nf_conn *ct,
 	if (!seqadj)
 		return 0;
 
+	spin_lock_bh(&ct->lock);
 	if (cda[CTA_SEQ_ADJ_ORIG]) {
 		ret = change_seq_adj(&seqadj->seq[IP_CT_DIR_ORIGINAL],
 				     cda[CTA_SEQ_ADJ_ORIG]);
 		if (ret < 0)
-			return ret;
+			goto err;
 
-		ct->status |= IPS_SEQ_ADJUST;
+		set_bit(IPS_SEQ_ADJUST_BIT, &ct->status);
 	}
 
 	if (cda[CTA_SEQ_ADJ_REPLY]) {
 		ret = change_seq_adj(&seqadj->seq[IP_CT_DIR_REPLY],
 				     cda[CTA_SEQ_ADJ_REPLY]);
 		if (ret < 0)
-			return ret;
+			goto err;
 
-		ct->status |= IPS_SEQ_ADJUST;
+		set_bit(IPS_SEQ_ADJUST_BIT, &ct->status);
 	}
 
+	spin_unlock_bh(&ct->lock);
 	return 0;
+err:
+	spin_unlock_bh(&ct->lock);
+	return ret;
 }
 
 static int
@@ -1813,6 +1834,8 @@ ctnetlink_create_conntrack(struct net *net,
 	nf_ct_tstamp_ext_add(ct, GFP_ATOMIC);
 	nf_ct_ecache_ext_add(ct, 0, 0, GFP_ATOMIC);
 	nf_ct_labels_ext_add(ct);
+	nfct_seqadj_ext_add(ct);
+	nfct_synproxy_ext_add(ct);
 
 	/* we must add conntrack extensions before confirmation. */
 	ct->status |= IPS_CONFIRMED;
@@ -1959,9 +1982,7 @@ static int ctnetlink_new_conntrack(struct net *net, struct sock *ctnl,
 	err = -EEXIST;
 	ct = nf_ct_tuplehash_to_ctrack(h);
 	if (!(nlh->nlmsg_flags & NLM_F_EXCL)) {
-		spin_lock_bh(&nf_conntrack_expect_lock);
 		err = ctnetlink_change_conntrack(ct, cda);
-		spin_unlock_bh(&nf_conntrack_expect_lock);
 		if (err == 0) {
 			nf_conntrack_eventmask_report((1 << IPCT_REPLY) |
 						      (1 << IPCT_ASSURED) |
@@ -2294,10 +2315,10 @@ ctnetlink_update_status(struct nf_conn *ct, const struct nlattr * const cda[])
 	/* This check is less strict than ctnetlink_change_status()
 	 * because callers often flip IPS_EXPECTED bits when sending
 	 * an NFQA_CT attribute to the kernel.  So ignore the
-	 * unchangeable bits but do not error out.
+	 * unchangeable bits but do not error out. Also user programs
+	 * are allowed to clear the bits that they are allowed to change.
 	 */
-	ct->status = (status & ~IPS_UNCHANGEABLE_MASK) |
-		     (ct->status & IPS_UNCHANGEABLE_MASK);
+	__ctnetlink_change_status(ct, status, ~status);
 	return 0;
 }
 
@@ -2351,11 +2372,7 @@ ctnetlink_glue_parse(const struct nlattr *attr, struct nf_conn *ct)
 	if (ret < 0)
 		return ret;
 
-	spin_lock_bh(&nf_conntrack_expect_lock);
-	ret = ctnetlink_glue_parse_ct((const struct nlattr **)cda, ct);
-	spin_unlock_bh(&nf_conntrack_expect_lock);
-
-	return ret;
+	return ctnetlink_glue_parse_ct((const struct nlattr **)cda, ct);
 }
 
 static int ctnetlink_glue_exp_parse(const struct nlattr * const *cda,
@@ -2438,7 +2455,7 @@ static struct nfnl_ct_hook ctnetlink_glue_hook = {
 
 static int ctnetlink_exp_dump_tuple(struct sk_buff *skb,
 				    const struct nf_conntrack_tuple *tuple,
-				    enum ctattr_expect type)
+				    u32 type)
 {
 	struct nlattr *nest_parms;
 

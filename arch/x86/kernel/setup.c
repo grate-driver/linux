@@ -980,8 +980,6 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	x86_configure_nx();
 
-	simple_udelay_calibration();
-
 	parse_early_param();
 
 #ifdef CONFIG_MEMORY_HOTPLUG
@@ -1040,6 +1038,8 @@ void __init setup_arch(char **cmdline_p)
 	 * needs to be done after dmi_scan_machine, for the BP.
 	 */
 	init_hypervisor_platform();
+
+	simple_udelay_calibration();
 
 	x86_init.resources.probe_roms();
 
@@ -1224,6 +1224,21 @@ void __init setup_arch(char **cmdline_p)
 	x86_init.paging.pagetable_init();
 
 	kasan_init();
+
+#ifdef CONFIG_X86_32
+	/* sync back kernel address range */
+	clone_pgd_range(initial_page_table + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir     + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+
+	/*
+	 * sync back low identity map too.  It is used for example
+	 * in the 32-bit EFI stub.
+	 */
+	clone_pgd_range(initial_page_table,
+			swapper_pg_dir     + KERNEL_PGD_BOUNDARY,
+			min(KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
+#endif
 
 	tboot_probe();
 

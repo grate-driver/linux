@@ -56,6 +56,11 @@
  * rotational or flash-based devices, and to get the job done quickly
  * for applications consisting in many I/O-bound processes.
  *
+ * NOTE: if the main or only goal, with a given device, is to achieve
+ * the maximum-possible throughput at all times, then do switch off
+ * all low-latency heuristics for that device, by setting low_latency
+ * to 0.
+ *
  * BFQ is described in [1], where also a reference to the initial, more
  * theoretical paper on BFQ can be found. The interested reader can find
  * in the latter paper full details on the main algorithm, as well as
@@ -3660,7 +3665,7 @@ void bfq_put_queue(struct bfq_queue *bfqq)
 
 	kmem_cache_free(bfq_pool, bfqq);
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
-	bfqg_put(bfqg);
+	bfqg_and_blkg_put(bfqg);
 #endif
 }
 

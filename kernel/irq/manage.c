@@ -1312,8 +1312,10 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			ret = __irq_set_trigger(desc,
 						new->flags & IRQF_TRIGGER_MASK);
 
-			if (ret)
+			if (ret) {
+				irq_release_resources(desc);
 				goto out_mask;
+			}
 		}
 
 		desc->istate &= ~(IRQS_AUTODETECT | IRQS_SPURIOUS_DISABLED | \
@@ -1559,7 +1561,7 @@ void remove_irq(unsigned int irq, struct irqaction *act)
 	struct irq_desc *desc = irq_to_desc(irq);
 
 	if (desc && !WARN_ON(irq_settings_is_per_cpu_devid(desc)))
-	    __free_irq(irq, act->dev_id);
+		__free_irq(irq, act->dev_id);
 }
 EXPORT_SYMBOL_GPL(remove_irq);
 
@@ -1576,20 +1578,27 @@ EXPORT_SYMBOL_GPL(remove_irq);
  *	have completed.
  *
  *	This function must not be called from interrupt context.
+ *
+ *	Returns the devname argument passed to request_irq.
  */
-void free_irq(unsigned int irq, void *dev_id)
+const void *free_irq(unsigned int irq, void *dev_id)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
+	struct irqaction *action;
+	const char *devname;
 
 	if (!desc || WARN_ON(irq_settings_is_per_cpu_devid(desc)))
-		return;
+		return NULL;
 
 #ifdef CONFIG_SMP
 	if (WARN_ON(desc->affinity_notify))
 		desc->affinity_notify = NULL;
 #endif
 
-	kfree(__free_irq(irq, dev_id));
+	action = __free_irq(irq, dev_id);
+	devname = action->name;
+	kfree(action);
+	return devname;
 }
 EXPORT_SYMBOL(free_irq);
 

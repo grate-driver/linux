@@ -3563,7 +3563,7 @@ static inline void check_schedstat_required(void)
 			trace_sched_stat_runtime_enabled())  {
 		printk_deferred_once("Scheduler tracepoints stat_sleep, stat_iowait, "
 			     "stat_blocked and stat_runtime require the "
-			     "kernel parameter schedstats=enabled or "
+			     "kernel parameter schedstats=enable or "
 			     "kernel.sched_schedstats=1\n");
 	}
 #endif
@@ -7631,7 +7631,7 @@ next_group:
 
 /**
  * check_asym_packing - Check to see if the group is packed into the
- *			sched doman.
+ *			sched domain.
  *
  * This is primarily intended to used at the sibling level.  Some
  * cores like POWER7 prefer to use lower numbered SMT threads.  In the

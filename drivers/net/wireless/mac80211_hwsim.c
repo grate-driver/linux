@@ -1201,7 +1201,13 @@ static bool mac80211_hwsim_tx_frame_no_nl(struct ieee80211_hw *hw,
 			rx_status.encoding = RX_ENC_HT;
 	}
 	if (info->control.rates[0].flags & IEEE80211_TX_RC_40_MHZ_WIDTH)
-		rx_status.enc_flags |= RX_ENC_FLAG_40MHZ;
+		rx_status.bw = RATE_INFO_BW_40;
+	else if (info->control.rates[0].flags & IEEE80211_TX_RC_80_MHZ_WIDTH)
+		rx_status.bw = RATE_INFO_BW_80;
+	else if (info->control.rates[0].flags & IEEE80211_TX_RC_160_MHZ_WIDTH)
+		rx_status.bw = RATE_INFO_BW_160;
+	else
+		rx_status.bw = RATE_INFO_BW_20;
 	if (info->control.rates[0].flags & IEEE80211_TX_RC_SHORT_GI)
 		rx_status.enc_flags |= RX_ENC_FLAG_SHORT_GI;
 	/* TODO: simulate real signal strength (and optional packet loss) */
@@ -2855,7 +2861,7 @@ static const struct net_device_ops hwsim_netdev_ops = {
 static void hwsim_mon_setup(struct net_device *dev)
 {
 	dev->netdev_ops = &hwsim_netdev_ops;
-	dev->destructor = free_netdev;
+	dev->needs_free_netdev = true;
 	ether_setup(dev);
 	dev->priv_flags |= IFF_NO_QUEUE;
 	dev->type = ARPHRD_IEEE80211_RADIOTAP;

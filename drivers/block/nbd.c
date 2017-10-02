@@ -18,6 +18,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/sched.h>
+#include <linux/sched/mm.h>
 #include <linux/fs.h>
 #include <linux/bio.h>
 #include <linux/stat.h>
@@ -347,7 +348,7 @@ static int sock_xmit(struct nbd_device *nbd, int index, int send,
 	struct socket *sock = config->socks[index]->sock;
 	int result;
 	struct msghdr msg;
-	unsigned long pflags = current->flags;
+	unsigned int noreclaim_flag;
 
 	if (unlikely(!sock)) {
 		dev_err_ratelimited(disk_to_dev(nbd->disk),
@@ -358,7 +359,7 @@ static int sock_xmit(struct nbd_device *nbd, int index, int send,
 
 	msg.msg_iter = *iter;
 
-	current->flags |= PF_MEMALLOC;
+	noreclaim_flag = memalloc_noreclaim_save();
 	do {
 		sock->sk->sk_allocation = GFP_NOIO | __GFP_MEMALLOC;
 		msg.msg_name = NULL;
@@ -381,7 +382,7 @@ static int sock_xmit(struct nbd_device *nbd, int index, int send,
 			*sent += result;
 	} while (msg_data_left(&msg));
 
-	current_restore_flags(pflags, PF_MEMALLOC);
+	memalloc_noreclaim_restore(noreclaim_flag);
 
 	return result;
 }
@@ -936,14 +937,6 @@ static int nbd_reconnect_socket(struct nbd_device *nbd, unsigned long arg)
 	return -ENOSPC;
 }
 
-/* Reset all properties of an NBD device */
-static void nbd_reset(struct nbd_device *nbd)
-{
-	nbd->config = NULL;
-	nbd->tag_set.timeout = 0;
-	queue_flag_clear_unlocked(QUEUE_FLAG_DISCARD, nbd->disk->queue);
-}
-
 static void nbd_bdev_reset(struct block_device *bdev)
 {
 	if (bdev->bd_openers > 1)
@@ -1028,7 +1021,11 @@ static void nbd_config_put(struct nbd_device *nbd)
 			}
 			kfree(config->socks);
 		}
-		nbd_reset(nbd);
+		kfree(nbd->config);
+		nbd->config = NULL;
+
+		nbd->tag_set.timeout = 0;
+		queue_flag_clear_unlocked(QUEUE_FLAG_DISCARD, nbd->disk->queue);
 
 		mutex_unlock(&nbd->config_lock);
 		nbd_put(nbd);
@@ -1396,12 +1393,11 @@ static void nbd_dbg_close(void)
 
 #endif
 
-static int nbd_init_request(void *data, struct request *rq,
-			    unsigned int hctx_idx, unsigned int request_idx,
-			    unsigned int numa_node)
+static int nbd_init_request(struct blk_mq_tag_set *set, struct request *rq,
+			    unsigned int hctx_idx, unsigned int numa_node)
 {
 	struct nbd_cmd *cmd = blk_mq_rq_to_pdu(rq);
-	cmd->nbd = data;
+	cmd->nbd = set->driver_data;
 	return 0;
 }
 
@@ -1483,7 +1479,6 @@ static int nbd_dev_add(int index)
 	disk->fops = &nbd_fops;
 	disk->private_data = nbd;
 	sprintf(disk->disk_name, "nbd%d", index);
-	nbd_reset(nbd);
 	add_disk(disk);
 	nbd_total_devices++;
 	return index;

@@ -978,7 +978,7 @@ static int qed_slowpath_start(struct qed_dev *cdev,
 		if (rc)
 			goto err2;
 
-		/* First Dword used to diffrentiate between various sources */
+		/* First Dword used to differentiate between various sources */
 		data = cdev->firmware->data + sizeof(u32);
 
 		qed_dbg_pf_init(cdev);
@@ -1093,10 +1093,12 @@ static int qed_slowpath_stop(struct qed_dev *cdev)
 		qed_free_stream_mem(cdev);
 		if (IS_QED_ETH_IF(cdev))
 			qed_sriov_disable(cdev, true);
-
-		qed_nic_stop(cdev);
-		qed_slowpath_irq_free(cdev);
 	}
+
+	qed_nic_stop(cdev);
+
+	if (IS_PF(cdev))
+		qed_slowpath_irq_free(cdev);
 
 	qed_disable_msix(cdev);
 
@@ -1372,7 +1374,7 @@ static void qed_fill_link(struct qed_hwfn *hwfn,
 
 	/* TODO - at the moment assume supported and advertised speed equal */
 	if_link->supported_caps = QED_LM_FIBRE_BIT;
-	if (params.speed.autoneg)
+	if (link_caps.default_speed_autoneg)
 		if_link->supported_caps |= QED_LM_Autoneg_BIT;
 	if (params.pause.autoneg ||
 	    (params.pause.forced_rx && params.pause.forced_tx))
@@ -1382,6 +1384,10 @@ static void qed_fill_link(struct qed_hwfn *hwfn,
 		if_link->supported_caps |= QED_LM_Pause_BIT;
 
 	if_link->advertised_caps = if_link->supported_caps;
+	if (params.speed.autoneg)
+		if_link->advertised_caps |= QED_LM_Autoneg_BIT;
+	else
+		if_link->advertised_caps &= ~QED_LM_Autoneg_BIT;
 	if (params.speed.advertised_speeds &
 	    NVM_CFG1_PORT_DRV_SPEED_CAPABILITY_MASK_1G)
 		if_link->advertised_caps |= QED_LM_1000baseT_Half_BIT |
@@ -1521,7 +1527,7 @@ static void qed_get_coalesce(struct qed_dev *cdev, u16 *rx_coal, u16 *tx_coal)
 }
 
 static int qed_set_coalesce(struct qed_dev *cdev, u16 rx_coal, u16 tx_coal,
-			    u8 qid, u16 sb_id)
+			    u16 qid, u16 sb_id)
 {
 	struct qed_hwfn *hwfn;
 	struct qed_ptt *ptt;
@@ -1724,7 +1730,8 @@ void qed_get_protocol_stats(struct qed_dev *cdev,
 		qed_get_protocol_stats_iscsi(cdev, &stats->iscsi_stats);
 		break;
 	default:
-		DP_ERR(cdev, "Invalid protocol type = %d\n", type);
+		DP_VERBOSE(cdev, QED_MSG_SP,
+			   "Invalid protocol type = %d\n", type);
 		return;
 	}
 }
