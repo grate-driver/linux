@@ -337,9 +337,12 @@ static void timeout_release_mlock(struct host1x_cdma *cdma)
 	/*
 	 * On Tegra186, there is no register to unlock an MLOCK (don't ask me
 	 * why). As such, we have to execute a release_mlock instruction to
-	 * do it. We do this by backing up just enough of the current push
-	 * buffer, replacing it with a opcode sequence to do the unlocking,
-	 * executing it, and again restoring the original contents.
+	 * do it. We do this by backing up the first three opcodes of the
+	 * pushbuffer and replacing them with our own short sequence to do
+	 * the unlocking. We set the .pos field to 12, which causes DMAEND
+	 * to be set accordingly such that only the three opcodes we set
+	 * here are executed before CDMA stops. Finally we restore the value
+	 * of pos and pushbuffer contents.
 	 */
 
 	pb_pos = cdma->push_buffer.pos;
