@@ -724,6 +724,44 @@ static void bfq_updated_next_req(struct bfq_data *bfqd,
 	}
 }
 
+static unsigned int bfq_wr_duration(struct bfq_data *bfqd)
+{
+	u64 dur;
+
+	if (bfqd->bfq_wr_max_time > 0)
+		return bfqd->bfq_wr_max_time;
+
+	dur = bfqd->RT_prod;
+	do_div(dur, bfqd->peak_rate);
+
+	/*
+	 * Limit duration between 3 and 13 seconds. Tests show that
+	 * higher values than 13 seconds often yield the opposite of
+	 * the desired result, i.e., worsen responsiveness by letting
+	 * non-interactive and non-soft-real-time applications
+	 * preserve weight raising for a too long time interval.
+	 *
+	 * On the other end, lower values than 3 seconds make it
+	 * difficult for most interactive tasks to complete their jobs
+	 * before weight-raising finishes.
+	 */
+	if (dur > msecs_to_jiffies(13000))
+		dur = msecs_to_jiffies(13000);
+	else if (dur < msecs_to_jiffies(3000))
+		dur = msecs_to_jiffies(3000);
+
+	return dur;
+}
+
+/* switch back from soft real-time to interactive weight raising */
+static void switch_back_to_interactive_wr(struct bfq_queue *bfqq,
+					  struct bfq_data *bfqd)
+{
+	bfqq->wr_coeff = bfqd->bfq_wr_coeff;
+	bfqq->wr_cur_max_time = bfq_wr_duration(bfqd);
+	bfqq->last_wr_start_finish = bfqq->wr_start_at_switch_to_srt;
+}
+
 static void
 bfq_bfqq_resume_state(struct bfq_queue *bfqq, struct bfq_data *bfqd,
 		      struct bfq_io_cq *bic, bool bfq_already_existing)
@@ -750,10 +788,16 @@ bfq_bfqq_resume_state(struct bfq_queue *bfqq, struct bfq_data *bfqd,
 	if (bfqq->wr_coeff > 1 && (bfq_bfqq_in_large_burst(bfqq) ||
 	    time_is_before_jiffies(bfqq->last_wr_start_finish +
 				   bfqq->wr_cur_max_time))) {
-		bfq_log_bfqq(bfqq->bfqd, bfqq,
-		    "resume state: switching off wr");
-
-		bfqq->wr_coeff = 1;
+		if (bfqq->wr_cur_max_time == bfqd->bfq_wr_rt_max_time &&
+		    !bfq_bfqq_in_large_burst(bfqq) &&
+		    time_is_after_eq_jiffies(bfqq->wr_start_at_switch_to_srt +
+					     bfq_wr_duration(bfqd))) {
+			switch_back_to_interactive_wr(bfqq, bfqd);
+		} else {
+			bfqq->wr_coeff = 1;
+			bfq_log_bfqq(bfqq->bfqd, bfqq,
+				     "resume state: switching off wr");
+		}
 	}
 
 	/* make sure weight will be updated, however we got here */
@@ -1173,33 +1217,22 @@ static bool bfq_bfqq_update_budg_for_activation(struct bfq_data *bfqd,
 	return wr_or_deserves_wr;
 }
 
-static unsigned int bfq_wr_duration(struct bfq_data *bfqd)
+/*
+ * Return the farthest future time instant according to jiffies
+ * macros.
+ */
+static unsigned long bfq_greatest_from_now(void)
 {
-	u64 dur;
+	return jiffies + MAX_JIFFY_OFFSET;
+}
 
-	if (bfqd->bfq_wr_max_time > 0)
-		return bfqd->bfq_wr_max_time;
-
-	dur = bfqd->RT_prod;
-	do_div(dur, bfqd->peak_rate);
-
-	/*
-	 * Limit duration between 3 and 13 seconds. Tests show that
-	 * higher values than 13 seconds often yield the opposite of
-	 * the desired result, i.e., worsen responsiveness by letting
-	 * non-interactive and non-soft-real-time applications
-	 * preserve weight raising for a too long time interval.
-	 *
-	 * On the other end, lower values than 3 seconds make it
-	 * difficult for most interactive tasks to complete their jobs
-	 * before weight-raising finishes.
-	 */
-	if (dur > msecs_to_jiffies(13000))
-		dur = msecs_to_jiffies(13000);
-	else if (dur < msecs_to_jiffies(3000))
-		dur = msecs_to_jiffies(3000);
-
-	return dur;
+/*
+ * Return the farthest past time instant according to jiffies
+ * macros.
+ */
+static unsigned long bfq_smallest_from_now(void)
+{
+	return jiffies - MAX_JIFFY_OFFSET;
 }
 
 static void bfq_update_bfqq_wr_on_rq_arrival(struct bfq_data *bfqd,
@@ -1216,7 +1249,19 @@ static void bfq_update_bfqq_wr_on_rq_arrival(struct bfq_data *bfqd,
 			bfqq->wr_coeff = bfqd->bfq_wr_coeff;
 			bfqq->wr_cur_max_time = bfq_wr_duration(bfqd);
 		} else {
-			bfqq->wr_start_at_switch_to_srt = jiffies;
+			/*
+			 * No interactive weight raising in progress
+			 * here: assign minus infinity to
+			 * wr_start_at_switch_to_srt, to make sure
+			 * that, at the end of the soft-real-time
+			 * weight raising periods that is starting
+			 * now, no interactive weight-raising period
+			 * may be wrongly considered as still in
+			 * progress (and thus actually started by
+			 * mistake).
+			 */
+			bfqq->wr_start_at_switch_to_srt =
+				bfq_smallest_from_now();
 			bfqq->wr_coeff = bfqd->bfq_wr_coeff *
 				BFQ_SOFTRT_WEIGHT_FACTOR;
 			bfqq->wr_cur_max_time =
@@ -2016,10 +2061,27 @@ static void bfq_bfqq_save_state(struct bfq_queue *bfqq)
 	bic->saved_IO_bound = bfq_bfqq_IO_bound(bfqq);
 	bic->saved_in_large_burst = bfq_bfqq_in_large_burst(bfqq);
 	bic->was_in_burst_list = !hlist_unhashed(&bfqq->burst_list_node);
-	bic->saved_wr_coeff = bfqq->wr_coeff;
-	bic->saved_wr_start_at_switch_to_srt = bfqq->wr_start_at_switch_to_srt;
-	bic->saved_last_wr_start_finish = bfqq->last_wr_start_finish;
-	bic->saved_wr_cur_max_time = bfqq->wr_cur_max_time;
+	if (unlikely(bfq_bfqq_just_created(bfqq) &&
+		     !bfq_bfqq_in_large_burst(bfqq))) {
+		/*
+		 * bfqq being merged right after being created: bfqq
+		 * would have deserved interactive weight raising, but
+		 * did not make it to be set in a weight-raised state,
+		 * because of this early merge.	Store directly the
+		 * weight-raising state that would have been assigned
+		 * to bfqq, so that to avoid that bfqq unjustly fails
+		 * to enjoy weight raising if split soon.
+		 */
+		bic->saved_wr_coeff = bfqq->bfqd->bfq_wr_coeff;
+		bic->saved_wr_cur_max_time = bfq_wr_duration(bfqq->bfqd);
+		bic->saved_last_wr_start_finish = jiffies;
+	} else {
+		bic->saved_wr_coeff = bfqq->wr_coeff;
+		bic->saved_wr_start_at_switch_to_srt =
+			bfqq->wr_start_at_switch_to_srt;
+		bic->saved_last_wr_start_finish = bfqq->last_wr_start_finish;
+		bic->saved_wr_cur_max_time = bfqq->wr_cur_max_time;
+	}
 }
 
 static void
@@ -2897,24 +2959,6 @@ static unsigned long bfq_bfqq_softrt_next_start(struct bfq_data *bfqd,
 		   jiffies + nsecs_to_jiffies(bfqq->bfqd->bfq_slice_idle) + 4);
 }
 
-/*
- * Return the farthest future time instant according to jiffies
- * macros.
- */
-static unsigned long bfq_greatest_from_now(void)
-{
-	return jiffies + MAX_JIFFY_OFFSET;
-}
-
-/*
- * Return the farthest past time instant according to jiffies
- * macros.
- */
-static unsigned long bfq_smallest_from_now(void)
-{
-	return jiffies - MAX_JIFFY_OFFSET;
-}
-
 /**
  * bfq_bfqq_expire - expire a queue.
  * @bfqd: device owning the queue.
@@ -3489,11 +3533,7 @@ static void bfq_update_wr_data(struct bfq_data *bfqd, struct bfq_queue *bfqq)
 					       bfq_wr_duration(bfqd)))
 				bfq_bfqq_end_wr(bfqq);
 			else {
-				/* switch back to interactive wr */
-				bfqq->wr_coeff = bfqd->bfq_wr_coeff;
-				bfqq->wr_cur_max_time = bfq_wr_duration(bfqd);
-				bfqq->last_wr_start_finish =
-					bfqq->wr_start_at_switch_to_srt;
+				switch_back_to_interactive_wr(bfqq, bfqd);
 				bfqq->entity.prio_changed = 1;
 			}
 		}
@@ -3685,16 +3725,10 @@ void bfq_put_queue(struct bfq_queue *bfqq)
 	if (bfqq->ref)
 		return;
 
-	if (bfq_bfqq_sync(bfqq))
-		/*
-		 * The fact that this queue is being destroyed does not
-		 * invalidate the fact that this queue may have been
-		 * activated during the current burst. As a consequence,
-		 * although the queue does not exist anymore, and hence
-		 * needs to be removed from the burst list if there,
-		 * the burst size has not to be decremented.
-		 */
+	if (bfq_bfqq_sync(bfqq) && !hlist_unhashed(&bfqq->burst_list_node)) {
 		hlist_del_init(&bfqq->burst_list_node);
+		bfqq->bfqd->burst_size--;
+	}
 
 	kmem_cache_free(bfq_pool, bfqq);
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
@@ -4127,7 +4161,6 @@ static void __bfq_insert_request(struct bfq_data *bfqd, struct request *rq)
 		new_bfqq->allocated++;
 		bfqq->allocated--;
 		new_bfqq->ref++;
-		bfq_clear_bfqq_just_created(bfqq);
 		/*
 		 * If the bic associated with the process
 		 * issuing this request still points to bfqq
@@ -4139,6 +4172,8 @@ static void __bfq_insert_request(struct bfq_data *bfqd, struct request *rq)
 		if (bic_to_bfqq(RQ_BIC(rq), 1) == bfqq)
 			bfq_merge_bfqqs(bfqd, RQ_BIC(rq),
 					bfqq, new_bfqq);
+
+		bfq_clear_bfqq_just_created(bfqq);
 		/*
 		 * rq is about to be enqueued into new_bfqq,
 		 * release rq reference on bfqq

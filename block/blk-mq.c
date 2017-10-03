@@ -476,6 +476,9 @@ void blk_mq_free_request(struct request *rq)
 	if (rq->rq_flags & RQF_MQ_INFLIGHT)
 		atomic_dec(&hctx->nr_active);
 
+	if (unlikely(laptop_mode && !blk_rq_is_passthrough(rq)))
+		laptop_io_completion(q->backing_dev_info);
+
 	wbt_done(q->rq_wb, &rq->issue_stat);
 
 	clear_bit(REQ_ATOM_STARTED, &rq->atomic_flags);
@@ -1502,12 +1505,6 @@ static void blk_mq_bio_to_request(struct request *rq, struct bio *bio)
 	blk_init_request_from_bio(rq, bio);
 
 	blk_account_io_start(rq, true);
-}
-
-static inline bool hctx_allow_merges(struct blk_mq_hw_ctx *hctx)
-{
-	return (hctx->flags & BLK_MQ_F_SHOULD_MERGE) &&
-		!blk_queue_nomerges(hctx->queue);
 }
 
 static inline void blk_mq_queue_io(struct blk_mq_hw_ctx *hctx,

@@ -53,6 +53,7 @@ struct wb_writeback_work {
 	unsigned int for_background:1;
 	unsigned int for_sync:1;	/* sync(2) WB_SYNC_ALL writeback */
 	unsigned int auto_free:1;	/* free on completion */
+	unsigned int start_all:1;	/* nr_pages == 0 (all) writeback */
 	enum wb_reason reason;		/* why was writeback initiated? */
 
 	struct list_head list;		/* pending work list */
@@ -933,13 +934,37 @@ static void bdi_split_work_to_wbs(struct backing_dev_info *bdi,
 
 #endif	/* CONFIG_CGROUP_WRITEBACK */
 
-void wb_start_writeback(struct bdi_writeback *wb, long nr_pages,
-			bool range_cyclic, enum wb_reason reason)
+/*
+ * Add in the number of potentially dirty inodes, because each inode
+ * write can dirty pagecache in the underlying blockdev.
+ */
+static unsigned long get_nr_dirty_pages(void)
+{
+	return global_node_page_state(NR_FILE_DIRTY) +
+		global_node_page_state(NR_UNSTABLE_NFS) +
+		get_nr_dirty_inodes();
+}
+
+static void wb_start_writeback(struct bdi_writeback *wb, enum wb_reason reason)
 {
 	struct wb_writeback_work *work;
 
 	if (!wb_has_dirty_io(wb))
 		return;
+
+	/*
+	 * All callers of this function want to start writeback of all
+	 * dirty pages. Places like vmscan can call this at a very
+	 * high frequency, causing pointless allocations of tons of
+	 * work items and keeping the flusher threads busy retrieving
+	 * that work. Ensure that we only allow one of them pending and
+	 * inflight at the time. It doesn't matter if we race a little
+	 * bit on this, so use the faster separate test/set bit variants.
+	 */
+	if (test_bit(WB_start_all, &wb->state))
+		return;
+
+	set_bit(WB_start_all, &wb->state);
 
 	/*
 	 * This is WB_SYNC_NONE writeback, so if allocation fails just
@@ -948,16 +973,18 @@ void wb_start_writeback(struct bdi_writeback *wb, long nr_pages,
 	work = kzalloc(sizeof(*work),
 		       GFP_NOWAIT | __GFP_NOMEMALLOC | __GFP_NOWARN);
 	if (!work) {
+		clear_bit(WB_start_all, &wb->state);
 		trace_writeback_nowork(wb);
 		wb_wakeup(wb);
 		return;
 	}
 
 	work->sync_mode	= WB_SYNC_NONE;
-	work->nr_pages	= nr_pages;
-	work->range_cyclic = range_cyclic;
+	work->nr_pages	= wb_split_bdi_pages(wb, get_nr_dirty_pages());
+	work->range_cyclic = 1;
 	work->reason	= reason;
 	work->auto_free	= 1;
+	work->start_all = 1;
 
 	wb_queue_work(wb, work);
 }
@@ -1811,18 +1838,15 @@ static struct wb_writeback_work *get_next_work_item(struct bdi_writeback *wb)
 		list_del_init(&work->list);
 	}
 	spin_unlock_bh(&wb->work_lock);
-	return work;
-}
 
-/*
- * Add in the number of potentially dirty inodes, because each inode
- * write can dirty pagecache in the underlying blockdev.
- */
-static unsigned long get_nr_dirty_pages(void)
-{
-	return global_node_page_state(NR_FILE_DIRTY) +
-		global_node_page_state(NR_UNSTABLE_NFS) +
-		get_nr_dirty_inodes();
+	/*
+	 * Once we start processing a work item that had !nr_pages,
+	 * clear the wb state bit for that so we can allow more.
+	 */
+	if (work && work->start_all)
+		clear_bit(WB_start_all, &wb->state);
+
+	return work;
 }
 
 static long wb_check_background_flush(struct bdi_writeback *wb)
@@ -1947,10 +1971,33 @@ void wb_workfn(struct work_struct *work)
 }
 
 /*
- * Start writeback of `nr_pages' pages.  If `nr_pages' is zero, write back
- * the whole world.
+ * Start writeback of `nr_pages' pages on this bdi. If `nr_pages' is zero,
+ * write back the whole world.
  */
-void wakeup_flusher_threads(long nr_pages, enum wb_reason reason)
+static void __wakeup_flusher_threads_bdi(struct backing_dev_info *bdi,
+					 enum wb_reason reason)
+{
+	struct bdi_writeback *wb;
+
+	if (!bdi_has_dirty_io(bdi))
+		return;
+
+	list_for_each_entry_rcu(wb, &bdi->wb_list, bdi_node)
+		wb_start_writeback(wb, reason);
+}
+
+void wakeup_flusher_threads_bdi(struct backing_dev_info *bdi,
+				enum wb_reason reason)
+{
+	rcu_read_lock();
+	__wakeup_flusher_threads_bdi(bdi, reason);
+	rcu_read_unlock();
+}
+
+/*
+ * Wakeup the flusher threads to start writeback of all currently dirty pages
+ */
+void wakeup_flusher_threads(enum wb_reason reason)
 {
 	struct backing_dev_info *bdi;
 
@@ -1960,20 +2007,9 @@ void wakeup_flusher_threads(long nr_pages, enum wb_reason reason)
 	if (blk_needs_flush_plug(current))
 		blk_schedule_flush_plug(current);
 
-	if (!nr_pages)
-		nr_pages = get_nr_dirty_pages();
-
 	rcu_read_lock();
-	list_for_each_entry_rcu(bdi, &bdi_list, bdi_list) {
-		struct bdi_writeback *wb;
-
-		if (!bdi_has_dirty_io(bdi))
-			continue;
-
-		list_for_each_entry_rcu(wb, &bdi->wb_list, bdi_node)
-			wb_start_writeback(wb, wb_split_bdi_pages(wb, nr_pages),
-					   false, reason);
-	}
+	list_for_each_entry_rcu(bdi, &bdi_list, bdi_list)
+		__wakeup_flusher_threads_bdi(bdi, reason);
 	rcu_read_unlock();
 }
 
