@@ -360,7 +360,7 @@ static void timeout_release_mlock(struct host1x_cdma *cdma)
 	cdma_resume(cdma, 0);
 
 	/* Wait until the release_mlock opcode has been executed */
-	err = readl_poll_timeout(
+	err = readl_relaxed_poll_timeout(
 		host->hv_regs + HOST1X_HV_MLOCK(mlock_id), val,
 		!HOST1X_HV_MLOCK_LOCKED_V(val) ||
 			HOST1X_HV_MLOCK_CH_V(val) != ch->id,
