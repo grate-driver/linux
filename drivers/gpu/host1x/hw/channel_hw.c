@@ -187,7 +187,7 @@ static int channel_submit(struct host1x_job *job)
 	if (job->class) {
 		/*
 		 * Push additional increment to catch jobs that crash before
-		 * finishing their gather (and thus reaching the MLOCK release).
+		 * finishing their gather, not reaching the unlock opcode.
 		 */
 		syncval = host1x_syncpt_incr_max(sp, 1);
 		host1x_cdma_push(&ch->cdma,
