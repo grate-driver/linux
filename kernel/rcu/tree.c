@@ -947,7 +947,7 @@ void rcu_irq_exit_irqson(void)
  * we really have exited idle, and must do the appropriate accounting.
  * The caller must have disabled interrupts.
  */
-static void rcu_eqs_exit_common(long long newval, int user)
+static void rcu_eqs_exit_common(long newval, int user)
 {
 	RCU_TRACE(struct rcu_dynticks *rdtp = this_cpu_ptr(&rcu_dynticks);)
 
@@ -980,7 +980,7 @@ static void rcu_eqs_exit_common(long long newval, int user)
 static void rcu_eqs_exit(bool user)
 {
 	struct rcu_dynticks *rdtp;
-	long long oldval;
+	long oldval;
 
 	RCU_LOCKDEP_WARN(!irqs_disabled(), "rcu_eqs_exit() invoked with irqs enabled!!!");
 	rdtp = this_cpu_ptr(&rcu_dynticks);
@@ -1044,7 +1044,7 @@ void rcu_user_exit(void)
 void rcu_nmi_enter(void)
 {
 	struct rcu_dynticks *rdtp = this_cpu_ptr(&rcu_dynticks);
-	int incby = 2;
+	long incby = 2;
 
 	/* Complain about underflow. */
 	WARN_ON_ONCE(rdtp->dynticks_nmi_nesting < 0);
