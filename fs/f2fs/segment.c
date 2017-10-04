@@ -1196,12 +1196,13 @@ skip:
 	return issued;
 }
 
-static void __drop_discard_cmd(struct f2fs_sb_info *sbi)
+static bool __drop_discard_cmd(struct f2fs_sb_info *sbi)
 {
 	struct discard_cmd_control *dcc = SM_I(sbi)->dcc_info;
 	struct list_head *pend_list;
 	struct discard_cmd *dc, *tmp;
 	int i;
+	bool dropped = false;
 
 	mutex_lock(&dcc->cmd_lock);
 	for (i = MAX_PLIST_NUM - 1; i >= 0; i--) {
@@ -1209,9 +1210,12 @@ static void __drop_discard_cmd(struct f2fs_sb_info *sbi)
 		list_for_each_entry_safe(dc, tmp, pend_list, list) {
 			f2fs_bug_on(sbi, dc->state != D_PREP);
 			__remove_discard_cmd(sbi, dc);
+			dropped = true;
 		}
 	}
 	mutex_unlock(&dcc->cmd_lock);
+
+	return dropped;
 }
 
 static void __wait_one_discard_bio(struct f2fs_sb_info *sbi,
@@ -1306,15 +1310,18 @@ void stop_discard_thread(struct f2fs_sb_info *sbi)
 }
 
 /* This comes from f2fs_put_super */
-void f2fs_wait_discard_bios(struct f2fs_sb_info *sbi)
+bool f2fs_wait_discard_bios(struct f2fs_sb_info *sbi)
 {
 	struct discard_cmd_control *dcc = SM_I(sbi)->dcc_info;
 	struct discard_policy dpolicy;
+	bool dropped;
 
 	init_discard_policy(&dpolicy, DPOLICY_UMOUNT, dcc->discard_granularity);
 	__issue_discard_cmd(sbi, &dpolicy);
-	__drop_discard_cmd(sbi);
+	dropped = __drop_discard_cmd(sbi);
 	__wait_all_discard_cmd(sbi, &dpolicy);
+
+	return dropped;
 }
 
 static int issue_discard_thread(void *data)
@@ -1659,7 +1666,7 @@ void init_discard_policy(struct discard_policy *dpolicy,
 		dpolicy->max_interval = DEF_MAX_DISCARD_ISSUE_TIME;
 		dpolicy->max_requests = DEF_MAX_DISCARD_REQUEST;
 		dpolicy->io_aware_gran = MAX_PLIST_NUM;
-		dpolicy->io_aware = false;
+		dpolicy->io_aware = true;
 	} else if (discard_type == DPOLICY_FSTRIM) {
 		dpolicy->max_requests = DEF_MAX_DISCARD_REQUEST;
 		dpolicy->io_aware_gran = MAX_PLIST_NUM;
