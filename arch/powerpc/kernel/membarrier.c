@@ -19,24 +19,15 @@
 #include <linux/thread_info.h>
 #include <linux/spinlock.h>
 #include <linux/rcupdate.h>
+#include <linux/atomic.h>
 
 void membarrier_arch_register_private_expedited(struct task_struct *p)
 {
-	struct task_struct *t;
+	struct mm_struct *mm = p->mm;
 
-	if (get_nr_threads(p) == 1) {
-		set_thread_flag(TIF_MEMBARRIER_PRIVATE_EXPEDITED);
+	atomic_or(MEMBARRIER_STATE_SWITCH_MM, &mm->membarrier_state);
+	if (atomic_read(&mm->mm_users) == 1 && get_nr_threads(p) == 1)
 		return;
-	}
-	/*
-	 * Coherence of TIF_MEMBARRIER_PRIVATE_EXPEDITED against thread
-	 * fork is protected by siglock.
-	 */
-	spin_lock(&p->sighand->siglock);
-	for_each_thread(p, t)
-		set_ti_thread_flag(task_thread_info(t),
-				TIF_MEMBARRIER_PRIVATE_EXPEDITED);
-	spin_unlock(&p->sighand->siglock);
 	/*
 	 * Ensure all future scheduler executions will observe the new
 	 * thread flag state for this process.

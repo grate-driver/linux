@@ -446,7 +446,7 @@ struct mm_struct {
 
 	struct core_state *core_state; /* coredumping support */
 #ifdef CONFIG_MEMBARRIER
-	int membarrier_private_expedited;
+	atomic_t membarrier_state;
 #endif
 #ifdef CONFIG_AIO
 	spinlock_t			ioctx_lock;

@@ -18,6 +18,7 @@
 #include <linux/membarrier.h>
 #include <linux/tick.h>
 #include <linux/cpumask.h>
+#include <linux/atomic.h>
 
 #include "sched.h"	/* for cpu_rq(). */
 
@@ -40,7 +41,8 @@ static int membarrier_private_expedited(void)
 	bool fallback = false;
 	cpumask_var_t tmpmask;
 
-	if (!READ_ONCE(current->mm->membarrier_private_expedited))
+	if (!(atomic_read(&current->mm->membarrier_state)
+			& MEMBARRIER_STATE_PRIVATE_EXPEDITED_READY))
 		return -EPERM;
 
 	if (num_online_cpus() == 1)
@@ -104,11 +106,19 @@ static int membarrier_private_expedited(void)
 static void membarrier_register_private_expedited(void)
 {
 	struct task_struct *p = current;
+	struct mm_struct *mm = p->mm;
 
-	if (READ_ONCE(p->mm->membarrier_private_expedited))
+	/*
+	 * We need to consider threads belonging to different thread
+	 * groups, which use the same mm. (CLONE_VM but not
+	 * CLONE_THREAD).
+	 */
+	if (atomic_read(&mm->membarrier_state)
+			& MEMBARRIER_STATE_PRIVATE_EXPEDITED_READY)
 		return;
 	membarrier_arch_register_private_expedited(p);
-	WRITE_ONCE(p->mm->membarrier_private_expedited, 1);
+	atomic_or(MEMBARRIER_STATE_PRIVATE_EXPEDITED_READY,
+			&mm->membarrier_state);
 }
 
 /**

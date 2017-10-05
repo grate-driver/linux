@@ -218,35 +218,23 @@ static inline void memalloc_noreclaim_restore(unsigned int flags)
 
 #ifdef CONFIG_MEMBARRIER
 
+enum {
+	MEMBARRIER_STATE_PRIVATE_EXPEDITED_READY	= (1U << 0),
+	MEMBARRIER_STATE_SWITCH_MM			= (1U << 1),
+};
+
 #ifdef CONFIG_ARCH_HAS_MEMBARRIER_HOOKS
 #include <asm/membarrier.h>
 #else
-static inline void membarrier_arch_fork(struct task_struct *t,
-		unsigned long clone_flags)
-{
-}
-static inline void membarrier_arch_execve(struct task_struct *t)
-{
-}
 static inline void membarrier_arch_register_private_expedited(
 		struct task_struct *p)
 {
 }
 #endif
 
-static inline void membarrier_fork(struct task_struct *t,
-		unsigned long clone_flags)
-{
-	/*
-	 * Prior copy_mm() copies the membarrier_private_expedited field
-	 * from current->mm to t->mm.
-	 */
-	membarrier_arch_fork(t, clone_flags);
-}
 static inline void membarrier_execve(struct task_struct *t)
 {
-	t->mm->membarrier_private_expedited = 0;
-	membarrier_arch_execve(t);
+	atomic_set(&t->mm->membarrier_state, 0);
 }
 #else
 #ifdef CONFIG_ARCH_HAS_MEMBARRIER_HOOKS
@@ -255,10 +243,6 @@ static inline void membarrier_arch_switch_mm(struct mm_struct *prev,
 {
 }
 #endif
-static inline void membarrier_fork(struct task_struct *t,
-		unsigned long clone_flags)
-{
-}
 static inline void membarrier_execve(struct task_struct *t)
 {
 }
