@@ -221,10 +221,6 @@ static inline void memalloc_noreclaim_restore(unsigned int flags)
 #ifdef CONFIG_ARCH_HAS_MEMBARRIER_HOOKS
 #include <asm/membarrier.h>
 #else
-static inline void membarrier_arch_switch_mm(struct mm_struct *prev,
-		struct mm_struct *next, struct task_struct *tsk)
-{
-}
 static inline void membarrier_arch_fork(struct task_struct *t,
 		unsigned long clone_flags)
 {
@@ -253,10 +249,12 @@ static inline void membarrier_execve(struct task_struct *t)
 	membarrier_arch_execve(t);
 }
 #else
+#ifdef CONFIG_ARCH_HAS_MEMBARRIER_HOOKS
 static inline void membarrier_arch_switch_mm(struct mm_struct *prev,
 		struct mm_struct *next, struct task_struct *tsk)
 {
 }
+#endif
 static inline void membarrier_fork(struct task_struct *t,
 		unsigned long clone_flags)
 {
