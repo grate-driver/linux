@@ -8,12 +8,58 @@ config PRINTK_TIME
 	  messages to be added to the output of the syslog() system
 	  call and at the console.
 
+choice
+	prompt "printk default clock timestamp" if PRINTK_TIME
+	default PRINTK_TIME_LOCAL if PRINTK_TIME
+	help
+	  This option is selected by setting one of
+	  PRINTK_TIME_[DISABLE|LOCAL|BOOT|MONO|REAL] and causes time stamps of
+	  the printk() messages to be added to the output of the syslog()
+	  system call and at the console.
+
 	  The timestamp is always recorded internally, and exported
 	  to /dev/kmsg. This flag just specifies if the timestamp should
 	  be included, not that the timestamp is recorded.
 
 	  The behavior is also controlled by the kernel command line
-	  parameter printk.time=1. See Documentation/admin-guide/kernel-parameters.rst
+	  parameter printk.time. See
+	  Documentation/admin-guide/kernel-parameters.rst
+
+config PRINTK_TIME_LOCAL
+	bool "Local Clock"
+	help
+	  Selecting this option causes the time stamps of printk() to be
+	  stamped with the unadjusted hardware clock.
+
+config PRINTK_TIME_BOOT
+	bool "Boot Time Clock"
+	help
+	  Selecting this option causes the time stamps of printk() to be
+	  stamped with the adjusted boottime clock.
+
+config PRINTK_TIME_MONO
+	bool "Monotonic Clock"
+	help
+	  Selecting this option causes the time stamps of printk() to be
+	  stamped with the adjusted monotonic clock.
+
+config PRINTK_TIME_REAL
+	bool "Real Time Clock"
+	help
+	  Selecting this option causes the time stamps of printk() to be
+	  stamped with the adjusted realtime clock (UTC).
+endchoice
+
+config PRINTK_TIME_TYPE
+	int
+	depends on PRINTK
+	range 0 4
+	default 0 if !PRINTK_TIME
+	default 1 if PRINTK_TIME_LOCAL
+	default 2 if PRINTK_TIME_BOOT
+	default 3 if PRINTK_TIME_MONO
+	default 4 if PRINTK_TIME_REAL
+
 
 config CONSOLE_LOGLEVEL_DEFAULT
 	int "Default console loglevel (1-15)"
