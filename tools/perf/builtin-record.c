@@ -863,7 +863,7 @@ static int record__synthesize(struct record *rec, bool tail)
 
 	err = __machine__synthesize_threads(machine, tool, &opts->target, rec->evlist->threads,
 					    process_synthesized_event, opts->sample_address,
-					    opts->proc_map_timeout);
+					    opts->proc_map_timeout, 1);
 out:
 	return err;
 }
@@ -1641,6 +1641,9 @@ static struct option __record_options[] = {
 	OPT_BOOLEAN(0, "per-thread", &record.opts.target.per_thread,
 		    "use per-thread mmaps"),
 	OPT_CALLBACK_OPTARG('I', "intr-regs", &record.opts.sample_intr_regs, NULL, "any register",
+		    "sample selected machine registers on interrupt,"
+		    " use -I ? to list register names", parse_regs),
+	OPT_CALLBACK_OPTARG(0, "user-regs", &record.opts.sample_user_regs, NULL, "any register",
 		    "sample selected machine registers on interrupt,"
 		    " use -I ? to list register names", parse_regs),
 	OPT_BOOLEAN(0, "running-time", &record.opts.running_time,
