@@ -693,13 +693,17 @@ else
 endif
 endif
 endif
+# If stack-protection was requested (and available, in the case of _AUTO),
+# then prepare the build for it being enabled.
 ifdef stackp-name
-  # If the stack protector has been selected, inform the rest of the build.
+ifneq ($(stackp-flag),)
+  # If the stack protector is active, enable code that depends on it.
   KBUILD_CFLAGS += -DCONFIG_CC_STACKPROTECTOR
   KBUILD_AFLAGS += -DCONFIG_CC_STACKPROTECTOR
   # Find arch-specific stack protector compiler sanity-checking script.
   stackp-path := $(srctree)/scripts/gcc-$(SRCARCH)_$(BITS)-has-stack-protector.sh
   stackp-check := $(wildcard $(stackp-path))
+endif
 endif
 KBUILD_CFLAGS += $(stackp-flag)
 
