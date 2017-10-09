@@ -3260,7 +3260,7 @@ int copy_hugetlb_page_range(struct mm_struct *dst, struct mm_struct *src,
 				 * No need to notify as we downgrading page
 				 * table protection not changing it to point
 				 * to a new page.
-	 			 *
+				 *
 				 * See Documentation/vm/mmu_notifier.txt
 				 */
 				huge_ptep_set_wrprotect(src, addr, src_pte);
