@@ -853,7 +853,7 @@ ten times more freeable objects than there are.
 
 numa_stats_mode
 
-This interface allows numa statistics configurable.
+This interface allows runtime configuration or numa statistics.
 
 When page allocation performance becomes a bottleneck and you can tolerate
 some possible tool breakage and decreased numa counter precision, you can
@@ -864,13 +864,14 @@ When page allocation performance is not a bottleneck and you want all
 tooling to work, you can do:
 	echo [S|s]trict > /proc/sys/vm/numa_stat_mode
 
-We recommend automatic detection of numa statistics by system, because numa
-statistics does not affect system's decision and it is very rarely
-consumed. you can do:
+We recommend automatic detection of numa statistics by system, because
+numa statistics do not affect system decisions and it is very rarely
+consumed.  In this case you can do:
 	echo [A|a]uto > /proc/sys/vm/numa_stats_mode
-This is also system default configuration, with this default setting, numa
-counters update is skipped unless the counter is *read* by users at least
-once.
+
+This is the system default configuration.  With this default setting, numa
+counter updates are skipped until the counter is *read* by userspace at
+least once.
 
 ==============================================================
 

@@ -40,13 +40,11 @@ static DEFINE_MUTEX(vm_numa_stats_mode_lock);
 
 static int __parse_vm_numa_stats_mode(char *s)
 {
-	const char *str = s;
-
-	if (strcmp(str, "auto") == 0 || strcmp(str, "Auto") == 0)
+	if (strcasecmp(s, "auto"))
 		vm_numa_stats_mode = VM_NUMA_STAT_AUTO_MODE;
-	else if (strcmp(str, "strict") == 0 || strcmp(str, "Strict") == 0)
+	else if (strcasecmp(s, "strict") == 0)
 		vm_numa_stats_mode = VM_NUMA_STAT_STRICT_MODE;
-	else if (strcmp(str, "coarse") == 0 || strcmp(str, "Coarse") == 0)
+	else if (strcasecmp(s, "coarse"))
 		vm_numa_stats_mode = VM_NUMA_STAT_COARSE_MODE;
 	else {
 		pr_warn("Ignoring invalid vm_numa_stats_mode value: %s\n", s);
@@ -86,30 +84,29 @@ int sysctl_vm_numa_stats_mode_handler(struct ctl_table *table, int write,
 			/* no change */
 			mutex_unlock(&vm_numa_stats_mode_lock);
 			return 0;
-		} else if (vm_numa_stats_mode == VM_NUMA_STAT_AUTO_MODE)
+		} else if (vm_numa_stats_mode == VM_NUMA_STAT_AUTO_MODE) {
 			/*
-			 * Keep the branch selection in last time when numa stats
-			 * is changed to auto mode.
+			 * Keep the branch selection in last time when numa
+			 * stats is changed to auto mode.
 			 */
-			pr_info("numa stats changes from %s mode to auto mode\n",
-					vm_numa_stats_mode_name[oldval]);
-		else if (vm_numa_stats_mode == VM_NUMA_STAT_STRICT_MODE) {
+			pr_info("numa stats changed from %s to auto mode\n",
+				 vm_numa_stats_mode_name[oldval]);
+		} else if (vm_numa_stats_mode == VM_NUMA_STAT_STRICT_MODE) {
 			static_branch_enable(&vm_numa_stats_mode_key);
-			pr_info("numa stats changes from %s mode to strict mode\n",
-					vm_numa_stats_mode_name[oldval]);
+			pr_info("numa stats changes from %s to strict mode\n",
+				 vm_numa_stats_mode_name[oldval]);
 		} else if (vm_numa_stats_mode == VM_NUMA_STAT_COARSE_MODE) {
 			static_branch_disable(&vm_numa_stats_mode_key);
 			/*
-			 * Invalidate numa counters when vmstat mode is set to coarse
-			 * mode, because users can't tell the difference between the
-			 * dead state and when allocator activity is quiet once
-			 * zone_statistics() is turned off.
+			 * Invalidate numa counters when vmstat mode is set to
+			 * coarse mode, because users can't tell the difference
+			 * between the dead state and when allocator activity is
+			 * quiet once zone_statistics() is turned off.
 			 */
 			invalid_numa_statistics();
-			pr_info("numa stats changes from %s mode to coarse mode\n",
-					vm_numa_stats_mode_name[oldval]);
-		} else
-			pr_warn("invalid vm_numa_stats_mode:%d\n", vm_numa_stats_mode);
+			pr_info("numa stats changes from %s to coarse mode\n",
+				 vm_numa_stats_mode_name[oldval]);
+		}
 	}
 
 	mutex_unlock(&vm_numa_stats_mode_lock);
