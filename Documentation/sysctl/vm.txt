@@ -853,7 +853,7 @@ ten times more freeable objects than there are.
 
 numa_stats_mode
 
-This interface allows runtime configuration or numa statistics.
+This interface allows runtime configuration of numa statistics.
 
 When page allocation performance becomes a bottleneck and you can tolerate
 some possible tool breakage and decreased numa counter precision, you can
