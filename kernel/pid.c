@@ -68,9 +68,6 @@ static inline int mk_pid(struct pid_namespace *pid_ns,
  */
 struct pid_namespace init_pid_ns = {
 	.kref = KREF_INIT(2),
-	.pidmap = {
-		[ 0 ... PIDMAP_ENTRIES-1] = { ATOMIC_INIT(BITS_PER_PAGE), NULL }
-	},
 	.last_pid = 0,
 	.nr_hashed = PIDNS_HASH_ADDING,
 	.level = 0,
@@ -106,7 +103,6 @@ static void free_pidmap(struct upid *upid)
 	int offset = nr & BITS_PER_PAGE_MASK;
 
 	clear_bit(offset, map->page);
-	atomic_inc(&map->nr_free);
 }
 
 /*
@@ -181,20 +177,17 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 			if (unlikely(!map->page))
 				return -ENOMEM;
 		}
-		if (likely(atomic_read(&map->nr_free))) {
-			for ( ; ; ) {
-				if (!test_and_set_bit(offset, map->page)) {
-					atomic_dec(&map->nr_free);
-					set_last_pid(pid_ns, last, pid);
-					return pid;
-				}
-				offset = find_next_offset(map, offset);
-				if (offset >= BITS_PER_PAGE)
-					break;
-				pid = mk_pid(pid_ns, map, offset);
-				if (pid >= pid_max)
-					break;
+		for (;;) {
+			if (!test_and_set_bit(offset, map->page)) {
+				set_last_pid(pid_ns, last, pid);
+				return pid;
 			}
+			offset = find_next_offset(map, offset);
+			if (offset >= BITS_PER_PAGE)
+				break;
+			pid = mk_pid(pid_ns, map, offset);
+			if (pid >= pid_max)
+				break;
 		}
 		if (map < &pid_ns->pidmap[(pid_max-1)/BITS_PER_PAGE]) {
 			++map;
@@ -591,7 +584,6 @@ void __init pidmap_init(void)
 	init_pid_ns.pidmap[0].page = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	/* Reserve PID 0. We never call free_pidmap(0) */
 	set_bit(0, init_pid_ns.pidmap[0].page);
-	atomic_dec(&init_pid_ns.pidmap[0].nr_free);
 
 	init_pid_ns.pid_cachep = KMEM_CACHE(pid,
 			SLAB_HWCACHE_ALIGN | SLAB_PANIC | SLAB_ACCOUNT);
