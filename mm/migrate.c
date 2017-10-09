@@ -2929,7 +2929,7 @@ int migrate_vma(const struct migrate_vma_ops *ops,
 	start &= PAGE_MASK;
 	end &= PAGE_MASK;
 	if (!vma || is_vm_hugetlb_page(vma) || (vma->vm_flags & VM_SPECIAL)
-			|| vma_is_dax(dma))
+			|| vma_is_dax(vma))
 		return -EINVAL;
 	if (start < vma->vm_start || start >= vma->vm_end)
 		return -EINVAL;
