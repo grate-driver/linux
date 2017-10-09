@@ -197,4 +197,8 @@ struct prctl_mm_map {
 # define PR_CAP_AMBIENT_LOWER		3
 # define PR_CAP_AMBIENT_CLEAR_ALL	4
 
+/* Process-based variant of PDEATHSIG */
+#define PR_SET_PDEATHSIG_PROC		48
+#define PR_GET_PDEATHSIG_PROC		49
+
 #endif /* _LINUX_PRCTL_H */
