@@ -140,11 +140,10 @@ static int alloc_swap_slot_cache(unsigned int cpu)
 	if (cache->slots || cache->slots_ret)
 		/* cache already allocated */
 		goto out;
-	if (!cache->lock_initialized) {
-		mutex_init(&cache->alloc_lock);
-		spin_lock_init(&cache->free_lock);
-		cache->lock_initialized = true;
-	}
+
+	mutex_init(&cache->alloc_lock);
+	spin_lock_init(&cache->free_lock);
+
 	cache->nr = 0;
 	cache->cur = 0;
 	cache->n_ret = 0;
