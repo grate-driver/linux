@@ -223,8 +223,8 @@ int ipc_get_maxid(struct ipc_ids *ids)
  */
 #define ipc_idr_alloc(ids, new)						\
 	idr_alloc(&(ids)->ipcs_idr, (new),				\
-		  (ids)->next_id < 0 ? 0: ipcid_to_idx((ids)->next_id), \
-		  0, GFP_NOWAIT);
+		  (ids)->next_id < 0 ? 0 : ipcid_to_idx((ids)->next_id),\
+		  0, GFP_NOWAIT)
 
 static inline int ipc_buildid(int id, struct ipc_ids *ids,
 			      struct kern_ipc_perm *new)
@@ -243,7 +243,7 @@ static inline int ipc_buildid(int id, struct ipc_ids *ids,
 
 #else
 #define ipc_idr_alloc(ids, new)					\
-	idr_alloc(&(ids)->ipcs_idr, (new), 0, 0, GFP_NOWAIT);
+	idr_alloc(&(ids)->ipcs_idr, (new), 0, 0, GFP_NOWAIT)
 
 static inline int ipc_buildid(int id, struct ipc_ids *ids,
 			      struct kern_ipc_perm *new)
