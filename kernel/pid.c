@@ -48,9 +48,7 @@ struct pid init_struct_pid = INIT_STRUCT_PID;
 
 int pid_max = PID_MAX_DEFAULT;
 
-#define RESERVED_PIDS		300
-
-int pid_max_min = RESERVED_PIDS + 1;
+int pid_max_min = 301;
 int pid_max_max = PID_MAX_LIMIT;
 
 static inline int mk_pid(struct pid_namespace *pid_ns,
@@ -157,13 +155,13 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 
 	pid = last + 1;
 	if (pid >= pid_max)
-		pid = RESERVED_PIDS;
+		pid = 1;
 	offset = pid & BITS_PER_PAGE_MASK;
 	map = &pid_ns->pidmap[pid/BITS_PER_PAGE];
 	/*
 	 * If last_pid points into the middle of the map->page we
 	 * want to scan this bitmap block twice, the second time
-	 * we start with offset == 0 (or RESERVED_PIDS).
+	 * we start with offset == 0.
 	 */
 	max_scan = DIV_ROUND_UP(pid_max, BITS_PER_PAGE) - !offset;
 	for (i = 0; i <= max_scan; ++i) {
@@ -203,7 +201,7 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 			offset = 0;
 		} else {
 			map = &pid_ns->pidmap[0];
-			offset = RESERVED_PIDS;
+			offset = 1;
 			if (unlikely(last == offset))
 				break;
 		}
