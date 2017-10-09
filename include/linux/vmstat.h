@@ -6,8 +6,27 @@
 #include <linux/mmzone.h>
 #include <linux/vm_event_item.h>
 #include <linux/atomic.h>
+#include <linux/static_key.h>
 
 extern int sysctl_stat_interval;
+
+#ifdef CONFIG_NUMA
+DECLARE_STATIC_KEY_FALSE(vm_numa_stats_mode_key);
+/*
+ * vm_numa_stats_mode:
+ * 0 = auto mode of NUMA stats, automatic detection of NUMA statistics.
+ * 1 = strict mode of NUMA stats, keep NUMA statistics.
+ * 2 = coarse mode of NUMA stats, ignore NUMA statistics.
+ */
+#define VM_NUMA_STAT_AUTO_MODE 0
+#define VM_NUMA_STAT_STRICT_MODE  1
+#define VM_NUMA_STAT_COARSE_MODE  2
+#define VM_NUMA_STAT_MODE_LEN 16
+extern int vm_numa_stats_mode;
+extern char sysctl_vm_numa_stats_mode[];
+extern int sysctl_vm_numa_stats_mode_handler(struct ctl_table *table, int write,
+		void __user *buffer, size_t *length, loff_t *ppos);
+#endif
 
 #ifdef CONFIG_VM_EVENT_COUNTERS
 /*
@@ -229,6 +248,10 @@ extern unsigned long sum_zone_node_page_state(int node,
 extern unsigned long sum_zone_numa_state(int node, enum numa_stat_item item);
 extern unsigned long node_page_state(struct pglist_data *pgdat,
 						enum node_stat_item item);
+extern void zero_zone_numa_counters(struct zone *zone);
+extern void zero_zones_numa_counters(void);
+extern void zero_global_numa_counters(void);
+extern void invalid_numa_statistics(void);
 #else
 #define sum_zone_node_page_state(node, item) global_zone_page_state(item)
 #define node_page_state(node, item) global_node_page_state(item)

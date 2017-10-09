@@ -161,6 +161,8 @@ static DEVICE_ATTR(meminfo, S_IRUGO, node_read_meminfo, NULL);
 static ssize_t node_read_numastat(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
+	if (vm_numa_stats_mode == VM_NUMA_STAT_AUTO_MODE)
+		static_branch_enable(&vm_numa_stats_mode_key);
 	return sprintf(buf,
 		       "numa_hit %lu\n"
 		       "numa_miss %lu\n"
@@ -194,6 +196,8 @@ static ssize_t node_read_vmstat(struct device *dev,
 		n += sprintf(buf+n, "%s %lu\n",
 			     vmstat_text[i + NR_VM_ZONE_STAT_ITEMS],
 			     sum_zone_numa_state(nid, i));
+	if (vm_numa_stats_mode == VM_NUMA_STAT_AUTO_MODE)
+		static_branch_enable(&vm_numa_stats_mode_key);
 #endif
 
 	for (i = 0; i < NR_VM_NODE_STAT_ITEMS; i++)

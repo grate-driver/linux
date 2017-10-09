@@ -567,6 +567,9 @@ asmlinkage __visible void __init start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	mm_init();
+#ifdef CONFIG_NUMA
+	pr_info("vmstat: NUMA stats is skipped unless it has been consumed\n");
+#endif
 
 	ftrace_init();
 

@@ -32,6 +32,91 @@
 
 #define NUMA_STATS_THRESHOLD (U16_MAX - 2)
 
+#ifdef CONFIG_NUMA
+int vm_numa_stats_mode = VM_NUMA_STAT_AUTO_MODE;
+char sysctl_vm_numa_stats_mode[VM_NUMA_STAT_MODE_LEN] = "auto";
+static const char *vm_numa_stats_mode_name[3] = {"auto", "strict", "coarse"};
+static DEFINE_MUTEX(vm_numa_stats_mode_lock);
+
+static int __parse_vm_numa_stats_mode(char *s)
+{
+	const char *str = s;
+
+	if (strcmp(str, "auto") == 0 || strcmp(str, "Auto") == 0)
+		vm_numa_stats_mode = VM_NUMA_STAT_AUTO_MODE;
+	else if (strcmp(str, "strict") == 0 || strcmp(str, "Strict") == 0)
+		vm_numa_stats_mode = VM_NUMA_STAT_STRICT_MODE;
+	else if (strcmp(str, "coarse") == 0 || strcmp(str, "Coarse") == 0)
+		vm_numa_stats_mode = VM_NUMA_STAT_COARSE_MODE;
+	else {
+		pr_warn("Ignoring invalid vm_numa_stats_mode value: %s\n", s);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int sysctl_vm_numa_stats_mode_handler(struct ctl_table *table, int write,
+		void __user *buffer, size_t *length, loff_t *ppos)
+{
+	char old_string[VM_NUMA_STAT_MODE_LEN];
+	int ret, oldval;
+
+	mutex_lock(&vm_numa_stats_mode_lock);
+	if (write)
+		strncpy(old_string, (char *)table->data, VM_NUMA_STAT_MODE_LEN);
+	ret = proc_dostring(table, write, buffer, length, ppos);
+	if (ret || !write) {
+		mutex_unlock(&vm_numa_stats_mode_lock);
+		return ret;
+	}
+
+	oldval = vm_numa_stats_mode;
+	if (__parse_vm_numa_stats_mode((char *)table->data)) {
+		/*
+		 * invalid sysctl_vm_numa_stats_mode value, restore saved string
+		 */
+		strncpy((char *)table->data, old_string, VM_NUMA_STAT_MODE_LEN);
+		vm_numa_stats_mode = oldval;
+	} else {
+		/*
+		 * check whether numa stats mode changes or not
+		 */
+		if (vm_numa_stats_mode == oldval) {
+			/* no change */
+			mutex_unlock(&vm_numa_stats_mode_lock);
+			return 0;
+		} else if (vm_numa_stats_mode == VM_NUMA_STAT_AUTO_MODE)
+			/*
+			 * Keep the branch selection in last time when numa stats
+			 * is changed to auto mode.
+			 */
+			pr_info("numa stats changes from %s mode to auto mode\n",
+					vm_numa_stats_mode_name[oldval]);
+		else if (vm_numa_stats_mode == VM_NUMA_STAT_STRICT_MODE) {
+			static_branch_enable(&vm_numa_stats_mode_key);
+			pr_info("numa stats changes from %s mode to strict mode\n",
+					vm_numa_stats_mode_name[oldval]);
+		} else if (vm_numa_stats_mode == VM_NUMA_STAT_COARSE_MODE) {
+			static_branch_disable(&vm_numa_stats_mode_key);
+			/*
+			 * Invalidate numa counters when vmstat mode is set to coarse
+			 * mode, because users can't tell the difference between the
+			 * dead state and when allocator activity is quiet once
+			 * zone_statistics() is turned off.
+			 */
+			invalid_numa_statistics();
+			pr_info("numa stats changes from %s mode to coarse mode\n",
+					vm_numa_stats_mode_name[oldval]);
+		} else
+			pr_warn("invalid vm_numa_stats_mode:%d\n", vm_numa_stats_mode);
+	}
+
+	mutex_unlock(&vm_numa_stats_mode_lock);
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_VM_EVENT_COUNTERS
 DEFINE_PER_CPU(struct vm_event_state, vm_event_states) = {{0}};
 EXPORT_PER_CPU_SYMBOL(vm_event_states);
@@ -914,6 +999,42 @@ unsigned long sum_zone_numa_state(int node,
 	return count;
 }
 
+/* zero numa counters within a zone */
+void zero_zone_numa_counters(struct zone *zone)
+{
+	int item, cpu;
+
+	for (item = 0; item < NR_VM_NUMA_STAT_ITEMS; item++) {
+		atomic_long_set(&zone->vm_numa_stat[item], 0);
+		for_each_online_cpu(cpu)
+			per_cpu_ptr(zone->pageset, cpu)->vm_numa_stat_diff[item] = 0;
+	}
+}
+
+/* zero numa counters of all the populated zones */
+void zero_zones_numa_counters(void)
+{
+	struct zone *zone;
+
+	for_each_populated_zone(zone)
+		zero_zone_numa_counters(zone);
+}
+
+/* zero global numa counters */
+void zero_global_numa_counters(void)
+{
+	int item;
+
+	for (item = 0; item < NR_VM_NUMA_STAT_ITEMS; item++)
+		atomic_long_set(&vm_numa_stat[item], 0);
+}
+
+void invalid_numa_statistics(void)
+{
+	zero_zones_numa_counters();
+	zero_global_numa_counters();
+}
+
 /*
  * Determine the per node value of a stat item.
  */
@@ -1582,6 +1703,10 @@ static int zoneinfo_show(struct seq_file *m, void *arg)
 {
 	pg_data_t *pgdat = (pg_data_t *)arg;
 	walk_zones_in_node(m, pgdat, false, false, zoneinfo_show_print);
+#ifdef CONFIG_NUMA
+	if (vm_numa_stats_mode == VM_NUMA_STAT_AUTO_MODE)
+		static_branch_enable(&vm_numa_stats_mode_key);
+#endif
 	return 0;
 }
 
@@ -1678,6 +1803,10 @@ static int vmstat_show(struct seq_file *m, void *arg)
 
 static void vmstat_stop(struct seq_file *m, void *arg)
 {
+#ifdef CONFIG_NUMA
+	if (vm_numa_stats_mode == VM_NUMA_STAT_AUTO_MODE)
+		static_branch_enable(&vm_numa_stats_mode_key);
+#endif
 	kfree(m->private);
 	m->private = NULL;
 }
