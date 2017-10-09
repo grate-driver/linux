@@ -688,8 +688,11 @@ else
   stackp-flag := $(call cc-option, -fno-stack-protector)
 endif
 endif
-# Find arch-specific stack protector compiler sanity-checking script.
-ifdef CONFIG_CC_STACKPROTECTOR
+ifdef stackp-name
+  # If the stack protector has been selected, inform the rest of the build.
+  KBUILD_CFLAGS += -DCONFIG_CC_STACKPROTECTOR
+  KBUILD_AFLAGS += -DCONFIG_CC_STACKPROTECTOR
+  # Find arch-specific stack protector compiler sanity-checking script.
   stackp-path := $(srctree)/scripts/gcc-$(SRCARCH)_$(BITS)-has-stack-protector.sh
   stackp-check := $(wildcard $(stackp-path))
 endif
