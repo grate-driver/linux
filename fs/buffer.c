@@ -3116,6 +3116,18 @@ static int submit_bh_wbc(int op, int op_flags, struct buffer_head *bh,
 	return 0;
 }
 
+int submit_bh_blkcg_css(int op, int op_flags, struct buffer_head *bh,
+			struct cgroup_subsys_state *blkcg_css)
+{
+	struct bio *bio;
+
+	bio = create_bh_bio(op, op_flags, bh, 0);
+	bio_associate_blkcg(bio, blkcg_css);
+	submit_bio(bio);
+	return 0;
+}
+EXPORT_SYMBOL(submit_bh_blkcg_css);
+
 int submit_bh(int op, int op_flags, struct buffer_head *bh)
 {
 	struct bio *bio;
