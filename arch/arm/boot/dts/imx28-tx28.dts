@@ -328,8 +328,7 @@
 		reg = <0x20>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&tx28_pca9554_pins>;
-		interrupt-parent = <&gpio3>;
-		interrupts = <28 0>;
+		interrupts-extended = <&gpio3 28 IRQ_TYPE_NONE>;
 		gpio-controller;
 		#gpio-cells = <2>;
 		interrupt-controller;
@@ -341,8 +340,7 @@
 		reg = <0x38>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&tx28_edt_ft5x06_pins>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
+		interrupts-extended = <&gpio2 5 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&gpio2 6 GPIO_ACTIVE_LOW>;
 		wake-gpios = <&gpio4 9 GPIO_ACTIVE_HIGH>;
 	};
@@ -352,8 +350,7 @@
 		reg = <0x48>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&tx28_tsc2007_pins>;
-		interrupt-parent = <&gpio3>;
-		interrupts = <20 0>;
+		interrupts-extended = <&gpio3 20 IRQ_TYPE_EDGE_FALLING>;
 		pendown-gpio = <&gpio3 20 GPIO_ACTIVE_LOW>;
 		ti,x-plate-ohms = /bits/ 16 <660>;
 	};
