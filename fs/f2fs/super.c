@@ -1397,8 +1397,11 @@ static ssize_t f2fs_quota_write(struct super_block *sb, int type,
 
 		err = a_ops->write_begin(NULL, mapping, off, tocopy, 0,
 							&page, NULL);
-		if (unlikely(err))
+		if (unlikely(err)) {
+			if (len == towrite)
+				return err;
 			break;
+		}
 
 		kaddr = kmap_atomic(page);
 		memcpy(kaddr + offset, data, tocopy);
