@@ -53,7 +53,7 @@
 		};
 	};
 
-leds {
+	leds {
 		status = "okay";
 		compatible = "gpio-leds";
 
@@ -76,6 +76,10 @@ leds {
 
 &usb_x1_clk {
 	clock-frequency = <48000000>;
+};
+
+&mtu2 {
+	status = "okay";
 };
 
 &scif2 {
