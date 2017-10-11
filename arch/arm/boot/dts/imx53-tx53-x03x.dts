@@ -242,8 +242,7 @@
 		reg = <0x38>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_edt_ft5x06_1>;
-		interrupt-parent = <&gpio6>;
-		interrupts = <15 IRQ_TYPE_EDGE_FALLING>;
+		interrupts-extended = <&gpio6 15 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&gpio2 22 GPIO_ACTIVE_LOW>;
 		wake-gpios = <&gpio2 21 GPIO_ACTIVE_HIGH>;
 	};
@@ -253,8 +252,7 @@
 		reg = <0x48>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_tsc2007>;
-		interrupt-parent = <&gpio3>;
-		interrupts = <26 0>;
+		interrupts-extended = <&gpio3 26 IRQ_TYPE_EDGE_FALLING>;
 		gpios = <&gpio3 26 GPIO_ACTIVE_LOW>;
 		ti,x-plate-ohms = <660>;
 		wakeup-source;
