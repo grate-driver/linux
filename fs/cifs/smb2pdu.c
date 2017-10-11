@@ -470,7 +470,7 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 	struct smb2_negotiate_req *req;
 	struct smb2_negotiate_rsp *rsp;
 	struct kvec iov[1];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int rc = 0;
 	int resp_buftype;
 	struct TCP_Server_Info *server = ses->server;
@@ -1884,7 +1884,7 @@ SMB2_ioctl(const unsigned int xid, struct cifs_tcon *tcon, u64 persistent_fid,
 	struct smb2_sync_hdr *shdr;
 	struct cifs_ses *ses;
 	struct kvec iov[2];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int resp_buftype;
 	int n_iov;
 	int rc = 0;
@@ -1981,6 +1981,8 @@ SMB2_ioctl(const unsigned int xid, struct cifs_tcon *tcon, u64 persistent_fid,
 	rc = SendReceive2(xid, ses, iov, n_iov, &resp_buftype, flags, &rsp_iov);
 	cifs_small_buf_release(req);
 	rsp = (struct smb2_ioctl_rsp *)rsp_iov.iov_base;
+	if (rsp == NULL)
+		goto ioctl_exit;
 
 	if ((rc != 0) && (rc != -EINVAL)) {
 		cifs_stats_fail_inc(tcon, SMB2_IOCTL_HE);
@@ -2064,7 +2066,7 @@ SMB2_close(const unsigned int xid, struct cifs_tcon *tcon,
 	struct smb2_close_rsp *rsp;
 	struct cifs_ses *ses = tcon->ses;
 	struct kvec iov[1];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int resp_buftype;
 	int rc = 0;
 	int flags = 0;
@@ -2168,9 +2170,9 @@ query_info(const unsigned int xid, struct cifs_tcon *tcon,
 		u32 *dlen)
 {
 	struct smb2_query_info_req *req;
-	struct smb2_query_info_rsp *rsp = NULL;
+	struct smb2_query_info_rsp *rsp;
 	struct kvec iov[2];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int rc = 0;
 	int resp_buftype;
 	struct cifs_ses *ses = tcon->ses;
@@ -2404,7 +2406,7 @@ SMB2_flush(const unsigned int xid, struct cifs_tcon *tcon, u64 persistent_fid,
 	struct smb2_flush_req *req;
 	struct cifs_ses *ses = tcon->ses;
 	struct kvec iov[1];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int resp_buftype;
 	int rc = 0;
 	int flags = 0;
@@ -2639,10 +2641,10 @@ SMB2_read(const unsigned int xid, struct cifs_io_parms *io_parms,
 {
 	int resp_buftype, rc = -EACCES;
 	struct smb2_read_plain_req *req = NULL;
-	struct smb2_read_rsp *rsp = NULL;
+	struct smb2_read_rsp *rsp;
 	struct smb2_sync_hdr *shdr;
 	struct kvec iov[2];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	unsigned int total_len;
 	__be32 req_len;
 	struct smb_rqst rqst = { .rq_iov = iov,
@@ -2669,6 +2671,10 @@ SMB2_read(const unsigned int xid, struct cifs_io_parms *io_parms,
 	cifs_small_buf_release(req);
 
 	rsp = (struct smb2_read_rsp *)rsp_iov.iov_base;
+	if (rsp == NULL) {
+		cifs_dbg(VFS, "rsp is NULL in read\n");
+		return -EIO;
+	}
 	shdr = get_sync_hdr(rsp);
 
 	if (shdr->Status == STATUS_END_OF_FILE) {
@@ -2856,9 +2862,9 @@ SMB2_write(const unsigned int xid, struct cifs_io_parms *io_parms,
 {
 	int rc = 0;
 	struct smb2_write_req *req = NULL;
-	struct smb2_write_rsp *rsp = NULL;
+	struct smb2_write_rsp *rsp;
 	int resp_buftype;
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int flags = 0;
 
 	*nbytes = 0;
@@ -2963,7 +2969,7 @@ SMB2_query_directory(const unsigned int xid, struct cifs_tcon *tcon,
 	struct smb2_query_directory_req *req;
 	struct smb2_query_directory_rsp *rsp = NULL;
 	struct kvec iov[2];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int rc = 0;
 	int len;
 	int resp_buftype = CIFS_NO_BUFFER;
@@ -3093,9 +3099,9 @@ send_set_info(const unsigned int xid, struct cifs_tcon *tcon,
 		void **data, unsigned int *size)
 {
 	struct smb2_set_info_req *req;
-	struct smb2_set_info_rsp *rsp = NULL;
+	struct smb2_set_info_rsp *rsp;
 	struct kvec *iov;
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int rc = 0;
 	int resp_buftype;
 	unsigned int i;
@@ -3376,9 +3382,9 @@ int
 SMB2_QFS_info(const unsigned int xid, struct cifs_tcon *tcon,
 	      u64 persistent_fid, u64 volatile_fid, struct kstatfs *fsdata)
 {
-	struct smb2_query_info_rsp *rsp = NULL;
+	struct smb2_query_info_rsp *rsp;
 	struct kvec iov;
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int rc = 0;
 	int resp_buftype;
 	struct cifs_ses *ses = tcon->ses;
@@ -3419,9 +3425,9 @@ int
 SMB2_QFS_attr(const unsigned int xid, struct cifs_tcon *tcon,
 	      u64 persistent_fid, u64 volatile_fid, int level)
 {
-	struct smb2_query_info_rsp *rsp = NULL;
+	struct smb2_query_info_rsp *rsp;
 	struct kvec iov;
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int rc = 0;
 	int resp_buftype, max_len, min_len;
 	struct cifs_ses *ses = tcon->ses;
@@ -3492,7 +3498,7 @@ smb2_lockv(const unsigned int xid, struct cifs_tcon *tcon,
 	int rc = 0;
 	struct smb2_lock_req *req = NULL;
 	struct kvec iov[2];
-	struct kvec rsp_iov;
+	struct kvec rsp_iov = { NULL, 0 };
 	int resp_buf_type;
 	unsigned int count;
 	int flags = CIFS_NO_RESP;
@@ -3525,6 +3531,7 @@ smb2_lockv(const unsigned int xid, struct cifs_tcon *tcon,
 	rc = SendReceive2(xid, tcon->ses, iov, 2, &resp_buf_type, flags,
 			  &rsp_iov);
 	cifs_small_buf_release(req);
+	free_rsp_buf(resp_buf_type, rsp_iov.iov_base);
 	if (rc) {
 		cifs_dbg(FYI, "Send error in smb2_lockv = %d\n", rc);
 		cifs_stats_fail_inc(tcon, SMB2_LOCK_HE);
