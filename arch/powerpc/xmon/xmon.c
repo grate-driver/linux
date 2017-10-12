@@ -278,6 +278,7 @@ Commands:\n\
 #elif defined(CONFIG_44x) || defined(CONFIG_PPC_BOOK3E)
 "  u	dump TLB\n"
 #endif
+"  U	show uptime information\n"
 "  ?	help\n"
 "  # n	limit output to n lines per page (for dp, dpa, dl)\n"
 "  zr	reboot\n\
@@ -530,14 +531,19 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 
  waiting:
 	secondary = 1;
+	spin_begin();
 	while (secondary && !xmon_gate) {
 		if (in_xmon == 0) {
-			if (fromipi)
+			if (fromipi) {
+				spin_end();
 				goto leave;
+			}
 			secondary = test_and_set_bit(0, &in_xmon);
 		}
-		barrier();
+		spin_cpu_relax();
+		touch_nmi_watchdog();
 	}
+	spin_end();
 
 	if (!secondary && !xmon_gate) {
 		/* we are the first cpu to come in */
@@ -568,21 +574,25 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 		mb();
 		xmon_gate = 1;
 		barrier();
+		touch_nmi_watchdog();
 	}
 
  cmdloop:
 	while (in_xmon) {
 		if (secondary) {
+			spin_begin();
 			if (cpu == xmon_owner) {
 				if (!test_and_set_bit(0, &xmon_taken)) {
 					secondary = 0;
+					spin_end();
 					continue;
 				}
 				/* missed it */
 				while (cpu == xmon_owner)
-					barrier();
+					spin_cpu_relax();
 			}
-			barrier();
+			spin_cpu_relax();
+			touch_nmi_watchdog();
 		} else {
 			cmd = cmds(regs);
 			if (cmd != 0) {
@@ -896,6 +906,26 @@ static void remove_cpu_bpts(void)
 	write_ciabr(0);
 }
 
+/* Based on uptime_proc_show(). */
+static void
+show_uptime(void)
+{
+	struct timespec uptime;
+
+	if (setjmp(bus_error_jmp) == 0) {
+		catch_memory_errors = 1;
+		sync();
+
+		get_monotonic_boottime(&uptime);
+		printf("Uptime: %lu.%.2lu seconds\n", (unsigned long)uptime.tv_sec,
+			((unsigned long)uptime.tv_nsec / (NSEC_PER_SEC/100)));
+
+		sync();
+		__delay(200);						\
+	}
+	catch_memory_errors = 0;
+}
+
 static void set_lpp_cmd(void)
 {
 	unsigned long lpp;
@@ -1031,6 +1061,9 @@ cmds(struct pt_regs *excp)
 			dump_tlb_book3e();
 			break;
 #endif
+		case 'U':
+			show_uptime();
+			break;
 		default:
 			printf("Unrecognized command: ");
 			do {
