@@ -40,12 +40,14 @@
 #define APPRAISE	0x0004	/* same as IMA_APPRAISE */
 #define DONT_APPRAISE	0x0008
 #define AUDIT		0x0040
+#define DONT_FAILSAFE	0x0400
 
 #define INVALID_PCR(a) (((a) < 0) || \
 	(a) >= (FIELD_SIZEOF(struct integrity_iint_cache, measured_pcrs) * 8))
 
 int ima_policy_flag;
 static int temp_ima_appraise;
+static bool temp_failsafe = 1;
 
 #define MAX_LSM_RULES 6
 enum lsm_rule_types { LSM_OBJ_USER, LSM_OBJ_ROLE, LSM_OBJ_TYPE,
@@ -167,6 +169,10 @@ static struct ima_rule_entry secure_boot_rules[] __ro_after_init = {
 	 .flags = IMA_FUNC | IMA_DIGSIG_REQUIRED},
 };
 
+static struct ima_rule_entry dont_failsafe_rules[] __ro_after_init = {
+	{.action = DONT_FAILSAFE}
+};
+
 static LIST_HEAD(ima_default_rules);
 static LIST_HEAD(ima_policy_rules);
 static LIST_HEAD(ima_temp_rules);
@@ -186,6 +192,7 @@ __setup("ima_tcb", default_measure_policy_setup);
 
 static bool ima_use_appraise_tcb __initdata;
 static bool ima_use_secure_boot __initdata;
+static bool ima_use_dont_failsafe __initdata;
 static int __init policy_setup(char *str)
 {
 	char *p;
@@ -199,6 +206,10 @@ static int __init policy_setup(char *str)
 			ima_use_appraise_tcb = 1;
 		else if (strcmp(p, "secure_boot") == 0)
 			ima_use_secure_boot = 1;
+		else if (strcmp(p, "fs_unsafe") == 0) {
+			ima_use_dont_failsafe = 1;
+			set_failsafe(0);
+		}
 	}
 
 	return 1;
@@ -468,6 +479,9 @@ void __init ima_init_policy(void)
 			temp_ima_appraise |= IMA_APPRAISE_POLICY;
 	}
 
+	if (ima_use_dont_failsafe)
+		list_add_tail(&dont_failsafe_rules[0].list, &ima_default_rules);
+
 	ima_rules = &ima_default_rules;
 	ima_update_policy_flag();
 }
@@ -513,6 +527,9 @@ void ima_update_policy(void)
 	if (ima_rules != policy) {
 		ima_policy_flag = 0;
 		ima_rules = policy;
+
+		/* Only update on initial policy replacement, not append */
+		set_failsafe(temp_failsafe);
 	}
 	ima_update_policy_flag();
 }
@@ -529,7 +546,7 @@ enum {
 	Opt_uid_gt, Opt_euid_gt, Opt_fowner_gt,
 	Opt_uid_lt, Opt_euid_lt, Opt_fowner_lt,
 	Opt_appraise_type, Opt_permit_directio,
-	Opt_pcr
+	Opt_pcr, Opt_dont_failsafe
 };
 
 static match_table_t policy_tokens = {
@@ -560,6 +577,7 @@ static match_table_t policy_tokens = {
 	{Opt_appraise_type, "appraise_type=%s"},
 	{Opt_permit_directio, "permit_directio"},
 	{Opt_pcr, "pcr=%s"},
+	{Opt_dont_failsafe, "dont_failsafe"},
 	{Opt_err, NULL}
 };
 
@@ -630,6 +648,11 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 		if ((*p == '\0') || (*p == ' ') || (*p == '\t'))
 			continue;
 		token = match_token(p, policy_tokens, args);
+		if (entry->action == DONT_FAILSAFE) {
+			/* no args permitted, force invalid rule */
+			token = Opt_dont_failsafe;
+		}
+
 		switch (token) {
 		case Opt_measure:
 			ima_log_string(ab, "action", "measure");
@@ -670,6 +693,19 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 				result = -EINVAL;
 
 			entry->action = AUDIT;
+			break;
+		case Opt_dont_failsafe:
+			ima_log_string(ab, "action", "dont_failsafe");
+
+			if (entry->action != UNKNOWN)
+				result = -EINVAL;
+
+			/* Permit on initial policy replacement only */
+			if (ima_rules != &ima_policy_rules)
+				temp_failsafe = 0;
+			else
+				result = -EINVAL;
+			entry->action = DONT_FAILSAFE;
 			break;
 		case Opt_func:
 			ima_log_string(ab, "func", args[0].from);
@@ -949,6 +985,7 @@ void ima_delete_rules(void)
 	int i;
 
 	temp_ima_appraise = 0;
+	temp_failsafe = 1;
 	list_for_each_entry_safe(entry, tmp, &ima_temp_rules, list) {
 		for (i = 0; i < MAX_LSM_RULES; i++)
 			kfree(entry->lsm[i].args_p);
@@ -1040,6 +1077,8 @@ int ima_policy_show(struct seq_file *m, void *v)
 		seq_puts(m, pt(Opt_dont_appraise));
 	if (entry->action & AUDIT)
 		seq_puts(m, pt(Opt_audit));
+	if (entry->action & DONT_FAILSAFE)
+		seq_puts(m, pt(Opt_dont_failsafe));
 
 	seq_puts(m, " ");
 

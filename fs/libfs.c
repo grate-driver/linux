@@ -16,6 +16,7 @@
 #include <linux/exportfs.h>
 #include <linux/writeback.h>
 #include <linux/buffer_head.h> /* sync_mapping_buffers */
+#include <linux/uio.h>
 
 #include <linux/uaccess.h>
 
@@ -674,6 +675,37 @@ ssize_t simple_write_to_buffer(void *to, size_t available, loff_t *ppos,
 	return count;
 }
 EXPORT_SYMBOL(simple_write_to_buffer);
+
+/**
+ * simple_read_iter_from_buffer - copy data from the buffer to user space
+ * @iocb: struct containing the file, the current position and other info
+ * @to: the user space buffer to read to
+ * @from: the buffer to read from
+ * @available: the size of the buffer
+ *
+ * The simple_read_iter_from_buffer() function reads up to @available bytes
+ * from the current buffer into the user space buffer.
+ *
+ * On success, the current buffer offset is advanced by the number of bytes
+ * read, or a negative value is returned on error.
+ **/
+ssize_t simple_read_iter_from_buffer(struct kiocb *iocb, struct iov_iter *to,
+				     const void *from, size_t available)
+{
+	loff_t pos = iocb->ki_pos;
+	size_t ret;
+
+	if (pos < 0)
+		return -EINVAL;
+	if (pos >= available)
+		return 0;
+	ret = copy_to_iter(from + pos, available - pos, to);
+	if (!ret && iov_iter_count(to))
+		return -EFAULT;
+	iocb->ki_pos = pos + ret;
+	return ret;
+}
+EXPORT_SYMBOL(simple_read_iter_from_buffer);
 
 /**
  * memory_read_from_buffer - copy data from the buffer
