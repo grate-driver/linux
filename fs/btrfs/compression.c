@@ -33,6 +33,8 @@
 #include <linux/bit_spinlock.h>
 #include <linux/slab.h>
 #include <linux/sched/mm.h>
+#include <linux/sort.h>
+#include <linux/log2.h>
 #include "ctree.h"
 #include "disk-io.h"
 #include "transaction.h"
@@ -706,7 +708,88 @@ out:
 	return ret;
 }
 
-static struct {
+
+/*
+ * Heuristic use systematic sampling to collect data from
+ * input data range, so some constant needed to control algo
+ *
+ * @SAMPLING_READ_SIZE - how many bytes will be copied from on each sample
+ * @SAMPLING_INTERVAL  - period that used to iterate over input data range
+ */
+#define SAMPLING_READ_SIZE 16
+#define SAMPLING_INTERVAL 256
+
+/*
+ * For statistic analize of input data range
+ * consider that data consists from bytes
+ * so this is Galois Field with 256 objects
+ * each object have attribute count, i.e. how many times
+ * that object detected in sample
+ */
+#define BUCKET_SIZE 256
+
+/*
+ * The size of the sample is based on a statistical sampling rule of thumb.
+ * That common to perform sampling tests as long as number of elements in
+ * each cell is at least five.
+ *
+ * Instead of five, for now choose 32 value to obtain more accurate results.
+ * If the data contains the maximum number of symbols, which is 256,
+ * lets obtain a sample size bound of 8192.
+ *
+ * So sample at most 8KB of data per data range: 16 consecutive
+ * bytes from up to 512 locations.
+ */
+#define MAX_SAMPLE_SIZE (BTRFS_MAX_UNCOMPRESSED * \
+			  SAMPLING_READ_SIZE / SAMPLING_INTERVAL)
+
+struct bucket_item {
+	u32 count;
+};
+
+struct heuristic_ws {
+	/* Partial copy of input data */
+	u8 *sample;
+	u32 sample_size;
+	/* Bucket store counter for each byte type */
+	struct bucket_item *bucket;
+	struct list_head list;
+};
+
+static void free_heuristic_ws(struct list_head *ws)
+{
+	struct heuristic_ws *workspace;
+
+	workspace = list_entry(ws, struct heuristic_ws, list);
+
+	kvfree(workspace->sample);
+	kfree(workspace->bucket);
+	kfree(workspace);
+}
+
+static struct list_head *alloc_heuristic_ws(void){
+	struct heuristic_ws *ws;
+
+	ws = kzalloc(sizeof(*ws), GFP_KERNEL);
+	if (!ws)
+		return ERR_PTR(-ENOMEM);
+
+	ws->sample = kvmalloc(MAX_SAMPLE_SIZE, GFP_KERNEL);
+	if (!ws->sample)
+		goto fail;
+
+	ws->bucket = kcalloc(BUCKET_SIZE, sizeof(*ws->bucket), GFP_KERNEL);
+	if (!ws->bucket)
+		goto fail;
+
+	INIT_LIST_HEAD(&ws->list);
+	return &ws->list;
+fail:
+	free_heuristic_ws(&ws->list);
+	return ERR_PTR(-ENOMEM);
+}
+
+struct workspaces_list {
 	struct list_head idle_ws;
 	spinlock_t ws_lock;
 	/* Number of free workspaces */
@@ -715,7 +798,11 @@ static struct {
 	atomic_t total_ws;
 	/* Waiters for a free workspace */
 	wait_queue_head_t ws_wait;
-} btrfs_comp_ws[BTRFS_COMPRESS_TYPES];
+};
+
+static struct workspaces_list btrfs_comp_ws[BTRFS_COMPRESS_TYPES];
+
+static struct workspaces_list btrfs_heuristic_ws;
 
 static const struct btrfs_compress_op * const btrfs_compress_op[] = {
 	&btrfs_zlib_compress,
@@ -725,11 +812,24 @@ static const struct btrfs_compress_op * const btrfs_compress_op[] = {
 
 void __init btrfs_init_compress(void)
 {
+	struct list_head *workspace;
 	int i;
 
-	for (i = 0; i < BTRFS_COMPRESS_TYPES; i++) {
-		struct list_head *workspace;
+	INIT_LIST_HEAD(&btrfs_heuristic_ws.idle_ws);
+	spin_lock_init(&btrfs_heuristic_ws.ws_lock);
+	atomic_set(&btrfs_heuristic_ws.total_ws, 0);
+	init_waitqueue_head(&btrfs_heuristic_ws.ws_wait);
 
+	workspace = alloc_heuristic_ws();
+	if (IS_ERR(workspace)) {
+		pr_warn("BTRFS: cannot preallocate heuristic workspace, will try later\n");
+	} else {
+		atomic_set(&btrfs_heuristic_ws.total_ws, 1);
+		btrfs_heuristic_ws.free_ws = 1;
+		list_add(workspace, &btrfs_heuristic_ws.idle_ws);
+	}
+
+	for (i = 0; i < BTRFS_COMPRESS_TYPES; i++) {
 		INIT_LIST_HEAD(&btrfs_comp_ws[i].idle_ws);
 		spin_lock_init(&btrfs_comp_ws[i].ws_lock);
 		atomic_set(&btrfs_comp_ws[i].total_ws, 0);
@@ -756,18 +856,33 @@ void __init btrfs_init_compress(void)
  * Preallocation makes a forward progress guarantees and we do not return
  * errors.
  */
-static struct list_head *find_workspace(int type)
+static struct list_head *__find_workspace(int type, bool heuristic)
 {
 	struct list_head *workspace;
 	int cpus = num_online_cpus();
 	int idx = type - 1;
 	unsigned nofs_flag;
 
-	struct list_head *idle_ws	= &btrfs_comp_ws[idx].idle_ws;
-	spinlock_t *ws_lock		= &btrfs_comp_ws[idx].ws_lock;
-	atomic_t *total_ws		= &btrfs_comp_ws[idx].total_ws;
-	wait_queue_head_t *ws_wait	= &btrfs_comp_ws[idx].ws_wait;
-	int *free_ws			= &btrfs_comp_ws[idx].free_ws;
+	struct list_head *idle_ws;
+	spinlock_t *ws_lock;
+	atomic_t *total_ws;
+	wait_queue_head_t *ws_wait;
+	int *free_ws;
+
+	if (!heuristic) {
+		idle_ws		= &btrfs_comp_ws[idx].idle_ws;
+		ws_lock		= &btrfs_comp_ws[idx].ws_lock;
+		total_ws	= &btrfs_comp_ws[idx].total_ws;
+		ws_wait		= &btrfs_comp_ws[idx].ws_wait;
+		free_ws		= &btrfs_comp_ws[idx].free_ws;
+	} else {
+		idle_ws		= &btrfs_heuristic_ws.idle_ws;
+		ws_lock		= &btrfs_heuristic_ws.ws_lock;
+		total_ws	= &btrfs_heuristic_ws.total_ws;
+		ws_wait		= &btrfs_heuristic_ws.ws_wait;
+		free_ws		= &btrfs_heuristic_ws.free_ws;
+	}
+
 again:
 	spin_lock(ws_lock);
 	if (!list_empty(idle_ws)) {
@@ -797,7 +912,10 @@ again:
 	 * context of btrfs_compress_bio/btrfs_compress_pages
 	 */
 	nofs_flag = memalloc_nofs_save();
-	workspace = btrfs_compress_op[idx]->alloc_workspace();
+	if (!heuristic)
+		workspace = btrfs_compress_op[idx]->alloc_workspace();
+	else
+		workspace = alloc_heuristic_ws();
 	memalloc_nofs_restore(nofs_flag);
 
 	if (IS_ERR(workspace)) {
@@ -828,18 +946,38 @@ again:
 	return workspace;
 }
 
+static struct list_head *find_workspace(int type)
+{
+	return __find_workspace(type, false);
+}
+
 /*
  * put a workspace struct back on the list or free it if we have enough
  * idle ones sitting around
  */
-static void free_workspace(int type, struct list_head *workspace)
+static void __free_workspace(int type, struct list_head *workspace,
+			     bool heuristic)
 {
 	int idx = type - 1;
-	struct list_head *idle_ws	= &btrfs_comp_ws[idx].idle_ws;
-	spinlock_t *ws_lock		= &btrfs_comp_ws[idx].ws_lock;
-	atomic_t *total_ws		= &btrfs_comp_ws[idx].total_ws;
-	wait_queue_head_t *ws_wait	= &btrfs_comp_ws[idx].ws_wait;
-	int *free_ws			= &btrfs_comp_ws[idx].free_ws;
+	struct list_head *idle_ws;
+	spinlock_t *ws_lock;
+	atomic_t *total_ws;
+	wait_queue_head_t *ws_wait;
+	int *free_ws;
+
+	if (!heuristic) {
+		idle_ws		= &btrfs_comp_ws[idx].idle_ws;
+		ws_lock		= &btrfs_comp_ws[idx].ws_lock;
+		total_ws	= &btrfs_comp_ws[idx].total_ws;
+		ws_wait		= &btrfs_comp_ws[idx].ws_wait;
+		free_ws		= &btrfs_comp_ws[idx].free_ws;
+	} else {
+		idle_ws		= &btrfs_heuristic_ws.idle_ws;
+		ws_lock		= &btrfs_heuristic_ws.ws_lock;
+		total_ws	= &btrfs_heuristic_ws.total_ws;
+		ws_wait		= &btrfs_heuristic_ws.ws_wait;
+		free_ws		= &btrfs_heuristic_ws.free_ws;
+	}
 
 	spin_lock(ws_lock);
 	if (*free_ws <= num_online_cpus()) {
@@ -850,7 +988,10 @@ static void free_workspace(int type, struct list_head *workspace)
 	}
 	spin_unlock(ws_lock);
 
-	btrfs_compress_op[idx]->free_workspace(workspace);
+	if (!heuristic)
+		btrfs_compress_op[idx]->free_workspace(workspace);
+	else
+		free_heuristic_ws(workspace);
 	atomic_dec(total_ws);
 wake:
 	/*
@@ -861,6 +1002,11 @@ wake:
 		wake_up(ws_wait);
 }
 
+static void free_workspace(int type, struct list_head *ws)
+{
+	return __free_workspace(type, ws, false);
+}
+
 /*
  * cleanup function for module exit
  */
@@ -868,6 +1014,13 @@ static void free_workspaces(void)
 {
 	struct list_head *workspace;
 	int i;
+
+	while (!list_empty(&btrfs_heuristic_ws.idle_ws)) {
+		workspace = btrfs_heuristic_ws.idle_ws.next;
+		list_del(workspace);
+		free_heuristic_ws(workspace);
+		atomic_dec(&btrfs_heuristic_ws.total_ws);
+	}
 
 	for (i = 0; i < BTRFS_COMPRESS_TYPES; i++) {
 		while (!list_empty(&btrfs_comp_ws[i].idle_ws)) {
@@ -883,6 +1036,11 @@ static void free_workspaces(void)
  * Given an address space and start and length, compress the bytes into @pages
  * that are allocated on demand.
  *
+ * @type_level is encoded algorithm and level, where level 0 means whatever
+ * default the algorithm chooses and is opaque here;
+ * - compression algo are 0-3
+ * - the level are bits 4-7
+ *
  * @out_pages is an in/out parameter, holds maximum number of pages to allocate
  * and returns number of actually allocated pages
  *
@@ -897,7 +1055,7 @@ static void free_workspaces(void)
  * @max_out tells us the max number of bytes that we're allowed to
  * stuff into pages
  */
-int btrfs_compress_pages(int type, struct address_space *mapping,
+int btrfs_compress_pages(unsigned int type_level, struct address_space *mapping,
 			 u64 start, struct page **pages,
 			 unsigned long *out_pages,
 			 unsigned long *total_in,
@@ -905,9 +1063,11 @@ int btrfs_compress_pages(int type, struct address_space *mapping,
 {
 	struct list_head *workspace;
 	int ret;
+	int type = type_level & 0xF;
 
 	workspace = find_workspace(type);
 
+	btrfs_compress_op[type - 1]->set_level(workspace, type_level);
 	ret = btrfs_compress_op[type-1]->compress_pages(workspace, mapping,
 						      start, pages,
 						      out_pages,
@@ -1066,6 +1226,219 @@ int btrfs_decompress_buf2page(const char *buf, unsigned long buf_start,
 }
 
 /*
+ * Shannon Entropy calculation
+ *
+ * Pure byte distribution analyze fail to determine
+ * compressiability of data. Try calculate entropy to
+ * estimate the average minimum number of bits needed
+ * to encode a sample data.
+ *
+ * For comfort, use return of percentage of needed bit's,
+ * instead of bit's amaount directly.
+ *
+ * @ENTROPY_LVL_ACEPTABLE - below that threshold sample has low byte
+ * entropy and can be compressible with high probability
+ *
+ * @ENTROPY_LVL_HIGH - data are not compressible with high probability,
+ *
+ * Use of ilog2() decrease precision, so to see ~ correct answer
+ * LVL decreased by 5.
+ */
+
+#define ENTROPY_LVL_ACEPTABLE 65
+#define ENTROPY_LVL_HIGH 80
+
+/*
+ * For increase precision in shannon_entropy calculation
+ * Let's do pow(n, M) to save more digits after comma
+ *
+ * Max int bit lengh 64
+ * ilog2(MAX_SAMPLE_SIZE) -> 13
+ * 13*4 = 52 < 64 -> M = 4
+ * So use pow(n, 4)
+ */
+static inline u32 ilog2_w(u64 n)
+{
+	return ilog2(n * n * n * n);
+}
+
+static u32 shannon_entropy(struct heuristic_ws *ws)
+{
+	const u32 entropy_max = 8*ilog2_w(2);
+	u32 entropy_sum = 0;
+	u32 p, p_base, sz_base;
+	u32 i;
+
+	sz_base = ilog2_w(ws->sample_size);
+	for (i = 0; i < BUCKET_SIZE && ws->bucket[i].count > 0; i++) {
+		p = ws->bucket[i].count;
+		p_base = ilog2_w(p);
+		entropy_sum += p * (sz_base - p_base);
+	}
+
+	entropy_sum /= ws->sample_size;
+	return entropy_sum * 100 / entropy_max;
+}
+
+/* Compare buckets by size, ascending */
+static inline int bucket_comp_rev(const void *lv, const void *rv)
+{
+	const struct bucket_item *l = (struct bucket_item *)(lv);
+	const struct bucket_item *r = (struct bucket_item *)(rv);
+
+	return r->count - l->count;
+}
+
+/*
+ * Byte Core set size
+ * How many bytes use 90% of sample
+ *
+ * Several type of structure d binary data have in general
+ * nearly all types of bytes, but distribution can be Uniform
+ * where in bucket all byte types will have the nearly same count
+ * (ex. Encrypted data)
+ * and as ex. Normal (Gaussian), where count of bytes will be not so linear
+ * in that case data can be compressible, probably compressible, and
+ * not compressible, so assume:
+ *
+ * @BYTE_CORE_SET_LOW - main part of byte types repeated frequently
+ *                      compression algo can easy fix that
+ * @BYTE_CORE_SET_HIGH - data have Uniform distribution and with high
+ *                       probability not compressible
+ *
+ */
+
+#define BYTE_CORE_SET_LOW  64
+#define BYTE_CORE_SET_HIGH 200
+
+static int byte_core_set_size(struct heuristic_ws *ws)
+{
+	u32 i;
+	u32 coreset_sum = 0;
+	u32 core_set_threshold = ws->sample_size * 90 / 100;
+	struct bucket_item *bucket = ws->bucket;
+
+	/* Sort in reverse order */
+	sort(bucket, BUCKET_SIZE, sizeof(*bucket), &bucket_comp_rev, NULL);
+
+	for (i = 0; i < BYTE_CORE_SET_LOW; i++)
+		coreset_sum += bucket[i].count;
+
+	if (coreset_sum > core_set_threshold)
+		return i;
+
+	for (; i < BYTE_CORE_SET_HIGH && bucket[i].count > 0; i++) {
+		coreset_sum += bucket[i].count;
+		if (coreset_sum > core_set_threshold)
+			break;
+	}
+
+	return i;
+}
+
+/*
+ * Count byte types in bucket
+ * That heuristic can detect text like data (configs, xml, json, html & etc)
+ * Because in most text like data byte set are restricted to limit number
+ * of possible characters, and that restriction in most cases
+ * make data easy compressible.
+ *
+ * @BYTE_SET_THRESHOLD - assume that all data with that byte set size:
+ *	less - compressible
+ *	more - need additional analize
+ */
+
+#define BYTE_SET_THRESHOLD 64
+
+static u32 byte_set_size(const struct heuristic_ws *ws)
+{
+	u32 i;
+	u32 byte_set_size = 0;
+
+	for (i = 0; i < BYTE_SET_THRESHOLD; i++) {
+		if (ws->bucket[i].count > 0)
+			byte_set_size++;
+	}
+
+	/*
+	 * Continue collecting count of byte types in bucket
+	 * If byte set size bigger then threshold
+	 * That useless to continue, because for that data type
+	 * detection technique fail
+	 */
+	for (; i < BUCKET_SIZE; i++) {
+		if (ws->bucket[i].count > 0) {
+			byte_set_size++;
+			if (byte_set_size > BYTE_SET_THRESHOLD)
+				return byte_set_size;
+		}
+	}
+
+	return byte_set_size;
+}
+
+
+static bool sample_repeated_patterns(struct heuristic_ws *ws)
+{
+	u32 half_of_sample = ws->sample_size / 2;
+	u8 *p = ws->sample;
+
+	return !memcmp(&p[0], &p[half_of_sample], half_of_sample);
+}
+
+
+static void heuristic_collect_sample(struct inode *inode, u64 start, u64 end,
+				     struct heuristic_ws *ws)
+{
+	struct page *page;
+	u64 index, index_end;
+	u32 i, curr_sample_pos;
+	u8 *in_data;
+
+	/*
+	 * Compression only handle first 128kb of input range
+	 * And just shift over range in loop for compressing it.
+	 * Let's do the same.
+	 *
+	 * MAX_SAMPLE_SIZE - calculated in assume that heuristic will process
+	 * not more then BTRFS_MAX_UNCOMPRESSED at run
+	 */
+	if (end - start > BTRFS_MAX_UNCOMPRESSED)
+		end = start + BTRFS_MAX_UNCOMPRESSED;
+
+	index = start >> PAGE_SHIFT;
+	index_end = end >> PAGE_SHIFT;
+
+	/* Don't miss unaligned end */
+	if (!IS_ALIGNED(end, PAGE_SIZE))
+		index_end++;
+
+	curr_sample_pos = 0;
+	while (index < index_end) {
+		page = find_get_page(inode->i_mapping, index);
+		in_data = kmap(page);
+		/* Handle case where start unaligned to PAGE_SIZE */
+		i = start % PAGE_SIZE;
+		while (i < PAGE_SIZE - SAMPLING_READ_SIZE) {
+			/* Don't sample mem trash from last page */
+			if (start > end - SAMPLING_READ_SIZE)
+				break;
+			memcpy(&ws->sample[curr_sample_pos],
+			       &in_data[i], SAMPLING_READ_SIZE);
+			i += SAMPLING_INTERVAL;
+			start += SAMPLING_INTERVAL;
+			curr_sample_pos += SAMPLING_READ_SIZE;
+		}
+		kunmap(page);
+		put_page(page);
+
+		index++;
+	}
+
+	ws->sample_size = curr_sample_pos;
+}
+
+/*
  * Compression heuristic.
  *
  * For now is's a naive and optimistic 'return true', we'll extend the logic to
@@ -1082,18 +1455,94 @@ int btrfs_decompress_buf2page(const char *buf, unsigned long buf_start,
  */
 int btrfs_compress_heuristic(struct inode *inode, u64 start, u64 end)
 {
-	u64 index = start >> PAGE_SHIFT;
-	u64 end_index = end >> PAGE_SHIFT;
-	struct page *page;
-	int ret = 1;
+	struct list_head *ws_list = __find_workspace(0, true);
+	struct heuristic_ws *ws;
+	u32 i;
+	u8 byte;
+	int ret = 0;
 
-	while (index <= end_index) {
-		page = find_get_page(inode->i_mapping, index);
-		kmap(page);
-		kunmap(page);
-		put_page(page);
-		index++;
+	ws = list_entry(ws_list, struct heuristic_ws, list);
+
+	heuristic_collect_sample(inode, start, end, ws);
+
+	if (sample_repeated_patterns(ws)) {
+		ret = 1;
+		goto out;
 	}
 
+	memset(ws->bucket, 0, sizeof(*ws->bucket)*BUCKET_SIZE);
+
+	for (i = 0; i < ws->sample_size; i++) {
+		byte = ws->sample[i];
+		ws->bucket[byte].count++;
+	}
+
+	i = byte_set_size(ws);
+	if (i < BYTE_SET_THRESHOLD) {
+		ret = 2;
+		goto out;
+	}
+
+	i = byte_core_set_size(ws);
+	if (i <= BYTE_CORE_SET_LOW) {
+		ret = 3;
+		goto out;
+	}
+
+	if (i >= BYTE_CORE_SET_HIGH) {
+		ret = 0;
+		goto out;
+	}
+
+	i = shannon_entropy(ws);
+	if (i <= ENTROPY_LVL_ACEPTABLE) {
+		ret = 4;
+		goto out;
+	}
+
+	/*
+	 * At below entropy levels additional
+	 * analysis needed for show green light to compression
+	 * For now just assume that compression at that level are
+	 * not worth for resources, becuase:
+	 * 1. that possible to defrag data later
+	 * 2. Case where that will really show compressible data are rare
+	 *   ex. 150 byte types, every bucket have counter at level ~54
+	 *   Heuristic will be confused, that can happen when data
+	 *   have some internal repeated patterns abbacbbc..
+	 *   that can be detected only by analize sample for byte pairs
+	 */
+	if (i < ENTROPY_LVL_HIGH) {
+		ret = 5;
+		goto out;
+	} else {
+		ret = 0;
+		goto out;
+	}
+
+out:
+	__free_workspace(0, ws_list, true);
 	return ret;
+}
+
+unsigned int btrfs_compress_str2level(const char *str)
+{
+	long level;
+	int max;
+
+	if (strncmp(str, "zlib", 4) == 0)
+		max = 9;
+	else if (strncmp(str, "zstd", 4) == 0)
+		max = 15; // encoded on 4 bits, real max is 22
+	else
+		return 0;
+
+	str += 4;
+	if (*str == ':')
+		str++;
+
+	if (kstrtoul(str, 10, &level))
+		return 0;
+
+	return (level > max) ? 0 : level;
 }

@@ -790,6 +790,7 @@ struct btrfs_fs_info {
 	 */
 	unsigned long pending_changes;
 	unsigned long compress_type:4;
+	unsigned int compress_level;
 	int commit_interval;
 	/*
 	 * It is a suggestive number, the read side is safe even it gets a
@@ -878,9 +879,6 @@ struct btrfs_fs_info {
 	rwlock_t tree_mod_log_lock;
 	struct rb_root tree_mod_log;
 
-	atomic_t nr_async_submits;
-	atomic_t async_submit_draining;
-	atomic_t nr_async_bios;
 	atomic_t async_delalloc_pages;
 	atomic_t open_ioctl_trans;
 
@@ -2821,9 +2819,7 @@ enum btrfs_compare_tree_result {
 	BTRFS_COMPARE_TREE_CHANGED,
 	BTRFS_COMPARE_TREE_SAME,
 };
-typedef int (*btrfs_changed_cb_t)(struct btrfs_root *left_root,
-				  struct btrfs_root *right_root,
-				  struct btrfs_path *left_path,
+typedef int (*btrfs_changed_cb_t)(struct btrfs_path *left_path,
 				  struct btrfs_path *right_path,
 				  struct btrfs_key *key,
 				  enum btrfs_compare_tree_result result,
