@@ -23,7 +23,6 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/io.h>
-#include <linux/miscdevice.h>
 #include <linux/platform_device.h>
 #include <linux/firmware.h>
 #include <linux/pm_runtime.h>
@@ -532,6 +531,14 @@ static struct sst_acpi_mach sst_acpi_bytcr[] = {
 	{
 		.id = "10EC5648",
 		.drv_name = "cht-bsw-rt5645",
+		.fw_filename = "intel/fw_sst_0f28.bin",
+		.board = "cht-bsw",
+		.pdata = &byt_rvp_platform_data
+	},
+	/* use CHT driver to Baytrail Chromebooks */
+	{
+		.id = "193C9890",
+		.drv_name = "cht-bsw-max98090",
 		.fw_filename = "intel/fw_sst_0f28.bin",
 		.board = "cht-bsw",
 		.pdata = &byt_rvp_platform_data
