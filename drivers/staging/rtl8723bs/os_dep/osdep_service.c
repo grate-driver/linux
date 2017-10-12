@@ -30,22 +30,17 @@ inline int RTW_STATUS_CODE(int error_code)
 	return _FAIL;
 }
 
-u8 *_rtw_malloc(u32 sz)
+void *_rtw_malloc(u32 sz)
 {
-	u8 *pbuf = NULL;
-
-	pbuf = kmalloc(sz, in_interrupt() ? GFP_ATOMIC : GFP_KERNEL);
-
-	return pbuf;
+	return kmalloc(sz, in_interrupt() ? GFP_ATOMIC : GFP_KERNEL);
 }
 
-u8 *_rtw_zmalloc(u32 sz)
+void *_rtw_zmalloc(u32 sz)
 {
-	u8 *pbuf = _rtw_malloc(sz);
+	void *pbuf = _rtw_malloc(sz);
 
-	if (pbuf != NULL) {
+	if (pbuf)
 		memset(pbuf, 0, sz);
-	}
 
 	return pbuf;
 }
@@ -470,7 +465,7 @@ struct rtw_cbuf *rtw_cbuf_alloc(u32 size)
 {
 	struct rtw_cbuf *cbuf;
 
-	cbuf = (struct rtw_cbuf *)rtw_malloc(sizeof(*cbuf) + sizeof(void*)*size);
+	cbuf = rtw_malloc(sizeof(*cbuf) + sizeof(void *) * size);
 
 	if (cbuf) {
 		cbuf->write = cbuf->read = 0;

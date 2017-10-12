@@ -49,43 +49,6 @@ u8 channel5g_80m[CHANNEL_MAX_NUMBER_5G_80M] = {
 	42, 58, 106, 122, 138, 155, 171
 };
 
-void rtl_addr_delay(u32 addr)
-{
-	if (addr == 0xfe)
-		mdelay(50);
-	else if (addr == 0xfd)
-		msleep(5);
-	else if (addr == 0xfc)
-		msleep(1);
-	else if (addr == 0xfb)
-		usleep_range(50, 100);
-	else if (addr == 0xfa)
-		usleep_range(5, 10);
-	else if (addr == 0xf9)
-		usleep_range(1, 2);
-}
-
-void rtl_rfreg_delay(struct ieee80211_hw *hw, enum radio_path rfpath, u32 addr,
-		     u32 mask, u32 data)
-{
-	if (addr >= 0xf9 && addr <= 0xfe) {
-		rtl_addr_delay(addr);
-	} else {
-		rtl_set_rfreg(hw, rfpath, addr, mask, data);
-		udelay(1);
-	}
-}
-
-void rtl_bb_delay(struct ieee80211_hw *hw, u32 addr, u32 data)
-{
-	if (addr >= 0xf9 && addr <= 0xfe) {
-		rtl_addr_delay(addr);
-	} else {
-		rtl_set_bbreg(hw, addr, MASKDWORD, data);
-		udelay(1);
-	}
-}
-
 static void rtl_fw_do_work(const struct firmware *firmware, void *context,
 			   bool is_wow)
 {
@@ -449,7 +412,8 @@ static void _rtl_add_wowlan_patterns(struct ieee80211_hw *hw,
 	for (i = 0; i < wow->n_patterns; i++) {
 		memset(&rtl_pattern, 0, sizeof(struct rtl_wow_pattern));
 		memset(mask, 0, MAX_WOL_BIT_MASK_SIZE);
-		if (patterns[i].pattern_len > MAX_WOL_PATTERN_SIZE) {
+		if (patterns[i].pattern_len < 0 ||
+		    patterns[i].pattern_len > MAX_WOL_PATTERN_SIZE) {
 			RT_TRACE(rtlpriv, COMP_POWER, DBG_WARNING,
 				 "Pattern[%d] is too long\n", i);
 			continue;
@@ -1160,7 +1124,7 @@ static void rtl_op_bss_info_changed(struct ieee80211_hw *hw,
 			if (rtlpriv->dm.supp_phymode_switch) {
 				if (sta->ht_cap.ht_supported)
 					rtl_send_smps_action(hw, sta,
-							IEEE80211_SMPS_STATIC);
+							     IEEE80211_SMPS_STATIC);
 			}
 
 			if (rtlhal->current_bandtype == BAND_ON_5G) {
@@ -1224,7 +1188,7 @@ static void rtl_op_bss_info_changed(struct ieee80211_hw *hw,
 				cfg80211_unlink_bss(hw->wiphy, bss);
 				cfg80211_put_bss(hw->wiphy, bss);
 				RT_TRACE(rtlpriv, COMP_MAC80211, DBG_DMESG,
-					"cfg80211_unlink !!\n");
+					 "cfg80211_unlink !!\n");
 			}
 
 			eth_zero_addr(mac->bssid);
@@ -1885,7 +1849,7 @@ bool rtl_hal_pwrseqcmdparsing(struct rtl_priv *rtlpriv, u8 cut_version,
 				break;
 			case PWR_CMD_WRITE:
 				RT_TRACE(rtlpriv, COMP_INIT, DBG_TRACE,
-					"%s(): PWR_CMD_WRITE\n", __func__);
+					 "%s(): PWR_CMD_WRITE\n", __func__);
 				offset = GET_PWR_CFG_OFFSET(cfg_cmd);
 
 				/*Read the value from system register*/
