@@ -411,7 +411,7 @@ static void buffer_queue(struct vb2_buffer *vb)
 	spin_lock_irqsave(&isi->irqlock, flags);
 	list_add_tail(&buf->list, &isi->video_buffer_list);
 
-	if (isi->active == NULL) {
+	if (!isi->active) {
 		isi->active = buf;
 		if (vb2_is_streaming(vb->vb2_queue))
 			start_dma(isi, buf);
@@ -1038,10 +1038,8 @@ static int isi_formats_init(struct atmel_isi *isi)
 	isi->user_formats = devm_kcalloc(isi->dev,
 					 num_fmts, sizeof(struct isi_format *),
 					 GFP_KERNEL);
-	if (!isi->user_formats) {
-		dev_err(isi->dev, "could not allocate memory\n");
+	if (!isi->user_formats)
 		return -ENOMEM;
-	}
 
 	memcpy(isi->user_formats, isi_fmts,
 	       num_fmts * sizeof(struct isi_format *));
@@ -1143,7 +1141,7 @@ static int isi_graph_init(struct atmel_isi *isi)
 
 	/* Register the subdevices notifier. */
 	subdevs = devm_kzalloc(isi->dev, sizeof(*subdevs), GFP_KERNEL);
-	if (subdevs == NULL) {
+	if (!subdevs) {
 		of_node_put(isi->entity.node);
 		return -ENOMEM;
 	}
@@ -1176,10 +1174,8 @@ static int atmel_isi_probe(struct platform_device *pdev)
 	int ret, i;
 
 	isi = devm_kzalloc(&pdev->dev, sizeof(struct atmel_isi), GFP_KERNEL);
-	if (!isi) {
-		dev_err(&pdev->dev, "Can't allocate interface!\n");
+	if (!isi)
 		return -ENOMEM;
-	}
 
 	isi->pclk = devm_clk_get(&pdev->dev, "isi_clk");
 	if (IS_ERR(isi->pclk))
@@ -1204,7 +1200,7 @@ static int atmel_isi_probe(struct platform_device *pdev)
 		return ret;
 
 	isi->vdev = video_device_alloc();
-	if (isi->vdev == NULL) {
+	if (!isi->vdev) {
 		ret = -ENOMEM;
 		goto err_vdev_alloc;
 	}

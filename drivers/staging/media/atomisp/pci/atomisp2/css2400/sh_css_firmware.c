@@ -145,7 +145,7 @@ sh_css_load_blob_info(const char *fw, const struct ia_css_fw_info *bi, struct ia
 		size_t configstruct_size = sizeof(struct ia_css_config_memory_offsets);
 		size_t statestruct_size = sizeof(struct ia_css_state_memory_offsets);
 
-		char *parambuf = (char *)kmalloc(paramstruct_size + configstruct_size + statestruct_size,
+		char *parambuf = kmalloc(paramstruct_size + configstruct_size + statestruct_size,
 							GFP_KERNEL);
 		if (parambuf == NULL)
 			return IA_CSS_ERR_CANNOT_ALLOCATE_MEMORY;
@@ -235,7 +235,9 @@ sh_css_load_firmware(const char *fw_data,
 		sh_css_blob_info = NULL;
 	}
 
-	fw_minibuffer = kzalloc(sh_css_num_binaries * sizeof(struct fw_param), GFP_KERNEL);
+	fw_minibuffer = kcalloc(sh_css_num_binaries, sizeof(struct fw_param),
+				GFP_KERNEL);
+
 	if (fw_minibuffer == NULL)
 		return IA_CSS_ERR_CANNOT_ALLOCATE_MEMORY;
 
@@ -295,10 +297,8 @@ void sh_css_unload_firmware(void)
 	}
 
 	memset(&sh_css_sp_fw, 0, sizeof(sh_css_sp_fw));
-	if (sh_css_blob_info) {
-		kfree(sh_css_blob_info);
-		sh_css_blob_info = NULL;
-	}
+	kfree(sh_css_blob_info);
+	sh_css_blob_info = NULL;
 	sh_css_num_binaries = 0;
 }
 

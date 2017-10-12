@@ -1505,12 +1505,10 @@ static int isc_formats_init(struct isc_device *isc)
 
 	isc->num_user_formats = num_fmts;
 	isc->user_formats = devm_kcalloc(isc->dev,
-					 num_fmts, sizeof(struct isc_format *),
+					 num_fmts, sizeof(*isc->user_formats),
 					 GFP_KERNEL);
-	if (!isc->user_formats) {
-		v4l2_err(&isc->v4l2_dev, "could not allocate memory\n");
+	if (!isc->user_formats)
 		return -ENOMEM;
-	}
 
 	fmt = &isc_formats[0];
 	for (i = 0, j = 0; i < ARRAY_SIZE(isc_formats); i++) {
@@ -1592,7 +1590,7 @@ static int isc_async_complete(struct v4l2_async_notifier *notifier)
 	spin_lock_init(&isc->dma_queue_lock);
 
 	sd_entity->config = v4l2_subdev_alloc_pad_config(sd_entity->sd);
-	if (sd_entity->config == NULL)
+	if (!sd_entity->config)
 		return -ENOMEM;
 
 	ret = isc_formats_init(isc);
@@ -1716,7 +1714,7 @@ static int isc_parse_dt(struct device *dev, struct isc_device *isc)
 
 		subdev_entity = devm_kzalloc(dev,
 					  sizeof(*subdev_entity), GFP_KERNEL);
-		if (subdev_entity == NULL) {
+		if (!subdev_entity) {
 			of_node_put(rem);
 			ret = -ENOMEM;
 			break;
@@ -1724,7 +1722,7 @@ static int isc_parse_dt(struct device *dev, struct isc_device *isc)
 
 		subdev_entity->asd = devm_kzalloc(dev,
 				     sizeof(*subdev_entity->asd), GFP_KERNEL);
-		if (subdev_entity->asd == NULL) {
+		if (!subdev_entity->asd) {
 			of_node_put(rem);
 			ret = -ENOMEM;
 			break;

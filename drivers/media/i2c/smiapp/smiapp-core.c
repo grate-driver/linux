@@ -1313,7 +1313,7 @@ static int smiapp_power_on(struct device *dev)
 	rval = smiapp_write(sensor, SMIAPP_REG_U8_DPHY_CTRL,
 			    SMIAPP_DPHY_CTRL_UI);
 	if (rval < 0)
-		return rval;
+		goto out_cci_addr_fail;
 
 	rval = smiapp_call_quirk(sensor, post_poweron);
 	if (rval) {
@@ -2829,12 +2829,10 @@ static struct smiapp_hwconfig *smiapp_get_hwconfig(struct device *dev)
 	/* NVM size is not mandatory */
 	fwnode_property_read_u32(fwnode, "nokia,nvm-size", &hwcfg->nvm_size);
 
-	rval = fwnode_property_read_u32(fwnode, "clock-frequency",
+	rval = fwnode_property_read_u32(dev_fwnode(dev), "clock-frequency",
 					&hwcfg->ext_clk);
-	if (rval) {
-		dev_warn(dev, "can't get clock-frequency\n");
-		goto out_err;
-	}
+	if (rval)
+		dev_info(dev, "can't get clock-frequency\n");
 
 	dev_dbg(dev, "nvm %d, clk %d, mode %d\n",
 		hwcfg->nvm_size, hwcfg->ext_clk, hwcfg->csi_signalling_mode);
@@ -2894,18 +2892,46 @@ static int smiapp_probe(struct i2c_client *client,
 	}
 
 	sensor->ext_clk = devm_clk_get(&client->dev, NULL);
-	if (IS_ERR(sensor->ext_clk)) {
+	if (PTR_ERR(sensor->ext_clk) == -ENOENT) {
+		dev_info(&client->dev, "no clock defined, continuing...\n");
+		sensor->ext_clk = NULL;
+	} else if (IS_ERR(sensor->ext_clk)) {
 		dev_err(&client->dev, "could not get clock (%ld)\n",
 			PTR_ERR(sensor->ext_clk));
 		return -EPROBE_DEFER;
 	}
 
-	rval = clk_set_rate(sensor->ext_clk, sensor->hwcfg->ext_clk);
-	if (rval < 0) {
-		dev_err(&client->dev,
-			"unable to set clock freq to %u\n",
+	if (sensor->ext_clk) {
+		if (sensor->hwcfg->ext_clk) {
+			unsigned long rate;
+
+			rval = clk_set_rate(sensor->ext_clk,
+					    sensor->hwcfg->ext_clk);
+			if (rval < 0) {
+				dev_err(&client->dev,
+					"unable to set clock freq to %u\n",
+					sensor->hwcfg->ext_clk);
+				return rval;
+			}
+
+			rate = clk_get_rate(sensor->ext_clk);
+			if (rate != sensor->hwcfg->ext_clk) {
+				dev_err(&client->dev,
+					"can't set clock freq, asked for %u but got %lu\n",
+					sensor->hwcfg->ext_clk, rate);
+				return rval;
+			}
+		} else {
+			sensor->hwcfg->ext_clk = clk_get_rate(sensor->ext_clk);
+			dev_dbg(&client->dev, "obtained clock freq %u\n",
+				sensor->hwcfg->ext_clk);
+		}
+	} else if (sensor->hwcfg->ext_clk) {
+		dev_dbg(&client->dev, "assuming clock freq %u\n",
 			sensor->hwcfg->ext_clk);
-		return rval;
+	} else {
+		dev_err(&client->dev, "unable to obtain clock freq\n");
+		return -EINVAL;
 	}
 
 	sensor->xshutdown = devm_gpiod_get_optional(&client->dev, "xshutdown",
