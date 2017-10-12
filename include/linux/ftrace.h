@@ -51,6 +51,30 @@ static inline void early_trace_init(void) { }
 struct module;
 struct ftrace_hash;
 
+#if defined(CONFIG_FUNCTION_TRACER) && defined(CONFIG_MODULES) && \
+	defined(CONFIG_DYNAMIC_FTRACE)
+const char *
+ftrace_mod_address_lookup(unsigned long addr, unsigned long *size,
+		   unsigned long *off, char **modname, char *sym);
+int ftrace_mod_get_kallsym(unsigned int symnum, unsigned long *value,
+			   char *type, char *name,
+			   char *module_name, int *exported);
+#else
+static inline const char *
+ftrace_mod_address_lookup(unsigned long addr, unsigned long *size,
+		   unsigned long *off, char **modname, char *sym)
+{
+	return NULL;
+}
+static inline int ftrace_mod_get_kallsym(unsigned int symnum, unsigned long *value,
+					 char *type, char *name,
+					 char *module_name, int *exported)
+{
+	return -1;
+}
+#endif
+
+
 #ifdef CONFIG_FUNCTION_TRACER
 
 extern int ftrace_enabled;
@@ -151,8 +175,10 @@ struct ftrace_ops_hash {
 };
 
 void ftrace_free_init_mem(void);
+void ftrace_free_mem(struct module *mod, void *start, void *end);
 #else
 static inline void ftrace_free_init_mem(void) { }
+static inline void ftrace_free_mem(struct module *mod, void *start, void *end) { }
 #endif
 
 /*
@@ -270,6 +296,7 @@ static inline int ftrace_nr_registered_ops(void)
 static inline void clear_ftrace_function(void) { }
 static inline void ftrace_kill(void) { }
 static inline void ftrace_free_init_mem(void) { }
+static inline void ftrace_free_mem(struct module *mod, void *start, void *end) { }
 #endif /* CONFIG_FUNCTION_TRACER */
 
 #ifdef CONFIG_STACK_TRACER
