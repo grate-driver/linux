@@ -1899,7 +1899,7 @@ static bool rcu_nocb_cpu_needs_barrier(struct rcu_state *rsp, int cpu)
 	if (!READ_ONCE(rdp->nocb_kthread) && rhp &&
 	    rcu_scheduler_fully_active) {
 		/* RCU callback enqueued before CPU first came online??? */
-		pr_err("RCU: Never-onlined no-CBs CPU %d has CB %p\n",
+		pr_err("RCU: Never-onlined no-CBs CPU %d has CB %pK\n",
 		       cpu, rhp->func);
 		WARN_ON_ONCE(1);
 	}
