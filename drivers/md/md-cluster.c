@@ -15,7 +15,7 @@
 #include <linux/sched.h>
 #include <linux/raid/md_p.h>
 #include "md.h"
-#include "bitmap.h"
+#include "md-bitmap.h"
 #include "md-cluster.h"
 
 #define LVB_SIZE	64
@@ -1094,7 +1094,7 @@ static void metadata_update_cancel(struct mddev *mddev)
 /*
  * return 0 if all the bitmaps have the same sync_size
  */
-int cluster_check_sync_size(struct mddev *mddev)
+static int cluster_check_sync_size(struct mddev *mddev)
 {
 	int i, rv;
 	bitmap_super_t *sb;

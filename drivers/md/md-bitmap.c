@@ -29,7 +29,7 @@
 #include <linux/seq_file.h>
 #include <trace/events/block.h>
 #include "md.h"
-#include "bitmap.h"
+#include "md-bitmap.h"
 
 static inline char *bmname(struct bitmap *bitmap)
 {
@@ -153,6 +153,7 @@ static int read_sb_page(struct mddev *mddev, loff_t offset,
 
 	struct md_rdev *rdev;
 	sector_t target;
+	int target_size;
 
 	rdev_for_each(rdev, mddev) {
 		if (! test_bit(In_sync, &rdev->flags)
@@ -161,9 +162,12 @@ static int read_sb_page(struct mddev *mddev, loff_t offset,
 			continue;
 
 		target = offset + index * (PAGE_SIZE/512);
+		target_size = min_t(u64, size, i_size_read(rdev->bdev->bd_inode) -
+			((target + rdev->sb_start) << 9));
+		target_size = roundup(target_size,
+			bdev_logical_block_size(rdev->bdev));
 
-		if (sync_page_io(rdev, target,
-				 roundup(size, bdev_logical_block_size(rdev->bdev)),
+		if (sync_page_io(rdev, target, target_size,
 				 page, REQ_OP_READ, 0, true)) {
 			page->index = index;
 			return 0;
