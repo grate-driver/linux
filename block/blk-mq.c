@@ -476,7 +476,13 @@ void blk_mq_free_request(struct request *rq)
 	if (rq->rq_flags & RQF_MQ_INFLIGHT)
 		atomic_dec(&hctx->nr_active);
 
+	if (unlikely(laptop_mode && !blk_rq_is_passthrough(rq)))
+		laptop_io_completion(q->backing_dev_info);
+
 	wbt_done(q->rq_wb, &rq->issue_stat);
+
+	if (blk_rq_rl(rq))
+		blk_put_rl(blk_rq_rl(rq));
 
 	clear_bit(REQ_ATOM_STARTED, &rq->atomic_flags);
 	clear_bit(REQ_ATOM_POLL_SLEPT, &rq->atomic_flags);
@@ -593,22 +599,32 @@ void blk_mq_start_request(struct request *rq)
 
 	blk_add_timer(rq);
 
-	/*
-	 * Ensure that ->deadline is visible before set the started
-	 * flag and clear the completed flag.
-	 */
-	smp_mb__before_atomic();
+	WARN_ON_ONCE(test_bit(REQ_ATOM_STARTED, &rq->atomic_flags));
 
 	/*
 	 * Mark us as started and clear complete. Complete might have been
 	 * set if requeue raced with timeout, which then marked it as
 	 * complete. So be sure to clear complete again when we start
 	 * the request, otherwise we'll ignore the completion event.
+	 *
+	 * Ensure that ->deadline is visible before we set STARTED, such that
+	 * blk_mq_check_expired() is guaranteed to observe our ->deadline when
+	 * it observes STARTED.
 	 */
-	if (!test_bit(REQ_ATOM_STARTED, &rq->atomic_flags))
-		set_bit(REQ_ATOM_STARTED, &rq->atomic_flags);
-	if (test_bit(REQ_ATOM_COMPLETE, &rq->atomic_flags))
+	smp_wmb();
+	set_bit(REQ_ATOM_STARTED, &rq->atomic_flags);
+	if (test_bit(REQ_ATOM_COMPLETE, &rq->atomic_flags)) {
+		/*
+		 * Coherence order guarantees these consecutive stores to a
+		 * single variable propagate in the specified order. Thus the
+		 * clear_bit() is ordered _after_ the set bit. See
+		 * blk_mq_check_expired().
+		 *
+		 * (the bits must be part of the same byte for this to be
+		 * true).
+		 */
 		clear_bit(REQ_ATOM_COMPLETE, &rq->atomic_flags);
+	}
 
 	if (q->dma_drain_size && blk_rq_bytes(rq)) {
 		/*
@@ -778,9 +794,18 @@ static void blk_mq_check_expired(struct blk_mq_hw_ctx *hctx,
 		struct request *rq, void *priv, bool reserved)
 {
 	struct blk_mq_timeout_data *data = priv;
+	unsigned long deadline;
 
 	if (!test_bit(REQ_ATOM_STARTED, &rq->atomic_flags))
 		return;
+
+	/*
+	 * Ensures that if we see STARTED we must also see our
+	 * up-to-date deadline, see blk_mq_start_request().
+	 */
+	smp_rmb();
+
+	deadline = READ_ONCE(rq->deadline);
 
 	/*
 	 * The rq being checked may have been freed and reallocated
@@ -795,11 +820,20 @@ static void blk_mq_check_expired(struct blk_mq_hw_ctx *hctx,
 	 *   and clearing the flag in blk_mq_start_request(), so
 	 *   this rq won't be timed out too.
 	 */
-	if (time_after_eq(jiffies, rq->deadline)) {
-		if (!blk_mark_rq_complete(rq))
+	if (time_after_eq(jiffies, deadline)) {
+		if (!blk_mark_rq_complete(rq)) {
+			/*
+			 * Again coherence order ensures that consecutive reads
+			 * from the same variable must be in that order. This
+			 * ensures that if we see COMPLETE clear, we must then
+			 * see STARTED set and we'll ignore this timeout.
+			 *
+			 * (There's also the MB implied by the test_and_clear())
+			 */
 			blk_mq_rq_timed_out(rq, reserved);
-	} else if (!data->next_set || time_after(data->next, rq->deadline)) {
-		data->next = rq->deadline;
+		}
+	} else if (!data->next_set || time_after(data->next, deadline)) {
+		data->next = deadline;
 		data->next_set = 1;
 	}
 }
@@ -1501,13 +1535,9 @@ static void blk_mq_bio_to_request(struct request *rq, struct bio *bio)
 {
 	blk_init_request_from_bio(rq, bio);
 
-	blk_account_io_start(rq, true);
-}
+	blk_rq_set_rl(rq, blk_get_rl(rq->q, bio));
 
-static inline bool hctx_allow_merges(struct blk_mq_hw_ctx *hctx)
-{
-	return (hctx->flags & BLK_MQ_F_SHOULD_MERGE) &&
-		!blk_queue_nomerges(hctx->queue);
+	blk_account_io_start(rq, true);
 }
 
 static inline void blk_mq_queue_io(struct blk_mq_hw_ctx *hctx,
@@ -2898,6 +2928,12 @@ EXPORT_SYMBOL_GPL(blk_mq_poll);
 
 static int __init blk_mq_init(void)
 {
+	/*
+	 * See comment in block/blk.h rq_atomic_flags enum
+	 */
+	BUILD_BUG_ON((REQ_ATOM_STARTED / BITS_PER_BYTE) !=
+			(REQ_ATOM_COMPLETE / BITS_PER_BYTE));
+
 	cpuhp_setup_state_multi(CPUHP_BLK_MQ_DEAD, "block/mq:dead", NULL,
 				blk_mq_hctx_notify_dead);
 	return 0;
