@@ -191,6 +191,7 @@ struct cros_ec_dev {
 	struct cros_ec_device *ec_dev;
 	struct device *dev;
 	struct cros_ec_debugfs *debug_info;
+	bool has_kb_wake_angle;
 	u16 cmd_offset;
 	u32 features[2];
 };
