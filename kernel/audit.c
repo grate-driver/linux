@@ -72,6 +72,7 @@
 #include <linux/freezer.h>
 #include <linux/pid_namespace.h>
 #include <net/netns/generic.h>
+#include <linux/dcache.h>
 
 #include "audit.h"
 
@@ -85,13 +86,13 @@ static int	audit_initialized;
 #define AUDIT_OFF	0
 #define AUDIT_ON	1
 #define AUDIT_LOCKED	2
-u32		audit_enabled;
-u32		audit_ever_enabled;
+u32		audit_enabled = AUDIT_OFF;
+bool		audit_ever_enabled = !!AUDIT_OFF;
 
 EXPORT_SYMBOL_GPL(audit_enabled);
 
 /* Default state when kernel boots without any parameters. */
-static u32	audit_default;
+static u32	audit_default = AUDIT_OFF;
 
 /* If auditing cannot proceed, audit_failure selects what happens. */
 static u32	audit_failure = AUDIT_FAIL_PRINTK;
@@ -1549,8 +1550,6 @@ static int __init audit_init(void)
 	register_pernet_subsys(&audit_net_ops);
 
 	audit_initialized = AUDIT_INITIALIZED;
-	audit_enabled = audit_default;
-	audit_ever_enabled |= !!audit_default;
 
 	kauditd_task = kthread_run(kauditd_thread, NULL, "kauditd");
 	if (IS_ERR(kauditd_task)) {
@@ -1564,14 +1563,21 @@ static int __init audit_init(void)
 
 	return 0;
 }
-__initcall(audit_init);
+postcore_initcall(audit_init);
 
 /* Process kernel command-line parameter at boot time.  audit=0 or audit=1. */
 static int __init audit_enable(char *str)
 {
-	audit_default = !!simple_strtol(str, NULL, 0);
-	if (!audit_default)
+	long val;
+
+	if (kstrtol(str, 0, &val))
+		panic("audit: invalid 'audit' parameter value (%s)\n", str);
+	audit_default = (val ? AUDIT_ON : AUDIT_OFF);
+
+	if (audit_default == AUDIT_OFF)
 		audit_initialized = AUDIT_DISABLED;
+	if (audit_set_enabled(audit_default))
+		panic("audit: error setting audit state (%d)\n", audit_default);
 
 	pr_info("%s\n", audit_default ?
 		"enabled (after initialization)" : "disabled (until reboot)");
@@ -2048,6 +2054,10 @@ void audit_copy_inode(struct audit_names *name, const struct dentry *dentry,
 	name->gid   = inode->i_gid;
 	name->rdev  = inode->i_rdev;
 	security_inode_getsecid(inode, &name->osid);
+	if (name->dentry) {
+		dput(name->dentry);
+		name->dentry = NULL;
+	}
 	audit_copy_fcaps(name, dentry);
 }
 
@@ -2089,6 +2099,21 @@ void audit_log_name(struct audit_context *context, struct audit_names *n,
 			audit_log_n_untrustedstring(ab, n->name->name,
 						    n->name_len);
 		}
+	} else if (n->dentry) {
+		char *fullpath;
+		const char *fullpathp = NULL;
+
+		fullpath = kmalloc(PATH_MAX, GFP_KERNEL);
+		if (fullpath) {
+			fullpathp = dentry_path_raw(n->dentry, fullpath, PATH_MAX);
+			if (IS_ERR(fullpathp)) {
+				fullpathp = NULL;
+				kfree(fullpath);
+			}
+		}
+		audit_log_format(ab, " name=%s(0x%lx):%s",
+				 n->dentry->d_sb->s_type->name ?: "?",
+				 n->dentry->d_sb->s_magic, fullpathp ?: "?");
 	} else
 		audit_log_format(ab, " name=(null)");
 
