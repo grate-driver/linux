@@ -641,8 +641,8 @@
 		For now, only VisioBraille is supported.
 
 	consoleblank=	[KNL] The console blank (screen saver) timeout in
-			seconds. Defaults to 10*60 = 10mins. A value of 0
-			disables the blank timer.
+			seconds. A value of 0 disables the blank timer.
+                       Defaults to 0.
 
 	coredump_filter=
 			[KNL] Change the default value for
@@ -2248,7 +2248,7 @@
 			s2idle  - Suspend-To-Idle
 			shallow - Power-On Suspend or equivalent (if supported)
 			deep    - Suspend-To-RAM or equivalent (if supported)
-			See Documentation/power/states.txt.
+			See Documentation/admin-guide/pm/sleep-states.rst.
 
 	meye.*=		[HW] Set MotionEye Camera parameters
 			See Documentation/video4linux/meye.txt.
@@ -3884,6 +3884,12 @@
 	softlockup_panic=
 			[KNL] Should the soft-lockup detector generate panics.
 			Format: <integer>
+
+			A nonzero value instructs the soft-lockup detector
+			to panic the machine when a soft-lockup occurs. This
+			is also controlled by CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC
+			which is the respective build-time switch to that
+			functionality.
 
 	softlockup_all_cpu_backtrace=
 			[KNL] Should the soft-lockup detector generate
