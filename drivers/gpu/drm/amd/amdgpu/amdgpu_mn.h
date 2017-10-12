@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Advanced Micro Devices, Inc.
+ * Copyright 2017 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -19,16 +19,34 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  *
+ * Authors: Christian König
  */
+#ifndef __AMDGPU_MN_H__
+#define __AMDGPU_MN_H__
 
-#ifndef _EVENTINIT_H_
-#define _EVENTINIT_H_
+/*
+ * MMU Notifier
+ */
+struct amdgpu_mn;
 
-#define PEM_CURRENT_POWERPLAY_FEATURE_VERSION 4
+#if defined(CONFIG_MMU_NOTIFIER)
+void amdgpu_mn_lock(struct amdgpu_mn *mn);
+void amdgpu_mn_unlock(struct amdgpu_mn *mn);
+struct amdgpu_mn *amdgpu_mn_get(struct amdgpu_device *adev);
+int amdgpu_mn_register(struct amdgpu_bo *bo, unsigned long addr);
+void amdgpu_mn_unregister(struct amdgpu_bo *bo);
+#else
+static inline void amdgpu_mn_lock(struct amdgpu_mn *mn) {}
+static inline void amdgpu_mn_unlock(struct amdgpu_mn *mn) {}
+static inline struct amdgpu_mn *amdgpu_mn_get(struct amdgpu_device *adev)
+{
+	return NULL;
+}
+static inline int amdgpu_mn_register(struct amdgpu_bo *bo, unsigned long addr)
+{
+	return -ENODEV;
+}
+static inline void amdgpu_mn_unregister(struct amdgpu_bo *bo) {}
+#endif
 
-void pem_init_feature_info(struct pp_eventmgr *eventmgr);
-void pem_uninit_featureInfo(struct pp_eventmgr *eventmgr);
-int pem_register_interrupts(struct pp_eventmgr *eventmgr);
-int pem_unregister_interrupts(struct pp_eventmgr *eventmgr);
-
-#endif /* _EVENTINIT_H_ */
+#endif
