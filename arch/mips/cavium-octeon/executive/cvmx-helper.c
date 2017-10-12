@@ -31,6 +31,7 @@
  *
  */
 #include <asm/octeon/octeon.h>
+#include <asm/octeon/cvmx-sysinfo.h>
 
 #include <asm/octeon/cvmx-config.h>
 
@@ -862,7 +863,7 @@ int __cvmx_helper_errata_fix_ipd_ptr_alignment(void)
 	 */
 	cvmx_write_csr(CVMX_ASXX_RX_PRT_EN(INTERFACE(FIX_IPD_OUTPORT)), 0);
 
-	cvmx_wait(100000000ull);
+	__delay(100000000ull);
 
 	for (retry_loop_cnt = 0; retry_loop_cnt < 10; retry_loop_cnt++) {
 		retry_cnt = 100000;
