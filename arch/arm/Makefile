@@ -342,7 +342,7 @@ $(INSTALL_TARGETS):
 
 PHONY += dtbs dtbs_install
 
-dtbs: prepare scripts
+dtbs: scripts
 	$(Q)$(MAKE) $(build)=$(boot)/dts
 
 dtbs_install:
