@@ -112,6 +112,9 @@ union sa_command_0 {
 
 #define CRYPTO_MODE_ECB				0
 #define CRYPTO_MODE_CBC				1
+#define CRYPTO_MODE_OFB				2
+#define CRYPTO_MODE_CFB				3
+#define CRYPTO_MODE_CTR				4
 
 #define CRYPTO_FEEDBACK_MODE_NO_FB		0
 #define CRYPTO_FEEDBACK_MODE_64BIT_OFB		0
@@ -169,7 +172,7 @@ union sa_command_1 {
 } __attribute__((packed));
 
 struct dynamic_sa_ctl {
-	u32 sa_contents;
+	union dynamic_sa_contents sa_contents;
 	union sa_command_0 sa_command_0;
 	union sa_command_1 sa_command_1;
 } __attribute__((packed));
@@ -239,5 +242,33 @@ struct dynamic_sa_hash160 {
 } __attribute__((packed));
 #define SA_HASH160_LEN		(sizeof(struct dynamic_sa_hash160)/4)
 #define SA_HASH160_CONTENTS     0x2000a502
+
+static inline u32
+get_dynamic_sa_offset_state_ptr_field(struct dynamic_sa_ctl *cts)
+{
+	u32 offset;
+
+	offset = cts->sa_contents.bf.key_size
+		+ cts->sa_contents.bf.inner_size
+		+ cts->sa_contents.bf.outer_size
+		+ cts->sa_contents.bf.spi
+		+ cts->sa_contents.bf.seq_num0
+		+ cts->sa_contents.bf.seq_num1
+		+ cts->sa_contents.bf.seq_num_mask0
+		+ cts->sa_contents.bf.seq_num_mask1
+		+ cts->sa_contents.bf.seq_num_mask2
+		+ cts->sa_contents.bf.seq_num_mask3
+		+ cts->sa_contents.bf.iv0
+		+ cts->sa_contents.bf.iv1
+		+ cts->sa_contents.bf.iv2
+		+ cts->sa_contents.bf.iv3;
+
+	return sizeof(struct dynamic_sa_ctl) + offset * 4;
+}
+
+static inline u8 *get_dynamic_sa_key_field(struct dynamic_sa_ctl *cts)
+{
+	return (u8 *) ((unsigned long)cts + sizeof(struct dynamic_sa_ctl));
+}
 
 #endif

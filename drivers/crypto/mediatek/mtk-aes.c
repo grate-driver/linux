@@ -13,6 +13,7 @@
  */
 
 #include <crypto/aes.h>
+#include <crypto/gcm.h>
 #include "mtk-platform.h"
 
 #define AES_QUEUE_SIZE		512
@@ -928,7 +929,12 @@ static int mtk_aes_gcm_start(struct mtk_cryp *cryp, struct mtk_aes_rec *aes)
 static int mtk_aes_gcm_crypt(struct aead_request *req, u64 mode)
 {
 	struct mtk_aes_base_ctx *ctx = crypto_aead_ctx(crypto_aead_reqtfm(req));
+	struct mtk_aes_gcm_ctx *gctx = mtk_aes_gcm_ctx_cast(ctx);
 	struct mtk_aes_reqctx *rctx = aead_request_ctx(req);
+
+	/* Empty messages are not supported yet */
+	if (!gctx->textlen && !req->assoclen)
+		return -EINVAL;
 
 	rctx->mode = AES_FLAGS_GCM | mode;
 
@@ -1098,7 +1104,7 @@ static struct aead_alg aes_gcm_alg = {
 	.decrypt	= mtk_aes_gcm_decrypt,
 	.init		= mtk_aes_gcm_init,
 	.exit		= mtk_aes_gcm_exit,
-	.ivsize		= 12,
+	.ivsize		= GCM_AES_IV_SIZE,
 	.maxauthsize	= AES_BLOCK_SIZE,
 
 	.base = {

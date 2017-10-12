@@ -23,6 +23,8 @@
 #define __CRYPTO4XX_CORE_H__
 
 #include <crypto/internal/hash.h>
+#include "crypto4xx_reg_def.h"
+#include "crypto4xx_sa.h"
 
 #define MODULE_NAME "crypto4xx"
 
@@ -48,6 +50,13 @@
 
 struct crypto4xx_device;
 
+union shadow_sa_buf {
+	struct dynamic_sa_ctl sa;
+
+	/* alloc 256 bytes which is enough for any kind of dynamic sa */
+	u8 buf[256];
+} __packed;
+
 struct pd_uinfo {
 	struct crypto4xx_device *dev;
 	u32   state;
@@ -60,9 +69,9 @@ struct pd_uinfo {
 				used by this packet */
 	u32 num_sd;		/* number of scatter discriptors
 				used by this packet */
-	void *sa_va;		/* shadow sa, when using cp from ctx->sa */
+	struct dynamic_sa_ctl *sa_va;	/* shadow sa */
 	u32 sa_pa;
-	void *sr_va;		/* state record for shadow sa */
+	struct sa_state_record *sr_va;	/* state record for shadow sa */
 	u32 sr_pa;
 	struct scatterlist *dest_va;
 	struct crypto_async_request *async_req; 	/* base crypto request
@@ -72,27 +81,21 @@ struct pd_uinfo {
 struct crypto4xx_device {
 	struct crypto4xx_core_device *core_dev;
 	char *name;
-	u64  ce_phy_address;
 	void __iomem *ce_base;
 	void __iomem *trng_base;
 
-	void *pdr;			/* base address of packet
-					descriptor ring */
-	dma_addr_t pdr_pa;		/* physical address used to
-					program ce pdr_base_register */
-	void *gdr;                      /* gather descriptor ring */
-	dma_addr_t gdr_pa;		/* physical address used to
-					program ce gdr_base_register */
-	void *sdr;			/* scatter descriptor ring */
-	dma_addr_t sdr_pa;		/* physical address used to
-					program ce sdr_base_register */
+	struct ce_pd *pdr;	/* base address of packet descriptor ring */
+	dma_addr_t pdr_pa;	/* physical address of pdr_base_register */
+	struct ce_gd *gdr;	/* gather descriptor ring */
+	dma_addr_t gdr_pa;	/* physical address of gdr_base_register */
+	struct ce_sd *sdr;	/* scatter descriptor ring */
+	dma_addr_t sdr_pa;	/* physical address of sdr_base_register */
 	void *scatter_buffer_va;
 	dma_addr_t scatter_buffer_pa;
-	u32 scatter_buffer_size;
 
-	void *shadow_sa_pool;		/* pool of memory for sa in pd_uinfo */
+	union shadow_sa_buf *shadow_sa_pool;
 	dma_addr_t shadow_sa_pool_pa;
-	void *shadow_sr_pool;		/* pool of memory for sr in pd_uinfo */
+	struct sa_state_record *shadow_sr_pool;
 	dma_addr_t shadow_sr_pool_pa;
 	u32 pdr_tail;
 	u32 pdr_head;
@@ -100,7 +103,7 @@ struct crypto4xx_device {
 	u32 gdr_head;
 	u32 sdr_tail;
 	u32 sdr_head;
-	void *pdr_uinfo;
+	struct pd_uinfo *pdr_uinfo;
 	struct list_head alg_list;	/* List of algorithm supported
 					by this device */
 };
@@ -118,30 +121,18 @@ struct crypto4xx_core_device {
 
 struct crypto4xx_ctx {
 	struct crypto4xx_device *dev;
-	void *sa_in;
+	struct dynamic_sa_ctl *sa_in;
 	dma_addr_t sa_in_dma_addr;
-	void *sa_out;
+	struct dynamic_sa_ctl *sa_out;
 	dma_addr_t sa_out_dma_addr;
-	void *state_record;
+	struct sa_state_record *state_record;
 	dma_addr_t state_record_dma_addr;
 	u32 sa_len;
 	u32 offset_to_sr_ptr;           /* offset to state ptr, in dynamic sa */
 	u32 direction;
-	u32 next_hdr;
 	u32 save_iv;
-	u32 pd_ctl_len;
 	u32 pd_ctl;
-	u32 bypass;
 	u32 is_hash;
-	u32 hash_final;
-};
-
-struct crypto4xx_req_ctx {
-	struct crypto4xx_device *dev;	/* Device in which
-					operation to send to */
-	void *sa;
-	u32 sa_dma_addr;
-	u16 sa_len;
 };
 
 struct crypto4xx_alg_common {
@@ -170,31 +161,35 @@ static inline struct crypto4xx_alg *crypto_alg_to_crypto4xx_alg(
 	return container_of(x, struct crypto4xx_alg, alg.u.cipher);
 }
 
-extern int crypto4xx_alloc_sa(struct crypto4xx_ctx *ctx, u32 size);
-extern void crypto4xx_free_sa(struct crypto4xx_ctx *ctx);
-extern u32 crypto4xx_alloc_sa_rctx(struct crypto4xx_ctx *ctx,
-				   struct crypto4xx_ctx *rctx);
-extern void crypto4xx_free_sa_rctx(struct crypto4xx_ctx *rctx);
-extern void crypto4xx_free_ctx(struct crypto4xx_ctx *ctx);
-extern u32 crypto4xx_alloc_state_record(struct crypto4xx_ctx *ctx);
-extern u32 get_dynamic_sa_offset_state_ptr_field(struct crypto4xx_ctx *ctx);
-extern u32 get_dynamic_sa_offset_key_field(struct crypto4xx_ctx *ctx);
-extern u32 get_dynamic_sa_iv_size(struct crypto4xx_ctx *ctx);
-extern void crypto4xx_memcpy_le(unsigned int *dst,
-				const unsigned char *buf, int len);
-extern u32 crypto4xx_build_pd(struct crypto_async_request *req,
-			      struct crypto4xx_ctx *ctx,
-			      struct scatterlist *src,
-			      struct scatterlist *dst,
-			      unsigned int datalen,
-			      void *iv, u32 iv_len);
-extern int crypto4xx_setkey_aes_cbc(struct crypto_ablkcipher *cipher,
-				    const u8 *key, unsigned int keylen);
-extern int crypto4xx_encrypt(struct ablkcipher_request *req);
-extern int crypto4xx_decrypt(struct ablkcipher_request *req);
-extern int crypto4xx_sha1_alg_init(struct crypto_tfm *tfm);
-extern int crypto4xx_hash_digest(struct ahash_request *req);
-extern int crypto4xx_hash_final(struct ahash_request *req);
-extern int crypto4xx_hash_update(struct ahash_request *req);
-extern int crypto4xx_hash_init(struct ahash_request *req);
+int crypto4xx_alloc_sa(struct crypto4xx_ctx *ctx, u32 size);
+void crypto4xx_free_sa(struct crypto4xx_ctx *ctx);
+void crypto4xx_free_ctx(struct crypto4xx_ctx *ctx);
+u32 crypto4xx_alloc_state_record(struct crypto4xx_ctx *ctx);
+void crypto4xx_memcpy_le(unsigned int *dst,
+			 const unsigned char *buf, int len);
+u32 crypto4xx_build_pd(struct crypto_async_request *req,
+		       struct crypto4xx_ctx *ctx,
+		       struct scatterlist *src,
+		       struct scatterlist *dst,
+		       unsigned int datalen,
+		       void *iv, u32 iv_len);
+int crypto4xx_setkey_aes_cbc(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen);
+int crypto4xx_setkey_aes_cfb(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen);
+int crypto4xx_setkey_aes_ecb(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen);
+int crypto4xx_setkey_aes_ofb(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen);
+int crypto4xx_setkey_rfc3686(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen);
+int crypto4xx_encrypt(struct ablkcipher_request *req);
+int crypto4xx_decrypt(struct ablkcipher_request *req);
+int crypto4xx_rfc3686_encrypt(struct ablkcipher_request *req);
+int crypto4xx_rfc3686_decrypt(struct ablkcipher_request *req);
+int crypto4xx_sha1_alg_init(struct crypto_tfm *tfm);
+int crypto4xx_hash_digest(struct ahash_request *req);
+int crypto4xx_hash_final(struct ahash_request *req);
+int crypto4xx_hash_update(struct ahash_request *req);
+int crypto4xx_hash_init(struct ahash_request *req);
 #endif

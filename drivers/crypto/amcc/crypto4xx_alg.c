@@ -28,9 +28,10 @@
 #include <crypto/algapi.h>
 #include <crypto/aes.h>
 #include <crypto/sha.h>
+#include <crypto/ctr.h>
 #include "crypto4xx_reg_def.h"
-#include "crypto4xx_sa.h"
 #include "crypto4xx_core.h"
+#include "crypto4xx_sa.h"
 
 static void set_dynamic_sa_command_0(struct dynamic_sa_ctl *sa, u32 save_h,
 				     u32 save_iv, u32 ld_h, u32 ld_iv,
@@ -75,13 +76,12 @@ int crypto4xx_encrypt(struct ablkcipher_request *req)
 	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 
 	ctx->direction = DIR_OUTBOUND;
-	ctx->hash_final = 0;
 	ctx->is_hash = 0;
 	ctx->pd_ctl = 0x1;
 
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
-				  req->nbytes, req->info,
-				  get_dynamic_sa_iv_size(ctx));
+		req->nbytes, req->info,
+		crypto_ablkcipher_ivsize(crypto_ablkcipher_reqtfm(req)));
 }
 
 int crypto4xx_decrypt(struct ablkcipher_request *req)
@@ -89,13 +89,12 @@ int crypto4xx_decrypt(struct ablkcipher_request *req)
 	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 
 	ctx->direction = DIR_INBOUND;
-	ctx->hash_final = 0;
 	ctx->is_hash = 0;
 	ctx->pd_ctl = 1;
 
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
-				  req->nbytes, req->info,
-				  get_dynamic_sa_iv_size(ctx));
+		req->nbytes, req->info,
+		crypto_ablkcipher_ivsize(crypto_ablkcipher_reqtfm(req)));
 }
 
 /**
@@ -135,8 +134,7 @@ static int crypto4xx_setkey_aes(struct crypto_ablkcipher *cipher,
 		}
 	}
 	/* Setup SA */
-	sa = (struct dynamic_sa_ctl *) ctx->sa_in;
-	ctx->hash_final = 0;
+	sa = ctx->sa_in;
 
 	set_dynamic_sa_command_0(sa, SA_NOT_SAVE_HASH, SA_NOT_SAVE_IV,
 				 SA_LOAD_HASH_FROM_SA, SA_LOAD_IV_FROM_STATE,
@@ -150,18 +148,18 @@ static int crypto4xx_setkey_aes(struct crypto_ablkcipher *cipher,
 				 SA_SEQ_MASK_OFF, SA_MC_ENABLE,
 				 SA_NOT_COPY_PAD, SA_NOT_COPY_PAYLOAD,
 				 SA_NOT_COPY_HDR);
-	crypto4xx_memcpy_le(ctx->sa_in + get_dynamic_sa_offset_key_field(ctx),
+	crypto4xx_memcpy_le(get_dynamic_sa_key_field(sa),
 			    key, keylen);
-	sa->sa_contents = SA_AES_CONTENTS | (keylen << 2);
+	sa->sa_contents.w = SA_AES_CONTENTS | (keylen << 2);
 	sa->sa_command_1.bf.key_len = keylen >> 3;
 	ctx->is_hash = 0;
 	ctx->direction = DIR_INBOUND;
-	memcpy(ctx->sa_in + get_dynamic_sa_offset_state_ptr_field(ctx),
-			(void *)&ctx->state_record_dma_addr, 4);
-	ctx->offset_to_sr_ptr = get_dynamic_sa_offset_state_ptr_field(ctx);
+	memcpy(sa + get_dynamic_sa_offset_state_ptr_field(sa),
+	       (void *)&ctx->state_record_dma_addr, 4);
+	ctx->offset_to_sr_ptr = get_dynamic_sa_offset_state_ptr_field(sa);
 
 	memcpy(ctx->sa_out, ctx->sa_in, ctx->sa_len * 4);
-	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
+	sa = ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
 
 	return 0;
@@ -172,6 +170,71 @@ int crypto4xx_setkey_aes_cbc(struct crypto_ablkcipher *cipher,
 {
 	return crypto4xx_setkey_aes(cipher, key, keylen, CRYPTO_MODE_CBC,
 				    CRYPTO_FEEDBACK_MODE_NO_FB);
+}
+
+int crypto4xx_setkey_aes_cfb(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen)
+{
+	return crypto4xx_setkey_aes(cipher, key, keylen, CRYPTO_MODE_CFB,
+				    CRYPTO_FEEDBACK_MODE_128BIT_CFB);
+}
+
+int crypto4xx_setkey_aes_ecb(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen)
+{
+	return crypto4xx_setkey_aes(cipher, key, keylen, CRYPTO_MODE_ECB,
+				    CRYPTO_FEEDBACK_MODE_NO_FB);
+}
+
+int crypto4xx_setkey_aes_ofb(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen)
+{
+	return crypto4xx_setkey_aes(cipher, key, keylen, CRYPTO_MODE_OFB,
+				    CRYPTO_FEEDBACK_MODE_64BIT_OFB);
+}
+
+int crypto4xx_setkey_rfc3686(struct crypto_ablkcipher *cipher,
+			     const u8 *key, unsigned int keylen)
+{
+	struct crypto_tfm *tfm = crypto_ablkcipher_tfm(cipher);
+	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(tfm);
+	int rc;
+
+	rc = crypto4xx_setkey_aes(cipher, key, keylen - CTR_RFC3686_NONCE_SIZE,
+		CRYPTO_MODE_CTR, CRYPTO_FEEDBACK_MODE_NO_FB);
+	if (rc)
+		return rc;
+
+	memcpy(ctx->state_record,
+		key + keylen - CTR_RFC3686_NONCE_SIZE, CTR_RFC3686_NONCE_SIZE);
+
+	return 0;
+}
+
+int crypto4xx_rfc3686_encrypt(struct ablkcipher_request *req)
+{
+	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
+	__be32 iv[AES_IV_SIZE / 4] = { *(u32 *)ctx->state_record,
+		*(u32 *) req->info, *(u32 *) (req->info + 4), cpu_to_be32(1) };
+
+	ctx->direction = DIR_OUTBOUND;
+	ctx->pd_ctl = 1;
+
+	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
+				  req->nbytes, iv, AES_IV_SIZE);
+}
+
+int crypto4xx_rfc3686_decrypt(struct ablkcipher_request *req)
+{
+	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
+	__be32 iv[AES_IV_SIZE / 4] = { *(u32 *)ctx->state_record,
+		*(u32 *) req->info, *(u32 *) (req->info + 4), cpu_to_be32(1) };
+
+	ctx->direction = DIR_INBOUND;
+	ctx->pd_ctl = 1;
+
+	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
+				  req->nbytes, iv, AES_IV_SIZE);
 }
 
 /**
@@ -185,13 +248,11 @@ static int crypto4xx_hash_alg_init(struct crypto_tfm *tfm,
 	struct crypto_alg *alg = tfm->__crt_alg;
 	struct crypto4xx_alg *my_alg = crypto_alg_to_crypto4xx_alg(alg);
 	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(tfm);
-	struct dynamic_sa_ctl *sa;
-	struct dynamic_sa_hash160 *sa_in;
+	struct dynamic_sa_hash160 *sa;
 	int rc;
 
 	ctx->dev   = my_alg->dev;
 	ctx->is_hash = 1;
-	ctx->hash_final = 0;
 
 	/* Create SA */
 	if (ctx->sa_in_dma_addr || ctx->sa_out_dma_addr)
@@ -211,25 +272,24 @@ static int crypto4xx_hash_alg_init(struct crypto_tfm *tfm,
 
 	crypto_ahash_set_reqsize(__crypto_ahash_cast(tfm),
 				 sizeof(struct crypto4xx_ctx));
-	sa = (struct dynamic_sa_ctl *) ctx->sa_in;
-	set_dynamic_sa_command_0(sa, SA_SAVE_HASH, SA_NOT_SAVE_IV,
+	sa = (struct dynamic_sa_hash160 *)ctx->sa_in;
+	set_dynamic_sa_command_0(&sa->ctrl, SA_SAVE_HASH, SA_NOT_SAVE_IV,
 				 SA_NOT_LOAD_HASH, SA_LOAD_IV_FROM_SA,
 				 SA_NO_HEADER_PROC, ha, SA_CIPHER_ALG_NULL,
 				 SA_PAD_TYPE_ZERO, SA_OP_GROUP_BASIC,
 				 SA_OPCODE_HASH, DIR_INBOUND);
-	set_dynamic_sa_command_1(sa, 0, SA_HASH_MODE_HASH,
+	set_dynamic_sa_command_1(&sa->ctrl, 0, SA_HASH_MODE_HASH,
 				 CRYPTO_FEEDBACK_MODE_NO_FB, SA_EXTENDED_SN_OFF,
 				 SA_SEQ_MASK_OFF, SA_MC_ENABLE,
 				 SA_NOT_COPY_PAD, SA_NOT_COPY_PAYLOAD,
 				 SA_NOT_COPY_HDR);
 	ctx->direction = DIR_INBOUND;
-	sa->sa_contents = SA_HASH160_CONTENTS;
-	sa_in = (struct dynamic_sa_hash160 *) ctx->sa_in;
 	/* Need to zero hash digest in SA */
-	memset(sa_in->inner_digest, 0, sizeof(sa_in->inner_digest));
-	memset(sa_in->outer_digest, 0, sizeof(sa_in->outer_digest));
-	sa_in->state_ptr = ctx->state_record_dma_addr;
-	ctx->offset_to_sr_ptr = get_dynamic_sa_offset_state_ptr_field(ctx);
+	memset(sa->inner_digest, 0, sizeof(sa->inner_digest));
+	memset(sa->outer_digest, 0, sizeof(sa->outer_digest));
+	sa->state_ptr = ctx->state_record_dma_addr;
+	ctx->offset_to_sr_ptr =
+		get_dynamic_sa_offset_state_ptr_field(&sa->ctrl);
 
 	return 0;
 }
@@ -240,7 +300,7 @@ int crypto4xx_hash_init(struct ahash_request *req)
 	int ds;
 	struct dynamic_sa_ctl *sa;
 
-	sa = (struct dynamic_sa_ctl *) ctx->sa_in;
+	sa = ctx->sa_in;
 	ds = crypto_ahash_digestsize(
 			__crypto_ahash_cast(req->base.tfm));
 	sa->sa_command_0.bf.digest_len = ds >> 2;
@@ -256,7 +316,6 @@ int crypto4xx_hash_update(struct ahash_request *req)
 	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 
 	ctx->is_hash = 1;
-	ctx->hash_final = 0;
 	ctx->pd_ctl = 0x11;
 	ctx->direction = DIR_INBOUND;
 
@@ -274,7 +333,6 @@ int crypto4xx_hash_digest(struct ahash_request *req)
 {
 	struct crypto4xx_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 
-	ctx->hash_final = 1;
 	ctx->pd_ctl = 0x11;
 	ctx->direction = DIR_INBOUND;
 
