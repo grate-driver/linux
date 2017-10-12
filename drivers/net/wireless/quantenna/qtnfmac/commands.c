@@ -2055,8 +2055,10 @@ int qtnf_cmd_send_connect(struct qtnf_vif *vif,
 
 	ether_addr_copy(cmd->bssid, bss_cfg->bssid);
 
-	if (vif->mac->chandef.chan)
-		cmd->channel = cpu_to_le16(vif->mac->chandef.chan->hw_value);
+	if (sme->channel)
+		cmd->channel = cpu_to_le16(sme->channel->hw_value);
+	else
+		cmd->channel = 0;
 
 	cmd->bg_scan_period = cpu_to_le16(bss_cfg->bg_scan_period);
 
@@ -2304,15 +2306,16 @@ out:
 	return ret;
 }
 
-int qtnf_cmd_send_chan_switch(struct qtnf_wmac *mac,
+int qtnf_cmd_send_chan_switch(struct qtnf_vif *vif,
 			      struct cfg80211_csa_settings *params)
 {
+	struct qtnf_wmac *mac = vif->mac;
 	struct qlink_cmd_chan_switch *cmd;
 	struct sk_buff *cmd_skb;
 	u16 res_code = QLINK_CMD_RESULT_OK;
 	int ret;
 
-	cmd_skb = qtnf_cmd_alloc_new_cmdskb(mac->macid, 0x0,
+	cmd_skb = qtnf_cmd_alloc_new_cmdskb(mac->macid, vif->vifid,
 					    QLINK_CMD_CHAN_SWITCH,
 					    sizeof(*cmd));
 
@@ -2334,9 +2337,6 @@ int qtnf_cmd_send_chan_switch(struct qtnf_wmac *mac,
 
 	switch (res_code) {
 	case QLINK_CMD_RESULT_OK:
-		memcpy(&mac->csa_chandef, &params->chandef,
-		       sizeof(mac->csa_chandef));
-		mac->status |= QTNF_MAC_CSA_ACTIVE;
 		ret = 0;
 		break;
 	case QLINK_CMD_RESULT_ENOTFOUND:
@@ -2356,5 +2356,43 @@ int qtnf_cmd_send_chan_switch(struct qtnf_wmac *mac,
 
 out:
 	qtnf_bus_unlock(mac->bus);
+	return ret;
+}
+
+int qtnf_cmd_get_channel(struct qtnf_vif *vif, struct cfg80211_chan_def *chdef)
+{
+	struct qtnf_bus *bus = vif->mac->bus;
+	const struct qlink_resp_channel_get *resp;
+	struct sk_buff *cmd_skb;
+	struct sk_buff *resp_skb = NULL;
+	u16 res_code = QLINK_CMD_RESULT_OK;
+	int ret;
+
+	cmd_skb = qtnf_cmd_alloc_new_cmdskb(vif->mac->macid, vif->vifid,
+					    QLINK_CMD_CHAN_GET,
+					    sizeof(struct qlink_cmd));
+	if (unlikely(!cmd_skb))
+		return -ENOMEM;
+
+	qtnf_bus_lock(bus);
+
+	ret = qtnf_cmd_send_with_reply(bus, cmd_skb, &resp_skb, &res_code,
+				       sizeof(*resp), NULL);
+
+	qtnf_bus_unlock(bus);
+
+	if (unlikely(ret))
+		goto out;
+
+	if (unlikely(res_code != QLINK_CMD_RESULT_OK)) {
+		ret = -ENODATA;
+		goto out;
+	}
+
+	resp = (const struct qlink_resp_channel_get *)resp_skb->data;
+	qlink_chandef_q2cfg(priv_to_wiphy(vif->mac), &resp->chan, chdef);
+
+out:
+	consume_skb(resp_skb);
 	return ret;
 }

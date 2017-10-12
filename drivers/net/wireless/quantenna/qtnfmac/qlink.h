@@ -108,15 +108,29 @@ enum qlink_sta_flags {
 };
 
 enum qlink_channel_width {
-	QLINK_CHAN_WIDTH_5		= BIT(0),
-	QLINK_CHAN_WIDTH_10		= BIT(1),
-	QLINK_CHAN_WIDTH_20_NOHT	= BIT(2),
-	QLINK_CHAN_WIDTH_20		= BIT(3),
-	QLINK_CHAN_WIDTH_40		= BIT(4),
-	QLINK_CHAN_WIDTH_80		= BIT(5),
-	QLINK_CHAN_WIDTH_80P80		= BIT(6),
-	QLINK_CHAN_WIDTH_160		= BIT(7),
+	QLINK_CHAN_WIDTH_5 = 0,
+	QLINK_CHAN_WIDTH_10,
+	QLINK_CHAN_WIDTH_20_NOHT,
+	QLINK_CHAN_WIDTH_20,
+	QLINK_CHAN_WIDTH_40,
+	QLINK_CHAN_WIDTH_80,
+	QLINK_CHAN_WIDTH_80P80,
+	QLINK_CHAN_WIDTH_160,
 };
+
+/**
+ * struct qlink_chandef - qlink channel definition
+ *
+ * @center_freq1: center frequency of first segment
+ * @center_freq2: center frequency of second segment (80+80 only)
+ * @width: channel width, one of @enum qlink_channel_width
+ */
+struct qlink_chandef {
+	__le16 center_freq1;
+	__le16 center_freq2;
+	u8 width;
+	u8 rsvd[3];
+} __packed;
 
 /* QLINK Command messages related definitions
  */
@@ -155,6 +169,7 @@ enum qlink_cmd_type {
 	QLINK_CMD_REG_NOTIFY		= 0x0019,
 	QLINK_CMD_CHANS_INFO_GET	= 0x001A,
 	QLINK_CMD_CHAN_SWITCH		= 0x001B,
+	QLINK_CMD_CHAN_GET		= 0x001C,
 	QLINK_CMD_CONFIG_AP		= 0x0020,
 	QLINK_CMD_START_AP		= 0x0021,
 	QLINK_CMD_STOP_AP		= 0x0022,
@@ -680,6 +695,16 @@ struct qlink_resp_get_chan_stats {
 	u8 info[0];
 } __packed;
 
+/**
+ * struct qlink_resp_channel_get - response for QLINK_CMD_CHAN_GET command
+ *
+ * @chan: definition of current operating channel.
+ */
+struct qlink_resp_channel_get {
+	struct qlink_resp rhdr;
+	struct qlink_chandef chan;
+} __packed;
+
 /* QLINK Events messages related definitions
  */
 
@@ -764,11 +789,11 @@ struct qlink_event_bss_leave {
 /**
  * struct qlink_event_freq_change - data for QLINK_EVENT_FREQ_CHANGE event
  *
- * @freq: new operating frequency in MHz
+ * @chan: new operating channel definition
  */
 struct qlink_event_freq_change {
 	struct qlink_event ehdr;
-	__le32 freq;
+	struct qlink_chandef chan;
 } __packed;
 
 enum qlink_rxmgmt_flags {
