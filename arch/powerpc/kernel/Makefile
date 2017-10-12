@@ -135,6 +135,8 @@ endif
 obj-$(CONFIG_EPAPR_PARAVIRT)	+= epapr_paravirt.o epapr_hcalls.o
 obj-$(CONFIG_KVM_GUEST)		+= kvm.o kvm_emul.o
 
+obj-$(CONFIG_MEMBARRIER)	+= membarrier.o
+
 # Disable GCOV & sanitizers in odd or sensitive code
 GCOV_PROFILE_prom_init.o := n
 UBSAN_SANITIZE_prom_init.o := n

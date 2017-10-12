@@ -420,37 +420,40 @@ TRACE_EVENT(rcu_fqs,
 
 /*
  * Tracepoint for dyntick-idle entry/exit events.  These take a string
- * as argument: "Start" for entering dyntick-idle mode, "End" for
- * leaving it, "--=" for events moving towards idle, and "++=" for events
- * moving away from idle.  "Error on entry: not idle task" and "Error on
- * exit: not idle task" indicate that a non-idle task is erroneously
- * toying with the idle loop.
+ * as argument: "Start" for entering dyntick-idle mode, "Startirq" for
+ * entering it from irq/NMI, "End" for leaving it, "Endirq" for leaving it
+ * to irq/NMI, "--=" for events moving towards idle, and "++=" for events
+ * moving away from idle.
  *
  * These events also take a pair of numbers, which indicate the nesting
- * depth before and after the event of interest.  Note that task-related
- * events use the upper bits of each number, while interrupt-related
- * events use the lower bits.
+ * depth before and after the event of interest, and a third number that is
+ * the ->dynticks counter.  Note that task-related and interrupt-related
+ * events use two separate counters, and that the "++=" and "--=" events
+ * for irq/NMI will change the counter by two, otherwise by one.
  */
 TRACE_EVENT(rcu_dyntick,
 
-	TP_PROTO(const char *polarity, long long oldnesting, long long newnesting),
+	TP_PROTO(const char *polarity, long oldnesting, long newnesting, atomic_t dynticks),
 
-	TP_ARGS(polarity, oldnesting, newnesting),
+	TP_ARGS(polarity, oldnesting, newnesting, dynticks),
 
 	TP_STRUCT__entry(
 		__field(const char *, polarity)
-		__field(long long, oldnesting)
-		__field(long long, newnesting)
+		__field(long, oldnesting)
+		__field(long, newnesting)
+		__field(int, dynticks)
 	),
 
 	TP_fast_assign(
 		__entry->polarity = polarity;
 		__entry->oldnesting = oldnesting;
 		__entry->newnesting = newnesting;
+		__entry->dynticks = atomic_read(&dynticks);
 	),
 
-	TP_printk("%s %llx %llx", __entry->polarity,
-		  __entry->oldnesting, __entry->newnesting)
+	TP_printk("%s %lx %lx %#3x", __entry->polarity,
+		  __entry->oldnesting, __entry->newnesting,
+		  __entry->dynticks & 0xfff)
 );
 
 /*
@@ -798,7 +801,7 @@ TRACE_EVENT(rcu_barrier,
 					 grplo, grphi, gp_tasks) do { } \
 	while (0)
 #define trace_rcu_fqs(rcuname, gpnum, cpu, qsevent) do { } while (0)
-#define trace_rcu_dyntick(polarity, oldnesting, newnesting) do { } while (0)
+#define trace_rcu_dyntick(polarity, oldnesting, newnesting, dyntick) do { } while (0)
 #define trace_rcu_prep_idle(reason) do { } while (0)
 #define trace_rcu_callback(rcuname, rhp, qlen_lazy, qlen) do { } while (0)
 #define trace_rcu_kfree_callback(rcuname, rhp, offset, qlen_lazy, qlen) \
