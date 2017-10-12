@@ -2,6 +2,7 @@ config ARM
 	bool
 	default y
 	select ARCH_CLOCKSOURCE_DATA
+	select ARCH_DISCARD_MEMBLOCK if !HAVE_ARCH_PFN_VALID
 	select ARCH_HAS_DEBUG_VIRTUAL
 	select ARCH_HAS_DEVMEM_IS_ALLOWED
 	select ARCH_HAS_ELF_RANDOMIZE
@@ -2004,6 +2005,17 @@ config XIP_PHYS_ADDR
 	  This is the physical address in your flash memory the kernel will
 	  be linked for and stored to.  This address is dependent on your
 	  own flash usage.
+
+config XIP_DEFLATED_DATA
+	bool "Store kernel .data section compressed in ROM"
+	depends on XIP_KERNEL
+	select ZLIB_INFLATE
+	help
+	  Before the kernel is actually executed, its .data section has to be
+	  copied to RAM from ROM. This option allows for storing that data
+	  in compressed form and decompressed to RAM rather than merely being
+	  copied, saving some precious ROM space. A possible drawback is a
+	  slightly longer boot delay.
 
 config KEXEC
 	bool "Kexec system call (EXPERIMENTAL)"
