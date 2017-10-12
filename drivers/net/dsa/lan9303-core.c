@@ -17,6 +17,8 @@
 #include <linux/regmap.h>
 #include <linux/mutex.h>
 #include <linux/mii.h>
+#include <linux/phy.h>
+#include <linux/if_bridge.h>
 
 #include "lan9303.h"
 
@@ -57,6 +59,7 @@
 #define LAN9303_SWITCH_CSR_CMD_LANES (BIT(19) | BIT(18) | BIT(17) | BIT(16))
 #define LAN9303_VIRT_PHY_BASE 0x70
 #define LAN9303_VIRT_SPECIAL_CTRL 0x77
+#define  LAN9303_VIRT_SPECIAL_TURBO BIT(10) /*Turbo MII Enable*/
 
 /*13.4 Switch Fabric Control and Status Registers
  * Accessed indirectly via SWITCH_CSR_CMD, SWITCH_CSR_DATA.
@@ -144,6 +147,7 @@
 # define LAN9303_SWE_PORT_STATE_FORWARDING_PORT0 (0)
 # define LAN9303_SWE_PORT_STATE_LEARNING_PORT0 BIT(1)
 # define LAN9303_SWE_PORT_STATE_BLOCKING_PORT0 BIT(0)
+# define LAN9303_SWE_PORT_STATE_DISABLED_PORT0 (3)
 #define LAN9303_SWE_PORT_MIRROR 0x1846
 # define LAN9303_SWE_PORT_MIRROR_SNIFF_ALL BIT(8)
 # define LAN9303_SWE_PORT_MIRROR_SNIFFER_PORT2 BIT(7)
@@ -154,7 +158,9 @@
 # define LAN9303_SWE_PORT_MIRROR_MIRRORED_PORT0 BIT(2)
 # define LAN9303_SWE_PORT_MIRROR_ENABLE_RX_MIRRORING BIT(1)
 # define LAN9303_SWE_PORT_MIRROR_ENABLE_TX_MIRRORING BIT(0)
+# define LAN9303_SWE_PORT_MIRROR_DISABLED 0
 #define LAN9303_SWE_INGRESS_PORT_TYPE 0x1847
+#define  LAN9303_SWE_INGRESS_PORT_TYPE_VLAN 3
 #define LAN9303_BM_CFG 0x1c00
 #define LAN9303_BM_EGRSS_PORT_TYPE 0x1c0c
 # define LAN9303_BM_EGRSS_PORT_TYPE_SPECIAL_TAG_PORT2 (BIT(17) | BIT(16))
@@ -508,11 +514,30 @@ static int lan9303_enable_processing_port(struct lan9303 *chip,
 				LAN9303_MAC_TX_CFG_X_TX_ENABLE);
 }
 
+/* forward special tagged packets from port 0 to port 1 *or* port 2 */
+static int lan9303_setup_tagging(struct lan9303 *chip)
+{
+	int ret;
+	u32 val;
+	/* enable defining the destination port via special VLAN tagging
+	 * for port 0
+	 */
+	ret = lan9303_write_switch_reg(chip, LAN9303_SWE_INGRESS_PORT_TYPE,
+				       LAN9303_SWE_INGRESS_PORT_TYPE_VLAN);
+	if (ret)
+		return ret;
+
+	/* tag incoming packets at port 1 and 2 on their way to port 0 to be
+	 * able to discover their source port
+	 */
+	val = LAN9303_BM_EGRSS_PORT_TYPE_SPECIAL_TAG_PORT0;
+	return lan9303_write_switch_reg(chip, LAN9303_BM_EGRSS_PORT_TYPE, val);
+}
+
 /* We want a special working switch:
  * - do not forward packets between port 1 and 2
  * - forward everything from port 1 to port 0
  * - forward everything from port 2 to port 0
- * - forward special tagged packets from port 0 to port 1 *or* port 2
  */
 static int lan9303_separate_ports(struct lan9303 *chip)
 {
@@ -527,27 +552,21 @@ static int lan9303_separate_ports(struct lan9303 *chip)
 	if (ret)
 		return ret;
 
-	/* enable defining the destination port via special VLAN tagging
-	 * for port 0
-	 */
-	ret = lan9303_write_switch_reg(chip, LAN9303_SWE_INGRESS_PORT_TYPE,
-				       0x03);
-	if (ret)
-		return ret;
-
-	/* tag incoming packets at port 1 and 2 on their way to port 0 to be
-	 * able to discover their source port
-	 */
-	ret = lan9303_write_switch_reg(chip, LAN9303_BM_EGRSS_PORT_TYPE,
-			LAN9303_BM_EGRSS_PORT_TYPE_SPECIAL_TAG_PORT0);
-	if (ret)
-		return ret;
-
 	/* prevent port 1 and 2 from forwarding packets by their own */
 	return lan9303_write_switch_reg(chip, LAN9303_SWE_PORT_STATE,
 				LAN9303_SWE_PORT_STATE_FORWARDING_PORT0 |
 				LAN9303_SWE_PORT_STATE_BLOCKING_PORT1 |
 				LAN9303_SWE_PORT_STATE_BLOCKING_PORT2);
+}
+
+static void lan9303_bridge_ports(struct lan9303 *chip)
+{
+	/* ports bridged: remove mirroring */
+	lan9303_write_switch_reg(chip, LAN9303_SWE_PORT_MIRROR,
+				 LAN9303_SWE_PORT_MIRROR_DISABLED);
+
+	lan9303_write_switch_reg(chip, LAN9303_SWE_PORT_STATE,
+				 chip->swe_port_state);
 }
 
 static int lan9303_handle_reset(struct lan9303 *chip)
@@ -641,6 +660,10 @@ static int lan9303_setup(struct dsa_switch *ds)
 		dev_err(chip->dev, "port 0 is not the CPU port\n");
 		return -EINVAL;
 	}
+
+	ret = lan9303_setup_tagging(chip);
+	if (ret)
+		dev_err(chip->dev, "failed to setup port tagging %d\n", ret);
 
 	ret = lan9303_separate_ports(chip);
 	if (ret)
@@ -760,6 +783,43 @@ static int lan9303_phy_write(struct dsa_switch *ds, int phy, int regnum,
 	return chip->ops->phy_write(chip, phy, regnum, val);
 }
 
+static void lan9303_adjust_link(struct dsa_switch *ds, int port,
+				struct phy_device *phydev)
+{
+	struct lan9303 *chip = ds->priv;
+	int ctl, res;
+
+	if (!phy_is_pseudo_fixed_link(phydev))
+		return;
+
+	ctl = lan9303_phy_read(ds, port, MII_BMCR);
+
+	ctl &= ~BMCR_ANENABLE;
+
+	if (phydev->speed == SPEED_100)
+		ctl |= BMCR_SPEED100;
+	else if (phydev->speed == SPEED_10)
+		ctl &= ~BMCR_SPEED100;
+	else
+		dev_err(ds->dev, "unsupported speed: %d\n", phydev->speed);
+
+	if (phydev->duplex == DUPLEX_FULL)
+		ctl |= BMCR_FULLDPLX;
+	else
+		ctl &= ~BMCR_FULLDPLX;
+
+	res =  lan9303_phy_write(ds, port, MII_BMCR, ctl);
+
+	if (port == chip->phy_addr_sel_strap) {
+		/* Virtual Phy: Remove Turbo 200Mbit mode */
+		lan9303_read(chip->regmap, LAN9303_VIRT_SPECIAL_CTRL, &ctl);
+
+		ctl &= ~LAN9303_VIRT_SPECIAL_TURBO;
+		res =  regmap_write(chip->regmap,
+				    LAN9303_VIRT_SPECIAL_CTRL, ctl);
+	}
+}
+
 static int lan9303_port_enable(struct dsa_switch *ds, int port,
 			       struct phy_device *phy)
 {
@@ -797,16 +857,86 @@ static void lan9303_port_disable(struct dsa_switch *ds, int port,
 	}
 }
 
+static int lan9303_port_bridge_join(struct dsa_switch *ds, int port,
+				    struct net_device *br)
+{
+	struct lan9303 *chip = ds->priv;
+
+	dev_dbg(chip->dev, "%s(port %d)\n", __func__, port);
+	if (ds->ports[1].bridge_dev ==  ds->ports[2].bridge_dev) {
+		lan9303_bridge_ports(chip);
+		chip->is_bridged = true;  /* unleash stp_state_set() */
+	}
+
+	return 0;
+}
+
+static void lan9303_port_bridge_leave(struct dsa_switch *ds, int port,
+				      struct net_device *br)
+{
+	struct lan9303 *chip = ds->priv;
+
+	dev_dbg(chip->dev, "%s(port %d)\n", __func__, port);
+	if (chip->is_bridged) {
+		lan9303_separate_ports(chip);
+		chip->is_bridged = false;
+	}
+}
+
+static void lan9303_port_stp_state_set(struct dsa_switch *ds, int port,
+				       u8 state)
+{
+	int portmask, portstate;
+	struct lan9303 *chip = ds->priv;
+
+	dev_dbg(chip->dev, "%s(port %d, state %d)\n",
+		__func__, port, state);
+
+	switch (state) {
+	case BR_STATE_DISABLED:
+		portstate = LAN9303_SWE_PORT_STATE_DISABLED_PORT0;
+		break;
+	case BR_STATE_BLOCKING:
+	case BR_STATE_LISTENING:
+		portstate = LAN9303_SWE_PORT_STATE_BLOCKING_PORT0;
+		break;
+	case BR_STATE_LEARNING:
+		portstate = LAN9303_SWE_PORT_STATE_LEARNING_PORT0;
+		break;
+	case BR_STATE_FORWARDING:
+		portstate = LAN9303_SWE_PORT_STATE_FORWARDING_PORT0;
+		break;
+	default:
+		portstate = LAN9303_SWE_PORT_STATE_DISABLED_PORT0;
+		dev_err(chip->dev, "unknown stp state: port %d, state %d\n",
+			port, state);
+	}
+
+	portmask = 0x3 << (port * 2);
+	portstate <<= (port * 2);
+
+	chip->swe_port_state = (chip->swe_port_state & ~portmask) | portstate;
+
+	if (chip->is_bridged)
+		lan9303_write_switch_reg(chip, LAN9303_SWE_PORT_STATE,
+					 chip->swe_port_state);
+	/* else: touching SWE_PORT_STATE would break port separation */
+}
+
 static const struct dsa_switch_ops lan9303_switch_ops = {
 	.get_tag_protocol = lan9303_get_tag_protocol,
 	.setup = lan9303_setup,
 	.get_strings = lan9303_get_strings,
 	.phy_read = lan9303_phy_read,
 	.phy_write = lan9303_phy_write,
+	.adjust_link = lan9303_adjust_link,
 	.get_ethtool_stats = lan9303_get_ethtool_stats,
 	.get_sset_count = lan9303_get_sset_count,
 	.port_enable = lan9303_port_enable,
 	.port_disable = lan9303_port_disable,
+	.port_bridge_join       = lan9303_port_bridge_join,
+	.port_bridge_leave      = lan9303_port_bridge_leave,
+	.port_stp_state_set     = lan9303_port_stp_state_set,
 };
 
 static int lan9303_register_switch(struct lan9303 *chip)
