@@ -1234,13 +1234,7 @@ int scsi_sysfs_add_sdev(struct scsi_device *sdev)
 
 	scsi_autopm_get_device(sdev);
 
-	error = scsi_dh_add_device(sdev);
-	if (error)
-		/*
-		 * device_handler is optional, so any error can be ignored
-		 */
-		sdev_printk(KERN_INFO, sdev,
-				"failed to add device handler: %d\n", error);
+	scsi_dh_add_device(sdev);
 
 	error = device_add(&sdev->sdev_gendev);
 	if (error) {
@@ -1376,13 +1370,19 @@ static void __scsi_remove_target(struct scsi_target *starget)
 	spin_lock_irqsave(shost->host_lock, flags);
  restart:
 	list_for_each_entry(sdev, &shost->__devices, siblings) {
+		/*
+		 * We cannot call scsi_device_get() here, as
+		 * we might've been called from rmmod() causing
+		 * scsi_device_get() to fail the module_is_live()
+		 * check.
+		 */
 		if (sdev->channel != starget->channel ||
 		    sdev->id != starget->id ||
-		    scsi_device_get(sdev))
+		    !get_device(&sdev->sdev_gendev))
 			continue;
 		spin_unlock_irqrestore(shost->host_lock, flags);
 		scsi_remove_device(sdev);
-		scsi_device_put(sdev);
+		put_device(&sdev->sdev_gendev);
 		spin_lock_irqsave(shost->host_lock, flags);
 		goto restart;
 	}
