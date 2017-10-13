@@ -98,7 +98,6 @@ static struct pid_namespace *create_pid_namespace(struct user_namespace *user_ns
 	struct pid_namespace *ns;
 	unsigned int level = parent_pid_ns->level + 1;
 	struct ucounts *ucounts;
-	int i;
 	int err;
 
 	err = -EINVAL;
@@ -139,11 +138,6 @@ static struct pid_namespace *create_pid_namespace(struct user_namespace *user_ns
 	INIT_WORK(&ns->proc_work, proc_cleanup_work);
 
 	set_bit(0, ns->pidmap[0].page);
-	atomic_set(&ns->pidmap[0].nr_free, BITS_PER_PAGE - 1);
-
-	for (i = 1; i < PIDMAP_ENTRIES; i++)
-		atomic_set(&ns->pidmap[i].nr_free, BITS_PER_PAGE);
-
 	return ns;
 
 out_free_map:

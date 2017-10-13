@@ -506,6 +506,7 @@ static inline void free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
 	pud = pud_offset(p4d, start);
 	p4d_clear(p4d);
 	pud_free_tlb(tlb, pud, start);
+	mm_dec_nr_puds(tlb->mm);
 }
 
 static inline void free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd,
@@ -830,6 +831,8 @@ struct page *_vm_normal_page(struct vm_area_struct *vma, unsigned long addr,
 			return vma->vm_ops->find_special_page(vma, addr);
 		if (vma->vm_flags & (VM_PFNMAP | VM_MIXEDMAP))
 			return NULL;
+		if (pte_devmap(pte))
+			return NULL;
 		if (is_zero_pfn(pfn))
 			return NULL;
 
@@ -917,6 +920,8 @@ struct page *vm_normal_page_pmd(struct vm_area_struct *vma, unsigned long addr,
 		}
 	}
 
+	if (pmd_devmap(pmd))
+		return NULL;
 	if (is_zero_pfn(pfn))
 		return NULL;
 	if (unlikely(pfn > highest_memmap_pfn))
@@ -1227,7 +1232,7 @@ int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	 * efficient than faulting.
 	 */
 	if (!(vma->vm_flags & (VM_HUGETLB | VM_PFNMAP | VM_MIXEDMAP)) &&
-			!vma->anon_vma)
+			!vma->anon_vma && !vma_is_dax(vma))
 		return 0;
 
 	if (is_vm_hugetlb_page(vma))
@@ -1896,12 +1901,24 @@ int vm_insert_pfn_prot(struct vm_area_struct *vma, unsigned long addr,
 }
 EXPORT_SYMBOL(vm_insert_pfn_prot);
 
+static bool vm_mixed_ok(struct vm_area_struct *vma, pfn_t pfn)
+{
+	/* these checks mirror the abort conditions in vm_normal_page */
+	if (vma->vm_flags & VM_MIXEDMAP)
+		return true;
+	if (pfn_t_devmap(pfn))
+		return true;
+	if (is_zero_pfn(pfn_t_to_pfn(pfn)))
+		return true;
+	return false;
+}
+
 static int __vm_insert_mixed(struct vm_area_struct *vma, unsigned long addr,
 			pfn_t pfn, bool mkwrite)
 {
 	pgprot_t pgprot = vma->vm_page_prot;
 
-	BUG_ON(!(vma->vm_flags & VM_MIXEDMAP));
+	BUG_ON(!vm_mixed_ok(vma, pfn));
 
 	if (addr < vma->vm_start || addr >= vma->vm_end)
 		return -EFAULT;
@@ -2842,7 +2859,7 @@ EXPORT_SYMBOL(unmap_mapping_range);
 int do_swap_page(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-	struct page *page = NULL, *swapcache;
+	struct page *page = NULL, *swapcache = NULL;
 	struct mem_cgroup *memcg;
 	struct vma_swap_readahead swap_ra;
 	swp_entry_t entry;
@@ -2881,17 +2898,35 @@ int do_swap_page(struct vm_fault *vmf)
 		}
 		goto out;
 	}
+
+
 	delayacct_set_flag(DELAYACCT_PF_SWAPIN);
 	if (!page)
 		page = lookup_swap_cache(entry, vma_readahead ? vma : NULL,
 					 vmf->address);
 	if (!page) {
-		if (vma_readahead)
-			page = do_swap_page_readahead(entry,
-				GFP_HIGHUSER_MOVABLE, vmf, &swap_ra);
-		else
-			page = swapin_readahead(entry,
-				GFP_HIGHUSER_MOVABLE, vma, vmf->address);
+		struct swap_info_struct *si = swp_swap_info(entry);
+
+		if (!(si->flags & SWP_SYNCHRONOUS_IO)) {
+			if (vma_readahead)
+				page = do_swap_page_readahead(entry,
+					GFP_HIGHUSER_MOVABLE, vmf, &swap_ra);
+			else
+				page = swapin_readahead(entry,
+					GFP_HIGHUSER_MOVABLE, vma, vmf->address);
+			swapcache = page;
+		} else {
+			/* skip swapcache */
+			page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, vmf->address);
+			if (page) {
+				__SetPageLocked(page);
+				__SetPageSwapBacked(page);
+				set_page_private(page, entry.val);
+				lru_cache_add_anon(page);
+				swap_readpage(page, true);
+			}
+		}
+
 		if (!page) {
 			/*
 			 * Back out if somebody else faulted in this pte
@@ -2920,7 +2955,6 @@ int do_swap_page(struct vm_fault *vmf)
 		goto out_release;
 	}
 
-	swapcache = page;
 	locked = lock_page_or_retry(page, vma->vm_mm, vmf->flags);
 
 	delayacct_clear_flag(DELAYACCT_PF_SWAPIN);
@@ -2935,7 +2969,8 @@ int do_swap_page(struct vm_fault *vmf)
 	 * test below, are not enough to exclude that.  Even if it is still
 	 * swapcache, we need to check that the page's swap has not changed.
 	 */
-	if (unlikely(!PageSwapCache(page) || page_private(page) != entry.val))
+	if (unlikely((!PageSwapCache(page) ||
+			page_private(page) != entry.val)) && swapcache)
 		goto out_page;
 
 	page = ksm_might_need_to_copy(page, vma, vmf->address);
@@ -2988,14 +3023,16 @@ int do_swap_page(struct vm_fault *vmf)
 		pte = pte_mksoft_dirty(pte);
 	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, pte);
 	vmf->orig_pte = pte;
-	if (page == swapcache) {
-		do_page_add_anon_rmap(page, vma, vmf->address, exclusive);
-		mem_cgroup_commit_charge(page, memcg, true, false);
-		activate_page(page);
-	} else { /* ksm created a completely new copy */
+
+	/* ksm created a completely new copy */
+	if (unlikely(page != swapcache && swapcache)) {
 		page_add_new_anon_rmap(page, vma, vmf->address, false);
 		mem_cgroup_commit_charge(page, memcg, false, false);
 		lru_cache_add_active_or_unevictable(page, vma);
+	} else {
+		do_page_add_anon_rmap(page, vma, vmf->address, exclusive);
+		mem_cgroup_commit_charge(page, memcg, true, false);
+		activate_page(page);
 	}
 
 	swap_free(entry);
@@ -3003,7 +3040,7 @@ int do_swap_page(struct vm_fault *vmf)
 	    (vma->vm_flags & VM_LOCKED) || PageMlocked(page))
 		try_to_free_swap(page);
 	unlock_page(page);
-	if (page != swapcache) {
+	if (page != swapcache && swapcache) {
 		/*
 		 * Hold the lock to avoid the swap entry to be reused
 		 * until we take the PT lock for the pte_same() check
@@ -3036,7 +3073,7 @@ out_page:
 	unlock_page(page);
 out_release:
 	put_page(page);
-	if (page != swapcache) {
+	if (page != swapcache && swapcache) {
 		unlock_page(swapcache);
 		put_page(swapcache);
 	}
@@ -4124,15 +4161,17 @@ int __pud_alloc(struct mm_struct *mm, p4d_t *p4d, unsigned long address)
 
 	spin_lock(&mm->page_table_lock);
 #ifndef __ARCH_HAS_5LEVEL_HACK
-	if (p4d_present(*p4d))		/* Another has populated it */
-		pud_free(mm, new);
-	else
+	if (!p4d_present(*p4d)) {
+		mm_inc_nr_puds(mm);
 		p4d_populate(mm, p4d, new);
-#else
-	if (pgd_present(*p4d))		/* Another has populated it */
+	} else	/* Another has populated it */
 		pud_free(mm, new);
-	else
+#else
+	if (!pgd_present(*p4d)) {
+		mm_inc_nr_puds(mm);
 		pgd_populate(mm, p4d, new);
+	} else	/* Another has populated it */
+		pud_free(mm, new);
 #endif /* __ARCH_HAS_5LEVEL_HACK */
 	spin_unlock(&mm->page_table_lock);
 	return 0;

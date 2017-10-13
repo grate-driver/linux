@@ -504,6 +504,9 @@ static void __init mm_init(void)
 	pgtable_init();
 	vmalloc_init();
 	ioremap_huge_init();
+#ifdef CONFIG_NUMA
+	pr_info("vmstat: NUMA stat updates are skipped unless they have been used\n");
+#endif
 }
 
 asmlinkage __visible void __init start_kernel(void)

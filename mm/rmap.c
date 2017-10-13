@@ -939,10 +939,15 @@ static bool page_mkclean_one(struct page *page, struct vm_area_struct *vma,
 #endif
 		}
 
-		if (ret) {
-			mmu_notifier_invalidate_range(vma->vm_mm, cstart, cend);
+		/*
+		 * No need to call mmu_notifier_invalidate_range() as we are
+		 * downgrading page table protection not changing it to point
+		 * to a new page.
+		 *
+		 * See Documentation/vm/mmu_notifier.txt
+		 */
+		if (ret)
 			(*cleaned)++;
-		}
 	}
 
 	mmu_notifier_invalidate_range_end(vma->vm_mm, start, end);
@@ -1549,13 +1554,43 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			if (pte_soft_dirty(pteval))
 				swp_pte = pte_swp_mksoft_dirty(swp_pte);
 			set_pte_at(mm, address, pvmw.pte, swp_pte);
-		} else
+		} else {
+			/*
+			 * We should not need to notify here as we reach this
+			 * case only from freeze_page() itself only call from
+			 * split_huge_page_to_list() so everything below must
+			 * be true:
+			 *   - page is not anonymous
+			 *   - page is locked
+			 *
+			 * So as it is a shared page and it is locked, it can
+			 * not be remove from the page cache and replace by
+			 * a new page before mmu_notifier_invalidate_range_end
+			 * so no concurrent thread might update its page table
+			 * to point at new page while a device still is using
+			 * this page.
+			 *
+			 * But we can not assume that new user of try_to_unmap
+			 * will have that in mind so just to be safe here call
+			 * mmu_notifier_invalidate_range()
+			 *
+			 * See Documentation/vm/mmu_notifier.txt
+			 */
 			dec_mm_counter(mm, mm_counter_file(page));
+			mmu_notifier_invalidate_range(mm, address,
+						      address + PAGE_SIZE);
+		}
 discard:
+		/*
+		 * No need to call mmu_notifier_invalidate_range() as we are
+		 * either replacing a present pte with non present one (either
+		 * a swap or special one). We handling the clearing pte case
+		 * above.
+		 *
+		 * See Documentation/vm/mmu_notifier.txt
+		 */
 		page_remove_rmap(subpage, PageHuge(page));
 		put_page(page);
-		mmu_notifier_invalidate_range(mm, address,
-					      address + PAGE_SIZE);
 	}
 
 	mmu_notifier_invalidate_range_end(vma->vm_mm, start, end);

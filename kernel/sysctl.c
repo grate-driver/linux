@@ -1366,6 +1366,13 @@ static struct ctl_table vm_table[] = {
 		.mode           = 0644,
 		.proc_handler   = &hugetlb_mempolicy_sysctl_handler,
 	},
+	{
+		.procname	= "numa_stats_mode",
+		.data		= sysctl_vm_numa_stats_mode,
+		.maxlen		= VM_NUMA_STAT_MODE_LEN,
+		.mode		= 0644,
+		.proc_handler	= sysctl_vm_numa_stats_mode_handler,
+	},
 #endif
 	 {
 		.procname	= "hugetlb_shm_group",
@@ -1374,13 +1381,6 @@ static struct ctl_table vm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	 },
-	 {
-		.procname	= "hugepages_treat_as_movable",
-		.data		= &hugepages_treat_as_movable,
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
-	},
 	{
 		.procname	= "nr_overcommit_hugepages",
 		.data		= NULL,

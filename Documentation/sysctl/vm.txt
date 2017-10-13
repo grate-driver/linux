@@ -30,7 +30,6 @@ Currently, these files are in /proc/sys/vm:
 - dirty_writeback_centisecs
 - drop_caches
 - extfrag_threshold
-- hugepages_treat_as_movable
 - hugetlb_shm_group
 - laptop_mode
 - legacy_va_layout
@@ -61,6 +60,7 @@ Currently, these files are in /proc/sys/vm:
 - swappiness
 - user_reserve_kbytes
 - vfs_cache_pressure
+- numa_stats_mode
 - watermark_scale_factor
 - zone_reclaim_mode
 
@@ -157,6 +157,10 @@ Note: the minimum value allowed for dirty_bytes is two pages (in bytes); any
 value lower than this limit will be ignored and the old configuration will be
 retained.
 
+Note: the value of dirty_bytes also must be set greater than
+dirty_background_bytes or the amount of memory corresponding to
+dirty_background_ratio.
+
 ==============================================================
 
 dirty_expire_centisecs
@@ -175,6 +179,9 @@ and reclaimable pages, the number of pages at which a process which is
 generating disk writes will itself start writing out dirty data.
 
 The total available memory is not equal to total system memory.
+
+Note: dirty_ratio must be set greater than dirty_background_ratio or
+ratio corresponding to dirty_background_bytes.
 
 ==============================================================
 
@@ -257,30 +264,6 @@ storage more effectively. Note this also comes with a risk of pre-mature
 OOM killer because some writers (e.g. direct block device writes) can
 only use the low memory and they can fill it up with dirty data without
 any throttling.
-
-==============================================================
-
-hugepages_treat_as_movable
-
-This parameter controls whether we can allocate hugepages from ZONE_MOVABLE
-or not. If set to non-zero, hugepages can be allocated from ZONE_MOVABLE.
-ZONE_MOVABLE is created when kernel boot parameter kernelcore= is specified,
-so this parameter has no effect if used without kernelcore=.
-
-Hugepage migration is now available in some situations which depend on the
-architecture and/or the hugepage size. If a hugepage supports migration,
-allocation from ZONE_MOVABLE is always enabled for the hugepage regardless
-of the value of this parameter.
-IOW, this parameter affects only non-migratable hugepages.
-
-Assuming that hugepages are not migratable in your system, one usecase of
-this parameter is that users can make hugepage pool more extensible by
-enabling the allocation from ZONE_MOVABLE. This is because on ZONE_MOVABLE
-page reclaim/migration/compaction work more and you can get contiguous
-memory more likely. Note that using ZONE_MOVABLE for non-migratable
-hugepages can do harm to other features like memory hotremove (because
-memory hotremove expects that memory blocks on ZONE_MOVABLE are always
-removable,) so it's a trade-off responsible for the users.
 
 ==============================================================
 
@@ -622,10 +605,10 @@ oom_dump_tasks
 
 Enables a system-wide task dump (excluding kernel threads) to be produced
 when the kernel performs an OOM-killing and includes such information as
-pid, uid, tgid, vm size, rss, nr_ptes, nr_pmds, swapents, oom_score_adj
-score, and name.  This is helpful to determine why the OOM killer was
-invoked, to identify the rogue task that caused it, and to determine why
-the OOM killer chose the task it did to kill.
+pid, uid, tgid, vm size, rss, nr_ptes, nr_pmds, nr_puds, swapents,
+oom_score_adj score, and name.  This is helpful to determine why the OOM
+killer was invoked, to identify the rogue task that caused it, and to
+determine why the OOM killer chose the task it did to kill.
 
 If this is set to zero, this information is suppressed.  On very
 large systems with thousands of tasks it may not be feasible to dump
@@ -842,6 +825,30 @@ directory and inode objects. With vfs_cache_pressure=1000, it will look for
 ten times more freeable objects than there are.
 
 =============================================================
+
+numa_stats_mode
+
+This interface allows runtime configuration of numa statistics.
+
+When page allocation performance becomes a bottleneck and you can tolerate
+some possible tool breakage and decreased numa counter precision, you can
+do:
+	echo [C|c]oarse > /proc/sys/vm/numa_stats_mode
+
+When page allocation performance is not a bottleneck and you want all
+tooling to work, you can do:
+	echo [S|s]trict > /proc/sys/vm/numa_stat_mode
+
+We recommend automatic detection of numa statistics by system, because
+numa statistics do not affect system decisions and it is very rarely
+consumed.  In this case you can do:
+	echo [A|a]uto > /proc/sys/vm/numa_stats_mode
+
+This is the system default configuration.  With this default setting, numa
+counter updates are skipped until the counter is *read* by userspace at
+least once.
+
+==============================================================
 
 watermark_scale_factor:
 

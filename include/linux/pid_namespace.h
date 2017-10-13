@@ -11,7 +11,6 @@
 #include <linux/ns_common.h>
 
 struct pidmap {
-       atomic_t nr_free;
        void *page;
 };
 
