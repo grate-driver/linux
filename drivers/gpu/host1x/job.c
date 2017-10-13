@@ -116,6 +116,20 @@ void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *bo,
 }
 EXPORT_SYMBOL(host1x_job_add_gather);
 
+/* XXX */
+void host1x_job_add_gather2(struct host1x_job *job, struct host1x_bo *bo,
+			    u32 words, u32 offset, dma_addr_t dma)
+{
+	struct host1x_job_gather *cur_gather = &job->gathers[job->num_gathers];
+
+	cur_gather->base = dma;
+	cur_gather->words = words;
+	cur_gather->bo = bo;
+	cur_gather->offset = offset;
+	job->num_gathers++;
+}
+EXPORT_SYMBOL(host1x_job_add_gather2);
+
 /*
  * NULL an already satisfied WAIT_SYNCPT host method, by patching its
  * args in the command stream. The method data is changed to reference

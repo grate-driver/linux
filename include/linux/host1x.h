@@ -287,6 +287,8 @@ struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
 				    u32 num_waitchks);
 void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *mem_id,
 			   u32 words, u32 offset);
+void host1x_job_add_gather2(struct host1x_job *job, struct host1x_bo *bo,
+			    u32 words, u32 offset, dma_addr_t dma);
 struct host1x_job *host1x_job_get(struct host1x_job *job);
 void host1x_job_put(struct host1x_job *job);
 int host1x_job_pin(struct host1x_job *job, struct device *dev);
@@ -367,5 +369,12 @@ int tegra_mipi_calibrate(struct tegra_mipi_device *device);
 
 struct dma_fence *host1x_fence_create(struct host1x_client *client,
 				      struct host1x_syncpt *sp, u32 threshold);
+
+void *host1x_alloc(struct host1x *host, size_t size,
+		   dma_addr_t *dma, dma_addr_t *phys,
+		   unsigned long flags, int prot);
+
+void host1x_free(struct host1x *host, void *vaddr, size_t size,
+		 dma_addr_t dma, dma_addr_t phys);
 
 #endif

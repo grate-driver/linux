@@ -19,6 +19,7 @@
 #include <drm/drm_gem.h>
 
 #define TEGRA_BO_BOTTOM_UP (1 << 0)
+#define TEGRA_BO_SCATTERED (1 << 1)
 
 enum tegra_bo_tiling_mode {
 	TEGRA_BO_TILING_MODE_PITCH,
@@ -85,5 +86,8 @@ struct dma_buf *tegra_gem_prime_export(struct drm_device *drm,
 				       int flags);
 struct drm_gem_object *tegra_gem_prime_import(struct drm_device *drm,
 					      struct dma_buf *buf);
+
+dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt);
+void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt);
 
 #endif

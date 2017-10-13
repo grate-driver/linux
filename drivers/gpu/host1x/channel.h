@@ -32,6 +32,7 @@ struct host1x_channel_list {
 
 	struct mutex lock;
 	unsigned long *allocated_channels;
+	unsigned int ch_sel;
 };
 
 struct host1x_channel {

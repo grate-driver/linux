@@ -137,6 +137,57 @@ static const struct of_device_id host1x_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, host1x_of_match);
 
+void *host1x_alloc(struct host1x *host, size_t size,
+		   dma_addr_t *dma, dma_addr_t *phys,
+		   unsigned long flags, int prot)
+{
+	struct iova *alloc;
+	void *vaddr;
+
+	vaddr = dma_alloc_wc(host->dev, size, phys, flags);
+	if (!vaddr)
+		return NULL;
+
+	if (host->domain) {
+		unsigned long shift;
+		int err;
+
+		shift = iova_shift(&host->iova);
+		alloc = alloc_iova(&host->iova,
+				   iova_align(&host->iova, size) >> shift,
+				   host->iova_end >> shift, true);
+		if (!alloc) {
+			dma_free_wc(host->dev, size, vaddr, *phys);
+			return NULL;
+		}
+
+		err = iommu_map(host->domain, iova_dma_addr(&host->iova, alloc),
+				*phys, size, prot);
+		if (err) {
+			__free_iova(&host->iova, alloc);
+			dma_free_wc(host->dev, size, vaddr, *phys);
+			return NULL;
+		}
+	} else {
+		*dma = *phys;
+	}
+
+	return vaddr;
+}
+EXPORT_SYMBOL(host1x_alloc);
+
+void host1x_free(struct host1x *host, void *vaddr, size_t size,
+		 dma_addr_t dma, dma_addr_t phys)
+{
+	if (host->domain) {
+		iommu_unmap(host->domain, dma, iova_align(&host->iova, size));
+		free_iova(&host->iova, iova_pfn(&host->iova, dma));
+	}
+
+	dma_free_wc(host->dev, size, vaddr, phys);
+}
+EXPORT_SYMBOL(host1x_free);
+
 static int host1x_iommu_init(struct host1x *host)
 {
 	struct iommu_domain_geometry *geometry;

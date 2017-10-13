@@ -111,22 +111,26 @@ static struct host1x_channel *acquire_unused_channel(struct host1x *host)
 	unsigned int max_channels = host->info->nb_channels;
 	unsigned int index;
 
-	mutex_lock(&chlist->lock);
-
 	index = find_first_zero_bit(chlist->allocated_channels, max_channels);
-	if (index >= max_channels) {
-		mutex_unlock(&chlist->lock);
-		dev_err(host->dev, "failed to find free channel\n");
+	if (index >= max_channels)
 		return NULL;
-	}
 
 	chlist->channels[index].id = index;
 
 	set_bit(index, chlist->allocated_channels);
 
-	mutex_unlock(&chlist->lock);
+// 	return &chlist->channels[index];
 
-	return &chlist->channels[index];
+	/* XXX */
+	return host1x_channel_get(&chlist->channels[index]);
+}
+
+static struct host1x_channel *get_used_channel(struct host1x *host)
+{
+	struct host1x_channel_list *chlist = &host->channel_list;
+	unsigned int max_channels = host->info->nb_channels;
+
+	return &chlist->channels[chlist->ch_sel++ % max_channels];
 }
 
 /**
@@ -143,9 +147,18 @@ struct host1x_channel *host1x_channel_request(struct device *dev)
 	struct host1x_channel *channel;
 	int err;
 
+	mutex_lock(&chlist->lock);
+
 	channel = acquire_unused_channel(host);
-	if (!channel)
-		return NULL;
+	if (!channel) {
+		channel = get_used_channel(host);
+		host1x_channel_get(channel);
+		mutex_unlock(&chlist->lock);
+
+		return channel;
+	}
+
+	mutex_unlock(&chlist->lock);
 
 	kref_init(&channel->refcount);
 	mutex_init(&channel->submitlock);

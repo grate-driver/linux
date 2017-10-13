@@ -378,37 +378,18 @@ void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
 	else
 		restart_addr = cdma->last_pos;
 
-	/* do CPU increments as long as this context continues */
-	list_for_each_entry_from(job, &cdma->sync_queue, list) {
-		/* different context, gets us out of this loop */
-		if (job->client != cdma->timeout.client)
-			break;
+	/* won't need a timeout when replayed */
+	job->timeout = 0;
 
-		/* won't need a timeout when replayed */
-		job->timeout = 0;
+	syncpt_incrs = job->syncpt_end - syncpt_val;
+	dev_dbg(dev, "%s: CPU incr (%d)\n", __func__, syncpt_incrs);
 
-		syncpt_incrs = job->syncpt_end - syncpt_val;
-		dev_dbg(dev, "%s: CPU incr (%d)\n", __func__, syncpt_incrs);
+	host1x_job_dump(dev, job);
 
-		host1x_job_dump(dev, job);
-
-		/* safe to use CPU to incr syncpts */
-		host1x_hw_cdma_timeout_cpu_incr(host1x, cdma, job->first_get,
-						syncpt_incrs, job->syncpt_end,
-						job->num_slots);
-
-		syncpt_val += syncpt_incrs;
-	}
-
-	/*
-	 * The following sumbits from the same client may be dependent on the
-	 * failed submit and therefore they may fail. Force a small timeout
-	 * to make the queue cleanup faster.
-	 */
-
-	list_for_each_entry_from(job, &cdma->sync_queue, list)
-		if (job->client == cdma->timeout.client)
-			job->timeout = min_t(unsigned int, job->timeout, 500);
+	/* safe to use CPU to incr syncpts */
+	host1x_hw_cdma_timeout_cpu_incr(host1x, cdma, job->first_get,
+					syncpt_incrs, job->syncpt_end,
+					job->num_slots);
 
 	dev_dbg(dev, "%s: finished sync_queue modification\n", __func__);
 

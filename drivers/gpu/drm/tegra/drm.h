@@ -101,6 +101,9 @@ struct tegra_drm_client_ops {
 		      struct drm_tegra_submit *args, struct drm_device *drm,
 		      struct drm_file *file);
 	void (*submit_done)(struct tegra_drm_context *context);
+	int (*submit_3d)(struct tegra_drm_context *context,
+			 struct drm_tegra_3d_submit *args,
+			 struct drm_file *file);
 };
 
 int tegra_drm_context_get_channel(struct tegra_drm_context *context);

@@ -173,12 +173,13 @@ static void tegra_bo_iommu_cached_unmap(struct tegra_drm *tegra,
 	mutex_unlock(&tegra->mm_lock);
 }
 
-static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
+dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 {
 	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
 	struct tegra_drm *tegra = obj->gem.dev->dev_private;
 
-	*sgt = obj->sgt;
+	if (sgt)
+		*sgt = obj->sgt;
 
 	if (obj->vaddr || !tegra->dynamic_iommu_mapping)
 		return obj->paddr;
@@ -187,7 +188,7 @@ static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 	return tegra_bo_iommu_cached_map(tegra, obj);
 }
 
-static void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)
+void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)
 {
 	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
 	struct tegra_drm *tegra = obj->gem.dev->dev_private;
@@ -495,6 +496,10 @@ struct tegra_bo *tegra_bo_create(struct drm_device *drm, size_t size,
 
 	if (flags & DRM_TEGRA_GEM_CREATE_BOTTOM_UP)
 		bo->flags |= TEGRA_BO_BOTTOM_UP;
+
+	if (!tegra->domain)
+		if (flags & DRM_TEGRA_GEM_CREATE_SCATTERED)
+			bo->flags |= TEGRA_BO_SCATTERED;
 
 	bo->resv = &bo->_resv;
 	reservation_object_init(bo->resv);

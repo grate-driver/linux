@@ -15,7 +15,8 @@ tegra-drm-y := \
 	gr2d.o \
 	gr3d.o \
 	falcon.o \
-	vic.o
+	vic.o \
+	commands-pool.o
 
 tegra-drm-y += trace.o
 

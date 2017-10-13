@@ -330,7 +330,7 @@ static int tegra_drm_open(struct drm_device *drm, struct drm_file *filp)
 	return 0;
 }
 
-static void tegra_drm_context_free(struct kref *ref)
+void tegra_drm_context_free(struct kref *ref)
 {
 	struct tegra_drm_context *context =
 		container_of(ref, struct tegra_drm_context, ref);
@@ -762,6 +762,12 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		dma_fence_put(in_fence);
 
 		if (err)
+			return err;
+	}
+
+	if (!context->channel) {
+		err = tegra_drm_context_get_channel(context);
+		if (err < 0)
 			return err;
 	}
 
@@ -1213,6 +1219,11 @@ static int tegra_submit(struct drm_device *drm, void *data,
 		goto unlock;
 	}
 
+	if (!context->client->ops->submit) {
+		err = -EINVAL;
+		goto unlock;
+	}
+
 	err = context->client->ops->submit(context, args, drm, file);
 
 unlock:
@@ -1429,6 +1440,36 @@ static int tegra_gem_cpu_prep(struct drm_device *drm, void *data,
 
 	return 0;
 }
+
+static int tegra_submit_3d(struct drm_device *drm, void *data,
+			   struct drm_file *file)
+{
+	struct tegra_drm_file *fpriv = file->driver_priv;
+	struct drm_tegra_3d_submit *args = data;
+	struct tegra_drm_context *context;
+	int err;
+
+	mutex_lock(&fpriv->lock);
+
+	context = idr_find(&fpriv->contexts, args->context);
+	if (!context) {
+		err = -ENODEV;
+		goto unlock;
+	}
+
+	if (!context->client->ops->submit_3d) {
+		err = -ENOTTY;
+		goto unlock;
+	}
+
+	err = context->client->ops->submit_3d(context, args, file);
+	if (!err)
+		kref_get(&context->ref);
+unlock:
+	mutex_unlock(&fpriv->lock);
+
+	return err;
+}
 #endif
 
 static const struct drm_ioctl_desc tegra_drm_ioctls[] = {
@@ -1462,6 +1503,8 @@ static const struct drm_ioctl_desc tegra_drm_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(TEGRA_GEM_GET_FLAGS, tegra_gem_get_flags,
 			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(TEGRA_GEM_CPU_PREP, tegra_gem_cpu_prep,
+			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(TEGRA_3D_SUBMIT, tegra_submit_3d,
 			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
 #endif
 };

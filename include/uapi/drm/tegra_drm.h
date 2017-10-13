@@ -192,6 +192,125 @@ struct drm_tegra_gem_cpu_prep {
 	__u32 pad;
 };
 
+struct drm_tegra_3d_regs {
+	__u32 r_0x00c[10];
+	__u32 r_0x120[1];
+	__u32 r_0x122[1];
+	__u32 r_0x124[3];
+	__u32 r_0x200[5];
+	__u32 r_0x209[9];
+	__u32 r_0x340[38];
+	__u32 r_0x400[18];
+	__u32 r_0x500[4];
+	__u32 r_0x542[5];
+	__u32 r_0x608[4];
+	__u32 r_0x740[2];
+	__u32 r_0x902[2];
+	__u32 r_0xa00[13];
+	__u32 r_0xe20[11];
+
+	__u32 reserved[32];
+};
+
+struct drm_tegra_3d_vertex_program {
+	__u32 r_0x206[1024];
+};
+
+struct drm_tegra_3d_vertex_consts {
+	__u32 r_0x208[1024];
+};
+
+struct drm_tegra_3d_linker_program {
+	__u32 r_0x300[64];
+};
+
+struct drm_tegra_3d_fragment_program {
+	__u32 r_0x520[32];
+	__u32 r_0x541[64];
+	__u32 r_0x601[64];
+	__u32 r_0x604[128];
+	__u32 r_0x701[64];
+	__u32 r_0x801[64];
+	__u32 r_0x804[512];
+	__u32 r_0x806[64];
+	__u32 r_0x901[64];
+};
+
+struct drm_tegra_3d_fragment_consts {
+	__u32 r_0x820[1024];
+};
+
+struct drm_tegra_3d_idx_desc {
+	__u32 enabled;
+	__u32 handle;
+	__u32 offset;
+};
+
+struct drm_tegra_3d_attr_desc {
+	__u32 enabled;
+	__u32 handle;
+	__u32 offset;
+	__u32 desc;
+};
+
+struct drm_tegra_3d_tex_desc {
+	__u32 enabled;
+	__u32 handle;
+	__u32 offset;
+	__u32 desc1;
+	__u32 desc2;
+};
+
+struct drm_tegra_3d_rt_desc {
+	__u32 enabled;
+	__u32 handle;
+	__u32 offset;
+	__u32 desc;
+};
+
+struct drm_tegra_3d_spill_desc {
+	__u32 enabled;
+	__u32 handle;
+	__u32 offset;
+};
+
+struct drm_tegra_3d_submit {
+	__u64 context;
+
+	struct drm_tegra_3d_idx_desc indices;
+	struct drm_tegra_3d_spill_desc spill_surf;
+	struct drm_tegra_3d_attr_desc attributes[16];
+	struct drm_tegra_3d_tex_desc textures[16];
+	struct drm_tegra_3d_rt_desc render_targets[16];
+
+	__u64 regs_pointer;
+	__u64 vertex_prog_pointer;
+	__u64 linker_prog_pointer;
+	__u64 fragment_prog_pointer;
+	__u64 vertex_consts_pointer;
+	__u64 fragment_consts_pointer;
+
+	__u32 vp_instructions_num;
+	__u32 vp_consts_num;
+	__u32 lp_instructions_num;
+	__u32 fp_pseq_eng_num;
+	__u32 fp_pseq_num;
+	__u32 fp_mfu_sched_num;
+	__u32 fp_mfu_num;
+	__u32 fp_tex_num;
+	__u32 fp_alu_sched_num;
+	__u32 fp_alu_num;
+	__u32 fp_alu_comp_num;
+	__u32 fp_consts_num;
+	__u32 fp_dw_num;
+
+	__u32 draw_primitives;
+
+	__u32 fence;
+
+	__u32 reserved[8];
+};
+
 #define DRM_TEGRA_GEM_CREATE		0x00
 #define DRM_TEGRA_GEM_MMAP		0x01
 #define DRM_TEGRA_SYNCPT_READ		0x02
@@ -207,6 +326,7 @@ struct drm_tegra_gem_cpu_prep {
 #define DRM_TEGRA_GEM_SET_FLAGS		0x0c
 #define DRM_TEGRA_GEM_GET_FLAGS		0x0d
 #define DRM_TEGRA_GEM_CPU_PREP		0x0e
+#define DRM_TEGRA_3D_SUBMIT		0x0f
 
 #define DRM_IOCTL_TEGRA_GEM_CREATE DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_CREATE, struct drm_tegra_gem_create)
 #define DRM_IOCTL_TEGRA_GEM_MMAP DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_MMAP, struct drm_tegra_gem_mmap)
@@ -223,6 +343,7 @@ struct drm_tegra_gem_cpu_prep {
 #define DRM_IOCTL_TEGRA_GEM_SET_FLAGS DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_SET_FLAGS, struct drm_tegra_gem_set_flags)
 #define DRM_IOCTL_TEGRA_GEM_GET_FLAGS DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_GET_FLAGS, struct drm_tegra_gem_get_flags)
 #define DRM_IOCTL_TEGRA_GEM_CPU_PREP DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_CPU_PREP, struct drm_tegra_gem_get_flags)
+#define DRM_IOCTL_TEGRA_3D_SUBMIT DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_3D_SUBMIT, struct drm_tegra_3d_submit)
 
 #if defined(__cplusplus)
 }
