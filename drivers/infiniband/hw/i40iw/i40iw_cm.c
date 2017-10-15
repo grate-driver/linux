@@ -1199,7 +1199,6 @@ static void i40iw_cm_timer_tick(unsigned long pass)
 	struct i40iw_cm_core *cm_core = (struct i40iw_cm_core *)pass;
 	u32 settimer = 0;
 	unsigned long timetosend;
-	struct i40iw_sc_dev *dev;
 	unsigned long flags;
 
 	struct list_head timer_list;
@@ -1270,7 +1269,6 @@ static void i40iw_cm_timer_tick(unsigned long pass)
 		spin_unlock_irqrestore(&cm_node->retrans_list_lock, flags);
 
 		vsi = &cm_node->iwdev->vsi;
-		dev = cm_node->dev;
 
 		if (!cm_node->ack_rcvd) {
 			atomic_inc(&send_entry->sqbuf->refcount);
@@ -2410,6 +2408,7 @@ static void i40iw_handle_rst_pkt(struct i40iw_cm_node *cm_node,
 	case I40IW_CM_STATE_FIN_WAIT1:
 	case I40IW_CM_STATE_LAST_ACK:
 		cm_node->cm_id->rem_ref(cm_node->cm_id);
+		/* fall through */
 	case I40IW_CM_STATE_TIME_WAIT:
 		cm_node->state = I40IW_CM_STATE_CLOSED;
 		i40iw_rem_ref_cm_node(cm_node);

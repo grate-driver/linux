@@ -99,10 +99,6 @@ module_param(enable_tcp_window_scaling, int, 0644);
 MODULE_PARM_DESC(enable_tcp_window_scaling,
 		 "Enable tcp window scaling (default=1)");
 
-int c4iw_debug;
-module_param(c4iw_debug, int, 0644);
-MODULE_PARM_DESC(c4iw_debug, "obsolete");
-
 static int peer2peer = 1;
 module_param(peer2peer, int, 0644);
 MODULE_PARM_DESC(peer2peer, "Support peer2peer ULPs (default=1)");
@@ -832,13 +828,13 @@ static int send_connect(struct c4iw_ep *ep)
 				t5req->params =
 					  cpu_to_be64(FILTER_TUPLE_V(params));
 				t5req->rsvd = cpu_to_be32(isn);
-			pr_debug("snd_isn %u\n", t5req->rsvd);
+				pr_debug("snd_isn %u\n", t5req->rsvd);
 				t5req->opt2 = cpu_to_be32(opt2);
 			} else {
 				t6req->params =
 					  cpu_to_be64(FILTER_TUPLE_V(params));
 				t6req->rsvd = cpu_to_be32(isn);
-			pr_debug("snd_isn %u\n", t6req->rsvd);
+				pr_debug("snd_isn %u\n", t6req->rsvd);
 				t6req->opt2 = cpu_to_be32(opt2);
 			}
 		}
@@ -885,13 +881,13 @@ static int send_connect(struct c4iw_ep *ep)
 				t5req6->params =
 					    cpu_to_be64(FILTER_TUPLE_V(params));
 				t5req6->rsvd = cpu_to_be32(isn);
-			pr_debug("snd_isn %u\n", t5req6->rsvd);
+				pr_debug("snd_isn %u\n", t5req6->rsvd);
 				t5req6->opt2 = cpu_to_be32(opt2);
 			} else {
 				t6req6->params =
 					    cpu_to_be64(FILTER_TUPLE_V(params));
 				t6req6->rsvd = cpu_to_be32(isn);
-			pr_debug("snd_isn %u\n", t6req6->rsvd);
+				pr_debug("snd_isn %u\n", t6req6->rsvd);
 				t6req6->opt2 = cpu_to_be32(opt2);
 			}
 
@@ -3642,6 +3638,7 @@ static void active_ofld_conn_reply(struct c4iw_dev *dev, struct sk_buff *skb,
 			send_fw_act_open_req(ep, atid);
 			return;
 		}
+		/* fall through */
 	case FW_EADDRINUSE:
 		set_bit(ACT_RETRY_INUSE, &ep->com.history);
 		if (ep->retry_count++ < ACT_OPEN_RETRY_COUNT) {
@@ -3880,7 +3877,6 @@ static int rx_pkt(struct c4iw_dev *dev, struct sk_buff *skb)
 	struct net_device *pdev;
 	u16 rss_qid, eth_hdr_len;
 	int step;
-	u32 tx_chan;
 	struct neighbour *neigh;
 
 	/* Drop all non-SYN packets */
@@ -3962,14 +3958,12 @@ static int rx_pkt(struct c4iw_dev *dev, struct sk_buff *skb)
 		e = cxgb4_l2t_get(dev->rdev.lldi.l2t, neigh,
 				    pdev, 0);
 		pi = (struct port_info *)netdev_priv(pdev);
-		tx_chan = cxgb4_port_chan(pdev);
 		dev_put(pdev);
 	} else {
 		pdev = get_real_dev(neigh->dev);
 		e = cxgb4_l2t_get(dev->rdev.lldi.l2t, neigh,
 					pdev, 0);
 		pi = (struct port_info *)netdev_priv(pdev);
-		tx_chan = cxgb4_port_chan(pdev);
 	}
 	neigh_release(neigh);
 	if (!e) {
