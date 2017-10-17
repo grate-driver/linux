@@ -304,8 +304,8 @@ static void scsi_strcpy_devinfo(char *name, char *to, size_t to_length,
 			 */
 			to[from_length] = '\0';
 		} else {
-			/* 
-			 * space pad the string if it is short. 
+			/*
+			 * space pad the string if it is short.
 			 */
 			strncpy(&to[from_length], spaces,
 				to_length - from_length);
@@ -325,10 +325,10 @@ static void scsi_strcpy_devinfo(char *name, char *to, size_t to_length,
  * @flags:	if strflags NULL, use this flag value
  *
  * Description:
- * 	Create and add one dev_info entry for @vendor, @model, @strflags or
- * 	@flag. If @compatible, add to the tail of the list, do not space
- * 	pad, and set devinfo->compatible. The scsi_static_device_list entries
- * 	are added with @compatible 1 and @clfags NULL.
+ *	Create and add one dev_info entry for @vendor, @model, @strflags or
+ *	@flag. If @compatible, add to the tail of the list, do not space
+ *	pad, and set devinfo->compatible. The scsi_static_device_list entries
+ *	are added with @compatible 1 and @clfags NULL.
  *
  * Returns: 0 OK, -error on failure.
  **/
@@ -350,11 +350,11 @@ static int scsi_dev_info_list_add(int compatible, char *vendor, char *model,
  * @key:	specify list to use
  *
  * Description:
- * 	Create and add one dev_info entry for @vendor, @model,
- * 	@strflags or @flag in list specified by @key. If @compatible,
- * 	add to the tail of the list, do not space pad, and set
- * 	devinfo->compatible. The scsi_static_device_list entries are
- * 	added with @compatible 1 and @clfags NULL.
+ *	Create and add one dev_info entry for @vendor, @model,
+ *	@strflags or @flag in list specified by @key. If @compatible,
+ *	add to the tail of the list, do not space pad, and set
+ *	devinfo->compatible. The scsi_static_device_list entries are
+ *	added with @compatible 1 and @clfags NULL.
  *
  * Returns: 0 OK, -error on failure.
  **/
@@ -399,13 +399,13 @@ EXPORT_SYMBOL(scsi_dev_info_list_add_keyed);
 
 /**
  * scsi_dev_info_list_find - find a matching dev_info list entry.
- * @vendor:	vendor string
- * @model:	model (product) string
+ * @vendor:	full vendor string
+ * @model:	full model (product) string
  * @key:	specify list to use
  *
  * Description:
  *	Finds the first dev_info entry matching @vendor, @model
- * 	in list specified by @key.
+ *	in list specified by @key.
  *
  * Returns: pointer to matching entry, or ERR_PTR on failure.
  **/
@@ -415,7 +415,7 @@ static struct scsi_dev_info_list *scsi_dev_info_list_find(const char *vendor,
 	struct scsi_dev_info_list *devinfo;
 	struct scsi_dev_info_list_table *devinfo_table =
 		scsi_devinfo_lookup_by_key(key);
-	size_t vmax, mmax;
+	size_t vmax, mmax, mlen;
 	const char *vskip, *mskip;
 
 	if (IS_ERR(devinfo_table))
@@ -454,22 +454,25 @@ static struct scsi_dev_info_list *scsi_dev_info_list_find(const char *vendor,
 			    dev_info_list) {
 		if (devinfo->compatible) {
 			/*
-			 * Behave like the older version of get_device_flags.
+			 * vendor strings must be an exact match
 			 */
-			if (memcmp(devinfo->vendor, vskip, vmax) ||
-					(vmax < sizeof(devinfo->vendor) &&
-						devinfo->vendor[vmax]))
+			if (vmax != strlen(devinfo->vendor) ||
+			    memcmp(devinfo->vendor, vskip, vmax))
 				continue;
-			if (memcmp(devinfo->model, mskip, mmax) ||
-					(mmax < sizeof(devinfo->model) &&
-						devinfo->model[mmax]))
+
+			/*
+			 * @model specifies the full string, and
+			 * must be larger or equal to devinfo->model
+			 */
+			mlen = strlen(devinfo->model);
+			if (mmax < mlen || memcmp(devinfo->model, mskip, mlen))
 				continue;
 			return devinfo;
 		} else {
 			if (!memcmp(devinfo->vendor, vendor,
-				     sizeof(devinfo->vendor)) &&
-			     !memcmp(devinfo->model, model,
-				      sizeof(devinfo->model)))
+				    sizeof(devinfo->vendor)) &&
+			    !memcmp(devinfo->model, model,
+				    sizeof(devinfo->model)))
 				return devinfo;
 		}
 	}
@@ -508,10 +511,10 @@ EXPORT_SYMBOL(scsi_dev_info_list_del_keyed);
  * @dev_list:	string of device flags to add
  *
  * Description:
- * 	Parse dev_list, and add entries to the scsi_dev_info_list.
- * 	dev_list is of the form "vendor:product:flag,vendor:product:flag".
- * 	dev_list is modified via strsep. Can be called for command line
- * 	addition, for proc or mabye a sysfs interface.
+ *	Parse dev_list, and add entries to the scsi_dev_info_list.
+ *	dev_list is of the form "vendor:product:flag,vendor:product:flag".
+ *	dev_list is modified via strsep. Can be called for command line
+ *	addition, for proc or mabye a sysfs interface.
  *
  * Returns: 0 if OK, -error on failure.
  **/
@@ -701,7 +704,7 @@ static int proc_scsi_devinfo_open(struct inode *inode, struct file *file)
 	return seq_open(file, &scsi_devinfo_seq_ops);
 }
 
-/* 
+/*
  * proc_scsi_dev_info_write - allow additions to scsi_dev_info_list via /proc.
  *
  * Description: Adds a black/white list entry for vendor and model with an
@@ -840,8 +843,8 @@ EXPORT_SYMBOL(scsi_dev_info_remove_list);
  * scsi_init_devinfo - set up the dynamic device list.
  *
  * Description:
- * 	Add command line entries from scsi_dev_flags, then add
- * 	scsi_static_device_list entries to the scsi device info list.
+ *	Add command line entries from scsi_dev_flags, then add
+ *	scsi_static_device_list entries to the scsi device info list.
  */
 int __init scsi_init_devinfo(void)
 {
