@@ -316,7 +316,6 @@ static int tpm_tis_send_data(struct tpm_chip *chip, const u8 *buf, size_t len)
 {
 	struct tpm_tis_data *priv = dev_get_drvdata(&chip->dev);
 	int rc, status, burstcnt;
-	size_t count = 0;
 	bool itpm = priv->flags & TPM_TIS_ITPM_WORKAROUND;
 
 	status = tpm_tis_status(chip);
@@ -330,35 +329,24 @@ static int tpm_tis_send_data(struct tpm_chip *chip, const u8 *buf, size_t len)
 		}
 	}
 
-	while (count < len - 1) {
-		burstcnt = get_burstcount(chip);
-		if (burstcnt < 0) {
-			dev_err(&chip->dev, "Unable to read burstcount\n");
-			rc = burstcnt;
-			goto out_err;
-		}
-		burstcnt = min_t(int, burstcnt, len - count - 1);
-		rc = tpm_tis_write_bytes(priv, TPM_DATA_FIFO(priv->locality),
-					 burstcnt, buf + count);
-		if (rc < 0)
-			goto out_err;
-
-		count += burstcnt;
-
-		if (wait_for_tpm_stat(chip, TPM_STS_VALID, chip->timeout_c,
-					&priv->int_queue, false) < 0) {
-			rc = -ETIME;
-			goto out_err;
-		}
-		status = tpm_tis_status(chip);
-		if (!itpm && (status & TPM_STS_DATA_EXPECT) == 0) {
-			rc = -EIO;
-			goto out_err;
-		}
+	/*
+	 * Get the initial burstcount to ensure TPM is ready to
+	 * accept data.
+	 */
+	burstcnt = get_burstcount(chip);
+	if (burstcnt < 0) {
+		dev_err(&chip->dev, "Unable to read burstcount\n");
+		rc = burstcnt;
+		goto out_err;
 	}
 
+	rc = tpm_tis_write_bytes(priv, TPM_DATA_FIFO(priv->locality),
+			len - 1, buf);
+	if (rc < 0)
+		goto out_err;
+
 	/* write last byte */
-	rc = tpm_tis_write8(priv, TPM_DATA_FIFO(priv->locality), buf[count]);
+	rc = tpm_tis_write8(priv, TPM_DATA_FIFO(priv->locality), buf[len-1]);
 	if (rc < 0)
 		goto out_err;
 
