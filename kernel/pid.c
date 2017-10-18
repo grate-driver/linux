@@ -118,8 +118,7 @@ void free_pid(struct pid *pid)
 	for (i = 0; i <= pid->level; i++) {
 		struct upid *upid = pid->numbers + i;
 		struct pid_namespace *ns = upid->ns;
-
-		switch(--ns->pid_allocated) {
+		switch (--ns->pid_allocated) {
 		case 2:
 		case 1:
 			/* When all that is left in the pid namespace
