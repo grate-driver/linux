@@ -31,7 +31,8 @@
 #define BO_PINNED   0x2000
 
 static struct msm_gem_submit *submit_create(struct drm_device *dev,
-		struct msm_gpu *gpu, uint32_t nr_bos, uint32_t nr_cmds)
+		struct msm_gpu *gpu, struct msm_gpu_submitqueue *queue,
+		uint32_t nr_bos, uint32_t nr_cmds)
 {
 	struct msm_gem_submit *submit;
 	uint64_t sz = sizeof(*submit) + ((u64)nr_bos * sizeof(submit->bos[0])) +
@@ -49,6 +50,7 @@ static struct msm_gem_submit *submit_create(struct drm_device *dev,
 	submit->fence = NULL;
 	submit->pid = get_pid(task_pid(current));
 	submit->cmd = (void *)&submit->bos[nr_bos];
+	submit->queue = queue;
 
 	/* initially, until copy_from_user() and bo lookup succeeds: */
 	submit->nr_bos = 0;
@@ -66,6 +68,8 @@ void msm_gem_submit_free(struct msm_gem_submit *submit)
 	dma_fence_put(submit->fence);
 	list_del(&submit->node);
 	put_pid(submit->pid);
+	msm_submitqueue_put(submit->queue);
+
 	kfree(submit);
 }
 
@@ -243,7 +247,8 @@ static int submit_fence_sync(struct msm_gem_submit *submit, bool no_implicit)
 		if (no_implicit)
 			continue;
 
-		ret = msm_gem_sync_object(&msm_obj->base, submit->gpu->fctx, write);
+		ret = msm_gem_sync_object(&msm_obj->base, submit->queue->fctx,
+			write);
 		if (ret)
 			break;
 	}
@@ -405,9 +410,10 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 	struct msm_gpu *gpu = priv->gpu;
 	struct dma_fence *in_fence = NULL;
 	struct sync_file *sync_file = NULL;
+	struct msm_gpu_submitqueue *queue;
 	int out_fence_fd = -1;
 	unsigned i;
-	int ret;
+	int ret, ring;
 
 	if (!gpu)
 		return -ENXIO;
@@ -421,6 +427,10 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 	if (MSM_PIPE_FLAGS(args->flags) & ~MSM_SUBMIT_FLAGS)
 		return -EINVAL;
 
+	queue = msm_submitqueue_get(ctx, args->queueid);
+	if (!queue)
+		return -ENOENT;
+
 	if (args->flags & MSM_SUBMIT_FENCE_FD_IN) {
 		in_fence = sync_file_get_fence(args->fence_fd);
 
@@ -431,7 +441,7 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 		 * Wait if the fence is from a foreign context, or if the fence
 		 * array contains any fence from a foreign context.
 		 */
-		if (!dma_fence_match_context(in_fence, gpu->fctx->context)) {
+		if (!dma_fence_match_context(in_fence, queue->fctx->context)) {
 			ret = dma_fence_wait(in_fence, true);
 			if (ret)
 				return ret;
@@ -451,7 +461,7 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 	}
 	priv->struct_mutex_task = current;
 
-	submit = submit_create(dev, gpu, args->nr_bos, args->nr_cmds);
+	submit = submit_create(dev, gpu, queue, args->nr_bos, args->nr_cmds);
 	if (!submit) {
 		ret = -ENOMEM;
 		goto out_unlock;
@@ -534,7 +544,10 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 
 	submit->nr_cmds = i;
 
-	submit->fence = msm_fence_alloc(gpu->fctx);
+	ring = clamp_t(uint32_t, queue->prio, 0, gpu->nr_rings - 1);
+	submit->ring = gpu->rb[ring];
+
+	submit->fence = msm_fence_alloc(queue->fctx);
 	if (IS_ERR(submit->fence)) {
 		ret = PTR_ERR(submit->fence);
 		submit->fence = NULL;
