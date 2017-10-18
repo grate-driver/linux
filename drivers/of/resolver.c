@@ -84,10 +84,9 @@ static int update_usages_of_a_phandle_reference(struct device_node *overlay,
 	int offset, len;
 	int err = 0;
 
-	value = kmalloc(prop_fixup->length, GFP_KERNEL);
+	value = kmemdup(prop_fixup->value, prop_fixup->length, GFP_KERNEL);
 	if (!value)
 		return -ENOMEM;
-	memcpy(value, prop_fixup->value, prop_fixup->length);
 
 	/* prop_fixup contains a list of tuples of path:property_name:offset */
 	end = value + prop_fixup->length;
@@ -165,7 +164,6 @@ static int adjust_local_phandle_references(struct device_node *local_fixups,
 	struct property *prop_fix, *prop;
 	int err, i, count;
 	unsigned int off;
-	phandle phandle;
 
 	if (!local_fixups)
 		return 0;
@@ -195,9 +193,7 @@ static int adjust_local_phandle_references(struct device_node *local_fixups,
 			if ((off + 4) > prop->length)
 				return -EINVAL;
 
-			phandle = be32_to_cpu(*(__be32 *)(prop->value + off));
-			phandle += phandle_delta;
-			*(__be32 *)(prop->value + off) = cpu_to_be32(phandle);
+			be32_add_cpu(prop->value + off, phandle_delta);
 		}
 	}
 

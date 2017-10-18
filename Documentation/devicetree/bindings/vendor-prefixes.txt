@@ -84,6 +84,7 @@ davicom	DAVICOM Semiconductor, Inc.
 delta	Delta Electronics, Inc.
 denx	Denx Software Engineering
 devantech	Devantech, Ltd.
+dh	DH electronics GmbH
 digi	Digi International Inc.
 digilent	Diglent, Inc.
 dioo	Dioo Microcircuit Co., Ltd
@@ -237,6 +238,7 @@ nintendo	Nintendo
 nlt	NLT Technologies, Ltd.
 nokia	Nokia
 nordic	Nordic Semiconductor
+nutsboard	NutsBoard
 nuvoton	Nuvoton Technology Corporation
 nvd	New Vision Display
 nvidia	NVIDIA
@@ -300,6 +302,7 @@ sensirion	Sensirion AG
 sff	Small Form Factor Committee
 sgx	SGX Sensortech
 sharp	Sharp Corporation
+shimafuji	Shimafuji Electric, Inc.
 si-en	Si-En Technology Ltd.
 sigma	Sigma Designs, Inc.
 sii	Seiko Instruments, Inc.
@@ -321,6 +324,7 @@ solomon        Solomon Systech Limited
 sony	Sony Corporation
 spansion	Spansion Inc.
 sprd	Spreadtrum Communications Inc.
+sst	Silicon Storage Technology, Inc.
 st	STMicroelectronics
 starry	Starry Electronic Technology (ShenZhen) Co., LTD
 startek	Startek
@@ -343,6 +347,7 @@ thine	THine Electronics, Inc.
 ti	Texas Instruments
 tianma	Tianma Micro-electronics Co., Ltd.
 tlm	Trusted Logic Mobility
+tmt	Tecon Microprocessor Technologies, LLC.
 topeet  Topeet
 toradex	Toradex AG
 toshiba	Toshiba Corporation
