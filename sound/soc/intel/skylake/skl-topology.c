@@ -2382,7 +2382,7 @@ static int skl_tplg_get_token(struct device *dev,
 	case SKL_TKN_U32_MAX_MCPS:
 	case SKL_TKN_U32_OBS:
 	case SKL_TKN_U32_IBS:
-		ret = skl_tplg_fill_res_tkn(dev, tkn_elem, res, dir, pin_index);
+		ret = skl_tplg_fill_res_tkn(dev, tkn_elem, res, pin_index, dir);
 		if (ret < 0)
 			return ret;
 
@@ -3331,6 +3331,7 @@ static struct snd_soc_tplg_ops skl_tplg_ops  = {
 	.io_ops = skl_tplg_kcontrol_ops,
 	.io_ops_count = ARRAY_SIZE(skl_tplg_kcontrol_ops),
 	.manifest = skl_manifest_load,
+	.dai_load = skl_dai_load,
 };
 
 /*

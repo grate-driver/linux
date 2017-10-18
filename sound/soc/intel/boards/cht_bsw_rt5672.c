@@ -20,7 +20,6 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
-#include <asm/cpu_device_id.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
@@ -348,9 +347,11 @@ static struct snd_soc_dai_link cht_dailink[] = {
 static int cht_suspend_pre(struct snd_soc_card *card)
 {
 	struct snd_soc_component *component;
+	struct cht_mc_private *ctx = snd_soc_card_get_drvdata(card);
 
 	list_for_each_entry(component, &card->component_dev_list, card_list) {
-		if (!strcmp(component->name, "i2c-10EC5670:00")) {
+		if (!strncmp(component->name,
+			     ctx->codec_name, sizeof(ctx->codec_name))) {
 			struct snd_soc_codec *codec = snd_soc_component_to_codec(component);
 
 			dev_dbg(codec->dev, "disabling jack detect before going to suspend.\n");
@@ -364,9 +365,11 @@ static int cht_suspend_pre(struct snd_soc_card *card)
 static int cht_resume_post(struct snd_soc_card *card)
 {
 	struct snd_soc_component *component;
+	struct cht_mc_private *ctx = snd_soc_card_get_drvdata(card);
 
 	list_for_each_entry(component, &card->component_dev_list, card_list) {
-		if (!strcmp(component->name, "i2c-10EC5670:00")) {
+		if (!strncmp(component->name,
+			     ctx->codec_name, sizeof(ctx->codec_name))) {
 			struct snd_soc_codec *codec = snd_soc_component_to_codec(component);
 
 			dev_dbg(codec->dev, "enabling jack detect for resume.\n");
@@ -380,7 +383,7 @@ static int cht_resume_post(struct snd_soc_card *card)
 
 /* SoC card */
 static struct snd_soc_card snd_soc_card_cht = {
-	.name = "cherrytrailcraudio",
+	.name = "cht-bsw-rt5672",
 	.owner = THIS_MODULE,
 	.dai_link = cht_dailink,
 	.num_links = ARRAY_SIZE(cht_dailink),
@@ -393,18 +396,6 @@ static struct snd_soc_card snd_soc_card_cht = {
 	.suspend_pre = cht_suspend_pre,
 	.resume_post = cht_resume_post,
 };
-
-static bool is_valleyview(void)
-{
-	static const struct x86_cpu_id cpu_ids[] = {
-		{ X86_VENDOR_INTEL, 6, 55 }, /* Valleyview, Bay Trail */
-		{}
-	};
-
-	if (!x86_match_cpu(cpu_ids))
-		return false;
-	return true;
-}
 
 #define RT5672_I2C_DEFAULT	"i2c-10EC5670:00"
 
@@ -439,14 +430,12 @@ static int snd_cht_mc_probe(struct platform_device *pdev)
 		}
 	}
 
-	if (is_valleyview()) {
-		drv->mclk = devm_clk_get(&pdev->dev, "pmc_plt_clk_3");
-		if (IS_ERR(drv->mclk)) {
-			dev_err(&pdev->dev,
-				"Failed to get MCLK from pmc_plt_clk_3: %ld\n",
-				PTR_ERR(drv->mclk));
-			return PTR_ERR(drv->mclk);
-		}
+	drv->mclk = devm_clk_get(&pdev->dev, "pmc_plt_clk_3");
+	if (IS_ERR(drv->mclk)) {
+		dev_err(&pdev->dev,
+			"Failed to get MCLK from pmc_plt_clk_3: %ld\n",
+			PTR_ERR(drv->mclk));
+		return PTR_ERR(drv->mclk);
 	}
 	snd_soc_card_set_drvdata(&snd_soc_card_cht, drv);
 
