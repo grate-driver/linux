@@ -23,9 +23,7 @@
 #ifndef __AMD_SHARED_H__
 #define __AMD_SHARED_H__
 
-#include <drm/amd_asic_type.h>
-
-struct seq_file;
+#define AMD_MAX_USEC_TIMEOUT		200000  /* 200 ms */
 
 /*
  * Supported ASIC types
@@ -53,8 +51,6 @@ enum amd_asic_type {
 	CHIP_RAVEN,
 	CHIP_LAST,
 };
-
-#define AMD_MAX_USEC_TIMEOUT		200000  /* 200 ms */
 
 /*
  * Chip flags
