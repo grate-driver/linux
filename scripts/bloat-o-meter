@@ -13,7 +13,7 @@ from signal import signal, SIGPIPE, SIG_DFL
 signal(SIGPIPE, SIG_DFL)
 
 if len(sys.argv) < 3:
-    sys.stderr.write("usage: %s [option] file1 file2 \n" % sys.argv[0])
+    sys.stderr.write("usage: %s [option] file1 file2\n" % sys.argv[0])
     sys.stderr.write("The options are:\n")
     sys.stderr.write("-c	cateogrize output based on symbole type\n")
     sys.stderr.write("-d	Show delta of Data Section\n")
@@ -22,23 +22,24 @@ if len(sys.argv) < 3:
 
 re_NUMBER = re.compile(r'\.[0-9]+')
 
-def getsizes(file, format) :
-    func_sym = {}
-    for l in os.popen("nm --size-sort " + file).readlines():
-        size, type, name = l[:-1].split()
-        if type in format:
-            # strip generated symbols
-            if name.startswith("__mod_"): continue
-            if name.startswith("SyS_"): continue
-            if name.startswith("compat_SyS_"): continue
-            if name == "linux_banner": continue
-            # statics and some other optimizations adds random .NUMBER
-            name = re_NUMBER.sub('', name)
-            func_sym[name] = func_sym.get(name, 0) + int(size, 16)
-    return func_sym
+def getsizes(file, format):
+    sym = {}
+    with os.popen("nm --size-sort " + file) as f:
+        for line in f:
+            size, type, name = line.split()
+            if type in format:
+                # strip generated symbols
+                if name.startswith("__mod_"): continue
+                if name.startswith("SyS_"): continue
+                if name.startswith("compat_SyS_"): continue
+                if name == "linux_banner": continue
+                # statics and some other optimizations adds random .NUMBER
+                name = re_NUMBER.sub('', name)
+                sym[name] = sym.get(name, 0) + int(size, 16)
+    return sym
 
 def calc(oldfile, newfile, format):
-    old = getsizes(oldfile , format)
+    old = getsizes(oldfile, format)
     new = getsizes(newfile, format)
     grow, shrink, add, remove, up, down = 0, 0, 0, 0, 0, 0
     delta, common = [], {}
@@ -79,27 +80,19 @@ def print_result(symboltype, symbolformat, argc):
     print("add/remove: %s/%s grow/shrink: %s/%s up/down: %s/%s (%s)" % \
           (add, remove, grow, shrink, up, -down, up-down))
     print("%-40s %7s %7s %+7s" % (symboltype, "old", "new", "delta"))
-
     for d, n in delta:
-        if d: print "%-40s %7s %7s %+7d" % (n, old.get(n,"-"), new.get(n,"-"), d)
+        if d: print("%-40s %7s %7s %+7d" % (n, old.get(n,"-"), new.get(n,"-"), d))
 
     print("Total: Before=%d, After=%d, chg %+.2f%%" % \
-          (otot, ntot, (ntot - otot)*100.0/otot))
+        (otot, ntot, (ntot - otot)*100.0/otot))
 
-if(sys.argv[1] == "-c"):
+if sys.argv[1] == "-c":
     print_result("Function", "tT", 3)
-    print("##########################################################")
-
     print_result("Data", "dDbB", 3)
-    print("##########################################################")
-
     print_result("RO Data", "rR", 3)
-
-elif(sys.argv[1] == "-d"):
+elif sys.argv[1] == "-d":
     print_result("Data", "dDbBrR", 3)
-
-elif(sys.argv[1] == "-t"):
+elif sys.argv[1] == "-t":
     print_result("Function", "tT", 3)
-
 else:
     print_result("Function", "tTdDbBrR", 2)
