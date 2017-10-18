@@ -14,7 +14,7 @@ those secondary TLB while holding page table lock when clearing a pte/pmd:
      on zero page, __replace_page(), ...)
 
 Case A is obvious you do not want to take the risk for the device to write to
-a page that might now be use by some completely different task.
+a page that might now be used by some completely different task.
 
 Case B is more subtle. For correctness it requires the following sequence to
 happen:
@@ -89,5 +89,5 @@ for the device.
 When changing a pte to write protect or to point to a new write protected page
 with same content (KSM) it is fine to delay the mmu_notifier_invalidate_range
 call to mmu_notifier_invalidate_range_end() outside the page table lock. This
-is true ven if the thread doing the page table update is preempted right after
+is true even if the thread doing the page table update is preempted right after
 releasing page table lock but before call mmu_notifier_invalidate_range_end().

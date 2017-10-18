@@ -1053,8 +1053,8 @@ static int write_protect_page(struct vm_area_struct *vma, struct page *page,
 		 * this assure us that no O_DIRECT can happen after the check
 		 * or in the middle of the check.
 		 *
-		 * No need to notify as we downgrading page table to read only
-		 * not changing it to point to a new page.
+		 * No need to notify as we are downgrading page table to read
+		 * only not changing it to point to a new page.
 		 *
 		 * See Documentation/vm/mmu_notifier.txt
 		 */
@@ -1142,7 +1142,7 @@ static int replace_page(struct vm_area_struct *vma, struct page *page,
 
 	flush_cache_page(vma, addr, pte_pfn(*ptep));
 	/*
-	 * No need to notify as we replacing a read only page with another
+	 * No need to notify as we are replacing a read only page with another
 	 * read only page with the same content.
 	 *
 	 * See Documentation/vm/mmu_notifier.txt

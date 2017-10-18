@@ -1189,7 +1189,7 @@ static int do_huge_pmd_wp_page_fallback(struct vm_fault *vmf, pmd_t orig_pmd,
 	/*
 	 * Leave pmd empty until pte is filled note we must notify here as
 	 * concurrent CPU thread might write to new page before the call to
-	 * mmu_notifier_invalidate_range_end() happen which can lead to a
+	 * mmu_notifier_invalidate_range_end() happens which can lead to a
 	 * device seeing memory write in different order than CPU.
 	 *
 	 * See Documentation/vm/mmu_notifier.txt
