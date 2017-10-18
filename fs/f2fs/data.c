@@ -418,8 +418,8 @@ next:
 
 	bio_page = fio->encrypted_page ? fio->encrypted_page : fio->page;
 
-	/* set submitted = 1 as a return value */
-	fio->submitted = 1;
+	/* set submitted = true as a return value */
+	fio->submitted = true;
 
 	inc_page_count(sbi, WB_DATA_TYPE(bio_page));
 
@@ -833,6 +833,13 @@ int f2fs_preallocate_blocks(struct kiocb *iocb, struct iov_iter *from)
 	struct f2fs_map_blocks map;
 	int err = 0;
 
+	/* convert inline data for Direct I/O*/
+	if (iocb->ki_flags & IOCB_DIRECT) {
+		err = f2fs_convert_inline_inode(inode);
+		if (err)
+			return err;
+	}
+
 	if (is_inode_flag_set(inode, FI_NO_PREALLOC))
 		return 0;
 
@@ -845,15 +852,11 @@ int f2fs_preallocate_blocks(struct kiocb *iocb, struct iov_iter *from)
 
 	map.m_next_pgofs = NULL;
 
-	if (iocb->ki_flags & IOCB_DIRECT) {
-		err = f2fs_convert_inline_inode(inode);
-		if (err)
-			return err;
+	if (iocb->ki_flags & IOCB_DIRECT)
 		return f2fs_map_blocks(inode, &map, 1,
 			__force_buffered_io(inode, WRITE) ?
 				F2FS_GET_BLOCK_PRE_AIO :
 				F2FS_GET_BLOCK_PRE_DIO);
-	}
 	if (iocb->ki_pos + iov_iter_count(from) > MAX_INLINE_DATA(inode)) {
 		err = f2fs_convert_inline_inode(inode);
 		if (err)
@@ -1334,7 +1337,7 @@ static int f2fs_read_data_pages(struct file *file,
 			struct address_space *mapping,
 			struct list_head *pages, unsigned nr_pages)
 {
-	struct inode *inode = file->f_mapping->host;
+	struct inode *inode = mapping->host;
 	struct page *page = list_last_entry(pages, struct page, lru);
 
 	trace_f2fs_readpages(inode, page, nr_pages);
@@ -1495,6 +1498,7 @@ static int __write_data_page(struct page *page, bool *submitted,
 	int err = 0;
 	struct f2fs_io_info fio = {
 		.sbi = sbi,
+		.ino = inode->i_ino,
 		.type = DATA,
 		.op = REQ_OP_WRITE,
 		.op_flags = wbc_to_write_flags(wbc),
@@ -1566,8 +1570,11 @@ write:
 			err = do_write_data_page(&fio);
 		}
 	}
+
+	down_write(&F2FS_I(inode)->i_sem);
 	if (F2FS_I(inode)->last_disk_size < psize)
 		F2FS_I(inode)->last_disk_size = psize;
+	up_write(&F2FS_I(inode)->i_sem);
 
 done:
 	if (err && err != -ENOENT)

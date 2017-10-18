@@ -100,6 +100,9 @@ static ssize_t features_show(struct f2fs_attr *a,
 	if (f2fs_sb_has_inode_chksum(sb))
 		len += snprintf(buf + len, PAGE_SIZE - len, "%s%s",
 				len ? ", " : "", "inode_checksum");
+	if (f2fs_sb_has_flexible_inline_xattr(sb))
+		len += snprintf(buf + len, PAGE_SIZE - len, "%s%s",
+				len ? ", " : "", "flexible_inline_xattr");
 	len += snprintf(buf + len, PAGE_SIZE - len, "\n");
 	return len;
 }
@@ -154,23 +157,10 @@ static ssize_t f2fs_sbi_store(struct f2fs_attr *a,
 	}
 
 	if (!strcmp(a->attr.name, "discard_granularity")) {
-		struct discard_cmd_control *dcc = SM_I(sbi)->dcc_info;
-		int i;
-
 		if (t == 0 || t > MAX_PLIST_NUM)
 			return -EINVAL;
 		if (t == *ui)
 			return count;
-
-		mutex_lock(&dcc->cmd_lock);
-		for (i = 0; i < MAX_PLIST_NUM; i++) {
-			if (i >= t - 1)
-				dcc->pend_list_tag[i] |= P_ACTIVE;
-			else
-				dcc->pend_list_tag[i] &= (~P_ACTIVE);
-		}
-		mutex_unlock(&dcc->cmd_lock);
-
 		*ui = t;
 		return count;
 	}
@@ -222,6 +212,7 @@ enum feat_id {
 	FEAT_EXTRA_ATTR,
 	FEAT_PROJECT_QUOTA,
 	FEAT_INODE_CHECKSUM,
+	FEAT_FLEXIBLE_INLINE_XATTR,
 };
 
 static ssize_t f2fs_feature_show(struct f2fs_attr *a,
@@ -234,6 +225,7 @@ static ssize_t f2fs_feature_show(struct f2fs_attr *a,
 	case FEAT_EXTRA_ATTR:
 	case FEAT_PROJECT_QUOTA:
 	case FEAT_INODE_CHECKSUM:
+	case FEAT_FLEXIBLE_INLINE_XATTR:
 		return snprintf(buf, PAGE_SIZE, "supported\n");
 	}
 	return 0;
@@ -304,6 +296,7 @@ F2FS_FEATURE_RO_ATTR(atomic_write, FEAT_ATOMIC_WRITE);
 F2FS_FEATURE_RO_ATTR(extra_attr, FEAT_EXTRA_ATTR);
 F2FS_FEATURE_RO_ATTR(project_quota, FEAT_PROJECT_QUOTA);
 F2FS_FEATURE_RO_ATTR(inode_checksum, FEAT_INODE_CHECKSUM);
+F2FS_FEATURE_RO_ATTR(flexible_inline_xattr, FEAT_FLEXIBLE_INLINE_XATTR);
 
 #define ATTR_LIST(name) (&f2fs_attr_##name.attr)
 static struct attribute *f2fs_attrs[] = {
@@ -350,6 +343,7 @@ static struct attribute *f2fs_feat_attrs[] = {
 	ATTR_LIST(extra_attr),
 	ATTR_LIST(project_quota),
 	ATTR_LIST(inode_checksum),
+	ATTR_LIST(flexible_inline_xattr),
 	NULL,
 };
 

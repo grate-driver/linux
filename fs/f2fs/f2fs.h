@@ -93,6 +93,7 @@ extern char *fault_name[FAULT_MAX];
 #define F2FS_MOUNT_GRPQUOTA		0x00100000
 #define F2FS_MOUNT_PRJQUOTA		0x00200000
 #define F2FS_MOUNT_QUOTA		0x00400000
+#define F2FS_MOUNT_INLINE_XATTR_SIZE	0x00800000
 
 #define clear_opt(sbi, option)	((sbi)->mount_opt.opt &= ~F2FS_MOUNT_##option)
 #define set_opt(sbi, option)	((sbi)->mount_opt.opt |= F2FS_MOUNT_##option)
@@ -118,6 +119,7 @@ struct f2fs_mount_info {
 #define F2FS_FEATURE_EXTRA_ATTR		0x0008
 #define F2FS_FEATURE_PRJQUOTA		0x0010
 #define F2FS_FEATURE_INODE_CHKSUM	0x0020
+#define F2FS_FEATURE_FLEXIBLE_INLINE_XATTR	0x0040
 
 #define F2FS_HAS_FEATURE(sb, mask)					\
 	((F2FS_SB(sb)->raw_super->feature & cpu_to_le32(mask)) != 0)
@@ -147,7 +149,7 @@ enum {
 #define BATCHED_TRIM_BLOCKS(sbi)	\
 		(BATCHED_TRIM_SEGMENTS(sbi) << (sbi)->log_blocks_per_seg)
 #define MAX_DISCARD_BLOCKS(sbi)		BLKS_PER_SEC(sbi)
-#define DISCARD_ISSUE_RATE		8
+#define DEF_MAX_DISCARD_REQUEST		8	/* issue 8 discards per round */
 #define DEF_MIN_DISCARD_ISSUE_TIME	50	/* 50 ms, if exists */
 #define DEF_MAX_DISCARD_ISSUE_TIME	60000	/* 60 s, if no candidates */
 #define DEF_CP_INTERVAL			60	/* 60 secs */
@@ -177,12 +179,14 @@ enum {
 	ORPHAN_INO,		/* for orphan ino list */
 	APPEND_INO,		/* for append ino list */
 	UPDATE_INO,		/* for update ino list */
+	FLUSH_INO,		/* for multiple device flushing */
 	MAX_INO_ENTRY,		/* max. list */
 };
 
 struct ino_entry {
-	struct list_head list;	/* list head */
-	nid_t ino;		/* inode number */
+	struct list_head list;		/* list head */
+	nid_t ino;			/* inode number */
+	unsigned int dirty_device;	/* dirty device bitmap */
 };
 
 /* for the list of inodes to be GCed */
@@ -205,10 +209,6 @@ struct discard_entry {
 #define MAX_PLIST_NUM		512
 #define plist_idx(blk_num)	((blk_num) >= MAX_PLIST_NUM ?		\
 					(MAX_PLIST_NUM - 1) : (blk_num - 1))
-
-#define P_ACTIVE	0x01
-#define P_TRIM		0x02
-#define plist_issue(tag)	(((tag) & P_ACTIVE) || ((tag) & P_TRIM))
 
 enum {
 	D_PREP,
@@ -241,12 +241,32 @@ struct discard_cmd {
 	int error;			/* bio error */
 };
 
+enum {
+	DPOLICY_BG,
+	DPOLICY_FORCE,
+	DPOLICY_FSTRIM,
+	DPOLICY_UMOUNT,
+	MAX_DPOLICY,
+};
+
+struct discard_policy {
+	int type;			/* type of discard */
+	unsigned int min_interval;	/* used for candidates exist */
+	unsigned int max_interval;	/* used for candidates not exist */
+	unsigned int max_requests;	/* # of discards issued per round */
+	unsigned int io_aware_gran;	/* minimum granularity discard not be aware of I/O */
+	bool io_aware;			/* issue discard in idle time */
+	bool sync;			/* submit discard with REQ_SYNC flag */
+	unsigned int granularity;	/* discard granularity */
+};
+
 struct discard_cmd_control {
 	struct task_struct *f2fs_issue_discard;	/* discard thread */
 	struct list_head entry_list;		/* 4KB discard entry list */
 	struct list_head pend_list[MAX_PLIST_NUM];/* store pending entries */
 	unsigned char pend_list_tag[MAX_PLIST_NUM];/* tag for pending entries */
 	struct list_head wait_list;		/* store on-flushing entries */
+	struct list_head fstrim_list;		/* in-flight discard from fstrim */
 	wait_queue_head_t discard_wait_queue;	/* waiting queue for wake-up */
 	unsigned int discard_wake;		/* to wake up discard thread */
 	struct mutex cmd_lock;
@@ -379,11 +399,14 @@ struct f2fs_flush_device {
 
 /* for inline stuff */
 #define DEF_INLINE_RESERVED_SIZE	1
+#define DEF_MIN_INLINE_SIZE		1
 static inline int get_extra_isize(struct inode *inode);
-#define MAX_INLINE_DATA(inode)	(sizeof(__le32) * \
-				(CUR_ADDRS_PER_INODE(inode) - \
-				DEF_INLINE_RESERVED_SIZE - \
-				F2FS_INLINE_XATTR_ADDRS))
+static inline int get_inline_xattr_addrs(struct inode *inode);
+#define F2FS_INLINE_XATTR_ADDRS(inode)	get_inline_xattr_addrs(inode)
+#define MAX_INLINE_DATA(inode)	(sizeof(__le32) *			\
+				(CUR_ADDRS_PER_INODE(inode) -		\
+				F2FS_INLINE_XATTR_ADDRS(inode) -	\
+				DEF_INLINE_RESERVED_SIZE))
 
 /* for inline dir */
 #define NR_INLINE_DENTRY(inode)	(MAX_INLINE_DATA(inode) * BITS_PER_BYTE / \
@@ -593,6 +616,7 @@ struct f2fs_inode_info {
 
 	int i_extra_isize;		/* size of extra space located in i_addr */
 	kprojid_t i_projid;		/* id for project quota */
+	int i_inline_xattr_size;	/* inline xattr size */
 };
 
 static inline void get_extent_info(struct extent_info *ext,
@@ -666,10 +690,13 @@ static inline void __try_update_largest_extent(struct inode *inode,
 	}
 }
 
-enum nid_list {
-	FREE_NID_LIST,
-	ALLOC_NID_LIST,
-	MAX_NID_LIST,
+/*
+ * For free nid management
+ */
+enum nid_state {
+	FREE_NID,		/* newly added to free nid list */
+	PREALLOC_NID,		/* it is preallocated */
+	MAX_NID_STATE,
 };
 
 struct f2fs_nm_info {
@@ -692,8 +719,8 @@ struct f2fs_nm_info {
 
 	/* free node ids management */
 	struct radix_tree_root free_nid_root;/* root of the free_nid cache */
-	struct list_head nid_list[MAX_NID_LIST];/* lists for free nids */
-	unsigned int nid_cnt[MAX_NID_LIST];	/* the number of free node id */
+	struct list_head free_nid_list;		/* list for free nids excluding preallocated nids */
+	unsigned int nid_cnt[MAX_NID_STATE];	/* the number of free node id */
 	spinlock_t nid_list_lock;	/* protect nid lists ops */
 	struct mutex build_lock;	/* lock for build free nids */
 	unsigned char (*free_nid_bitmap)[NAT_ENTRY_BITMAP_SIZE];
@@ -771,6 +798,7 @@ enum {
 struct flush_cmd {
 	struct completion wait;
 	struct llist_node llnode;
+	nid_t ino;
 	int ret;
 };
 
@@ -898,6 +926,7 @@ enum iostat_type {
 
 struct f2fs_io_info {
 	struct f2fs_sb_info *sbi;	/* f2fs_sb_info pointer */
+	nid_t ino;		/* inode number */
 	enum page_type type;	/* contains DATA/NODE/META/META_FLUSH */
 	enum temp_type temp;	/* contains HOT/WARM/COLD */
 	int op;			/* contains REQ_OP_ */
@@ -1044,6 +1073,7 @@ struct f2fs_sb_info {
 	loff_t max_file_blocks;			/* max block index of file */
 	int active_logs;			/* # of active logs */
 	int dir_level;				/* directory level */
+	int inline_xattr_size;			/* inline xattr size */
 
 	block_t user_block_count;		/* # of user blocks */
 	block_t total_valid_block_count;	/* # of valid blocks */
@@ -1115,6 +1145,8 @@ struct f2fs_sb_info {
 	struct list_head s_list;
 	int s_ndevs;				/* number of devices */
 	struct f2fs_dev_info *devs;		/* for device list */
+	unsigned int dirty_device;		/* for checkpoint data flush */
+	spinlock_t dev_lock;			/* protect dirty_device */
 	struct mutex umount_mutex;
 	unsigned int shrinker_run_no;
 
@@ -2160,25 +2192,20 @@ static inline int f2fs_has_inline_xattr(struct inode *inode)
 
 static inline unsigned int addrs_per_inode(struct inode *inode)
 {
-	if (f2fs_has_inline_xattr(inode))
-		return CUR_ADDRS_PER_INODE(inode) - F2FS_INLINE_XATTR_ADDRS;
-	return CUR_ADDRS_PER_INODE(inode);
+	return CUR_ADDRS_PER_INODE(inode) - F2FS_INLINE_XATTR_ADDRS(inode);
 }
 
-static inline void *inline_xattr_addr(struct page *page)
+static inline void *inline_xattr_addr(struct inode *inode, struct page *page)
 {
 	struct f2fs_inode *ri = F2FS_INODE(page);
 
 	return (void *)&(ri->i_addr[DEF_ADDRS_PER_INODE -
-					F2FS_INLINE_XATTR_ADDRS]);
+					F2FS_INLINE_XATTR_ADDRS(inode)]);
 }
 
 static inline int inline_xattr_size(struct inode *inode)
 {
-	if (f2fs_has_inline_xattr(inode))
-		return F2FS_INLINE_XATTR_ADDRS << 2;
-	else
-		return 0;
+	return get_inline_xattr_addrs(inode) * sizeof(__le32);
 }
 
 static inline int f2fs_has_inline_data(struct inode *inode)
@@ -2259,9 +2286,10 @@ static inline void clear_file(struct inode *inode, int type)
 
 static inline bool f2fs_skip_inode_update(struct inode *inode, int dsync)
 {
+	bool ret;
+
 	if (dsync) {
 		struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
-		bool ret;
 
 		spin_lock(&sbi->inode_lock[DIRTY_META]);
 		ret = list_empty(&F2FS_I(inode)->gdirty_list);
@@ -2272,7 +2300,12 @@ static inline bool f2fs_skip_inode_update(struct inode *inode, int dsync)
 			file_keep_isize(inode) ||
 			i_size_read(inode) & PAGE_MASK)
 		return false;
-	return F2FS_I(inode)->last_disk_size == i_size_read(inode);
+
+	down_read(&F2FS_I(inode)->i_sem);
+	ret = F2FS_I(inode)->last_disk_size == i_size_read(inode);
+	up_read(&F2FS_I(inode)->i_sem);
+
+	return ret;
 }
 
 static inline int f2fs_readonly(struct super_block *sb)
@@ -2320,6 +2353,16 @@ static inline void *f2fs_kmalloc(struct f2fs_sb_info *sbi,
 static inline int get_extra_isize(struct inode *inode)
 {
 	return F2FS_I(inode)->i_extra_isize / sizeof(__le32);
+}
+
+static inline int f2fs_sb_has_flexible_inline_xattr(struct super_block *sb);
+static inline int get_inline_xattr_addrs(struct inode *inode)
+{
+	if (!f2fs_has_inline_xattr(inode))
+		return 0;
+	if (!f2fs_sb_has_flexible_inline_xattr(F2FS_I_SB(inode)->sb))
+		return DEFAULT_INLINE_XATTR_ADDRS;
+	return F2FS_I(inode)->i_inline_xattr_size;
 }
 
 #define get_inode_mode(i) \
@@ -2518,14 +2561,17 @@ void drop_inmem_page(struct inode *inode, struct page *page);
 int commit_inmem_pages(struct inode *inode);
 void f2fs_balance_fs(struct f2fs_sb_info *sbi, bool need);
 void f2fs_balance_fs_bg(struct f2fs_sb_info *sbi);
-int f2fs_issue_flush(struct f2fs_sb_info *sbi);
+int f2fs_issue_flush(struct f2fs_sb_info *sbi, nid_t ino);
 int create_flush_cmd_control(struct f2fs_sb_info *sbi);
+int f2fs_flush_device_cache(struct f2fs_sb_info *sbi);
 void destroy_flush_cmd_control(struct f2fs_sb_info *sbi, bool free);
 void invalidate_blocks(struct f2fs_sb_info *sbi, block_t addr);
 bool is_checkpointed_data(struct f2fs_sb_info *sbi, block_t blkaddr);
+void init_discard_policy(struct discard_policy *dpolicy, int discard_type,
+						unsigned int granularity);
 void refresh_sit_entry(struct f2fs_sb_info *sbi, block_t old, block_t new);
 void stop_discard_thread(struct f2fs_sb_info *sbi);
-void f2fs_wait_discard_bios(struct f2fs_sb_info *sbi, bool umount);
+bool f2fs_wait_discard_bios(struct f2fs_sb_info *sbi);
 void clear_prefree_segments(struct f2fs_sb_info *sbi, struct cp_control *cpc);
 void release_discard_addrs(struct f2fs_sb_info *sbi);
 int npages_for_summary_flush(struct f2fs_sb_info *sbi, bool for_ra);
@@ -2580,6 +2626,10 @@ void add_ino_entry(struct f2fs_sb_info *sbi, nid_t ino, int type);
 void remove_ino_entry(struct f2fs_sb_info *sbi, nid_t ino, int type);
 void release_ino_entry(struct f2fs_sb_info *sbi, bool all);
 bool exist_written_data(struct f2fs_sb_info *sbi, nid_t ino, int mode);
+void set_dirty_device(struct f2fs_sb_info *sbi, nid_t ino,
+					unsigned int devidx, int type);
+bool is_dirty_device(struct f2fs_sb_info *sbi, nid_t ino,
+					unsigned int devidx, int type);
 int f2fs_sync_inode_meta(struct f2fs_sb_info *sbi);
 int acquire_orphan_inode(struct f2fs_sb_info *sbi);
 void release_orphan_inode(struct f2fs_sb_info *sbi);
@@ -2674,7 +2724,8 @@ struct f2fs_stat_info {
 	int free_nids, avail_nids, alloc_nids;
 	int total_count, utilization;
 	int bg_gc, nr_wb_cp_data, nr_wb_data;
-	int nr_flushing, nr_flushed, nr_discarding, nr_discarded;
+	int nr_flushing, nr_flushed, flush_list_empty;
+	int nr_discarding, nr_discarded;
 	int nr_discard_cmd;
 	unsigned int undiscard_blks;
 	int inline_xattr, inline_inode, inline_dir, append, update, orphans;
@@ -2980,6 +3031,11 @@ static inline int f2fs_sb_has_project_quota(struct super_block *sb)
 static inline int f2fs_sb_has_inode_chksum(struct super_block *sb)
 {
 	return F2FS_HAS_FEATURE(sb, F2FS_FEATURE_INODE_CHKSUM);
+}
+
+static inline int f2fs_sb_has_flexible_inline_xattr(struct super_block *sb)
+{
+	return F2FS_HAS_FEATURE(sb, F2FS_FEATURE_FLEXIBLE_INLINE_XATTR);
 }
 
 #ifdef CONFIG_BLK_DEV_ZONED

@@ -294,10 +294,13 @@ sync_nodes:
 	remove_ino_entry(sbi, ino, APPEND_INO);
 	clear_inode_flag(inode, FI_APPEND_WRITE);
 flush_out:
-	remove_ino_entry(sbi, ino, UPDATE_INO);
-	clear_inode_flag(inode, FI_UPDATE_WRITE);
 	if (!atomic)
-		ret = f2fs_issue_flush(sbi);
+		ret = f2fs_issue_flush(sbi, inode->i_ino);
+	if (!ret) {
+		remove_ino_entry(sbi, ino, UPDATE_INO);
+		clear_inode_flag(inode, FI_UPDATE_WRITE);
+		remove_ino_entry(sbi, ino, FLUSH_INO);
+	}
 	f2fs_update_time(sbi, REQ_TIME);
 out:
 	trace_f2fs_sync_file_exit(inode, need_cp, datasync, ret);
@@ -683,6 +686,11 @@ int f2fs_getattr(const struct path *path, struct kstat *stat,
 				  STATX_ATTR_NODUMP);
 
 	generic_fillattr(inode, stat);
+
+	/* we need to show initial sectors used for inline_data/dentries */
+	if (f2fs_has_inline_data(inode) || f2fs_has_inline_dentry(inode))
+		stat->blocks += (stat->size + 511) >> 9;
+
 	return 0;
 }
 
@@ -774,6 +782,10 @@ int f2fs_setattr(struct dentry *dentry, struct iattr *attr)
 			inode->i_mtime = inode->i_ctime = current_time(inode);
 		}
 
+		down_write(&F2FS_I(inode)->i_sem);
+		F2FS_I(inode)->last_disk_size = i_size_read(inode);
+		up_write(&F2FS_I(inode)->i_sem);
+
 		size_changed = true;
 	}
 
@@ -844,7 +856,7 @@ int truncate_hole(struct inode *inode, pgoff_t pg_start, pgoff_t pg_end)
 		err = get_dnode_of_data(&dn, pg_start, LOOKUP_NODE);
 		if (err) {
 			if (err == -ENOENT) {
-				pg_start++;
+				pg_start = get_next_page_offset(&dn, pg_start);
 				continue;
 			}
 			return err;

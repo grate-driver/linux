@@ -267,16 +267,6 @@ static unsigned int get_cb_cost(struct f2fs_sb_info *sbi, unsigned int segno)
 	return UINT_MAX - ((100 * (100 - u) * age) / (100 + u));
 }
 
-static unsigned int get_greedy_cost(struct f2fs_sb_info *sbi,
-						unsigned int segno)
-{
-	unsigned int valid_blocks =
-			get_valid_blocks(sbi, segno, true);
-
-	return IS_DATASEG(get_seg_entry(sbi, segno)->type) ?
-				valid_blocks * 2 : valid_blocks;
-}
-
 static inline unsigned int get_gc_cost(struct f2fs_sb_info *sbi,
 			unsigned int segno, struct victim_sel_policy *p)
 {
@@ -285,7 +275,7 @@ static inline unsigned int get_gc_cost(struct f2fs_sb_info *sbi,
 
 	/* alloc_mode == LFS */
 	if (p->gc_mode == GC_GREEDY)
-		return get_greedy_cost(sbi, segno);
+		return get_valid_blocks(sbi, segno, true);
 	else
 		return get_cb_cost(sbi, segno);
 }
@@ -608,6 +598,7 @@ static void move_data_block(struct inode *inode, block_t bidx,
 {
 	struct f2fs_io_info fio = {
 		.sbi = F2FS_I_SB(inode),
+		.ino = inode->i_ino,
 		.type = DATA,
 		.temp = COLD,
 		.op = REQ_OP_READ,
@@ -738,6 +729,7 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type,
 	} else {
 		struct f2fs_io_info fio = {
 			.sbi = F2FS_I_SB(inode),
+			.ino = inode->i_ino,
 			.type = DATA,
 			.temp = COLD,
 			.op = REQ_OP_WRITE,
