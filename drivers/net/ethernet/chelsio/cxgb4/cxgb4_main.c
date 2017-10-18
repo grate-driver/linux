@@ -79,7 +79,9 @@
 #include "l2t.h"
 #include "sched.h"
 #include "cxgb4_tc_u32.h"
+#include "cxgb4_tc_flower.h"
 #include "cxgb4_ptp.h"
+#include "cxgb4_cudbg.h"
 
 char cxgb4_driver_name[] = KBUILD_MODNAME;
 
@@ -280,7 +282,7 @@ void t4_os_link_changed(struct adapter *adapter, int port_id, int link_stat)
 		else {
 #ifdef CONFIG_CHELSIO_T4_DCB
 			if (cxgb4_dcb_enabled(dev)) {
-				cxgb4_dcb_state_init(dev);
+				cxgb4_dcb_reset(dev);
 				dcb_tx_queue_prio_enable(dev, false);
 			}
 #endif /* CONFIG_CHELSIO_T4_DCB */
@@ -1637,7 +1639,7 @@ void cxgb4_get_tcp_stats(struct pci_dev *pdev, struct tp_tcp_stats *v4,
 	struct adapter *adap = pci_get_drvdata(pdev);
 
 	spin_lock(&adap->stats_lock);
-	t4_tp_get_tcp_stats(adap, v4, v6);
+	t4_tp_get_tcp_stats(adap, v4, v6, false);
 	spin_unlock(&adap->stats_lock);
 }
 EXPORT_SYMBOL(cxgb4_get_tcp_stats);
@@ -2303,10 +2305,16 @@ static int cxgb_close(struct net_device *dev)
 {
 	struct port_info *pi = netdev_priv(dev);
 	struct adapter *adapter = pi->adapter;
+	int ret;
 
 	netif_tx_stop_all_queues(dev);
 	netif_carrier_off(dev);
-	return t4_enable_vi(adapter, adapter->pf, pi->viid, false, false);
+	ret = t4_enable_vi(adapter, adapter->pf, pi->viid, false, false);
+#ifdef CONFIG_CHELSIO_T4_DCB
+	cxgb4_dcb_reset(dev);
+	dcb_tx_queue_prio_enable(dev, false);
+#endif
+	return ret;
 }
 
 int cxgb4_create_server_filter(const struct net_device *dev, unsigned int stid,
@@ -2873,6 +2881,25 @@ static int cxgb_set_tx_maxrate(struct net_device *dev, int index, u32 rate)
 	return err;
 }
 
+static int cxgb_setup_tc_flower(struct net_device *dev,
+				struct tc_cls_flower_offload *cls_flower)
+{
+	if (!is_classid_clsact_ingress(cls_flower->common.classid) ||
+	    cls_flower->common.chain_index)
+		return -EOPNOTSUPP;
+
+	switch (cls_flower->command) {
+	case TC_CLSFLOWER_REPLACE:
+		return cxgb4_tc_flower_replace(dev, cls_flower);
+	case TC_CLSFLOWER_DESTROY:
+		return cxgb4_tc_flower_destroy(dev, cls_flower);
+	case TC_CLSFLOWER_STATS:
+		return cxgb4_tc_flower_stats(dev, cls_flower);
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
 static int cxgb_setup_tc_cls_u32(struct net_device *dev,
 				 struct tc_cls_u32_offload *cls_u32)
 {
@@ -2907,6 +2934,8 @@ static int cxgb_setup_tc(struct net_device *dev, enum tc_setup_type type,
 	switch (type) {
 	case TC_SETUP_CLSU32:
 		return cxgb_setup_tc_cls_u32(dev, type_data);
+	case TC_SETUP_CLSFLOWER:
+		return cxgb_setup_tc_flower(dev, type_data);
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -4048,7 +4077,7 @@ static int adap_init0(struct adapter *adap)
 	}
 	t4_init_sge_params(adap);
 	adap->flags |= FW_OK;
-	t4_init_tp_params(adap);
+	t4_init_tp_params(adap, true);
 	return 0;
 
 	/*
@@ -4615,6 +4644,7 @@ static void free_some_resources(struct adapter *adapter)
 	kvfree(adapter->l2t);
 	t4_cleanup_sched(adapter);
 	kvfree(adapter->tids.tid_tab);
+	cxgb4_cleanup_tc_flower(adapter);
 	cxgb4_cleanup_tc_u32(adapter);
 	kfree(adapter->sge.egr_map);
 	kfree(adapter->sge.ingr_map);
@@ -4995,7 +5025,7 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		netdev->priv_flags |= IFF_UNICAST_FLT;
 
 		/* MTU range: 81 - 9600 */
-		netdev->min_mtu = 81;
+		netdev->min_mtu = 81;              /* accommodate SACK */
 		netdev->max_mtu = MAX_MTU;
 
 		netdev->netdev_ops = &cxgb4_netdev_ops;
@@ -5005,6 +5035,8 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 #endif
 		cxgb4_set_ethtool_ops(netdev);
 	}
+
+	cxgb4_init_ethtool_dump(adapter);
 
 	pci_set_drvdata(pdev, adapter);
 
@@ -5083,6 +5115,8 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		if (!adapter->tc_u32)
 			dev_warn(&pdev->dev,
 				 "could not offload tc u32, continuing\n");
+
+		cxgb4_init_tc_flower(adapter);
 	}
 
 	if (is_offload(adapter)) {
@@ -5254,6 +5288,8 @@ static void remove_one(struct pci_dev *pdev)
 		return;
 	}
 
+	adapter->flags |= SHUTTING_DOWN;
+
 	if (adapter->pf == 4) {
 		int i;
 
@@ -5338,6 +5374,8 @@ static void shutdown_one(struct pci_dev *pdev)
 		pci_release_regions(pdev);
 		return;
 	}
+
+	adapter->flags |= SHUTTING_DOWN;
 
 	if (adapter->pf == 4) {
 		int i;

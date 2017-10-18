@@ -115,6 +115,24 @@ enum bcm_sf2_reg_offs {
 #define P7_IRQ_OFF			0
 #define P_IRQ_OFF(x)			((6 - (x)) * P_NUM_IRQ)
 
+/* Register set relative to 'ACB' */
+#define ACB_CONTROL			0x00
+#define  ACB_EN				(1 << 0)
+#define  ACB_ALGORITHM			(1 << 1)
+#define  ACB_FLUSH_SHIFT		2
+#define  ACB_FLUSH_MASK			0x3
+
+#define ACB_QUEUE_0_CFG			0x08
+#define  XOFF_THRESHOLD_MASK		0x7ff
+#define  XON_EN				(1 << 11)
+#define  TOTAL_XOFF_THRESHOLD_SHIFT	12
+#define  TOTAL_XOFF_THRESHOLD_MASK	0x7ff
+#define  TOTAL_XOFF_EN			(1 << 23)
+#define  TOTAL_XON_EN			(1 << 24)
+#define  PKTLEN_SHIFT			25
+#define  PKTLEN_MASK			0x3f
+#define ACB_QUEUE_CFG(x)		(ACB_QUEUE_0_CFG + ((x) * 0x4))
+
 /* Register set relative to 'CORE' */
 #define CORE_G_PCTL_PORT0		0x00000
 #define CORE_G_PCTL_PORT(x)		(CORE_G_PCTL_PORT0 + (x * 0x4))
@@ -205,15 +223,7 @@ enum bcm_sf2_reg_offs {
 
 #define CORE_IMP0_PRT_ID		0x0804
 
-#define CORE_BRCM_HDR_CTRL		0x0080c
-#define  BRCM_HDR_EN_P8			(1 << 0)
-#define  BRCM_HDR_EN_P5			(1 << 1)
-#define  BRCM_HDR_EN_P7			(1 << 2)
-
 #define CORE_RST_MIB_CNT_EN		0x0950
-
-#define CORE_BRCM_HDR_RX_DIS		0x0980
-#define CORE_BRCM_HDR_TX_DIS		0x0988
 
 #define CORE_ARLA_VTBL_RWCTRL		0x1600
 #define  ARLA_VTBL_CMD_WRITE		0
@@ -245,15 +255,17 @@ enum bcm_sf2_reg_offs {
 #define CORE_PORT_VLAN_CTL_PORT(x)	(0xc400 + ((x) * 0x8))
 #define  PORT_VLAN_CTRL_MASK		0x1ff
 
+#define CORE_TXQ_THD_PAUSE_QN_PORT_0	0x2c80
+#define  TXQ_PAUSE_THD_MASK		0x7ff
+#define CORE_TXQ_THD_PAUSE_QN_PORT(x)	(CORE_TXQ_THD_PAUSE_QN_PORT_0 + \
+					(x) * 0x8)
+
 #define CORE_DEFAULT_1Q_TAG_P(x)	(0xd040 + ((x) * 8))
 #define  CFI_SHIFT			12
 #define  PRI_SHIFT			13
 #define  PRI_MASK			0x7
 
 #define CORE_JOIN_ALL_VLAN_EN		0xd140
-
-#define CORE_EEE_EN_CTRL		0x24800
-#define CORE_EEE_LPI_INDICATE		0x24810
 
 #define CORE_CFP_ACC			0x28000
 #define  OP_STR_DONE			(1 << 0)

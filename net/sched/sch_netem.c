@@ -146,14 +146,7 @@ struct netem_sched_data {
  */
 struct netem_skb_cb {
 	psched_time_t	time_to_send;
-	ktime_t		tstamp_save;
 };
-
-
-static struct sk_buff *netem_rb_to_skb(struct rb_node *rb)
-{
-	return rb_entry(rb, struct sk_buff, rbnode);
-}
 
 static inline struct netem_skb_cb *netem_skb_cb(struct sk_buff *skb)
 {
@@ -362,12 +355,13 @@ static psched_time_t packet_len_2_sched_time(unsigned int len, struct netem_sche
 static void tfifo_reset(struct Qdisc *sch)
 {
 	struct netem_sched_data *q = qdisc_priv(sch);
-	struct rb_node *p;
+	struct rb_node *p = rb_first(&q->t_root);
 
-	while ((p = rb_first(&q->t_root))) {
-		struct sk_buff *skb = netem_rb_to_skb(p);
+	while (p) {
+		struct sk_buff *skb = rb_to_skb(p);
 
-		rb_erase(p, &q->t_root);
+		p = rb_next(p);
+		rb_erase(&skb->rbnode, &q->t_root);
 		rtnl_kfree_skbs(skb, skb);
 	}
 }
@@ -382,7 +376,7 @@ static void tfifo_enqueue(struct sk_buff *nskb, struct Qdisc *sch)
 		struct sk_buff *skb;
 
 		parent = *p;
-		skb = netem_rb_to_skb(parent);
+		skb = rb_to_skb(parent);
 		if (tnext >= netem_skb_cb(skb)->time_to_send)
 			p = &parent->rb_right;
 		else
@@ -538,7 +532,7 @@ static int netem_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 				struct sk_buff *t_skb;
 				struct netem_skb_cb *t_last;
 
-				t_skb = netem_rb_to_skb(rb_last(&q->t_root));
+				t_skb = skb_rb_last(&q->t_root);
 				t_last = netem_skb_cb(t_skb);
 				if (!last ||
 				    t_last->time_to_send > last->time_to_send) {
@@ -561,7 +555,6 @@ static int netem_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 		}
 
 		cb->time_to_send = now + delay;
-		cb->tstamp_save = skb->tstamp;
 		++q->counter;
 		tfifo_enqueue(skb, sch);
 	} else {
@@ -618,7 +611,7 @@ deliver:
 	if (p) {
 		psched_time_t time_to_send;
 
-		skb = netem_rb_to_skb(p);
+		skb = rb_to_skb(p);
 
 		/* if more time remaining? */
 		time_to_send = netem_skb_cb(skb)->time_to_send;
@@ -629,7 +622,10 @@ deliver:
 			qdisc_qstats_backlog_dec(sch, skb);
 			skb->next = NULL;
 			skb->prev = NULL;
-			skb->tstamp = netem_skb_cb(skb)->tstamp_save;
+			/* skb->dev shares skb->rbnode area,
+			 * we need to restore its value.
+			 */
+			skb->dev = qdisc_dev(sch);
 
 #ifdef CONFIG_NET_CLS_ACT
 			/*
