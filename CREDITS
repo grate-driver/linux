@@ -4128,6 +4128,13 @@ D: MD driver
 D: EISA/sysfs subsystem
 S: France
 
+N: Marcel Selhorst
+E: tpmdd@selhorst.net
+D: TPM driver
+
+N: Ashley Lai
+E: ashleydlai@gmail.com
+D: IBM VTPM driver
 
 # Don't add your name here, unless you really _are_ after Marc
 # alphabetically. Leonard used to be very proud of being the 
