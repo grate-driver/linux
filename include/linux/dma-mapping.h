@@ -260,10 +260,8 @@ static inline int dma_map_sg_attrs(struct device *dev, struct scatterlist *sg,
 				   unsigned long attrs)
 {
 	const struct dma_map_ops *ops = get_dma_ops(dev);
-	int i, ents;
-	struct scatterlist *s;
+	int ents;
 
-	for_each_sg(sg, s, nents, i)
 	BUG_ON(!valid_dma_direction(dir));
 	ents = ops->map_sg(dev, sg, nents, dir, attrs);
 	BUG_ON(ents < 0);
