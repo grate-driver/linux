@@ -67,6 +67,7 @@ config S390
 	select ARCH_BINFMT_ELF_STATE
 	select ARCH_HAS_DEVMEM_IS_ALLOWED
 	select ARCH_HAS_ELF_RANDOMIZE
+	select ARCH_HAS_FORTIFY_SOURCE
 	select ARCH_HAS_GCOV_PROFILE_ALL
 	select ARCH_HAS_GIGANTIC_PAGE if (MEMORY_ISOLATION && COMPACTION) || CMA
 	select ARCH_HAS_KCOV
@@ -142,7 +143,6 @@ config S390
 	select HAVE_DYNAMIC_FTRACE
 	select HAVE_DYNAMIC_FTRACE_WITH_REGS
 	select HAVE_EFFICIENT_UNALIGNED_ACCESS
-	select HAVE_EXIT_THREAD
 	select HAVE_FTRACE_MCOUNT_RECORD
 	select HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_FUNCTION_TRACER
@@ -928,18 +928,5 @@ config S390_GUEST
 
 	  Select this option if you want to run the kernel as a guest under
 	  the KVM hypervisor.
-
-config S390_GUEST_OLD_TRANSPORT
-	def_bool y
-	prompt "Guest support for old s390 virtio transport (DEPRECATED)"
-	depends on S390_GUEST
-	help
-	  Enable this option to add support for the old s390-virtio
-	  transport (i.e. virtio devices NOT based on virtio-ccw). This
-	  type of virtio devices is only available on the experimental
-	  kuli userspace or with old (< 2.6) qemu. If you are running
-	  with a modern version of qemu (which supports virtio-ccw since
-	  1.4 and uses it by default since version 2.4), you probably won't
-	  need this.
 
 endmenu

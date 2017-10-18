@@ -30,6 +30,9 @@
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
 #include <asm/switch_to.h>
+#include <asm/runtime_instr.h>
+#include <asm/facility.h>
+
 #include "entry.h"
 
 #ifdef CONFIG_COMPAT
@@ -1171,26 +1174,37 @@ static int s390_gs_cb_set(struct task_struct *target,
 			  unsigned int pos, unsigned int count,
 			  const void *kbuf, const void __user *ubuf)
 {
-	struct gs_cb *data = target->thread.gs_cb;
+	struct gs_cb gs_cb = { }, *data = NULL;
 	int rc;
 
 	if (!MACHINE_HAS_GS)
 		return -ENODEV;
-	if (!data) {
+	if (!target->thread.gs_cb) {
 		data = kzalloc(sizeof(*data), GFP_KERNEL);
 		if (!data)
 			return -ENOMEM;
-		data->gsd = 25;
-		target->thread.gs_cb = data;
-		if (target == current)
-			__ctl_set_bit(2, 4);
-	} else if (target == current) {
-		save_gs_cb(data);
 	}
+	if (!target->thread.gs_cb)
+		gs_cb.gsd = 25;
+	else if (target == current)
+		save_gs_cb(&gs_cb);
+	else
+		gs_cb = *target->thread.gs_cb;
 	rc = user_regset_copyin(&pos, &count, &kbuf, &ubuf,
-				data, 0, sizeof(struct gs_cb));
-	if (target == current)
-		restore_gs_cb(data);
+				&gs_cb, 0, sizeof(gs_cb));
+	if (rc) {
+		kfree(data);
+		return -EFAULT;
+	}
+	preempt_disable();
+	if (!target->thread.gs_cb)
+		target->thread.gs_cb = data;
+	*target->thread.gs_cb = gs_cb;
+	if (target == current) {
+		__ctl_set_bit(2, 4);
+		restore_gs_cb(target->thread.gs_cb);
+	}
+	preempt_enable();
 	return rc;
 }
 
@@ -1226,6 +1240,96 @@ static int s390_gs_bc_set(struct task_struct *target,
 	}
 	return user_regset_copyin(&pos, &count, &kbuf, &ubuf,
 				  data, 0, sizeof(struct gs_cb));
+}
+
+static bool is_ri_cb_valid(struct runtime_instr_cb *cb)
+{
+	return (cb->rca & 0x1f) == 0 &&
+		(cb->roa & 0xfff) == 0 &&
+		(cb->rla & 0xfff) == 0xfff &&
+		cb->s == 1 &&
+		cb->k == 1 &&
+		cb->h == 0 &&
+		cb->reserved1 == 0 &&
+		cb->ps == 1 &&
+		cb->qs == 0 &&
+		cb->pc == 1 &&
+		cb->qc == 0 &&
+		cb->reserved2 == 0 &&
+		cb->key == PAGE_DEFAULT_KEY &&
+		cb->reserved3 == 0 &&
+		cb->reserved4 == 0 &&
+		cb->reserved5 == 0 &&
+		cb->reserved6 == 0 &&
+		cb->reserved7 == 0 &&
+		cb->reserved8 == 0 &&
+		cb->rla >= cb->roa &&
+		cb->rca >= cb->roa &&
+		cb->rca <= cb->rla+1 &&
+		cb->m < 3;
+}
+
+static int s390_runtime_instr_get(struct task_struct *target,
+				const struct user_regset *regset,
+				unsigned int pos, unsigned int count,
+				void *kbuf, void __user *ubuf)
+{
+	struct runtime_instr_cb *data = target->thread.ri_cb;
+
+	if (!test_facility(64))
+		return -ENODEV;
+	if (!data)
+		return -ENODATA;
+
+	return user_regset_copyout(&pos, &count, &kbuf, &ubuf,
+				   data, 0, sizeof(struct runtime_instr_cb));
+}
+
+static int s390_runtime_instr_set(struct task_struct *target,
+				  const struct user_regset *regset,
+				  unsigned int pos, unsigned int count,
+				  const void *kbuf, const void __user *ubuf)
+{
+	struct runtime_instr_cb ri_cb = { }, *data = NULL;
+	int rc;
+
+	if (!test_facility(64))
+		return -ENODEV;
+
+	if (!target->thread.ri_cb) {
+		data = kzalloc(sizeof(*data), GFP_KERNEL);
+		if (!data)
+			return -ENOMEM;
+	}
+
+	if (target->thread.ri_cb) {
+		if (target == current)
+			store_runtime_instr_cb(&ri_cb);
+		else
+			ri_cb = *target->thread.ri_cb;
+	}
+
+	rc = user_regset_copyin(&pos, &count, &kbuf, &ubuf,
+				&ri_cb, 0, sizeof(struct runtime_instr_cb));
+	if (rc) {
+		kfree(data);
+		return -EFAULT;
+	}
+
+	if (!is_ri_cb_valid(&ri_cb)) {
+		kfree(data);
+		return -EINVAL;
+	}
+
+	preempt_disable();
+	if (!target->thread.ri_cb)
+		target->thread.ri_cb = data;
+	*target->thread.ri_cb = ri_cb;
+	if (target == current)
+		load_runtime_instr_cb(target->thread.ri_cb);
+	preempt_enable();
+
+	return 0;
 }
 
 static const struct user_regset s390_regsets[] = {
@@ -1300,6 +1404,14 @@ static const struct user_regset s390_regsets[] = {
 		.align = sizeof(__u64),
 		.get = s390_gs_bc_get,
 		.set = s390_gs_bc_set,
+	},
+	{
+		.core_note_type = NT_S390_RI_CB,
+		.n = sizeof(struct runtime_instr_cb) / sizeof(__u64),
+		.size = sizeof(__u64),
+		.align = sizeof(__u64),
+		.get = s390_runtime_instr_get,
+		.set = s390_runtime_instr_set,
 	},
 };
 
@@ -1536,6 +1648,14 @@ static const struct user_regset s390_compat_regsets[] = {
 		.align = sizeof(__u64),
 		.get = s390_gs_cb_get,
 		.set = s390_gs_cb_set,
+	},
+	{
+		.core_note_type = NT_S390_RI_CB,
+		.n = sizeof(struct runtime_instr_cb) / sizeof(__u64),
+		.size = sizeof(__u64),
+		.align = sizeof(__u64),
+		.get = s390_runtime_instr_get,
+		.set = s390_runtime_instr_set,
 	},
 };
 
