@@ -149,7 +149,7 @@ static int alloc_swap_slot_cache(unsigned int cpu)
 	cache->cur = 0;
 	cache->n_ret = 0;
 	/*
-	 * We intialized alloc_lock and free_lock earlier.  We use
+	 * We initialized alloc_lock and free_lock earlier.  We use
 	 * !cache->slots or !cache->slots_ret to know if it is safe to acquire
 	 * the corresponding lock and use the cache.  Memory barrier below
 	 * ensures the assumption.
