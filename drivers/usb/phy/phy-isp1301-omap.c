@@ -1183,9 +1183,11 @@ static irqreturn_t isp1301_irq(int irq, void *isp)
 	return IRQ_HANDLED;
 }
 
-static void isp1301_timer(unsigned long _isp)
+static void isp1301_timer(struct timer_list *t)
 {
-	isp1301_defer_work((void *)_isp, WORK_TIMER);
+	struct isp1301 *isp = from_timer(isp, t, timer);
+
+	isp1301_defer_work(isp, WORK_TIMER);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1222,7 +1224,6 @@ static int isp1301_remove(struct i2c_client *i2c)
 	if (machine_is_omap_h2())
 		gpio_free(2);
 
-	isp->timer.data = 0;
 	set_bit(WORK_STOP, &isp->todo);
 	del_timer_sync(&isp->timer);
 	flush_work(&isp->work);
@@ -1507,9 +1508,7 @@ isp1301_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	}
 
 	INIT_WORK(&isp->work, isp1301_work);
-	init_timer(&isp->timer);
-	isp->timer.function = isp1301_timer;
-	isp->timer.data = (unsigned long) isp;
+	timer_setup(&isp->timer, isp1301_timer, 0);
 
 	i2c_set_clientdata(i2c, isp);
 	isp->client = i2c;
