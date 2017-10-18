@@ -685,7 +685,7 @@ static int ov2640_mask_set(struct i2c_client *client,
 static int ov2640_reset(struct i2c_client *client)
 {
 	int ret;
-	const struct regval_list reset_seq[] = {
+	static const struct regval_list reset_seq[] = {
 		{BANK_SEL, BANK_SEL_SENS},
 		{COM7, COM7_SRST},
 		ENDMARKER,
@@ -1097,18 +1097,17 @@ static int ov2640_probe(struct i2c_client *client,
 		return -EIO;
 	}
 
-	priv = devm_kzalloc(&client->dev, sizeof(struct ov2640_priv), GFP_KERNEL);
-	if (!priv) {
-		dev_err(&adapter->dev,
-			"Failed to allocate memory for private data!\n");
+	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
+	if (!priv)
 		return -ENOMEM;
-	}
 
 	if (client->dev.of_node) {
 		priv->clk = devm_clk_get(&client->dev, "xvclk");
 		if (IS_ERR(priv->clk))
-			return -EPROBE_DEFER;
-		clk_prepare_enable(priv->clk);
+			return PTR_ERR(priv->clk);
+		ret = clk_prepare_enable(priv->clk);
+		if (ret)
+			return ret;
 	}
 
 	ret = ov2640_probe_dt(client, priv);

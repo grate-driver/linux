@@ -470,7 +470,7 @@ static void s5p_mfc_handle_error(struct s5p_mfc_dev *dev,
 {
 	mfc_err("Interrupt Error: %08x\n", err);
 
-	if (ctx != NULL) {
+	if (ctx) {
 		/* Error recovery is dependent on the state of context */
 		switch (ctx->state) {
 		case MFCINST_RES_CHANGE_INIT:
@@ -508,7 +508,7 @@ static void s5p_mfc_handle_seq_done(struct s5p_mfc_ctx *ctx,
 {
 	struct s5p_mfc_dev *dev;
 
-	if (ctx == NULL)
+	if (!ctx)
 		return;
 	dev = ctx->dev;
 	if (ctx->c_ops->post_seq_start) {
@@ -562,7 +562,7 @@ static void s5p_mfc_handle_init_buffers(struct s5p_mfc_ctx *ctx,
 	struct s5p_mfc_buf *src_buf;
 	struct s5p_mfc_dev *dev;
 
-	if (ctx == NULL)
+	if (!ctx)
 		return;
 	dev = ctx->dev;
 	s5p_mfc_hw_call(dev->mfc_ops, clear_int_flags, dev);
@@ -1083,7 +1083,7 @@ static struct device *s5p_mfc_alloc_memdev(struct device *dev,
 	struct device *child;
 	int ret;
 
-	child = devm_kzalloc(dev, sizeof(struct device), GFP_KERNEL);
+	child = devm_kzalloc(dev, sizeof(*child), GFP_KERNEL);
 	if (!child)
 		return NULL;
 
@@ -1270,10 +1270,8 @@ static int s5p_mfc_probe(struct platform_device *pdev)
 
 	pr_debug("%s++\n", __func__);
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
-	if (!dev) {
-		dev_err(&pdev->dev, "Not enough memory for MFC device\n");
+	if (!dev)
 		return -ENOMEM;
-	}
 
 	spin_lock_init(&dev->irqlock);
 	spin_lock_init(&dev->condlock);
@@ -1291,7 +1289,7 @@ static int s5p_mfc_probe(struct platform_device *pdev)
 		return PTR_ERR(dev->regs_base);
 
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	if (res == NULL) {
+	if (!res) {
 		dev_err(&pdev->dev, "failed to get irq resource\n");
 		return -ENOENT;
 	}
