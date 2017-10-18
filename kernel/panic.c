@@ -601,8 +601,8 @@ static int clear_warn_once_set(void *data, u64 val)
 
 DEFINE_SIMPLE_ATTRIBUTE(clear_warn_once_fops,
 			NULL,
-                        clear_warn_once_set,
-		        "%lld\n");
+			clear_warn_once_set,
+			"%lld\n");
 
 static __init int register_warn_debugfs(void)
 {
@@ -612,7 +612,7 @@ static __init int register_warn_debugfs(void)
 	return 0;
 }
 
-__initcall(register_warn_debugfs);
+device_initcall(register_warn_debugfs);
 #endif
 
 #ifdef CONFIG_CC_STACKPROTECTOR
