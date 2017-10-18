@@ -1,7 +1,6 @@
 /*
- * Copyright 2013 Emilio López
- *
- * Emilio López <emilio@elopez.com.ar>
+ * Copyright (C) 2017 Antony Antony <antony@phenome.org>
+ * Copyright (C) 2016 ARM Ltd.
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -43,14 +42,15 @@
  */
 
 /dts-v1/;
-#include "sun4i-a10.dtsi"
-#include "sunxi-common-regulators.dtsi"
+#include "sun50i-h5.dtsi"
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/pinctrl/sun4i-a10.h>
 
 / {
-	model = "Mele A1000";
-	compatible = "mele,a1000", "allwinner,sun4i-a10";
+	model = "FriendlyARM NanoPi NEO Plus2";
+	compatible = "friendlyarm,nanopi-neo-plus2", "allwinner,sun50i-h5";
 
 	aliases {
 		serial0 = &uart0;
@@ -63,109 +63,108 @@
 	leds {
 		compatible = "gpio-leds";
 
-		red {
-			label = "a1000:red:usr";
-			gpios = <&pio 7 10 GPIO_ACTIVE_HIGH>;
-		};
-
-		blue {
-			label = "a1000:blue:pwr";
-			gpios = <&pio 7 20 GPIO_ACTIVE_HIGH>;
+		pwr {
+			label = "nanopi:green:pwr";
+			gpios = <&r_pio 0 10 GPIO_ACTIVE_HIGH>;
 			default-state = "on";
 		};
+
+		status {
+			label = "nanopi:red:status";
+			gpios = <&pio 0 20 GPIO_ACTIVE_HIGH>;
+		};
 	};
 
-	reg_emac_3v3: emac-3v3 {
+	reg_gmac_3v3: gmac-3v3 {
 		compatible = "regulator-fixed";
-		regulator-name = "emac-3v3";
+		pinctrl-names = "default";
+		regulator-name = "gmac-3v3";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		startup-delay-us = <20000>;
+		startup-delay-us = <100000>;
 		enable-active-high;
-		gpio = <&pio 7 15 GPIO_ACTIVE_HIGH>;
+		gpio = <&pio 3 6 GPIO_ACTIVE_HIGH>;
 	};
 
-	sound {
-		compatible = "simple-audio-card";
-		simple-audio-card,name = "On-board SPDIF";
-
-		simple-audio-card,cpu {
-			sound-dai = <&spdif>;
-		};
-
-		simple-audio-card,codec {
-			sound-dai = <&spdif_out>;
-		};
+	reg_vcc3v3: vcc3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
 	};
 
-	spdif_out: spdif-out {
-		#sound-dai-cells = <0>;
-		compatible = "linux,spdif-dit";
+	vdd_cpux: gpio-regulator {
+		compatible = "regulator-gpio";
+		pinctrl-names = "default";
+		regulator-name = "vdd-cpux";
+		regulator-type = "voltage";
+		regulator-boot-on;
+		regulator-always-on;
+		regulator-min-microvolt = <1100000>;
+		regulator-max-microvolt = <1300000>;
+		regulator-ramp-delay = <50>; /* 4ms */
+		gpios = <&r_pio 0 6 GPIO_ACTIVE_HIGH>;
+		gpios-states = <0x1>;
+		states = <1100000 0x0
+			  1300000 0x1>;
 	};
-};
 
-&ahci {
-	status = "okay";
+	wifi_pwrseq: wifi_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		pinctrl-names = "default";
+		reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>; /* PL7 */
+		post-power-on-delay-ms = <200>;
+	};
 };
 
 &codec {
+	allwinner,audio-routing =
+		"Line Out", "LINEOUT",
+		"MIC1", "Mic",
+		"Mic",  "MBIAS";
 	status = "okay";
-};
-
-&cpu0 {
-	cpu-supply = <&reg_dcdc2>;
 };
 
 &ehci0 {
 	status = "okay";
 };
 
-&ehci1 {
+&ehci3 {
 	status = "okay";
-};
-
-&emac {
-	phy = <&phy1>;
-	status = "okay";
-};
-
-&emac_sram {
-	status = "okay";
-};
-
-&i2c0 {
-	status = "okay";
-
-	axp209: pmic@34 {
-		compatible = "x-powers,axp209";
-		reg = <0x34>;
-		interrupts = <0>;
-
-		interrupt-controller;
-		#interrupt-cells = <1>;
-	};
-};
-
-&ir0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&ir0_rx_pins>;
-	status = "okay";
-};
-
-&mdio {
-	phy-supply = <&reg_emac_3v3>;
-	status = "okay";
-
-	phy1: ethernet-phy@1 {
-		reg = <1>;
-	};
 };
 
 &mmc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
-	cd-gpios = <&pio 7 1 GPIO_ACTIVE_HIGH>; /* PH1 */
-	cd-inverted;
+	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
+	status = "okay";
+};
+
+&mmc1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc1_pins_a>;
+	vmmc-supply = <&reg_vcc3v3>;
+	vqmmc-supply = <&reg_vcc3v3>;
+	mmc-pwrseq = <&wifi_pwrseq>;
+	bus-width = <4>;
+	non-removable;
+	status = "okay";
+
+	brcmf: wifi@1 {
+		reg = <1>;
+		compatible = "brcm,bcm4329-fmac";
+	};
+};
+
+&mmc2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc2_8bit_pins>;
+	vmmc-supply = <&reg_vcc3v3>;
+	bus-width = <8>;
+	non-removable;
+	cap-mmc-hw-reset;
 	status = "okay";
 };
 
@@ -173,59 +172,22 @@
 	status = "okay";
 };
 
-&ohci1 {
-	status = "okay";
-};
-
-#include "axp209.dtsi"
-
-&reg_dcdc2 {
-	regulator-always-on;
-	regulator-min-microvolt = <1000000>;
-	regulator-max-microvolt = <1400000>;
-	regulator-name = "vdd-cpu";
-};
-
-&reg_dcdc3 {
-	regulator-always-on;
-	regulator-min-microvolt = <1000000>;
-	regulator-max-microvolt = <1250000>;
-	regulator-name = "vdd-int-dll";
-};
-
-&reg_ldo1 {
-	regulator-name = "vdd-rtc";
-};
-
-&reg_ldo2 {
-	regulator-always-on;
-	regulator-min-microvolt = <3000000>;
-	regulator-max-microvolt = <3000000>;
-	regulator-name = "avcc";
-};
-
-&reg_usb1_vbus {
-	status = "okay";
-};
-
-&reg_usb2_vbus {
-	status = "okay";
-};
-
-&spdif {
-	pinctrl-names = "default";
-	pinctrl-0 = <&spdif_tx_pin>;
+&ohci3 {
 	status = "okay";
 };
 
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pb_pins>;
+	pinctrl-0 = <&uart0_pins_a>;
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "host";
 	status = "okay";
 };
 
 &usbphy {
-	usb1_vbus-supply = <&reg_usb1_vbus>;
-	usb2_vbus-supply = <&reg_usb2_vbus>;
+	/* USB Type-A ports' VBUS is always on */
 	status = "okay";
 };
