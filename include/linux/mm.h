@@ -2529,6 +2529,17 @@ static inline void *vmemmap_alloc_block_buf(unsigned long size, int node)
 	return __vmemmap_alloc_block_buf(size, node, NULL);
 }
 
+static inline void *vmemmap_alloc_block_zero(unsigned long size, int node)
+{
+	void *p = vmemmap_alloc_block(size, node);
+
+	if (!p)
+		return NULL;
+	memset(p, 0, size);
+
+	return p;
+}
+
 void vmemmap_verify(pte_t *, int, unsigned long, unsigned long);
 int vmemmap_populate_basepages(unsigned long start, unsigned long end,
 			       int node);
