@@ -1,0 +1,34 @@
+next/fixes-non-critical
+
+next/cleanup
+
+next/soc
+
+next/dt
+
+next/defconfig
+
+next/drivers
+
+next/dt64
+
+next/arm64
+
+next/late
+
+fixes
+	patch
+		ARM: defconfig: FRAMEBUFFER_CONSOLE can no longer be =m
+		ARM: defconfig: update Gemini defconfig
+	<no branch> (093d79f62a89f47d9b5fd0746768146d9696535c)
+		git://git.kernel.org/pub/scm/linux/kernel/git/nferre/linux-at91 tags/at91-fixes
+	<no branch> (ce21574ad1922b403198ee664c4dff276f514f1d)
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-fixes-for-v4.14
+	<no branch> (544e3bf4f0e8278400f19ca7918a3cdf2548b4eb)
+		git://git.pengutronix.de/git/pza/linux tags/reset-fixes-for-4.14
+	<no branch> (9e7460fc325dad06d2066abdbc1f4dd49456f9a4)
+		git://git.infradead.org/linux-mvebu tags/mvebu-fixes-4.14-1
+	<no branch> (0bc15d85d97d44e8979ff91d0c1fbafe6fd4172c)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.14-rockchip-dts64fixes-1
+	<no branch> (4afa616ce937f88d9a69a71b8c561551596a81e3)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.14/fixes-rc3
