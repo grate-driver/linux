@@ -75,6 +75,7 @@
 #include <linux/uaccess.h>
 #include <linux/fsnotify_backend.h>
 #include <uapi/linux/limits.h>
+#include <linux/dcache.h>
 
 #include "audit.h"
 
@@ -882,6 +883,8 @@ static inline void audit_free_names(struct audit_context *context)
 		list_del(&n->list);
 		if (n->name)
 			putname(n->name);
+		if (n->dentry)
+			dput(n->dentry);
 		if (n->should_free)
 			kfree(n);
 	}
@@ -1862,7 +1865,7 @@ void __audit_file(const struct file *file)
  * unsuccessful attempts.
  */
 void __audit_inode_child(struct inode *parent,
-			 const struct dentry *dentry,
+			 struct dentry *dentry,
 			 const unsigned char type)
 {
 	struct audit_context *context = current->audit_context;
@@ -1918,6 +1921,7 @@ void __audit_inode_child(struct inode *parent,
 		if (!n)
 			return;
 		audit_copy_inode(n, NULL, parent);
+		n->dentry = dget_parent(dentry);
 	}
 
 	if (!found_child) {
@@ -1939,6 +1943,8 @@ void __audit_inode_child(struct inode *parent,
 		audit_copy_inode(found_child, dentry, inode);
 	else
 		found_child->ino = AUDIT_INO_UNSET;
+	if (!found_parent)
+		found_child->dentry = dget(dentry);
 }
 EXPORT_SYMBOL_GPL(__audit_inode_child);
 
