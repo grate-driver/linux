@@ -33,17 +33,17 @@
 
 #define pr_fmt(fmt)	KBUILD_MODNAME ": " fmt
 
-#include <linux/kernel.h>
-#include <linux/init.h>
-#include <linux/types.h>
-#include <linux/device.h>
-#include <linux/list.h>
 #include <linux/acpi.h>
-#include <linux/slab.h>
+#include <linux/device.h>
+#include <linux/init.h>
+#include <linux/kernel.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/wmi.h>
+#include <linux/slab.h>
+#include <linux/types.h>
 #include <linux/uuid.h>
+#include <linux/wmi.h>
 
 ACPI_MODULE_NAME("wmi");
 MODULE_AUTHOR("Carlos Corbacho");
@@ -1145,7 +1145,7 @@ static int acpi_wmi_remove(struct platform_device *device)
 	acpi_remove_address_space_handler(acpi_device->handle,
 				ACPI_ADR_SPACE_EC, &acpi_wmi_ec_space_handler);
 	wmi_free_devices(acpi_device);
-	device_unregister((struct device *)dev_get_drvdata(&device->dev));
+	device_destroy(&wmi_bus_class, MKDEV(0, 0));
 
 	return 0;
 }
@@ -1199,7 +1199,7 @@ static int acpi_wmi_probe(struct platform_device *device)
 	return 0;
 
 err_remove_busdev:
-	device_unregister(wmi_bus_dev);
+	device_destroy(&wmi_bus_class, MKDEV(0, 0));
 
 err_remove_notify_handler:
 	acpi_remove_notify_handler(acpi_device->handle, ACPI_DEVICE_NOTIFY,
@@ -1264,8 +1264,8 @@ err_unreg_class:
 static void __exit acpi_wmi_exit(void)
 {
 	platform_driver_unregister(&acpi_wmi_driver);
-	class_unregister(&wmi_bus_class);
 	bus_unregister(&wmi_bus_type);
+	class_unregister(&wmi_bus_class);
 }
 
 subsys_initcall(acpi_wmi_init);
