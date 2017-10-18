@@ -294,6 +294,14 @@ void truncate_inode_pages_range(struct address_space *mapping,
 	while (index < end && pagevec_lookup_entries(&pvec, mapping, index,
 			min(end - index, (pgoff_t)PAGEVEC_SIZE),
 			indices)) {
+		/*
+		 * Pagevec array has exceptional entries and we may also fail
+		 * to lock some pages. So we store pages that can be deleted
+		 * in an extra array.
+		 */
+		struct page *pages[PAGEVEC_SIZE];
+		int batch_count = 0;
+
 		for (i = 0; i < pagevec_count(&pvec); i++) {
 			struct page *page = pvec.pages[i];
 
@@ -315,9 +323,17 @@ void truncate_inode_pages_range(struct address_space *mapping,
 				unlock_page(page);
 				continue;
 			}
-			truncate_inode_page(mapping, page);
-			unlock_page(page);
+			if (page->mapping != mapping) {
+				unlock_page(page);
+				continue;
+			}
+			pages[batch_count++] = page;
 		}
+		for (i = 0; i < batch_count; i++)
+			truncate_cleanup_page(mapping, pages[i]);
+		delete_from_page_cache_batch(mapping, batch_count, pages);
+		for (i = 0; i < batch_count; i++)
+			unlock_page(pages[i]);
 		pagevec_remove_exceptionals(&pvec);
 		pagevec_release(&pvec);
 		cond_resched();

@@ -304,6 +304,90 @@ void delete_from_page_cache(struct page *page)
 }
 EXPORT_SYMBOL(delete_from_page_cache);
 
+/*
+ * page_cache_tree_delete_batch - delete several pages from page cache
+ * @mapping: the mapping to which pages belong
+ * @count: the number of pages to delete
+ * @pages: pages that should be deleted
+ *
+ * The function walks over mapping->page_tree and removes pages passed in
+ * @pages array from the radix tree. The function expects @pages array to
+ * sorted by page index. It tolerates holes in @pages array (radix tree
+ * entries at those indices are not modified). The function expects only THP
+ * head pages to be present in the @pages array and takes care to delete all
+ * corresponding tail pages from the radix tree as well.
+ *
+ * The function expects mapping->tree_lock to be held.
+ */
+static void
+page_cache_tree_delete_batch(struct address_space *mapping, int count,
+			     struct page **pages)
+{
+	struct radix_tree_iter iter;
+	void **slot;
+	int total_pages = 0;
+	int i = 0, tail_pages = 0;
+	struct page *page;
+	pgoff_t start;
+
+	start = pages[0]->index;
+	radix_tree_for_each_slot(slot, &mapping->page_tree, &iter, start) {
+		if (i >= count && !tail_pages)
+			break;
+		page = radix_tree_deref_slot_protected(slot,
+						       &mapping->tree_lock);
+		if (radix_tree_exceptional_entry(page))
+			continue;
+		if (!tail_pages) {
+			/*
+			 * Some page got inserted in our range? Skip it. We
+			 * have our pages locked so they are protected from
+			 * being removed.
+			 */
+			if (page != pages[i])
+				continue;
+			WARN_ON_ONCE(!PageLocked(page));
+			if (PageTransHuge(page) && !PageHuge(page))
+				tail_pages = HPAGE_PMD_NR - 1;
+			page->mapping = NULL;
+			/*
+			 * Leave page->index set: truncation lookup relies
+			 * upon it
+			 */
+			i++;
+		} else {
+			tail_pages--;
+		}
+		radix_tree_clear_tags(&mapping->page_tree, iter.node, slot);
+		__radix_tree_replace(&mapping->page_tree, iter.node, slot, NULL,
+				     workingset_update_node, mapping);
+		total_pages++;
+	}
+	mapping->nrpages -= total_pages;
+}
+
+void delete_from_page_cache_batch(struct address_space *mapping, int count,
+				  struct page **pages)
+{
+	int i;
+	unsigned long flags;
+
+	if (!count)
+		return;
+
+	spin_lock_irqsave(&mapping->tree_lock, flags);
+	for (i = 0; i < count; i++) {
+		trace_mm_filemap_delete_from_page_cache(pages[i]);
+
+		unaccount_page_cache_page(mapping, pages[i]);
+	}
+	page_cache_tree_delete_batch(mapping, count, pages);
+	spin_unlock_irqrestore(&mapping->tree_lock, flags);
+
+	for (i = 0; i < count; i++)
+		page_cache_free_page(mapping, pages[i]);
+}
+
 int filemap_check_errors(struct address_space *mapping)
 {
 	int ret = 0;
