@@ -436,7 +436,7 @@ void ipc_rmid(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)
 	if (unlikely(lid == ids->max_id)) {
 		do {
 			lid--;
-			if(lid == -1)
+			if (lid == -1)
 				break;
 		} while (!idr_find(&ids->ipcs_idr, lid));
 		ids->max_id = lid;
