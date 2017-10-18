@@ -764,6 +764,7 @@ static int xgene_hwmon_remove(struct platform_device *pdev)
 #ifdef CONFIG_ACPI
 static const struct acpi_device_id xgene_hwmon_acpi_match[] = {
 	{"APMC0D29", 0},
+	{"APMC0D8A", 0},
 	{},
 };
 MODULE_DEVICE_TABLE(acpi, xgene_hwmon_acpi_match);
