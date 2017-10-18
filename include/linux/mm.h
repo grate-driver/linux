@@ -1668,7 +1668,7 @@ static inline void mm_dec_nr_ptes(struct mm_struct *mm)
 #else
 
 static inline void mm_pgtables_bytes_init(struct mm_struct *mm) {}
-static inline unsigned long mm_pgtables_bytes(struct mm_struct *mm)
+static inline unsigned long mm_pgtables_bytes(const struct mm_struct *mm)
 {
 	return 0;
 }
