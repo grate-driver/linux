@@ -18,6 +18,7 @@ struct ipc_ids {
 	bool tables_initialized;
 	struct rw_semaphore rwsem;
 	struct idr ipcs_idr;
+	int max_id;
 #ifdef CONFIG_CHECKPOINT_RESTORE
 	int next_id;
 #endif
