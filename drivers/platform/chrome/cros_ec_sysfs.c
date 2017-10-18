@@ -116,15 +116,9 @@ static ssize_t store_ec_reboot(struct device *dev,
 	msg->command = EC_CMD_REBOOT_EC + ec->cmd_offset;
 	msg->outsize = sizeof(*param);
 	msg->insize = 0;
-	ret = cros_ec_cmd_xfer(ec->ec_dev, msg);
-	if (ret < 0) {
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
+	if (ret < 0)
 		count = ret;
-		goto exit;
-	}
-	if (msg->result != EC_RES_SUCCESS) {
-		dev_dbg(ec->dev, "EC result %d\n", msg->result);
-		count = -EINVAL;
-	}
 exit:
 	kfree(msg);
 	return count;
@@ -152,17 +146,11 @@ static ssize_t show_ec_version(struct device *dev,
 	msg->command = EC_CMD_GET_VERSION + ec->cmd_offset;
 	msg->insize = sizeof(*r_ver);
 	msg->outsize = 0;
-	ret = cros_ec_cmd_xfer(ec->ec_dev, msg);
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
 	if (ret < 0) {
 		count = ret;
 		goto exit;
 	}
-	if (msg->result != EC_RES_SUCCESS) {
-		count = scnprintf(buf, PAGE_SIZE,
-				  "ERROR: EC returned %d\n", msg->result);
-		goto exit;
-	}
-
 	r_ver = (struct ec_response_get_version *)msg->data;
 	/* Strings should be null-terminated, but let's be sure. */
 	r_ver->version_string_ro[sizeof(r_ver->version_string_ro) - 1] = '\0';
@@ -257,14 +245,9 @@ static ssize_t show_ec_flashinfo(struct device *dev,
 	msg->command = EC_CMD_FLASH_INFO + ec->cmd_offset;
 	msg->insize = sizeof(*resp);
 	msg->outsize = 0;
-	ret = cros_ec_cmd_xfer(ec->ec_dev, msg);
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
 	if (ret < 0)
 		goto exit;
-	if (msg->result != EC_RES_SUCCESS) {
-		ret = scnprintf(buf, PAGE_SIZE,
-				"ERROR: EC returned %d\n", msg->result);
-		goto exit;
-	}
 
 	resp = (struct ec_response_flash_info *)msg->data;
 
@@ -278,20 +261,100 @@ exit:
 	return ret;
 }
 
+/* Keyboard wake angle control */
+
+static ssize_t show_kb_wake_angle(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct ec_response_motion_sense *resp;
+	struct ec_params_motion_sense *param;
+	struct cros_ec_command *msg;
+	int ret;
+	struct cros_ec_dev *ec = container_of(
+			dev, struct cros_ec_dev, class_dev);
+
+	msg = kmalloc(sizeof(*msg) + EC_HOST_PARAM_SIZE, GFP_KERNEL);
+	if (!msg)
+		return -ENOMEM;
+
+	param = (struct ec_params_motion_sense *)msg->data;
+	msg->command = EC_CMD_MOTION_SENSE_CMD + ec->cmd_offset;
+	msg->version = 2;
+	param->cmd = MOTIONSENSE_CMD_KB_WAKE_ANGLE;
+	param->kb_wake_angle.data = EC_MOTION_SENSE_NO_VALUE;
+	msg->outsize = sizeof(*param);
+	msg->insize = sizeof(*resp);
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
+	if (ret < 0)
+		return ret;
+	resp = (struct ec_response_motion_sense *)msg->data;
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 resp->kb_wake_angle.ret);
+}
+
+static ssize_t store_kb_wake_angle(struct device *dev,
+				   struct device_attribute *attr,
+				   const char *buf, size_t count)
+{
+	struct ec_params_motion_sense *param;
+	struct cros_ec_command *msg;
+	int ret;
+	struct cros_ec_dev *ec = container_of(
+			dev, struct cros_ec_dev, class_dev);
+	u16 angle;
+
+	ret = kstrtou16(buf, 0, &angle);
+	if (ret)
+		return ret;
+
+	msg = kmalloc(sizeof(*msg) + EC_HOST_PARAM_SIZE, GFP_KERNEL);
+	if (!msg)
+		return -ENOMEM;
+
+	param = (struct ec_params_motion_sense *)msg->data;
+	msg->command = EC_CMD_MOTION_SENSE_CMD + ec->cmd_offset;
+	msg->version = 2;
+	param->cmd = MOTIONSENSE_CMD_KB_WAKE_ANGLE;
+	param->kb_wake_angle.data = angle;
+	msg->outsize = sizeof(*param);
+	msg->insize = sizeof(struct ec_response_motion_sense);
+	ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
+	if (ret < 0)
+		return ret;
+	return count;
+}
+
 /* Module initialization */
 
 static DEVICE_ATTR(reboot, S_IWUSR | S_IRUGO, show_ec_reboot, store_ec_reboot);
 static DEVICE_ATTR(version, S_IRUGO, show_ec_version, NULL);
 static DEVICE_ATTR(flashinfo, S_IRUGO, show_ec_flashinfo, NULL);
+static DEVICE_ATTR(kb_wake_angle, S_IWUSR | S_IRUGO, show_kb_wake_angle,
+		   store_kb_wake_angle);
 
 static struct attribute *__ec_attrs[] = {
+	&dev_attr_kb_wake_angle.attr,
 	&dev_attr_reboot.attr,
 	&dev_attr_version.attr,
 	&dev_attr_flashinfo.attr,
 	NULL,
 };
 
+static umode_t cros_ec_ctrl_visible(struct kobject *kobj,
+				    struct attribute *a, int n)
+{
+	struct device *dev = container_of(kobj, struct device, kobj);
+	struct cros_ec_dev *ec = container_of(dev, struct cros_ec_dev,
+					      class_dev);
+
+	if (a == &dev_attr_kb_wake_angle.attr && !ec->has_kb_wake_angle)
+		return 0;
+
+	return a->mode;
+}
+
 struct attribute_group cros_ec_attr_group = {
 	.attrs = __ec_attrs,
+	.is_visible = cros_ec_ctrl_visible,
 };
 
