@@ -192,7 +192,7 @@ static inline int pci_no_d1d2(struct pci_dev *dev)
 }
 extern const struct attribute_group *pci_dev_groups[];
 extern const struct attribute_group *pcibus_groups[];
-extern struct device_type pci_dev_type;
+extern const struct device_type pci_dev_type;
 extern const struct attribute_group *pci_bus_groups[];
 
 
@@ -263,6 +263,7 @@ struct pci_sriov {
 	u16 num_VFs;		/* number of VFs available */
 	u16 offset;		/* first VF Routing ID offset */
 	u16 stride;		/* following VF stride */
+	u16 vf_device;		/* VF device ID */
 	u32 pgsz;		/* page size for BAR alignment */
 	u8 link;		/* Function Dependency Link */
 	u8 max_VF_buses;	/* max buses consumed by VFs */
