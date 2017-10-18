@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Advanced Micro Devices, Inc.
+ * Copyright 2017 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,19 +20,21 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  *
  */
-#include "eventmgr.h"
-#include "eventinit.h"
-#include "eventmanagement.h"
-#include "eventmanager.h"
-#include "power_state.h"
-#include "hardwaremanager.h"
 
-int psm_get_ui_state(struct pp_eventmgr *eventmgr, enum PP_StateUILabel ui_label, unsigned long *state_id);
+#ifndef PP_PSM_H
+#define PP_PSM_H
 
-int psm_get_state_by_classification(struct pp_eventmgr *eventmgr, enum PP_StateClassificationFlag flag, unsigned long *state_id);
+#include "hwmgr.h"
 
-int psm_set_states(struct pp_eventmgr *eventmgr, unsigned long *state_id);
+int psm_init_power_state_table(struct pp_hwmgr *hwmgr);
+int psm_fini_power_state_table(struct pp_hwmgr *hwmgr);
+int psm_set_boot_states(struct pp_hwmgr *hwmgr);
+int psm_set_performance_states(struct pp_hwmgr *hwmgr);
+int psm_set_user_performance_state(struct pp_hwmgr *hwmgr,
+					enum PP_StateUILabel label_id,
+					struct pp_power_state **state);
+int psm_adjust_power_state_dynamic(struct pp_hwmgr *hwmgr,
+				bool skip,
+				struct pp_power_state *new_ps);
 
-int psm_adjust_power_state_dynamic(struct pp_eventmgr *eventmgr, bool skip);
-
-int psm_adjust_power_state_static(struct pp_eventmgr *eventmgr, bool skip);
+#endif
