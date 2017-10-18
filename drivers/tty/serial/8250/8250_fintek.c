@@ -40,6 +40,16 @@
 #define IRQ_LEVEL_LOW	0
 #define IRQ_EDGE_HIGH	BIT(5)
 
+/*
+ * F81216H clock source register, the value and mask is the same with F81866,
+ * but it's on F0h.
+ *
+ * Clock speeds for UART (register F0h)
+ * 00: 1.8432MHz.
+ * 01: 18.432MHz.
+ * 10: 24MHz.
+ * 11: 14.769MHz.
+ */
 #define RS485  0xF0
 #define RTS_INVERT BIT(5)
 #define RS485_URA BIT(4)
@@ -280,9 +290,80 @@ static void fintek_8250_goto_highspeed(struct uart_8250_port *uart,
 			F81866_UART_CLK_MASK,
 			F81866_UART_CLK_14_769MHZ);
 
-			uart->port.uartclk = 921600 * 16;
+		uart->port.uartclk = 921600 * 16;
 		break;
 	default: /* leave clock speed untouched */
+		break;
+	}
+}
+
+void fintek_8250_set_termios(struct uart_port *port, struct ktermios *termios,
+			struct ktermios *old)
+{
+	struct fintek_8250 *pdata = port->private_data;
+	unsigned int baud = tty_termios_baud_rate(termios);
+	int i;
+	u8 reg;
+	static u32 baudrate_table[] = {115200, 921600, 1152000, 1500000};
+	static u8 clock_table[] = { F81866_UART_CLK_1_8432MHZ,
+			F81866_UART_CLK_14_769MHZ, F81866_UART_CLK_18_432MHZ,
+			F81866_UART_CLK_24MHZ };
+
+	switch (pdata->pid) {
+	case CHIP_ID_F81216H:
+		reg = RS485;
+		break;
+	case CHIP_ID_F81866:
+		reg = F81866_UART_CLK;
+		break;
+	default:
+		/* Don't change clocksource with unknown PID */
+		dev_warn(port->dev,
+			"%s: pid: %x Not support. use default set_termios.\n",
+			__func__, pdata->pid);
+		serial8250_do_set_termios(port, termios, old);
+		return;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(baudrate_table); ++i) {
+		if (baud > baudrate_table[i] || baudrate_table[i] % baud != 0)
+			continue;
+
+		if (port->uartclk == baudrate_table[i] * 16)
+			break;
+
+		if (fintek_8250_enter_key(pdata->base_port, pdata->key))
+			continue;
+
+		port->uartclk = baudrate_table[i] * 16;
+
+		sio_write_reg(pdata, LDN, pdata->index);
+		sio_write_mask_reg(pdata, reg, F81866_UART_CLK_MASK,
+				clock_table[i]);
+
+		fintek_8250_exit_key(pdata->base_port);
+		break;
+	}
+
+	if (i == ARRAY_SIZE(baudrate_table)) {
+		baud = tty_termios_baud_rate(old);
+		tty_termios_encode_baud_rate(termios, baud, baud);
+	}
+
+	serial8250_do_set_termios(port, termios, old);
+}
+
+static void fintek_8250_set_termios_handler(struct uart_8250_port *uart)
+{
+	struct fintek_8250 *pdata = uart->port.private_data;
+
+	switch (pdata->pid) {
+	case CHIP_ID_F81216H:
+	case CHIP_ID_F81866:
+		uart->port.set_termios = fintek_8250_set_termios;
+		break;
+
+	default:
 		break;
 	}
 }
@@ -373,6 +454,7 @@ int fintek_8250_probe(struct uart_8250_port *uart)
 	memcpy(pdata, &probe_data, sizeof(probe_data));
 	uart->port.private_data = pdata;
 	fintek_8250_set_rs485_handler(uart);
+	fintek_8250_set_termios_handler(uart);
 
 	return 0;
 }
