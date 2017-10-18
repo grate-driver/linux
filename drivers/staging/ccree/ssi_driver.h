@@ -37,6 +37,7 @@
 #include <crypto/hash.h>
 #include <linux/version.h>
 #include <linux/clk.h>
+#include <linux/platform_device.h>
 
 /* Registers definitions from shared/hw/ree_include */
 #include "dx_reg_base_host.h"
@@ -68,12 +69,12 @@
 #define SSI_AXI_IRQ_MASK ((1 << DX_AXIM_CFG_BRESPMASK_BIT_SHIFT) | (1 << DX_AXIM_CFG_RRESPMASK_BIT_SHIFT) |	\
 			(1 << DX_AXIM_CFG_INFLTMASK_BIT_SHIFT) | (1 << DX_AXIM_CFG_COMPMASK_BIT_SHIFT))
 
-#define SSI_AXI_ERR_IRQ_MASK (1 << DX_HOST_IRR_AXI_ERR_INT_BIT_SHIFT)
+#define SSI_AXI_ERR_IRQ_MASK BIT(DX_HOST_IRR_AXI_ERR_INT_BIT_SHIFT)
 
-#define SSI_COMP_IRQ_MASK (1 << DX_HOST_IRR_AXIM_COMP_INT_BIT_SHIFT)
+#define SSI_COMP_IRQ_MASK BIT(DX_HOST_IRR_AXIM_COMP_INT_BIT_SHIFT)
 
 /* TEE FIPS status interrupt */
-#define SSI_GPR0_IRQ_MASK (1 << DX_HOST_IRR_GPR0_BIT_SHIFT)
+#define SSI_GPR0_IRQ_MASK BIT(DX_HOST_IRR_GPR0_BIT_SHIFT)
 
 #define SSI_CRA_PRIO 3000
 
@@ -89,19 +90,6 @@
 /* AXI_ID is not actually the AXI ID of the transaction but the value of AXI_ID
  * field in the HW descriptor. The DMA engine +8 that value.
  */
-
-/* Logging macros */
-#define SSI_LOG(level, format, ...) \
-	printk(level "cc715ree::%s: " format, __func__, ##__VA_ARGS__)
-#define SSI_LOG_ERR(format, ...) SSI_LOG(KERN_ERR, format, ##__VA_ARGS__)
-#define SSI_LOG_WARNING(format, ...) SSI_LOG(KERN_WARNING, format, ##__VA_ARGS__)
-#define SSI_LOG_NOTICE(format, ...) SSI_LOG(KERN_NOTICE, format, ##__VA_ARGS__)
-#define SSI_LOG_INFO(format, ...) SSI_LOG(KERN_INFO, format, ##__VA_ARGS__)
-#ifdef CC_DEBUG
-#define SSI_LOG_DEBUG(format, ...) SSI_LOG(KERN_DEBUG, format, ##__VA_ARGS__)
-#else /* Debug log messages are removed at compile time for non-DEBUG config. */
-#define SSI_LOG_DEBUG(format, ...) do {} while (0)
-#endif
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -128,10 +116,8 @@ struct ssi_crypto_req {
  * @fw_ver:	SeP loaded firmware version
  */
 struct ssi_drvdata {
-	struct resource *res_mem;
-	struct resource *res_irq;
 	void __iomem *cc_base;
-	unsigned int irq;
+	int irq;
 	u32 irq_mask;
 	u32 fw_ver;
 	/* Calibration time of start/stop
@@ -140,7 +126,6 @@ struct ssi_drvdata {
 	u32 monitor_null_cycles;
 	struct platform_device *plat_dev;
 	ssi_sram_addr_t mlli_sram_addr;
-	struct completion icache_setup_completion;
 	void *buff_mgr_handle;
 	void *hash_handle;
 	void *aead_handle;
@@ -187,11 +172,16 @@ struct async_gen_req_ctx {
 	enum drv_crypto_direction op_type;
 };
 
+static inline struct device *drvdata_to_dev(struct ssi_drvdata *drvdata)
+{
+	return &drvdata->plat_dev->dev;
+}
+
 #ifdef DX_DUMP_BYTES
 void dump_byte_array(const char *name, const u8 *the_array, unsigned long size);
 #else
-#define dump_byte_array(name, array, size) do {	\
-} while (0);
+static inline void dump_byte_array(const char *name, const u8 *the_array,
+				   unsigned long size) {};
 #endif
 
 int init_cc_regs(struct ssi_drvdata *drvdata, bool is_probe);

@@ -1687,9 +1687,13 @@ static short rtl8192_usb_initendpoints(struct net_device *dev)
 #ifndef JACKSON_NEW_RX
 	for (i = 0; i < (MAX_RX_URB + 1); i++) {
 		priv->rx_urb[i] = usb_alloc_urb(0, GFP_KERNEL);
+		if (!priv->rx_urb[i])
+			return -ENOMEM;
 
 		priv->rx_urb[i]->transfer_buffer =
 			kmalloc(RX_URB_SIZE, GFP_KERNEL);
+		if (!priv->rx_urb[i]->transfer_buffer)
+			return -ENOMEM;
 
 		priv->rx_urb[i]->transfer_buffer_length = RX_URB_SIZE;
 	}
@@ -2690,9 +2694,6 @@ static short rtl8192_init(struct net_device *dev)
 	err = rtl8192_read_eeprom_info(dev);
 	if (err) {
 		DMESG("Reading EEPROM info failed");
-		kfree(priv->pFirmware);
-		priv->pFirmware = NULL;
-		free_ieee80211(dev);
 		return err;
 	}
 	rtl8192_get_channel_map(dev);
@@ -4994,11 +4995,11 @@ static int rtl8192_usb_probe(struct usb_interface *intf,
 
 fail2:
 	rtl8192_down(dev);
+fail:
 	kfree(priv->pFirmware);
 	priv->pFirmware = NULL;
 	rtl8192_usb_deleteendpoints(dev);
 	mdelay(10);
-fail:
 	free_ieee80211(dev);
 
 	RT_TRACE(COMP_ERR, "wlan driver load failed\n");
