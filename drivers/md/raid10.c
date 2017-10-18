@@ -29,7 +29,7 @@
 #include "md.h"
 #include "raid10.h"
 #include "raid0.h"
-#include "bitmap.h"
+#include "md-bitmap.h"
 
 /*
  * RAID10 provides a combination of RAID0 and RAID1 functionality.
@@ -383,12 +383,11 @@ static void raid10_end_read_request(struct bio *bio)
 {
 	int uptodate = !bio->bi_status;
 	struct r10bio *r10_bio = bio->bi_private;
-	int slot, dev;
+	int slot;
 	struct md_rdev *rdev;
 	struct r10conf *conf = r10_bio->mddev->private;
 
 	slot = r10_bio->read_slot;
-	dev = r10_bio->devs[slot].devnum;
 	rdev = r10_bio->devs[slot].rdev;
 	/*
 	 * this branch is our 'one mirror IO has finished' event handler:
@@ -748,7 +747,6 @@ static struct md_rdev *read_balance(struct r10conf *conf,
 
 	raid10_find_phys(conf, r10_bio);
 	rcu_read_lock();
-	sectors = r10_bio->sectors;
 	best_slot = -1;
 	best_rdev = NULL;
 	best_dist = MaxSector;
@@ -2575,7 +2573,6 @@ static void handle_read_error(struct mddev *mddev, struct r10bio *r10_bio)
 	struct bio *bio;
 	struct r10conf *conf = mddev->private;
 	struct md_rdev *rdev = r10_bio->devs[slot].rdev;
-	sector_t bio_last_sector;
 
 	/* we got a read error. Maybe the drive is bad.  Maybe just
 	 * the block and we can fix it.
@@ -2586,7 +2583,6 @@ static void handle_read_error(struct mddev *mddev, struct r10bio *r10_bio)
 	 * frozen.
 	 */
 	bio = r10_bio->devs[slot].bio;
-	bio_last_sector = r10_bio->devs[slot].addr + rdev->data_offset + r10_bio->sectors;
 	bio_put(bio);
 	r10_bio->devs[slot].bio = NULL;
 
@@ -4578,14 +4574,17 @@ static int handle_reshape_read_error(struct mddev *mddev,
 	/* Use sync reads to get the blocks from somewhere else */
 	int sectors = r10_bio->sectors;
 	struct r10conf *conf = mddev->private;
-	struct {
-		struct r10bio r10_bio;
-		struct r10dev devs[conf->copies];
-	} on_stack;
-	struct r10bio *r10b = &on_stack.r10_bio;
+	struct r10bio *r10b;
 	int slot = 0;
 	int idx = 0;
 	struct page **pages;
+
+	r10b = kmalloc(sizeof(*r10b) +
+	       sizeof(struct r10dev) * conf->copies, GFP_NOIO);
+	if (!r10b) {
+		set_bit(MD_RECOVERY_INTR, &mddev->recovery);
+		return -ENOMEM;
+	}
 
 	/* reshape IOs share pages from .devs[0].bio */
 	pages = get_resync_pages(r10_bio->devs[0].bio)->pages;
@@ -4635,11 +4634,13 @@ static int handle_reshape_read_error(struct mddev *mddev,
 			/* couldn't read this block, must give up */
 			set_bit(MD_RECOVERY_INTR,
 				&mddev->recovery);
+			kfree(r10b);
 			return -EIO;
 		}
 		sectors -= s;
 		idx++;
 	}
+	kfree(r10b);
 	return 0;
 }
 
