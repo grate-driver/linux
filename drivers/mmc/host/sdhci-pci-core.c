@@ -448,6 +448,8 @@ static void intel_dsm_init(struct intel_host *intel_host, struct device *dev,
 	int err;
 	u32 val;
 
+	intel_host->d3_retune = true;
+
 	err = __intel_dsm(intel_host, dev, INTEL_DSM_FNS, &intel_host->dsm_fns);
 	if (err) {
 		pr_debug("%s: DSM not supported, error %d\n",
@@ -1288,6 +1290,7 @@ static const struct pci_device_id pci_ids[] = {
 	SDHCI_PCI_DEVICE(INTEL, SPT_SDIO,  intel_byt_sdio),
 	SDHCI_PCI_DEVICE(INTEL, SPT_SD,    intel_byt_sd),
 	SDHCI_PCI_DEVICE(INTEL, DNV_EMMC,  intel_byt_emmc),
+	SDHCI_PCI_DEVICE(INTEL, CDF_EMMC,  intel_glk_emmc),
 	SDHCI_PCI_DEVICE(INTEL, BXT_EMMC,  intel_byt_emmc),
 	SDHCI_PCI_DEVICE(INTEL, BXT_SDIO,  intel_byt_sdio),
 	SDHCI_PCI_DEVICE(INTEL, BXT_SD,    intel_byt_sd),
