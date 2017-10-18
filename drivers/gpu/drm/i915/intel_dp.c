@@ -137,32 +137,20 @@ static void vlv_steal_power_sequencer(struct drm_device *dev,
 				      enum pipe pipe);
 static void intel_dp_unset_edid(struct intel_dp *intel_dp);
 
-static int intel_dp_num_rates(u8 link_bw_code)
-{
-	switch (link_bw_code) {
-	default:
-		WARN(1, "invalid max DP link bw val %x, using 1.62Gbps\n",
-		     link_bw_code);
-	case DP_LINK_BW_1_62:
-		return 1;
-	case DP_LINK_BW_2_7:
-		return 2;
-	case DP_LINK_BW_5_4:
-		return 3;
-	}
-}
-
 /* update sink rates from dpcd */
 static void intel_dp_set_sink_rates(struct intel_dp *intel_dp)
 {
-	int i, num_rates;
+	int i, max_rate;
 
-	num_rates = intel_dp_num_rates(intel_dp->dpcd[DP_MAX_LINK_RATE]);
+	max_rate = drm_dp_bw_code_to_link_rate(intel_dp->dpcd[DP_MAX_LINK_RATE]);
 
-	for (i = 0; i < num_rates; i++)
+	for (i = 0; i < ARRAY_SIZE(default_rates); i++) {
+		if (default_rates[i] > max_rate)
+			break;
 		intel_dp->sink_rates[i] = default_rates[i];
+	}
 
-	intel_dp->num_sink_rates = num_rates;
+	intel_dp->num_sink_rates = i;
 }
 
 /* Theoretical max between source and sink */
@@ -254,14 +242,14 @@ intel_dp_set_source_rates(struct intel_dp *intel_dp)
 	} else if (IS_GEN9_BC(dev_priv)) {
 		source_rates = skl_rates;
 		size = ARRAY_SIZE(skl_rates);
-	} else {
+	} else if ((IS_HASWELL(dev_priv) && !IS_HSW_ULX(dev_priv)) ||
+		   IS_BROADWELL(dev_priv)) {
 		source_rates = default_rates;
 		size = ARRAY_SIZE(default_rates);
+	} else {
+		source_rates = default_rates;
+		size = ARRAY_SIZE(default_rates) - 1;
 	}
-
-	/* This depends on the fact that 5.4 is last value in the array */
-	if (!intel_dp_source_supports_hbr2(intel_dp))
-		size--;
 
 	intel_dp->source_rates = source_rates;
 	intel_dp->num_source_rates = size;
@@ -1019,7 +1007,7 @@ static uint32_t g4x_get_aux_send_ctl(struct intel_dp *intel_dp,
 	else
 		precharge = 5;
 
-	if (IS_BROADWELL(dev_priv) && intel_dig_port->port == PORT_A)
+	if (IS_BROADWELL(dev_priv))
 		timeout = DP_AUX_CH_CTL_TIME_OUT_600us;
 	else
 		timeout = DP_AUX_CH_CTL_TIME_OUT_400us;
@@ -1044,7 +1032,7 @@ static uint32_t skl_get_aux_send_ctl(struct intel_dp *intel_dp,
 	       DP_AUX_CH_CTL_DONE |
 	       (has_aux_irq ? DP_AUX_CH_CTL_INTERRUPT : 0) |
 	       DP_AUX_CH_CTL_TIME_OUT_ERROR |
-	       DP_AUX_CH_CTL_TIME_OUT_1600us |
+	       DP_AUX_CH_CTL_TIME_OUT_MAX |
 	       DP_AUX_CH_CTL_RECEIVE_ERROR |
 	       (send_bytes << DP_AUX_CH_CTL_MESSAGE_SIZE_SHIFT) |
 	       DP_AUX_CH_CTL_FW_SYNC_PULSE_SKL(32) |
@@ -1482,14 +1470,9 @@ intel_dp_aux_init(struct intel_dp *intel_dp)
 
 bool intel_dp_source_supports_hbr2(struct intel_dp *intel_dp)
 {
-	struct intel_digital_port *dig_port = dp_to_dig_port(intel_dp);
-	struct drm_i915_private *dev_priv = to_i915(dig_port->base.base.dev);
+	int max_rate = intel_dp->source_rates[intel_dp->num_source_rates - 1];
 
-	if ((IS_HASWELL(dev_priv) && !IS_HSW_ULX(dev_priv)) ||
-	    IS_BROADWELL(dev_priv) || (INTEL_GEN(dev_priv) >= 9))
-		return true;
-	else
-		return false;
+	return max_rate >= 540000;
 }
 
 static void
@@ -1848,6 +1831,8 @@ found:
 
 	if (!HAS_DDI(dev_priv))
 		intel_dp_set_clock(encoder, pipe_config);
+
+	intel_psr_compute_config(intel_dp, pipe_config);
 
 	return true;
 }

@@ -484,11 +484,6 @@ static bool stop_ring(struct intel_engine_cs *engine)
 	I915_WRITE_HEAD(engine, 0);
 	I915_WRITE_TAIL(engine, 0);
 
-	if (INTEL_GEN(dev_priv) > 2) {
-		(void)I915_READ_CTL(engine);
-		I915_WRITE_MODE(engine, _MASKED_BIT_DISABLE(STOP_RING));
-	}
-
 	return (I915_READ_HEAD(engine) & HEAD_ADDR) == 0;
 }
 
@@ -570,6 +565,9 @@ static int init_ring_common(struct intel_engine_cs *engine)
 
 	intel_engine_init_hangcheck(engine);
 
+	if (INTEL_GEN(dev_priv) > 2)
+		I915_WRITE_MODE(engine, _MASKED_BIT_DISABLE(STOP_RING));
+
 out:
 	intel_uncore_forcewake_put(dev_priv, FORCEWAKE_ALL);
 
@@ -579,7 +577,16 @@ out:
 static void reset_ring_common(struct intel_engine_cs *engine,
 			      struct drm_i915_gem_request *request)
 {
-	/* Try to restore the logical GPU state to match the continuation
+	/*
+	 * RC6 must be prevented until the reset is complete and the engine
+	 * reinitialised. If it occurs in the middle of this sequence, the
+	 * state written to/loaded from the power context is ill-defined (e.g.
+	 * the PP_BASE_DIR may be lost).
+	 */
+	assert_forcewakes_active(engine->i915, FORCEWAKE_ALL);
+
+	/*
+	 * Try to restore the logical GPU state to match the continuation
 	 * of the request queue. If we skip the context/PD restore, then
 	 * the next request may try to execute assuming that its context
 	 * is valid and loaded on the GPU and so may try to access invalid
@@ -1237,6 +1244,8 @@ int intel_ring_pin(struct intel_ring *ring,
 	if (IS_ERR(addr))
 		goto err;
 
+	vma->obj->pin_global++;
+
 	ring->vaddr = addr;
 	return 0;
 
@@ -1268,6 +1277,7 @@ void intel_ring_unpin(struct intel_ring *ring)
 		i915_gem_object_unpin_map(ring->vma->obj);
 	ring->vaddr = NULL;
 
+	ring->vma->obj->pin_global--;
 	i915_vma_unpin(ring->vma);
 }
 
@@ -1432,6 +1442,7 @@ intel_ring_context_pin(struct intel_engine_cs *engine,
 			goto err;
 
 		ce->state->obj->mm.dirty = true;
+		ce->state->obj->pin_global++;
 	}
 
 	/* The kernel context is only used as a placeholder for flushing the
@@ -1466,8 +1477,10 @@ static void intel_ring_context_unpin(struct intel_engine_cs *engine,
 	if (--ce->pin_count)
 		return;
 
-	if (ce->state)
+	if (ce->state) {
+		ce->state->obj->pin_global--;
 		i915_vma_unpin(ce->state);
+	}
 
 	i915_gem_context_put(ctx);
 }
