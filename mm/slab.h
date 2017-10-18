@@ -41,7 +41,6 @@ struct kmem_cache {
 
 #include <linux/memcontrol.h>
 #include <linux/fault-inject.h>
-#include <linux/kmemcheck.h>
 #include <linux/kasan.h>
 #include <linux/kmemleak.h>
 #include <linux/random.h>
@@ -145,10 +144,10 @@ static inline unsigned long kmem_cache_flags(unsigned long object_size,
 #if defined(CONFIG_SLAB)
 #define SLAB_CACHE_FLAGS (SLAB_MEM_SPREAD | SLAB_NOLEAKTRACE | \
 			  SLAB_RECLAIM_ACCOUNT | SLAB_TEMPORARY | \
-			  SLAB_NOTRACK | SLAB_ACCOUNT)
+			  SLAB_ACCOUNT)
 #elif defined(CONFIG_SLUB)
 #define SLAB_CACHE_FLAGS (SLAB_NOLEAKTRACE | SLAB_RECLAIM_ACCOUNT | \
-			  SLAB_TEMPORARY | SLAB_NOTRACK | SLAB_ACCOUNT)
+			  SLAB_TEMPORARY | SLAB_ACCOUNT)
 #else
 #define SLAB_CACHE_FLAGS (0)
 #endif
@@ -167,7 +166,6 @@ static inline unsigned long kmem_cache_flags(unsigned long object_size,
 			      SLAB_NOLEAKTRACE | \
 			      SLAB_RECLAIM_ACCOUNT | \
 			      SLAB_TEMPORARY | \
-			      SLAB_NOTRACK | \
 			      SLAB_ACCOUNT)
 
 int __kmem_cache_shutdown(struct kmem_cache *);
@@ -442,7 +440,6 @@ static inline void slab_post_alloc_hook(struct kmem_cache *s, gfp_t flags,
 	for (i = 0; i < size; i++) {
 		void *object = p[i];
 
-		kmemcheck_slab_alloc(s, flags, object, slab_ksize(s));
 		kmemleak_alloc_recursive(object, s->object_size, 1,
 					 s->flags, flags);
 		kasan_slab_alloc(s, object, flags);
@@ -508,6 +505,14 @@ void *memcg_slab_start(struct seq_file *m, loff_t *pos);
 void *memcg_slab_next(struct seq_file *m, void *p, loff_t *pos);
 void memcg_slab_stop(struct seq_file *m, void *p);
 int memcg_slab_show(struct seq_file *m, void *p);
+
+#if defined(CONFIG_SLAB) || defined(CONFIG_SLUB_DEBUG)
+void dump_unreclaimable_slab(void);
+#else
+static inline void dump_unreclaimable_slab(void)
+{
+}
+#endif
 
 void ___cache_free(struct kmem_cache *cache, void *x, unsigned long addr);
 

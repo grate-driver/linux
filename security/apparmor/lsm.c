@@ -689,6 +689,7 @@ static void apparmor_bprm_committing_creds(struct linux_binprm *bprm)
 	aa_inherit_files(bprm->cred, current->files);
 
 	current->pdeath_signal = 0;
+	current->signal->pdeath_signal_proc = 0;
 
 	/* reset soft limits and set hard limits for the new label */
 	__aa_transition_rlimits(label, new_ctx->label);
