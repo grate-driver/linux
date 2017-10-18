@@ -1020,9 +1020,9 @@ static struct class watchdog_class = {
 static int watchdog_reboot_notifier(struct notifier_block *nb,
 				    unsigned long code, void *data)
 {
-	struct watchdog_device *wdd = container_of(nb, struct watchdog_device,
-						   reboot_nb);
+	struct watchdog_device *wdd;
 
+	wdd = container_of(nb, struct watchdog_device, reboot_nb);
 	if (code == SYS_DOWN || code == SYS_HALT) {
 		if (watchdog_active(wdd)) {
 			int ret;
