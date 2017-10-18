@@ -2907,7 +2907,7 @@ int do_swap_page(struct vm_fault *vmf)
 					GFP_HIGHUSER_MOVABLE, vmf, &swap_ra);
 			else
 				page = swapin_readahead(entry,
-					GFP_HIGHUSER_MOVABLE, vma, vmf->address);
+				       GFP_HIGHUSER_MOVABLE, vma, vmf->address);
 			swapcache = page;
 		}
 
