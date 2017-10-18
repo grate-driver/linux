@@ -89,6 +89,8 @@ struct flash_info {
 #define NO_CHIP_ERASE		BIT(12) /* Chip does not support chip erase */
 #define SPI_NOR_SKIP_SFDP	BIT(13)	/* Skip parsing of SFDP tables */
 #define USE_CLSR		BIT(14)	/* use CLSR command */
+
+	int	(*quad_enable)(struct spi_nor *nor);
 };
 
 #define JEDEC_MFR(info)	((info)->id[0])
@@ -870,6 +872,8 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 	return ret;
 }
 
+static int macronix_quad_enable(struct spi_nor *nor);
+
 /* Used when the "_ext_id" is two bytes at most */
 #define INFO(_jedec_id, _ext_id, _sector_size, _n_sectors, _flags)	\
 		.id = {							\
@@ -983,6 +987,11 @@ static const struct flash_info spi_nor_ids[] = {
 			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
 	},
 	{
+		"gd25lq32", INFO(0xc86016, 0, 64 * 1024, 64,
+			SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
+			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
+	},
+	{
 		"gd25q64", INFO(0xc84017, 0, 64 * 1024, 128,
 			SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
 			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
@@ -996,6 +1005,12 @@ static const struct flash_info spi_nor_ids[] = {
 		"gd25q128", INFO(0xc84018, 0, 64 * 1024, 256,
 			SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
 			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
+	},
+	{
+		"gd25q256", INFO(0xc84019, 0, 64 * 1024, 512,
+			SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
+			SPI_NOR_4B_OPCODES | SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
+			.quad_enable = macronix_quad_enable,
 	},
 
 	/* Intel/Numonyx -- xxxs33b */
@@ -2288,8 +2303,7 @@ static int spi_nor_parse_sfdp(struct spi_nor *nor,
 
 	/* Check the SFDP header version. */
 	if (le32_to_cpu(header.signature) != SFDP_SIGNATURE ||
-	    header.major != SFDP_JESD216_MAJOR ||
-	    header.minor < SFDP_JESD216_MINOR)
+	    header.major != SFDP_JESD216_MAJOR)
 		return -EINVAL;
 
 	/*
@@ -2427,6 +2441,15 @@ static int spi_nor_init_params(struct spi_nor *nor,
 			params->quad_enable = spansion_quad_enable;
 			break;
 		}
+
+		/*
+		 * Some manufacturer like GigaDevice may use different
+		 * bit to set QE on different memories, so the MFR can't
+		 * indicate the quad_enable method for this case, we need
+		 * set it in flash info list.
+		 */
+		if (info->quad_enable)
+			params->quad_enable = info->quad_enable;
 	}
 
 	/* Override the parameters with data read from SFDP tables. */
@@ -2630,15 +2653,58 @@ static int spi_nor_setup(struct spi_nor *nor, const struct flash_info *info,
 	/* Enable Quad I/O if needed. */
 	enable_quad_io = (spi_nor_get_protocol_width(nor->read_proto) == 4 ||
 			  spi_nor_get_protocol_width(nor->write_proto) == 4);
-	if (enable_quad_io && params->quad_enable) {
-		err = params->quad_enable(nor);
+	if (enable_quad_io && params->quad_enable)
+		nor->quad_enable = params->quad_enable;
+	else
+		nor->quad_enable = NULL;
+
+	return 0;
+}
+
+static int spi_nor_init(struct spi_nor *nor)
+{
+	int err;
+
+	/*
+	 * Atmel, SST, Intel/Numonyx, and others serial NOR tend to power up
+	 * with the software protection bits set
+	 */
+	if (JEDEC_MFR(nor->info) == SNOR_MFR_ATMEL ||
+	    JEDEC_MFR(nor->info) == SNOR_MFR_INTEL ||
+	    JEDEC_MFR(nor->info) == SNOR_MFR_SST ||
+	    nor->info->flags & SPI_NOR_HAS_LOCK) {
+		write_enable(nor);
+		write_sr(nor, 0);
+		spi_nor_wait_till_ready(nor);
+	}
+
+	if (nor->quad_enable) {
+		err = nor->quad_enable(nor);
 		if (err) {
 			dev_err(nor->dev, "quad mode not supported\n");
 			return err;
 		}
 	}
 
+	if ((nor->addr_width == 4) &&
+	    (JEDEC_MFR(nor->info) != SNOR_MFR_SPANSION) &&
+	    !(nor->info->flags & SPI_NOR_4B_OPCODES))
+		set_4byte(nor, nor->info, 1);
+
 	return 0;
+}
+
+/* mtd resume handler */
+static void spi_nor_resume(struct mtd_info *mtd)
+{
+	struct spi_nor *nor = mtd_to_spi_nor(mtd);
+	struct device *dev = nor->dev;
+	int ret;
+
+	/* re-initialize the nor chip */
+	ret = spi_nor_init(nor);
+	if (ret)
+		dev_err(dev, "resume() failed\n");
 }
 
 int spi_nor_scan(struct spi_nor *nor, const char *name,
@@ -2708,20 +2774,6 @@ int spi_nor_scan(struct spi_nor *nor, const char *name,
 	if (ret)
 		return ret;
 
-	/*
-	 * Atmel, SST, Intel/Numonyx, and others serial NOR tend to power up
-	 * with the software protection bits set
-	 */
-
-	if (JEDEC_MFR(info) == SNOR_MFR_ATMEL ||
-	    JEDEC_MFR(info) == SNOR_MFR_INTEL ||
-	    JEDEC_MFR(info) == SNOR_MFR_SST ||
-	    info->flags & SPI_NOR_HAS_LOCK) {
-		write_enable(nor);
-		write_sr(nor, 0);
-		spi_nor_wait_till_ready(nor);
-	}
-
 	if (!mtd->name)
 		mtd->name = dev_name(dev);
 	mtd->priv = nor;
@@ -2731,6 +2783,7 @@ int spi_nor_scan(struct spi_nor *nor, const char *name,
 	mtd->size = params.size;
 	mtd->_erase = spi_nor_erase;
 	mtd->_read = spi_nor_read;
+	mtd->_resume = spi_nor_resume;
 
 	/* NOR protection support for STmicro/Micron chips and similar */
 	if (JEDEC_MFR(info) == SNOR_MFR_MICRON ||
@@ -2804,8 +2857,6 @@ int spi_nor_scan(struct spi_nor *nor, const char *name,
 		if (JEDEC_MFR(info) == SNOR_MFR_SPANSION ||
 		    info->flags & SPI_NOR_4B_OPCODES)
 			spi_nor_set_4byte_opcodes(nor, info);
-		else
-			set_4byte(nor, info, 1);
 	} else {
 		nor->addr_width = 3;
 	}
@@ -2821,6 +2872,12 @@ int spi_nor_scan(struct spi_nor *nor, const char *name,
 		if (ret)
 			return ret;
 	}
+
+	/* Send all the required SPI flash commands to initialize device */
+	nor->info = info;
+	ret = spi_nor_init(nor);
+	if (ret)
+		return ret;
 
 	dev_info(dev, "%s (%lld Kbytes)\n", info->name,
 			(long long)mtd->size >> 10);
