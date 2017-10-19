@@ -45,10 +45,8 @@ static int gic_next_event(unsigned long delta, struct clock_event_device *evt)
 
 	cnt = gic_read_count();
 	cnt += (u64)delta;
-	local_irq_save(flags);
 	write_gic_vl_other(mips_cm_vp_id(cpumask_first(evt->cpumask)));
 	write_gic_vo_compare(cnt);
-	local_irq_restore(flags);
 	res = ((int)(gic_read_count() - cnt) >= 0) ? -ETIME : 0;
 	return res;
 }
