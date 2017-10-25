@@ -132,72 +132,91 @@ static bool check_wait(struct host1x_waitchk *wait, struct host1x_bo *cmdbuf,
 	return true;
 }
 
-static int check_register(struct host1x_firewall *fw, bool immediate)
+static int check_register(struct host1x_firewall *fw, bool immediate,
+			  unsigned int writes_num)
 {
+	u32 offset = fw->offset;
+
 	if (fw->job->is_addr_reg &&
 	    fw->job->is_addr_reg(fw->dev, fw->class, fw->reg)) {
 		if (immediate) {
 			FW_ERR("Writing an immediate value to address "
 			       "register\n");
-			return -EINVAL;
+			goto fail;
 		}
 
-		if (!fw->num_relocs) {
-			FW_ERR("Invalid number of relocations\n");
-			return -EINVAL;
+		while (writes_num--) {
+			if (!fw->num_relocs) {
+				FW_ERR("Invalid number of relocations\n");
+				goto fail;
+			}
+
+			if (!check_reloc(fw->reloc, fw->cmdbuf, offset))
+				goto fail;
+
+			fw->num_relocs--;
+			fw->reloc++;
+			offset++;
 		}
-
-		if (!check_reloc(fw->reloc, fw->cmdbuf, fw->offset))
-			return -EINVAL;
-
-		fw->num_relocs--;
-		fw->reloc++;
 
 		return 0;
 	}
 
 	/* assume that all modules have INCR_SYNCPT at the same offset */
 	if (fw->reg == HOST1X_UCLASS_INCR_SYNCPT) {
-		u32 word = fw->cmdbuf_base[fw->offset];
-		unsigned int syncpt_id = word & 0xff;
+		while (writes_num--) {
+			u32 word = fw->cmdbuf_base[offset];
+			unsigned int syncpt_id = word & 0xff;
 
-		if (!fw->syncpt_incrs) {
-			FW_ERR("Invalid number of syncpoints\n");
-			return -EINVAL;
+			if (!fw->syncpt_incrs) {
+				FW_ERR("Invalid number of syncpoints\n");
+				goto fail;
+			}
+
+			if (syncpt_id != fw->job->syncpt_id) {
+				FW_ERR("Invalid syncpoint ID %u, "
+				       "should be %u\n",
+				       syncpt_id, fw->job->syncpt_id);
+				goto fail;
+			}
+
+			fw->syncpt_incrs--;
+			offset++;
 		}
-
-		if (syncpt_id != fw->job->syncpt_id) {
-			FW_ERR("Invalid syncpoint ID %u, should be %u\n",
-			       syncpt_id, fw->job->syncpt_id);
-			return -EINVAL;
-		}
-
-		fw->syncpt_incrs--;
 
 		return 0;
 	}
 
 	if (fw->reg == HOST1X_UCLASS_WAIT_SYNCPT) {
-		if (fw->class != HOST1X_CLASS_HOST1X) {
-			FW_ERR("Jobs class must be 'host1x' for a waitcheck\n");
-			return -EINVAL;
+		while (writes_num--) {
+			if (fw->class != HOST1X_CLASS_HOST1X) {
+				FW_ERR("Jobs class must be 'host1x' for a"
+				       " waitcheck\n");
+				goto fail;
+			}
+
+			if (!fw->num_waitchks) {
+				FW_ERR("Invalid number of a waitchecks\n");
+				goto fail;
+			}
+
+			if (!check_wait(fw->waitchk, fw->cmdbuf, offset))
+				goto fail;
+
+			fw->num_waitchks--;
+			fw->waitchk++;
+			offset++;
 		}
-
-		if (!fw->num_waitchks) {
-			FW_ERR("Invalid number of a waitchecks\n");
-			return -EINVAL;
-		}
-
-		if (!check_wait(fw->waitchk, fw->cmdbuf, fw->offset))
-			return -EINVAL;
-
-		fw->num_waitchks--;
-		fw->waitchk++;
 
 		return 0;
 	}
 
 	return 0;
+
+fail:
+	fw->offset = offset;
+
+	return -EINVAL;
 }
 
 static int check_class(struct host1x_firewall *fw)
@@ -224,7 +243,7 @@ static int check_mask(struct host1x_firewall *fw)
 		}
 
 		if (fw->mask & 1) {
-			err = check_register(fw, false);
+			err = check_register(fw, false, 1);
 			if (err)
 				return err;
 
@@ -248,7 +267,7 @@ static int check_incr(struct host1x_firewall *fw)
 			return -EINVAL;
 		}
 
-		err = check_register(fw, false);
+		err = check_register(fw, false, 1);
 		if (err)
 			return err;
 
@@ -264,19 +283,20 @@ static int check_nonincr(struct host1x_firewall *fw)
 {
 	int err;
 
-	while (fw->count--) {
-		if (fw->words == 0) {
-			FW_ERR("Invalid words count\n");
-			return -EINVAL;
-		}
-
-		err = check_register(fw, false);
-		if (err)
-			return err;
-
-		fw->words--;
-		fw->offset++;
+	if (fw->words == 0) {
+		FW_ERR("Invalid words count\n");
+		return -EINVAL;
 	}
+
+	if (fw->count == 0)
+		return 0;
+
+	err = check_register(fw, false, fw->count);
+	if (err)
+		return err;
+
+	fw->words  -= fw->count;
+	fw->offset += fw->count;
 
 	return 0;
 }
@@ -333,7 +353,7 @@ static int firewall_validate_gather(struct host1x_firewall *fw,
 
 		case HOST1X_OPCODE_IMM:
 			fw->reg = word >> 16 & 0x1fff;
-			ret = check_register(fw, true);
+			ret = check_register(fw, true, 1);
 			if (ret)
 				fw->offset--;
 			break;

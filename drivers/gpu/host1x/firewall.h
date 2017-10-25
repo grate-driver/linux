@@ -40,7 +40,7 @@ struct host1x_firewall {
 	struct host1x_bo *cmdbuf;
 	unsigned int offset;
 
-	unsigned int syncpt_incrs;
+	int syncpt_incrs;
 
 	u32 *cmdbuf_base;
 	u32 words;
