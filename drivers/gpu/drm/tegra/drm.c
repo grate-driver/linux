@@ -476,36 +476,6 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 	return 0;
 }
 
-static int host1x_waitchk_copy_from_user(struct host1x_waitchk *dest,
-					 struct drm_tegra_waitchk __user *src,
-					 struct drm_file *file)
-{
-	u32 cmdbuf;
-	int err;
-
-	err = get_user(cmdbuf, &src->handle);
-	if (err < 0)
-		return err;
-
-	err = get_user(dest->offset, &src->offset);
-	if (err < 0)
-		return err;
-
-	err = get_user(dest->syncpt_id, &src->syncpt);
-	if (err < 0)
-		return err;
-
-	err = get_user(dest->thresh, &src->thresh);
-	if (err < 0)
-		return err;
-
-	dest->bo = host1x_bo_lookup(file, cmdbuf);
-	if (!dest->bo)
-		return -ENOENT;
-
-	return 0;
-}
-
 static int tegra_append_bo_reservations(struct tegra_bo_reservation *resv,
 					struct tegra_bo *bo, unsigned int index,
 					bool write, bool cmdbuf, bool skip)
@@ -798,7 +768,6 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 {
 	unsigned int num_cmdbufs = args->num_cmdbufs;
 	unsigned int num_relocs = args->num_relocs;
-	unsigned int num_waitchks = args->num_waitchks;
 	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct tegra_drm *tegra = drm->dev_private;
 	struct drm_tegra_cmdbuf __user *user_cmdbufs;
@@ -861,7 +830,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 			goto put;
 	}
 
-	num_bos = num_cmdbufs + num_relocs * 2 + num_waitchks;
+	num_bos = num_cmdbufs + num_relocs * 2;
 
 	reservations = kmalloc_array(num_bos, sizeof(*reservations),
 				     GFP_KERNEL);
@@ -935,25 +904,6 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
 					!(reloc_flags & DRM_TEGRA_RELOC_READ_MADV),
 					false, false);
-		if (err)
-			goto fail;
-	}
-
-	/* copy and resolve waitchks from submit */
-	while (num_waitchks--) {
-		struct host1x_waitchk *wait = &job->waitchk[num_waitchks];
-		struct tegra_bo *obj;
-
-		err = host1x_waitchk_copy_from_user(wait,
-						    &user_waitchks[num_waitchks],
-						    file);
-		if (err < 0)
-			goto fail;
-
-		obj = host1x_to_tegra_bo(wait->bo);
-
-		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
-						   false, true, true);
 		if (err)
 			goto fail;
 	}

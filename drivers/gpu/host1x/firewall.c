@@ -126,29 +126,6 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 		}
 	}
 
-	for (i = 0; i < job->num_waitchk; i++) {
-		struct host1x_waitchk *wait = &job->waitchk[i];
-
-		if (wait->syncpt_id != job->syncpt->id) {
-			FW_ERR("Waitcheck #%u has invalid syncpoint ID %u\n",
-			       i, wait->syncpt_id);
-			goto fail;
-		}
-
-		if (wait->offset & 3) {
-			FW_ERR("Waitcheck #%u has unaligned offset 0x%X\n",
-			       i, wait->offset);
-			goto fail;
-		}
-
-		if (wait->offset >= host1x_bo_size(wait->bo)) {
-			FW_ERR("Waitcheck #%u has invalid offset 0x%X, "
-			       "max %zu\n", i, wait->offset,
-			       host1x_bo_size(wait->bo) - sizeof(u32));
-			goto fail;
-		}
-	}
-
 	host1x_debug_output_unlock();
 
 	return 0;
@@ -184,9 +161,7 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 	fw.job = job;
 	fw.class = job->class;
 	fw.reloc = job->relocarray;
-	fw.waitchk = job->waitchk;
 	fw.num_relocs = job->num_relocs;
-	fw.num_waitchks = job->num_waitchk;
 	fw.syncpt_incrs = job->syncpt_incrs;
 
 	for (i = 0; i < job->num_gathers; i++)
@@ -251,8 +226,8 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 		offset += g->words * sizeof(u32);
 	}
 
-	/* No relocs, waitchks and syncpts should remain at this point */
-	if (fw.num_relocs || fw.num_waitchks ||fw.syncpt_incrs)
+	/* No relocs and syncpts should remain at this point */
+	if (fw.num_relocs ||fw.syncpt_incrs)
 		goto fw_err;
 
 	host1x_debug_output_unlock();
@@ -269,10 +244,6 @@ fw_err:
 	if (fw.num_relocs)
 		FW_ERR("Job has invalid number of relocations, %u left\n",
 		       fw.num_relocs);
-
-	if (fw.num_waitchks)
-		FW_ERR("Job has invalid number of waitchecks, %u left\n",
-		       fw.num_waitchks);
 
 	if (fw.syncpt_incrs)
 		FW_ERR("Job has invalid number of syncpoint increments, "

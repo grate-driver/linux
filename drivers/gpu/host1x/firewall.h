@@ -24,7 +24,6 @@ struct host1x;
 struct host1x_bo;
 struct host1x_job;
 struct host1x_reloc;
-struct host1x_waitchk;
 struct device;
 
 struct host1x_firewall {
@@ -33,9 +32,6 @@ struct host1x_firewall {
 
 	unsigned int num_relocs;
 	struct host1x_reloc *reloc;
-
-	unsigned int num_waitchks;
-	struct host1x_waitchk *waitchk;
 
 	struct host1x_bo *cmdbuf;
 	unsigned int offset;

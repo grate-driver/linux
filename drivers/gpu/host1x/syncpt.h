@@ -28,9 +28,6 @@
 
 struct host1x;
 
-/* Reserved for replacing an expired wait with a NOP */
-#define HOST1X_SYNCPT_RESERVED			0
-
 struct host1x_syncpt_base {
 	unsigned int id;
 	u32 value;
@@ -83,8 +80,5 @@ u32 host1x_syncpt_load_wait_base(struct host1x_syncpt *sp);
 
 /* Indicate future operations by incrementing the sync point max. */
 u32 host1x_syncpt_incr_max(struct host1x_syncpt *sp, u32 incrs);
-
-/* Patch a wait by replacing it with a wait for syncpt 0 value 0 */
-int host1x_syncpt_patch_wait(struct host1x_syncpt *sp, void *patch_addr);
 
 #endif
