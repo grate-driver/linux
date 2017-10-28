@@ -130,13 +130,6 @@ struct drm_tegra_reloc {
 	__u32 flags;
 };
 
-struct drm_tegra_waitchk {
-	__u32 handle;
-	__u32 offset;
-	__u32 syncpt;
-	__u32 thresh;
-};
-
 #define DRM_TEGRA_SUBMIT_WAIT_FENCE_FD		(1 << 0)
 #define DRM_TEGRA_SUBMIT_CREATE_FENCE_FD	(1 << 1)
 #define DRM_TEGRA_SUBMIT_FLAGS			(DRM_TEGRA_SUBMIT_CREATE_FENCE_FD)
@@ -147,7 +140,6 @@ struct drm_tegra_submit {
 	__u32 num_cmdbufs;
 	__u32 num_relocs;
 	__u32 num_waitchks;
-	__u32 waitchk_mask;
 	__u32 timeout;
 	__u64 syncpts;
 	__u64 cmdbufs;

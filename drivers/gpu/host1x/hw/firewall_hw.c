@@ -114,24 +114,6 @@ static bool check_reloc(struct host1x_reloc *reloc, struct host1x_bo *cmdbuf,
 	return true;
 }
 
-static bool check_wait(struct host1x_waitchk *wait, struct host1x_bo *cmdbuf,
-		       unsigned int offset)
-{
-	offset *= sizeof(u32);
-
-	if (wait->bo != cmdbuf) {
-		FW_ERR("Doesn't belong to cmdbuf\n");
-		return false;
-	}
-
-	if (wait->offset != offset) {
-		FW_ERR("Invalid offset 0x%X\n", wait->offset);
-		return false;
-	}
-
-	return true;
-}
-
 static int check_register(struct host1x_firewall *fw, bool immediate,
 			  unsigned int writes_num)
 {
@@ -181,30 +163,6 @@ static int check_register(struct host1x_firewall *fw, bool immediate,
 			}
 
 			fw->syncpt_incrs--;
-			offset++;
-		}
-
-		return 0;
-	}
-
-	if (fw->reg == HOST1X_UCLASS_WAIT_SYNCPT) {
-		while (writes_num--) {
-			if (fw->class != HOST1X_CLASS_HOST1X) {
-				FW_ERR("Jobs class must be 'host1x' for a"
-				       " waitcheck\n");
-				goto fail;
-			}
-
-			if (!fw->num_waitchks) {
-				FW_ERR("Invalid number of a waitchecks\n");
-				goto fail;
-			}
-
-			if (!check_wait(fw->waitchk, fw->cmdbuf, offset))
-				goto fail;
-
-			fw->num_waitchks--;
-			fw->waitchk++;
 			offset++;
 		}
 

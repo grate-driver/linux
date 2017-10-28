@@ -138,73 +138,6 @@ int host1x_job_add_fence(struct host1x_job *job, struct dma_fence *fence)
 }
 EXPORT_SYMBOL(host1x_job_add_fence);
 
-/*
- * NULL an already satisfied WAIT_SYNCPT host method, by patching its
- * args in the command stream. The method data is changed to reference
- * a reserved (never given out or incr) HOST1X_SYNCPT_RESERVED syncpt
- * with a matching threshold value of 0, so is guaranteed to be popped
- * by the host HW.
- */
-static void host1x_syncpt_patch_offset(struct host1x_syncpt *sp,
-				       struct host1x_bo *h, u32 offset)
-{
-	void *patch_addr = NULL;
-
-	/* patch the wait */
-	patch_addr = host1x_bo_kmap(h, offset >> PAGE_SHIFT);
-	if (patch_addr) {
-		host1x_syncpt_patch_wait(sp,
-					 patch_addr + (offset & ~PAGE_MASK));
-		host1x_bo_kunmap(h, offset >> PAGE_SHIFT, patch_addr);
-	} else
-		pr_err("Could not map cmdbuf for wait check\n");
-}
-
-/*
- * Check driver supplied waitchk structs for syncpt thresholds
- * that have already been satisfied and NULL the comparison (to
- * avoid a wrap condition in the HW).
- */
-static int do_waitchks(struct host1x_job *job, struct host1x *host,
-		       struct host1x_job_gather *g)
-{
-	struct host1x_bo *patch = g->bo;
-	int i;
-
-	/* compare syncpt vs wait threshold */
-	for (i = 0; i < job->num_waitchk; i++) {
-		struct host1x_waitchk *wait = &job->waitchk[i];
-		struct host1x_syncpt *sp =
-			host1x_syncpt_get_by_id(host, wait->syncpt_id);
-
-		/* validate syncpt id */
-		if (wait->syncpt_id > host1x_syncpt_nb_pts(host))
-			continue;
-
-		/* skip all other gathers */
-		if (patch != wait->bo)
-			continue;
-
-		trace_host1x_syncpt_wait_check(wait->bo, wait->offset,
-					       wait->syncpt_id, wait->thresh,
-					       host1x_syncpt_read_min(sp));
-
-		if (host1x_syncpt_is_expired(sp, wait->thresh)) {
-			dev_dbg(host->dev,
-				"drop WAIT id %u (%s) thresh 0x%x, min 0x%x\n",
-				wait->syncpt_id, sp->name, wait->thresh,
-				host1x_syncpt_read_min(sp));
-
-			host1x_syncpt_patch_offset(sp, patch,
-						   g->offset + wait->offset);
-		}
-
-		wait->bo = NULL;
-	}
-
-	return 0;
-}
-
 static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 {
 	unsigned int i;
@@ -355,7 +288,6 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 	int err;
 	unsigned int i, j;
 	struct host1x *host = dev_get_drvdata(dev->parent);
-	DECLARE_BITMAP(waitchk_mask, host1x_syncpt_nb_pts(host));
 
 	/* bump syncpoints refcount */
 	host1x_syncpt_get(job->syncpt);
@@ -364,18 +296,6 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 	err = host1x_firewall_check_job(host, job, dev);
 	if (err)
 		goto out;
-
-	bitmap_zero(waitchk_mask, host1x_syncpt_nb_pts(host));
-	for (i = 0; i < job->num_waitchk; i++) {
-		u32 syncpt_id = job->waitchk[i].syncpt_id;
-
-		if (syncpt_id < host1x_syncpt_nb_pts(host))
-			set_bit(syncpt_id, waitchk_mask);
-	}
-
-	/* get current syncpt values for waitchk */
-	for_each_set_bit(i, waitchk_mask, host1x_syncpt_nb_pts(host))
-		host1x_syncpt_load(host->syncpts + i);
 
 	/* pin memory */
 	err = pin_job(host, job);
@@ -408,10 +328,6 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 		}
 
 		err = do_relocs(job, g);
-		if (err)
-			break;
-
-		err = do_waitchks(job, host, g);
 		if (err)
 			break;
 	}
