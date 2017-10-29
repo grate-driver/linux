@@ -824,10 +824,6 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	if (args->num_syncpts != 1)
 		return -EINVAL;
 
-	/* We don't yet support waitchks */
-	if (args->num_waitchks != 0)
-		return -EINVAL;
-
 	job = host1x_job_alloc(context->channel, args->num_cmdbufs,
 			       args->num_relocs, args->num_waitchks);
 	if (!job)
