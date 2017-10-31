@@ -1508,7 +1508,7 @@ lock_and_cleanup_extent_if_need(struct btrfs_inode *inode, struct page **pages,
 		clear_extent_bit(&inode->io_tree, start_pos,
 				 last_pos, clear_bits,
 				 (clear_bits & EXTENT_LOCKED) ? 1 : 0,
-				 0, cached_state, GFP_NOFS);
+				 0, cached_state);
 		if (ret)
 			return ret;
 		*lockstart = start_pos;
