@@ -166,6 +166,12 @@ Optional properties:
   "power-domains" property. Also, either all or none of the OPP nodes in an OPP
   table should have it set.
 
+
+On some platforms the exact frequency or voltage may be hidden from the OS by
+the firmware and the "opp-hz" or the "opp-microvolt" properties may contain
+magic values that represent the frequency or voltage in a firmware dependent
+way, for example an index of an array in the firmware.
+
 Example 1: Single cluster Dual-core ARM cortex A9, switch DVFS states together.
 
 / {
