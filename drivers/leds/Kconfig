@@ -51,6 +51,13 @@ config LEDS_BRIGHTNESS_HW_CHANGED
 
 comment "LED drivers"
 
+config LEDS_ISA1200
+	tristate "LES support for the ISA1200 motor"
+	depends on LEDS_CLASS
+	depends on I2C
+	help
+	  Say Y to enalbe the ISA1200 IC.
+
 config LEDS_88PM860X
 	tristate "LED Support for Marvell 88PM860x PMIC"
 	depends on LEDS_CLASS
