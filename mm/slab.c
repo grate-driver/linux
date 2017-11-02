@@ -4435,6 +4435,21 @@ const char *__check_heap_object(const void *ptr, unsigned long n,
 	if (offset < cachep->useroffset ||
 	    offset - cachep->useroffset > cachep->usersize ||
 	    n > cachep->useroffset - offset + cachep->usersize) {
+#ifdef CONFIG_HARDENED_USERCOPY_FALLBACK
+		/*
+		 * If no whitelist exists, and FALLBACK is set, produce
+		 * a warning instead of rejecting the copy. This is intended
+		 * to be a temporary method to find any missing usercopy
+		 * whitelists.
+		 */
+		if (cachep->usersize == 0 &&
+		    offset <= cachep->object_size &&
+		    n <= cachep->object_size - offset) {
+			WARN_ONCE(1, "unexpected usercopy without slab whitelist from %s offset %lu size %lu",
+				  cachep->name, offset, n);
+			return NULL;
+		}
+#endif
 		return cachep->name;
 	}
 
