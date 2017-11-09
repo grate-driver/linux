@@ -1045,9 +1045,6 @@ static int __btrfs_open_devices(struct btrfs_fs_devices *fs_devices,
 			goto error_brelse;
 
 		device->generation = btrfs_super_generation(disk_super);
-		if (!latest_dev ||
-		    device->generation > latest_dev->generation)
-			latest_dev = device;
 
 		if (btrfs_super_flags(disk_super) & BTRFS_SUPER_FLAG_SEEDING) {
 			device->writeable = 0;
@@ -1074,6 +1071,11 @@ static int __btrfs_open_devices(struct btrfs_fs_devices *fs_devices,
 				 &fs_devices->alloc_list);
 		}
 		brelse(bh);
+
+		if (!latest_dev ||
+		    device->generation > latest_dev->generation)
+			latest_dev = device;
+
 		continue;
 
 error_brelse:
