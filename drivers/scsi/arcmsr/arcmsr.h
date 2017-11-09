@@ -61,7 +61,9 @@ struct device_attribute;
 #define ARCMSR_MAX_XFER_SECTORS_C						304
 #define ARCMSR_MAX_TARGETID							17
 #define ARCMSR_MAX_TARGETLUN							8
-#define ARCMSR_MAX_CMD_PERLUN		                 ARCMSR_MAX_OUTSTANDING_CMD
+#define ARCMSR_MAX_CMD_PERLUN		128
+#define ARCMSR_DEFAULT_CMD_PERLUN	32
+#define ARCMSR_MIN_CMD_PERLUN		1
 #define ARCMSR_MAX_QBUFFER							4096
 #define ARCMSR_DEFAULT_SG_ENTRIES						38
 #define ARCMSR_MAX_HBB_POSTQUEUE						264
@@ -785,6 +787,7 @@ struct AdapterControlBlock
 	/* iop init */
 	#define ACB_F_ABORT				0x0200
 	#define ACB_F_FIRMWARE_TRAP           		0x0400
+	#define ACB_F_MSG_GET_CONFIG		0x1000
 	struct CommandControlBlock *			pccb_pool[ARCMSR_MAX_FREECCB_NUM];
 	/* used for memory free */
 	struct list_head		ccb_free_list;
