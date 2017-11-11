@@ -35,7 +35,7 @@ static void host1x_firewall_dump_gather(struct host1x *host1x,
 			    &g->base, g->offset, g->words, g->class);
 
 	if (job->gather_copy_mapped)
-		mapped = (u32 *)job->gather_copy_mapped;
+		mapped = job->gather_copy_mapped;
 	else
 		mapped = host1x_bo_mmap(g->bo);
 

@@ -252,9 +252,9 @@ static int do_relocs(struct host1x_job *job, struct host1x_job_gather *g)
 			continue;
 
 		if (IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL)) {
-			target = (u32 *)job->gather_copy_mapped +
-					reloc->cmdbuf.offset / sizeof(u32) +
-						g->offset / sizeof(u32);
+			target = job->gather_copy_mapped +
+					reloc->cmdbuf.offset +
+						g->offset;
 			goto patch_reloc;
 		}
 

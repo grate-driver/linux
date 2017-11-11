@@ -216,7 +216,7 @@ static void show_channel_gathers(struct output *o, struct host1x_cdma *cdma)
 			u32 *mapped;
 
 			if (job->gather_copy_mapped)
-				mapped = (u32 *)job->gather_copy_mapped;
+				mapped = job->gather_copy_mapped;
 			else
 				mapped = host1x_bo_mmap(g->bo);
 
