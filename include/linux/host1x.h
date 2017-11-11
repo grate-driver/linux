@@ -264,7 +264,7 @@ struct host1x_job {
 	/* Copy of gathers */
 	size_t gather_copy_size;
 	dma_addr_t gather_copy;
-	u8 *gather_copy_mapped;
+	void *gather_copy_mapped;
 
 	/* Check if register is marked as an address reg */
 	int (*is_addr_reg)(struct device *dev, u32 class, u32 reg);
