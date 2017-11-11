@@ -213,8 +213,8 @@ struct host1x_reloc {
 };
 
 struct host1x_waitchk {
-	struct host1x_bo *bo;
-	u32 offset;
+	u32 gather_index;
+	u32 relative;
 	u32 syncpt_id;
 	u32 thresh;
 };
@@ -236,9 +236,8 @@ struct host1x_job {
 	unsigned int num_gathers;
 
 	/* Wait checks to be processed at submit time */
-	struct host1x_waitchk *waitchk;
-	unsigned int num_waitchk;
-	u32 waitchk_mask;
+	struct host1x_waitchk *waitchks;
+	unsigned int num_waitchks;
 
 	/* Array of handles to be pinned & unpinned */
 	struct host1x_reloc *relocarray;
@@ -288,7 +287,7 @@ struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
 				    u32 num_cmdbufs, u32 num_relocs,
 				    u32 num_waitchks);
 void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *mem_id,
-			   u32 words, u32 offset);
+			   u32 words, u32 offset, u32 class);
 struct host1x_job *host1x_job_get(struct host1x_job *job);
 void host1x_job_put(struct host1x_job *job);
 int host1x_job_pin(struct host1x_job *job, struct device *dev);

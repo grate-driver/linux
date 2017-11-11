@@ -31,8 +31,8 @@ static void host1x_firewall_dump_gather(struct host1x *host1x,
 	unsigned int words;
 	u32 *mapped;
 
-	host1x_debug_output(&o, "GATHER at %pad+%#x, %d words\n",
-			    &g->base, g->offset, g->words);
+	host1x_debug_output(&o, "GATHER at %pad+%#x, %d words, class 0x%X\n",
+			    &g->base, g->offset, g->words, g->class);
 
 	if (job->gather_copy_mapped)
 		mapped = (u32 *)job->gather_copy_mapped;
@@ -122,6 +122,32 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 			       "offset %lu, max %zu\n",
 			       i, reloc->cmdbuf.offset,
 			       host1x_bo_size(reloc->cmdbuf.bo) - sizeof(u32));
+			goto fail;
+		}
+	}
+
+	for (i = 0; i < job->num_waitchks; i++) {
+		struct host1x_waitchk *waitchk = &job->waitchks[i];
+		struct host1x_syncpt *sp;
+
+		sp = host1x_syncpt_get_by_id(host, waitchk->syncpt_id);
+		if (!sp) {
+			FW_ERR("Waitcheck #%u has invalid syncpoint ID %u\n",
+			       i, waitchk->syncpt_id);
+			goto fail;
+		}
+
+		if (waitchk->relative && !sp->base) {
+			FW_ERR("Waitcheck #%u uses syncpoint ID %u which "
+			       "doesn't have a base\n",
+			       i, waitchk->syncpt_id);
+			goto fail;
+		}
+
+		if (waitchk->gather_index >= job->num_gathers) {
+			FW_ERR("Waitcheck #%u has invalid gather_index %u, "
+			       "max %u\n",
+			       i, waitchk->gather_index, job->num_gathers - 1);
 			goto fail;
 		}
 	}

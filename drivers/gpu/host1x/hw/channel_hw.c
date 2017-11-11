@@ -60,18 +60,70 @@ static void trace_write_gather(struct host1x_cdma *cdma, struct host1x_bo *bo,
 	}
 }
 
+static unsigned int prepend_waitchks(struct host1x_job *job,
+				     unsigned int wait_index,
+				     unsigned int gather_index,
+				     unsigned int *class)
+{
+	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
+	struct host1x_cdma *cdma = &job->channel->cdma;
+	struct host1x_syncpt *waitchk_sp;
+	struct host1x_waitchk *waitchk;
+
+next_wait:
+	if (wait_index >= job->num_waitchks)
+		goto out;
+
+	waitchk = &job->waitchks[wait_index];
+	waitchk_sp = host->syncpts + waitchk->syncpt_id;
+
+	if (waitchk->gather_index != gather_index)
+		goto out;
+
+	if (waitchk->relative)
+		host1x_cdma_push(cdma,
+			host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+				host1x_uclass_wait_syncpt_base_r(), 1),
+			host1x_class_host_wait_syncpt_base(waitchk->syncpt_id,
+							   waitchk_sp->base->id,
+							   waitchk->thresh));
+	else
+		host1x_cdma_push(cdma,
+			host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+				host1x_uclass_wait_syncpt_r(), 1),
+			host1x_class_host_wait_syncpt(waitchk->syncpt_id,
+						      waitchk->thresh));
+
+	*class = HOST1X_CLASS_HOST1X;
+	wait_index++;
+
+	goto next_wait;
+out:
+	return wait_index;
+}
+
 static void submit_gathers(struct host1x_job *job)
 {
 	struct host1x_cdma *cdma = &job->channel->cdma;
-	unsigned int i;
+	unsigned int class = 0;
+	unsigned int i, k;
 
-	for (i = 0; i < job->num_gathers; i++) {
+	for (i = 0, k = 0; i < job->num_gathers; i++) {
 		struct host1x_job_gather *g = &job->gathers[i];
 		u32 op1 = host1x_opcode_gather(g->words);
 		u32 op2 = g->base + g->offset;
 
+		k = prepend_waitchks(job, k, i, &class);
+
+		if (class != g->class)
+			host1x_cdma_push(cdma,
+					 host1x_opcode_setclass(g->class, 0, 0),
+					 HOST1X_OPCODE_NOP);
+
 		trace_write_gather(cdma, g->bo, g->offset, op1 & 0xffff);
 		host1x_cdma_push(cdma, op1, op2);
+
+		class = g->class;
 	}
 }
 
@@ -140,7 +192,7 @@ static int channel_submit(struct host1x_job *job)
 	sp = job->syncpt;
 	trace_host1x_channel_submit(dev_name(ch->dev),
 				    job->num_gathers, job->num_relocs,
-				    job->num_waitchk, sp->id,
+				    job->num_waitchks, sp->id,
 				    job->syncpt_incrs);
 
 	/* before error checks, return current max */
@@ -188,12 +240,6 @@ static int channel_submit(struct host1x_job *job)
 	host1x_hw_firewall_syncpt_assign_to_channel(host, sp, ch);
 
 	job->syncpt_end = syncval;
-
-	/* add a setclass for modules that require it */
-	if (job->class)
-		host1x_cdma_push(&ch->cdma,
-				 host1x_opcode_setclass(job->class, 0, 0),
-				 HOST1X_OPCODE_NOP);
 
 	submit_gathers(job);
 

@@ -476,6 +476,34 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 	return 0;
 }
 
+static int host1x_waitchk_copy_from_user(struct host1x_waitchk *dest,
+					 struct drm_tegra_waitchk __user *src)
+{
+	u32 flags;
+	int err;
+
+	err = get_user(dest->gather_index, &src->cmdbuf_index);
+	if (err < 0)
+		return err;
+
+	err = get_user(dest->syncpt_id, &src->syncpt_id);
+	if (err < 0)
+		return err;
+
+	err = get_user(dest->thresh, &src->thresh);
+	if (err < 0)
+		return err;
+
+	err = get_user(flags, &src->flags);
+	if (err < 0)
+		return err;
+
+	if (flags & DRM_TEGRA_WAITCHK_RELATIVE)
+		dest->relative = true;
+
+	return 0;
+}
+
 static int tegra_append_bo_reservations(struct tegra_bo_reservation *resv,
 					struct tegra_bo *bo, unsigned int index,
 					bool write, bool cmdbuf, bool skip)
@@ -768,6 +796,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 {
 	unsigned int num_cmdbufs = args->num_cmdbufs;
 	unsigned int num_relocs = args->num_relocs;
+	unsigned int num_waitchks = args->num_waitchks;
 	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct tegra_drm *tegra = drm->dev_private;
 	struct drm_tegra_cmdbuf __user *user_cmdbufs;
@@ -805,7 +834,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		return -ENOMEM;
 
 	job->num_relocs = args->num_relocs;
-	job->num_waitchk = args->num_waitchks;
+	job->num_waitchks = args->num_waitchks;
 	job->client = &context->client->base;
 	job->class = context->client->base.class;
 	job->serialize = true;
@@ -861,7 +890,8 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 
 		obj = host1x_to_tegra_bo(bo);
 
-		host1x_job_add_gather(job, bo, cmdbuf.words, cmdbuf.offset);
+		host1x_job_add_gather(job, bo, cmdbuf.words, cmdbuf.offset,
+				      cmdbuf.class_id);
 		num_cmdbufs--;
 		user_cmdbufs++;
 
@@ -905,6 +935,15 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 					!(reloc_flags & DRM_TEGRA_RELOC_READ_MADV),
 					false, false);
 		if (err)
+			goto fail;
+	}
+
+	/* copy and resolve waitchks from submit */
+	while (num_waitchks--) {
+		err = host1x_waitchk_copy_from_user(
+						&job->waitchks[num_waitchks],
+						&user_waitchks[num_waitchks]);
+		if (err < 0)
 			goto fail;
 	}
 
