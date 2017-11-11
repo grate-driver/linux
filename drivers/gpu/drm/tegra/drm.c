@@ -381,11 +381,21 @@ static int tegra_drm_open(struct drm_device *drm, struct drm_file *filp)
 	return 0;
 }
 
+static int tegra_drm_context_free_syncpt(int id, void *p, void *data)
+{
+	struct host1x_syncpt *syncpt = p;
+
+	host1x_syncpt_put(syncpt);
+
+	return 0;
+}
+
 static void tegra_drm_context_free(struct kref *ref)
 {
 	struct tegra_drm_context *context =
 		container_of(ref, struct tegra_drm_context, ref);
 
+	idr_for_each(&context->syncpts, tegra_drm_context_free_syncpt, NULL);
 	context->client->ops->close_channel(context);
 	kfree(context);
 }
@@ -768,10 +778,15 @@ static int tegra_lookup_syncpoint(struct tegra_drm_context *context,
 				  unsigned int syncpt_id)
 {
 	struct host1x_client *client = &context->client->base;
+	struct host1x_syncpt *syncpt;
 	unsigned int i;
 
 	for (i = 0; i < client->num_syncpts; i++)
 		if (host1x_syncpt_id(client->syncpts[i]) == syncpt_id)
+			return 0;
+
+	idr_for_each_entry(&context->syncpts, syncpt, i)
+		if (host1x_syncpt_id(syncpt) == syncpt_id)
 			return 0;
 
 	return -ENOENT;
@@ -1151,6 +1166,7 @@ static int tegra_client_open(struct tegra_drm_file *fpriv,
 		return err;
 	}
 
+	idr_init(&context->syncpts);
 	kref_init(&context->ref);
 	context->client = client;
 	context->id = err;
@@ -1477,6 +1493,108 @@ static int tegra_gem_cpu_prep(struct drm_device *drm, void *data,
 
 	return 0;
 }
+
+static int tegra_get_excl_syncpt(struct drm_device *drm, void *data,
+				 struct drm_file *file)
+{
+	struct tegra_drm_file *fpriv = file->driver_priv;
+	struct drm_tegra_get_exclusive_syncpt *args = data;
+	struct tegra_drm_context *context;
+	struct host1x_syncpt *syncpt;
+	unsigned long flags = 0;
+	int ret;
+
+	if (args->flags & DRM_TEGRA_EXCL_SYNCPT_WITH_BASE)
+		flags |= HOST1X_SYNCPT_HAS_BASE;
+
+	mutex_lock(&fpriv->lock);
+
+	context = idr_find(&fpriv->contexts, args->context);
+	if (!context) {
+		ret = -ENOENT;
+		goto unlock;
+	}
+
+	/* Make sure that context won't go away on unlock */
+	tegra_drm_context_get(context);
+
+	/* At first try a non-blocking syncpoint request */
+	syncpt = host1x_syncpt_request(&context->client->base, flags);
+	if (IS_ERR(syncpt)){
+		ret = PTR_ERR(syncpt);
+
+		/* Bail out if error isn't due to syncpoints being busy */
+		if (ret != -EBUSY)
+			goto put_context;
+
+		/*
+		 * Otherwise we need to unlock DRM because syncpoint
+		 * request below may block and we don't want to block
+		 * whole interface while awaiting for syncpoint.
+		 */
+		mutex_unlock(&fpriv->lock);
+
+		flags |= HOST1X_SYNCPT_REQUEST_BLOCKING;
+
+		syncpt = host1x_syncpt_request(&context->client->base, flags);
+		if (IS_ERR(syncpt)){
+			ret = PTR_ERR(syncpt);
+			tegra_drm_context_put(context);
+			goto out;
+		}
+
+		mutex_lock(&fpriv->lock);
+	}
+
+	ret = idr_alloc(&context->syncpts, syncpt, 0, U32_MAX, GFP_KERNEL);
+	if (ret < 0) {
+		host1x_syncpt_put(syncpt);
+		goto put_context;
+	}
+
+	args->value = host1x_syncpt_read_max(syncpt);
+	args->id = host1x_syncpt_id(syncpt);
+	args->index = ret;
+
+	ret = 0;
+put_context:
+	tegra_drm_context_put(context);
+unlock:
+	mutex_unlock(&fpriv->lock);
+out:
+	return ret;
+}
+
+static int tegra_put_excl_syncpt(struct drm_device *drm, void *data,
+				 struct drm_file *file)
+{
+	struct tegra_drm_file *fpriv = file->driver_priv;
+	struct drm_tegra_put_exclusive_syncpt *args = data;
+	struct tegra_drm_context *context;
+	struct host1x_syncpt *syncpt;
+	int ret = 0;
+
+	mutex_lock(&fpriv->lock);
+
+	context = idr_find(&fpriv->contexts, args->context);
+	if (!context) {
+		ret = -ENOENT;
+		goto unlock;
+	}
+
+	syncpt = idr_find(&context->syncpts, args->index);
+	if (!syncpt) {
+		ret = -ENOENT;
+		goto unlock;
+	}
+
+	idr_remove(&context->syncpts, args->index);
+	host1x_syncpt_put(syncpt);
+unlock:
+	mutex_unlock(&fpriv->lock);
+
+	return ret;
+}
 #endif
 
 static const struct drm_ioctl_desc tegra_drm_ioctls[] = {
@@ -1510,6 +1628,10 @@ static const struct drm_ioctl_desc tegra_drm_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(TEGRA_GEM_GET_FLAGS, tegra_gem_get_flags,
 			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(TEGRA_GEM_CPU_PREP, tegra_gem_cpu_prep,
+			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(TEGRA_GET_EXCLUSIVE_SYNCPT, tegra_get_excl_syncpt,
+			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(TEGRA_PUT_EXCLUSIVE_SYNCPT, tegra_put_excl_syncpt,
 			  DRM_UNLOCKED | DRM_RENDER_ALLOW),
 #endif
 };
