@@ -86,6 +86,22 @@ struct drm_tegra_get_syncpt_base {
 	__u32 id;
 };
 
+#define DRM_TEGRA_EXCL_SYNCPT_WITH_BASE	(1 << 0)
+
+struct drm_tegra_get_exclusive_syncpt {
+	__u64 context;
+	__u32 flags;
+	__u32 index;
+	__u32 value;
+	__u32 id;
+};
+
+struct drm_tegra_put_exclusive_syncpt {
+	__u64 context;
+	__u32 index;
+	__u32 pad;
+};
+
 struct drm_tegra_syncpt {
 	__u32 id;
 	__u32 incrs;
@@ -207,6 +223,8 @@ struct drm_tegra_gem_cpu_prep {
 #define DRM_TEGRA_GEM_SET_FLAGS		0x0c
 #define DRM_TEGRA_GEM_GET_FLAGS		0x0d
 #define DRM_TEGRA_GEM_CPU_PREP		0x0e
+#define DRM_TEGRA_GET_EXCLUSIVE_SYNCPT	0x0f
+#define DRM_TEGRA_PUT_EXCLUSIVE_SYNCPT	0x10
 
 #define DRM_IOCTL_TEGRA_GEM_CREATE DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_CREATE, struct drm_tegra_gem_create)
 #define DRM_IOCTL_TEGRA_GEM_MMAP DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_MMAP, struct drm_tegra_gem_mmap)
@@ -223,6 +241,8 @@ struct drm_tegra_gem_cpu_prep {
 #define DRM_IOCTL_TEGRA_GEM_SET_FLAGS DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_SET_FLAGS, struct drm_tegra_gem_set_flags)
 #define DRM_IOCTL_TEGRA_GEM_GET_FLAGS DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_GET_FLAGS, struct drm_tegra_gem_get_flags)
 #define DRM_IOCTL_TEGRA_GEM_CPU_PREP DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_CPU_PREP, struct drm_tegra_gem_get_flags)
+#define DRM_IOCTL_TEGRA_GET_EXCLUSIVE_SYNCPT DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GET_EXCLUSIVE_SYNCPT, struct drm_tegra_get_exclusive_syncpt)
+#define DRM_IOCTL_TEGRA_PUT_EXCLUSIVE_SYNCPT DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_PUT_EXCLUSIVE_SYNCPT, struct drm_tegra_put_exclusive_syncpt)
 
 #if defined(__cplusplus)
 }
