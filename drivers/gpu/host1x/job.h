@@ -25,6 +25,7 @@ struct host1x_job_gather {
 	struct host1x_bo *bo;
 	u32 offset;
 	bool handled;
+	u32 class;
 };
 
 struct host1x_job_unpin_data {

@@ -70,7 +70,7 @@ struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
 	mem += num_relocs * sizeof(struct host1x_reloc);
 	job->unpins = num_unpins ? mem : NULL;
 	mem += num_unpins * sizeof(struct host1x_job_unpin_data);
-	job->waitchk = num_waitchks ? mem : NULL;
+	job->waitchks = num_waitchks ? mem : NULL;
 	mem += num_waitchks * sizeof(struct host1x_waitchk);
 	job->gathers = num_cmdbufs ? mem : NULL;
 	mem += num_cmdbufs * sizeof(struct host1x_job_gather);
@@ -109,13 +109,14 @@ void host1x_job_put(struct host1x_job *job)
 EXPORT_SYMBOL(host1x_job_put);
 
 void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *bo,
-			   u32 words, u32 offset)
+			   u32 words, u32 offset, u32 class)
 {
 	struct host1x_job_gather *cur_gather = &job->gathers[job->num_gathers];
 
 	cur_gather->words = words;
 	cur_gather->bo = bo;
 	cur_gather->offset = offset;
+	cur_gather->class = class;
 	job->num_gathers++;
 }
 EXPORT_SYMBOL(host1x_job_add_gather);

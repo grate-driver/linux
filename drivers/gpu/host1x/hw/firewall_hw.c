@@ -177,13 +177,13 @@ fail:
 	return -EINVAL;
 }
 
-static int check_class(struct host1x_firewall *fw)
+static int check_class(struct host1x_firewall *fw, u32 class)
 {
 	if (!fw->job->is_valid_class)
 		return 0;
 
-	if (!fw->job->is_valid_class(fw->class)) {
-		FW_ERR("Invalid class ID 0x%X\n", fw->class);
+	if (!fw->job->is_valid_class(class)) {
+		FW_ERR("Invalid class ID 0x%X\n", class);
 		return -EINVAL;
 	}
 
@@ -271,6 +271,15 @@ static int firewall_validate_gather(struct host1x_firewall *fw,
 	fw->cmdbuf = g->bo;
 	fw->offset = 0;
 
+	if (g->class != fw->class) {
+		if (check_class(fw, g->class)) {
+			FW_ERR("Gather has invalid class ID 0x%X\n", g->class);
+			return -EINVAL;
+		}
+
+		fw->class = g->class;
+	}
+
 	while (fw->words && !ret) {
 		u32 word = cmdbuf_base[fw->offset];
 		u32 opcode = (word & 0xf0000000) >> 28;
@@ -282,15 +291,6 @@ static int firewall_validate_gather(struct host1x_firewall *fw,
 		fw->offset++;
 
 		switch (opcode) {
-		case HOST1X_OPCODE_SETCLASS:
-			fw->class = word >> 6 & 0x3ff;
-			fw->mask = word & 0x3f;
-			fw->reg = word >> 16 & 0xfff;
-			ret = check_class(fw);
-			if (ret == 0)
-				ret = check_mask(fw);
-			break;
-
 		case HOST1X_OPCODE_INCR:
 			fw->reg = word >> 16 & 0xfff;
 			fw->count = word & 0xffff;
@@ -316,6 +316,7 @@ static int firewall_validate_gather(struct host1x_firewall *fw,
 				fw->offset--;
 			break;
 
+		case HOST1X_OPCODE_SETCLASS:
 		case HOST1X_OPCODE_RESTART:
 		case HOST1X_OPCODE_GATHER:
 		case HOST1X_OPCODE_EXTEND:

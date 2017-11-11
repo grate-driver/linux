@@ -225,8 +225,8 @@ static void show_channel_gathers(struct output *o, struct host1x_cdma *cdma)
 				continue;
 			}
 
-			host1x_debug_output(o, "    GATHER at %pad+%#x, %d words\n",
-					    &g->base, g->offset, g->words);
+			host1x_debug_output(o, "    GATHER at %pad+%#x, %d words, class 0x%X\n",
+					    &g->base, g->offset, g->words, g->class);
 
 			show_gather(o, g->base + g->offset, g->words, g->base,
 				    mapped);
