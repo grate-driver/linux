@@ -443,7 +443,7 @@ int host1x_syncpt_init(struct host1x *host)
  * host1x client drivers can use this function to allocate a syncpoint for
  * subsequent use. A syncpoint returned by this function will be reserved for
  * use by the client exclusively. When no longer using a syncpoint, a host1x
- * client driver needs to release it using host1x_syncpt_free().
+ * client driver needs to release it using host1x_syncpt_put().
  */
 struct host1x_syncpt *host1x_syncpt_request(struct host1x_client *client,
 					    unsigned long flags)
@@ -492,6 +492,7 @@ struct host1x_syncpt *host1x_syncpt_request(struct host1x_client *client,
 		base = host1x_get_unused_base(host);
 	mutex_unlock(&host->syncpt_mutex);
 
+	kref_init(&sp->refcount);
 	sp->client_managed = managed;
 	sp->base = base;
 	sp->name = name;
@@ -507,50 +508,6 @@ err_free_name:
 	return ERR_PTR(err);
 }
 EXPORT_SYMBOL(host1x_syncpt_request);
-
-/**
- * host1x_syncpt_free() - free a requested syncpoint
- * @sp: host1x syncpoint
- *
- * Release a syncpoint previously allocated using host1x_syncpt_request(). A
- * host1x client driver should call this when the syncpoint is no longer in
- * use. Note that client drivers must ensure that the syncpoint doesn't remain
- * under the control of hardware after calling this function, otherwise two
- * clients may end up trying to access the same syncpoint concurrently.
- */
-void host1x_syncpt_free(struct host1x_syncpt *sp)
-{
-	bool up_base = false;
-	u32 value;
-
-	mutex_lock(&sp->host->syncpt_mutex);
-
-	kfree(sp->name);
-
-	if (sp->client_managed) {
-		sp->client_managed = false;
-
-		/* sync cached values with HW */
-		value = host1x_hw_syncpt_load(sp->host, sp->id);
-		atomic_set(&sp->min_val, value);
-		atomic_set(&sp->max_val, value);
-	}
-
-	clear_bit(sp->id, sp->host->requested_syncpts);
-
-	if (sp->base) {
-		clear_bit(sp->base->id, sp->host->requested_bases);
-		up_base = true;
-	}
-
-	mutex_unlock(&sp->host->syncpt_mutex);
-
-	if (up_base)
-		up(&sp->host->syncpt_base_sema);
-
-	up(&sp->host->syncpt_sema);
-}
-EXPORT_SYMBOL(host1x_syncpt_free);
 
 void host1x_syncpt_deinit(struct host1x *host)
 {
@@ -625,18 +582,18 @@ unsigned int host1x_syncpt_nb_mlocks(struct host1x *host)
 }
 
 /**
- * host1x_syncpt_get() - obtain a syncpoint by ID
+ * host1x_syncpt_get_by_id() - obtain a syncpoint by ID
  * @host: host1x controller
  * @id: syncpoint ID
  */
-struct host1x_syncpt *host1x_syncpt_get(struct host1x *host, u32 id)
+struct host1x_syncpt *host1x_syncpt_get_by_id(struct host1x *host, u32 id)
 {
 	if (id >= host->info->nb_pts)
 		return NULL;
 
 	return host->syncpts + id;
 }
-EXPORT_SYMBOL(host1x_syncpt_get);
+EXPORT_SYMBOL(host1x_syncpt_get_by_id);
 
 /**
  * host1x_syncpt_get_base() - obtain the wait base associated with a syncpoint
@@ -657,3 +614,71 @@ u32 host1x_syncpt_base_id(struct host1x_syncpt_base *base)
 	return base->id;
 }
 EXPORT_SYMBOL(host1x_syncpt_base_id);
+
+/**
+ * host1x_syncpt_get() - reference a requested syncpoint
+ * @sp: host1x syncpoint
+ *
+ * Bump syncpoints reference counter.
+ */
+struct host1x_syncpt * host1x_syncpt_get(struct host1x_syncpt *sp)
+{
+	kref_get(&sp->refcount);
+
+	return sp;
+}
+EXPORT_SYMBOL(host1x_syncpt_get);
+
+/*
+ * Release a syncpoint previously allocated using host1x_syncpt_request().
+ * Note that client drivers must ensure that the syncpoint doesn't remain
+ * under the control of hardware, otherwise two clients may end up trying
+ * to access the same syncpoint concurrently.
+ */
+static void release_syncpoint(struct kref *kref)
+{
+	struct host1x_syncpt *sp = container_of(kref, struct host1x_syncpt,
+						refcount);
+	struct host1x *host = sp->host;
+	bool up_base = false;
+	u32 value;
+
+	mutex_lock(&host->syncpt_mutex);
+
+	kfree(sp->name);
+
+	if (sp->client_managed) {
+		sp->client_managed = false;
+
+		/* sync cached values with HW */
+		value = host1x_hw_syncpt_load(host, sp->id);
+		atomic_set(&sp->min_val, value);
+		atomic_set(&sp->max_val, value);
+	}
+
+	clear_bit(sp->id, host->requested_syncpts);
+
+	if (sp->base) {
+		clear_bit(sp->base->id, host->requested_bases);
+		up_base = true;
+	}
+
+	mutex_unlock(&host->syncpt_mutex);
+
+	if (up_base)
+		up(&host->syncpt_base_sema);
+
+	up(&host->syncpt_sema);
+}
+
+/**
+ * host1x_syncpt_put() - unreference a requested syncpoint
+ * @sp: host1x syncpoint
+ *
+ * Unreference syncpoint, freeing it when refcount drops to 0.
+ */
+void host1x_syncpt_put(struct host1x_syncpt *sp)
+{
+	kref_put(&sp->refcount, release_syncpoint);
+}
+EXPORT_SYMBOL(host1x_syncpt_put);

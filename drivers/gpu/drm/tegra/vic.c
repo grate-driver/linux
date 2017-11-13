@@ -180,7 +180,7 @@ static int vic_init(struct host1x_client *client)
 	return 0;
 
 free_syncpt:
-	host1x_syncpt_free(client->syncpts[0]);
+	host1x_syncpt_put(client->syncpts[0]);
 free_channel:
 	host1x_channel_put(vic->channel);
 detach_device:
@@ -202,7 +202,7 @@ static int vic_exit(struct host1x_client *client)
 	if (err < 0)
 		return err;
 
-	host1x_syncpt_free(client->syncpts[0]);
+	host1x_syncpt_put(client->syncpts[0]);
 	host1x_channel_put(vic->channel);
 
 	if (vic->domain) {

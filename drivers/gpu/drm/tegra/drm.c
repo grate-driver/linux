@@ -751,6 +751,19 @@ static void tegra_attach_fence(struct tegra_bo_reservation *bos,
 	}
 }
 
+static int tegra_lookup_syncpoint(struct tegra_drm_context *context,
+				  unsigned int syncpt_id)
+{
+	struct host1x_client *client = &context->client->base;
+	unsigned int i;
+
+	for (i = 0; i < client->num_syncpts; i++)
+		if (host1x_syncpt_id(client->syncpts[i]) == syncpt_id)
+			return 0;
+
+	return -ENOENT;
+}
+
 int tegra_drm_submit(struct tegra_drm_context *context,
 		     struct drm_tegra_submit *args, struct drm_device *drm,
 		     struct drm_file *file)
@@ -922,10 +935,17 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		goto fail;
 	}
 
+	err = tegra_lookup_syncpoint(context, syncpt.id);
+	if (err)
+		goto fail;
+
+	host1x = dev_get_drvdata(drm->dev->parent);
+	sp = host1x_syncpt_get_by_id(host1x, syncpt.id);
+
 	job->is_addr_reg = context->client->ops->is_addr_reg;
 	job->is_valid_class = context->client->ops->is_valid_class;
 	job->syncpt_incrs = syncpt.incrs;
-	job->syncpt_id = syncpt.id;
+	job->syncpt = sp;
 	job->timeout = 10000;
 
 	if (args->timeout && args->timeout < 10000)
@@ -963,8 +983,6 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	}
 
 	/* create dma_fence for this job */
-	host1x = dev_get_drvdata(drm->dev->parent);
-	sp = host1x_syncpt_get(host1x, syncpt.id);
 	out_fence = host1x_fence_create(sp, job->syncpt_end, context_value,
 					tegra->fence_seqno++);
 
@@ -1067,7 +1085,7 @@ static int tegra_syncpt_read(struct drm_device *drm, void *data,
 	struct drm_tegra_syncpt_read *args = data;
 	struct host1x_syncpt *sp;
 
-	sp = host1x_syncpt_get(host, args->id);
+	sp = host1x_syncpt_get_by_id(host, args->id);
 	if (!sp)
 		return -EINVAL;
 
@@ -1082,7 +1100,7 @@ static int tegra_syncpt_incr(struct drm_device *drm, void *data,
 	struct drm_tegra_syncpt_incr *args = data;
 	struct host1x_syncpt *sp;
 
-	sp = host1x_syncpt_get(host1x, args->id);
+	sp = host1x_syncpt_get_by_id(host1x, args->id);
 	if (!sp)
 		return -EINVAL;
 
@@ -1096,7 +1114,7 @@ static int tegra_syncpt_wait(struct drm_device *drm, void *data,
 	struct drm_tegra_syncpt_wait *args = data;
 	struct host1x_syncpt *sp;
 
-	sp = host1x_syncpt_get(host1x, args->id);
+	sp = host1x_syncpt_get_by_id(host1x, args->id);
 	if (!sp)
 		return -EINVAL;
 

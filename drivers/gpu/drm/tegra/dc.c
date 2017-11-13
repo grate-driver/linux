@@ -2151,7 +2151,7 @@ static int tegra_dc_exit(struct host1x_client *client)
 		dc->domain = NULL;
 	}
 
-	host1x_syncpt_free(dc->syncpt);
+	host1x_syncpt_put(dc->syncpt);
 
 	return 0;
 }

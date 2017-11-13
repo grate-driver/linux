@@ -22,6 +22,7 @@
 #include <linux/atomic.h>
 #include <linux/host1x.h>
 #include <linux/kernel.h>
+#include <linux/kref.h>
 
 #include "intr.h"
 
@@ -46,6 +47,8 @@ struct host1x_syncpt {
 
 	/* interrupt data */
 	struct host1x_syncpt_intr intr;
+
+	struct kref refcount;
 };
 
 /* Initialize sync point array  */

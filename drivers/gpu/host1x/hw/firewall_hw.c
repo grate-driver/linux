@@ -168,10 +168,10 @@ static int check_register(struct host1x_firewall *fw, bool immediate,
 				return -EINVAL;
 			}
 
-			if (syncpt_id != fw->job->syncpt_id) {
+			if (syncpt_id != fw->job->syncpt->id) {
 				FW_ERR("Invalid syncpoint ID %u, "
 				       "should be %u\n",
-				       syncpt_id, fw->job->syncpt_id);
+				       syncpt_id, fw->job->syncpt->id);
 				return -EINVAL;
 			}
 

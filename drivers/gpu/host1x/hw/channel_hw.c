@@ -112,8 +112,7 @@ static void push_fences(struct host1x_channel *ch, struct host1x_job *job)
 
 static inline void synchronize_syncpt_base(struct host1x_job *job)
 {
-	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
-	struct host1x_syncpt *sp = host->syncpts + job->syncpt_id;
+	struct host1x_syncpt *sp = job->syncpt;
 	unsigned int id;
 	u32 value;
 
@@ -138,10 +137,10 @@ static int channel_submit(struct host1x_job *job)
 	struct host1x_waitlist *completed_waiter = NULL;
 	struct host1x *host = dev_get_drvdata(ch->dev->parent);
 
-	sp = host->syncpts + job->syncpt_id;
+	sp = job->syncpt;
 	trace_host1x_channel_submit(dev_name(ch->dev),
 				    job->num_gathers, job->num_relocs,
-				    job->num_waitchk, job->syncpt_id,
+				    job->num_waitchk, sp->id,
 				    job->syncpt_incrs);
 
 	/* before error checks, return current max */
@@ -174,7 +173,7 @@ static int channel_submit(struct host1x_job *job)
 		host1x_cdma_push(&ch->cdma,
 				 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
 					host1x_uclass_wait_syncpt_r(), 1),
-				 host1x_class_host_wait_syncpt(job->syncpt_id,
+				 host1x_class_host_wait_syncpt(sp->id,
 					host1x_syncpt_read_max(sp)));
 	}
 
@@ -204,7 +203,7 @@ static int channel_submit(struct host1x_job *job)
 	trace_host1x_channel_submitted(dev_name(ch->dev), prev_max, syncval);
 
 	/* schedule a submit complete interrupt */
-	host1x_intr_add_action(host, job->syncpt_id, syncval,
+	host1x_intr_add_action(host, sp->id, syncval,
 			       HOST1X_INTR_ACTION_SUBMIT_COMPLETE, ch,
 			       completed_waiter, NULL);
 
