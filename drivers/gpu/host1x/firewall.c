@@ -56,14 +56,7 @@ static void host1x_firewall_dump_gather(struct host1x *host1x,
 int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 			      struct device *dev)
 {
-	struct host1x_syncpt *sp;
 	unsigned int i;
-
-	sp = host1x_syncpt_get(host, job->syncpt_id);
-	if (!sp) {
-		FW_ERR("Jobs syncpoint ID %u is invalid\n", job->syncpt_id);
-		goto fail;
-	}
 
 	host1x_debug_output_lock();
 
@@ -136,8 +129,7 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 	for (i = 0; i < job->num_waitchk; i++) {
 		struct host1x_waitchk *wait = &job->waitchk[i];
 
-		sp = host1x_syncpt_get(host, wait->syncpt_id);
-		if (!sp) {
+		if (wait->syncpt_id != job->syncpt->id) {
 			FW_ERR("Waitcheck #%u has invalid syncpoint ID %u\n",
 			       i, wait->syncpt_id);
 			goto fail;
