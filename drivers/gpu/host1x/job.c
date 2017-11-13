@@ -293,6 +293,9 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 	unsigned int i, j;
 	struct host1x *host = dev_get_drvdata(dev->parent);
 
+	/* bump syncpoints refcount */
+	host1x_syncpt_get(job->syncpt);
+
 	/* perform basic validations */
 	err = host1x_firewall_check_job(host, job, dev);
 	if (err)
@@ -364,8 +367,12 @@ void host1x_job_unpin(struct host1x_job *job)
 		dma_free_wc(job->channel->dev, job->gather_copy_size,
 			    job->gather_copy_mapped, job->gather_copy);
 
+	if (job->syncpt)
+		host1x_syncpt_put(job->syncpt);
+
 	job->num_unpins = 0;
 	job->gather_copy_size = 0;
+	job->syncpt = NULL;
 }
 EXPORT_SYMBOL(host1x_job_unpin);
 
@@ -374,7 +381,7 @@ EXPORT_SYMBOL(host1x_job_unpin);
  */
 void host1x_job_dump(struct device *dev, struct host1x_job *job)
 {
-	dev_dbg(dev, "    SYNCPT_ID   %d\n", job->syncpt_id);
+	dev_dbg(dev, "    SYNCPT_ID   %d\n", job->syncpt->id);
 	dev_dbg(dev, "    SYNCPT_VAL  %d\n", job->syncpt_end);
 	dev_dbg(dev, "    FIRST_GET   0x%x\n", job->first_get);
 	dev_dbg(dev, "    TIMEOUT     %d\n", job->timeout);

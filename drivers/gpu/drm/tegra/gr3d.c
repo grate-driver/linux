@@ -81,7 +81,7 @@ static int gr3d_init(struct host1x_client *client)
 detach:
 	host1x_client_iommu_detach(client, gr3d->group);
 free:
-	host1x_syncpt_free(client->syncpts[0]);
+	host1x_syncpt_put(client->syncpts[0]);
 put:
 	host1x_channel_put(gr3d->channel);
 	return err;
@@ -99,7 +99,7 @@ static int gr3d_exit(struct host1x_client *client)
 		return err;
 
 	host1x_client_iommu_detach(client, gr3d->group);
-	host1x_syncpt_free(client->syncpts[0]);
+	host1x_syncpt_put(client->syncpts[0]);
 	host1x_channel_put(gr3d->channel);
 
 	return 0;
