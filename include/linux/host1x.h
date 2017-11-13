@@ -159,6 +159,7 @@ static inline size_t host1x_bo_size(struct host1x_bo *bo)
 
 #define HOST1X_SYNCPT_CLIENT_MANAGED	(1 << 0)
 #define HOST1X_SYNCPT_HAS_BASE		(1 << 1)
+#define HOST1X_SYNCPT_REQUEST_BLOCKING	(1 << 2)
 
 struct host1x_syncpt_base;
 struct host1x_syncpt;
