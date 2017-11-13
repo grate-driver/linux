@@ -423,6 +423,8 @@ int host1x_syncpt_init(struct host1x *host)
 	for (i = 0; i < host1x_syncpt_nb_bases(host); i++)
 		bases[i].id = i;
 
+	sema_init(&host->syncpt_base_sema, host1x_syncpt_nb_bases(host));
+	sema_init(&host->syncpt_sema, host1x_syncpt_nb_pts(host));
 	mutex_init(&host->syncpt_mutex);
 	host->syncpts = syncpts;
 	host->bases = bases;
@@ -447,11 +449,13 @@ struct host1x_syncpt *host1x_syncpt_request(struct host1x_client *client,
 					    unsigned long flags)
 {
 	struct host1x *host = dev_get_drvdata(client->parent->parent);
+	struct host1x_syncpt_base *base = NULL;
 	struct host1x_syncpt *sp;
+	bool blocking = !!(flags & HOST1X_SYNCPT_REQUEST_BLOCKING);
 	bool managed  = !!(flags & HOST1X_SYNCPT_CLIENT_MANAGED);
 	bool get_base = !!(flags & HOST1X_SYNCPT_HAS_BASE);
 	const char *name;
-	int err = -EBUSY;
+	int err;
 
 	name = kasprintf(GFP_KERNEL, "%s - %s%s",
 			 current->comm, dev_name(client->dev),
@@ -459,31 +463,46 @@ struct host1x_syncpt *host1x_syncpt_request(struct host1x_client *client,
 	if (!name)
 		return ERR_PTR(-ENOMEM);
 
-	mutex_lock(&host->syncpt_mutex);
-
-	sp = host1x_get_unused_syncpt(host);
-	if (!sp)
-		goto err_free_name;
-
-	if (get_base) {
-		sp->base = host1x_get_unused_base(host);
-		if (!sp->base) {
-			clear_bit(sp->id, sp->host->requested_syncpts);
+	if (blocking) {
+		err = down_interruptible(&host->syncpt_sema);
+		if (err)
 			goto err_free_name;
+
+		if (get_base) {
+			err = down_interruptible(&host->syncpt_base_sema);
+			if (err)
+				goto err_up_syncpt;
+		}
+	} else {
+		err = down_trylock(&host->syncpt_sema);
+		if (err)
+			goto err_free_name;
+
+		if (get_base) {
+			err = down_trylock(&host->syncpt_base_sema);
+			if (err)
+				goto err_up_syncpt;
 		}
 	}
 
-	sp->client_managed = managed;
-	sp->name = name;
+	mutex_lock(&host->syncpt_mutex);
+	sp = host1x_get_unused_syncpt(host);
 
+	if (get_base)
+		base = host1x_get_unused_base(host);
 	mutex_unlock(&host->syncpt_mutex);
+
+	sp->client_managed = managed;
+	sp->base = base;
+	sp->name = name;
 
 	return sp;
 
+err_up_syncpt:
+	up(&host->syncpt_sema);
+
 err_free_name:
 	kfree(name);
-
-	mutex_unlock(&host->syncpt_mutex);
 
 	return ERR_PTR(err);
 }
@@ -501,6 +520,7 @@ EXPORT_SYMBOL(host1x_syncpt_request);
  */
 void host1x_syncpt_free(struct host1x_syncpt *sp)
 {
+	bool up_base = false;
 	u32 value;
 
 	mutex_lock(&sp->host->syncpt_mutex);
@@ -520,15 +540,22 @@ void host1x_syncpt_free(struct host1x_syncpt *sp)
 
 	if (sp->base) {
 		clear_bit(sp->base->id, sp->host->requested_bases);
-		sp->base = NULL;
+		up_base = true;
 	}
 
 	mutex_unlock(&sp->host->syncpt_mutex);
+
+	if (up_base)
+		up(&sp->host->syncpt_base_sema);
+
+	up(&sp->host->syncpt_sema);
 }
 EXPORT_SYMBOL(host1x_syncpt_free);
 
 void host1x_syncpt_deinit(struct host1x *host)
 {
+	unsigned int i;
+
 	mutex_lock(&host->syncpt_mutex);
 
 	if (!bitmap_empty(host->requested_syncpts, host1x_syncpt_nb_pts(host)))
@@ -538,6 +565,12 @@ void host1x_syncpt_deinit(struct host1x *host)
 		dev_warn(host->dev, "Syncpoint base is in-use\n");
 
 	mutex_unlock(&host->syncpt_mutex);
+
+	for (i = 0; i < host1x_syncpt_nb_pts(host); i++)
+		down(&host->syncpt_sema);
+
+	for (i = 0; i < host1x_syncpt_nb_bases(host); i++)
+		down(&host->syncpt_base_sema);
 }
 
 /**
