@@ -235,13 +235,24 @@ static int channel_submit(struct host1x_job *job)
 	if (sp->base)
 		synchronize_syncpt_base(job);
 
-	syncval = host1x_syncpt_incr_max(sp, user_syncpt_incrs);
+	syncval = host1x_syncpt_incr_max(sp, user_syncpt_incrs + 1);
 
 	host1x_hw_firewall_syncpt_assign_to_channel(host, sp, ch);
 
 	job->syncpt_end = syncval;
 
 	submit_gathers(job);
+
+	/*
+	 * Append job with a syncpoint increment, ensuring that all
+	 * outstanding operations are indeed completed before next job
+	 * kicks in, otherwise jobs serialization isn't guaranteed.
+	 */
+	host1x_cdma_push(&ch->cdma,
+			 host1x_opcode_nonincr(
+				 host1x_uclass_incr_syncpt_r(), 1),
+			 host1x_uclass_incr_syncpt_cond_f(0x1) |
+			 host1x_uclass_incr_syncpt_indx_f(sp->id));
 
 	/* end CDMA submit & stash pinned hMems into sync queue */
 	host1x_cdma_end(&ch->cdma, job);
