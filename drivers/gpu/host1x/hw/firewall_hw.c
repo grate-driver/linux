@@ -89,18 +89,21 @@ static void firewall_enable_syncpt_protection(struct host1x *host)
 #endif
 }
 
-static bool check_reloc(struct host1x_reloc *reloc, struct host1x_bo *cmdbuf,
-			unsigned int offset)
+static bool check_reloc(struct host1x_firewall *fw)
 {
-	offset *= sizeof(u32);
+	struct host1x_reloc *reloc = fw->reloc;
+	size_t offset = fw->offset * sizeof(u32);
 
-	if (reloc->cmdbuf.bo != cmdbuf) {
-		FW_ERR("Doesn't belong to cmdbuf\n");
+	if (reloc->cmdbuf.index != fw->cmdbuf_index) {
+		FW_ERR("Doesn't belong to cmdbuf, reloc #%u "
+		       "index %u cmdbuf %u\n",
+		       fw->job->num_relocs - fw->num_relocs,
+		       reloc->cmdbuf.index, fw->cmdbuf_index);
 		return false;
 	}
 
 	if (reloc->cmdbuf.offset != offset) {
-		FW_ERR("Invalid command buffer offset 0x%lX\n",
+		FW_ERR("Invalid command buffer offset 0x%X\n",
 		       reloc->cmdbuf.offset);
 		return false;
 	}
@@ -130,7 +133,7 @@ static int check_register(struct host1x_firewall *fw, bool immediate,
 			return -EINVAL;
 		}
 
-		if (!check_reloc(fw->reloc, fw->cmdbuf, fw->offset))
+		if (!check_reloc(fw))
 			return -EINVAL;
 
 		fw->num_relocs--;
@@ -252,14 +255,15 @@ static int check_nonincr(struct host1x_firewall *fw)
 }
 
 static int firewall_validate_gather(struct host1x_firewall *fw,
-				    struct host1x_job_gather *g)
+				    struct host1x_job_gather *g,
+				    unsigned int cmdbuf_index)
 {
 	u32 *cmdbuf_base = fw->job->gather_copy_mapped + g->offset;
 	int ret = 0;
 
+	fw->cmdbuf_index = cmdbuf_index;
 	fw->cmdbuf_base = cmdbuf_base;
 	fw->words = g->words;
-	fw->cmdbuf = g->bo;
 	fw->offset = 0;
 
 	if (g->class != fw->class) {

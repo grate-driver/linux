@@ -107,27 +107,33 @@ struct drm_tegra_syncpt {
 	__u32 incrs;
 };
 
-struct drm_tegra_cmdbuf {
+#define DRM_TEGRA_SUBMIT_BO_WRITE_MADV		(1 << 0)
+#define DRM_TEGRA_SUBMIT_BO_IS_CMDBUF		(1 << 1)
+#define DRM_TEGRA_SUBMIT_BO_FLAGS		(DRM_TEGRA_SUBMIT_BO_IS_CMDBUF)
+
+struct drm_tegra_submit_bo {
 	__u32 handle;
+	__u32 flags;
+};
+
+struct drm_tegra_cmdbuf {
+	__u32 index;
 	__u32 offset;
 	__u32 words;
 	__u32 class_id;
 };
 
-#define DRM_TEGRA_RELOC_READ_MADV	(1 << 0)
-#define DRM_TEGRA_RELOC_FLAGS		(DRM_TEGRA_RELOC_READ_MADV)
-
 struct drm_tegra_reloc {
 	struct {
-		__u32 handle;
+		__u32 index;
 		__u32 offset;
 	} cmdbuf;
 	struct {
-		__u32 handle;
+		__u32 index;
 		__u32 offset;
 	} target;
 	__u32 shift;
-	__u32 flags;
+	__u32 pad;
 };
 
 #define DRM_TEGRA_WAITCHK_RELATIVE	(1 << 0)
@@ -149,15 +155,17 @@ struct drm_tegra_submit {
 	__u32 num_cmdbufs;
 	__u32 num_relocs;
 	__u32 num_waitchks;
+	__u32 num_bos;
 	__u32 timeout;
 	__u64 syncpts;
 	__u64 cmdbufs;
 	__u64 relocs;
 	__u64 waitchks;
+	__u64 bos;
 	__u32 fence;
 	__u32 flags;
 
-	__u32 reserved[4];	/* future expansion */
+	__u32 reserved[8];	/* future expansion */
 };
 
 #define DRM_TEGRA_GEM_TILING_MODE_PITCH 0

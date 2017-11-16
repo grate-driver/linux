@@ -99,13 +99,13 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 
 		if (reloc->target.offset & 3) {
 			FW_ERR("Relocation #%u has unaligned target "
-			       "offset %lu\n", i, reloc->target.offset);
+			       "offset %u\n", i, reloc->target.offset);
 			goto fail;
 		}
 
 		if (reloc->target.offset >= host1x_bo_size(reloc->target.bo)) {
 			FW_ERR("Relocation #%u has invalid target "
-			       "offset %lu, max %zu\n",
+			       "offset %u, max %zu\n",
 			       i, reloc->target.offset,
 			       host1x_bo_size(reloc->target.bo) - sizeof(u32));
 			goto fail;
@@ -113,15 +113,14 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 
 		if (reloc->cmdbuf.offset & 3) {
 			FW_ERR("Relocation #%u has unaligned cmdbuf "
-			       "offset %lu\n", i, reloc->cmdbuf.offset);
+			       "offset %u\n", i, reloc->cmdbuf.offset);
 			goto fail;
 		}
 
-		if (reloc->cmdbuf.offset >= host1x_bo_size(reloc->cmdbuf.bo)) {
-			FW_ERR("Relocation #%u has invalid cmdbuf "
-			       "offset %lu, max %zu\n",
-			       i, reloc->cmdbuf.offset,
-			       host1x_bo_size(reloc->cmdbuf.bo) - sizeof(u32));
+		if (reloc->cmdbuf.index >= job->num_gathers) {
+			FW_ERR("Relocation #%u has invalid gather_index %u, "
+			       "max %u\n",
+			       i, reloc->cmdbuf.index, job->num_gathers - 1);
 			goto fail;
 		}
 	}
@@ -227,7 +226,7 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 		g->offset = offset;
 
 		/* Validate jobs gather */
-		if (host1x_hw_firewall_validate(host, &fw, g)) {
+		if (host1x_hw_firewall_validate(host, &fw, g, i)) {
 			/* convert offset to number of words */
 			offset /= sizeof(u32);
 			offset += fw.offset + 1;

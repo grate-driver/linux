@@ -96,7 +96,8 @@ struct host1x_intr_ops {
 
 struct host1x_firewall_ops {
 	int (*validate_gather)(struct host1x_firewall *fw,
-			       struct host1x_job_gather *g);
+			       struct host1x_job_gather *g,
+			       unsigned int cmdbuf_index);
 	void (*enable_gather_filter)(struct host1x *host,
 				     struct host1x_channel *ch);
 	void (*syncpt_assign_to_channel)(struct host1x_syncpt *sp,
@@ -335,9 +336,10 @@ static inline void host1x_hw_show_gather(struct host1x *host, struct output *o,
 
 static inline int host1x_hw_firewall_validate(struct host1x *host,
 					      struct host1x_firewall *fw,
-					      struct host1x_job_gather *g)
+					      struct host1x_job_gather *g,
+					      unsigned int cmdbuf_index)
 {
-	return host->firewall_op->validate_gather(fw, g);
+	return host->firewall_op->validate_gather(fw, g, cmdbuf_index);
 }
 
 static inline void host1x_hw_firewall_enable_gather_filter(
