@@ -33,7 +33,7 @@ struct host1x_firewall {
 	unsigned int num_relocs;
 	struct host1x_reloc *reloc;
 
-	struct host1x_bo *cmdbuf;
+	unsigned int cmdbuf_index;
 	unsigned int offset;
 
 	int syncpt_incrs;

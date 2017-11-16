@@ -77,7 +77,6 @@ struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,
 	job->addr_phys = num_unpins ? mem : NULL;
 
 	job->reloc_addr_phys = job->addr_phys;
-	job->gather_addr_phys = &job->addr_phys[num_relocs];
 
 	return job;
 }
@@ -219,7 +218,9 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 			job->addr_phys[job->num_unpins] = phys_addr;
 		}
 
-		job->gather_addr_phys[i] = job->addr_phys[job->num_unpins];
+		/* copy_gathers() sets gathers base if firewall is enabled */
+		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL))
+			g->base = job->addr_phys[job->num_unpins];
 
 		job->unpins[job->num_unpins].bo = g->bo;
 		job->unpins[job->num_unpins].sgt = sgt;
@@ -233,23 +234,21 @@ unpin:
 	return err;
 }
 
-static int do_relocs(struct host1x_job *job, struct host1x_job_gather *g)
+static int do_relocs(struct host1x_job *job)
 {
-	int i = 0;
-	u32 last_page = ~0;
+	struct host1x_bo *cmdbuf = NULL;
 	void *cmdbuf_page_addr = NULL;
-	struct host1x_bo *cmdbuf = g->bo;
+	u32 last_page = U32_MAX;
+	int i;
 
-	/* pin & patch the relocs for one gather */
+	/* patch the relocations in jobs gathers */
 	for (i = 0; i < job->num_relocs; i++) {
 		struct host1x_reloc *reloc = &job->relocarray[i];
+		struct host1x_job_gather *g = &job->gathers[reloc->cmdbuf.index];
 		u32 reloc_addr = (job->reloc_addr_phys[i] +
 				  reloc->target.offset) >> reloc->shift;
 		u32 *target;
-
-		/* skip all other gathers */
-		if (cmdbuf != reloc->cmdbuf.bo)
-			continue;
+		u32 offset;
 
 		if (IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL)) {
 			target = job->gather_copy_mapped +
@@ -258,14 +257,27 @@ static int do_relocs(struct host1x_job *job, struct host1x_job_gather *g)
 			goto patch_reloc;
 		}
 
-		if (last_page != reloc->cmdbuf.offset >> PAGE_SHIFT) {
+		if (cmdbuf != g->bo) {
+			if (cmdbuf_page_addr) {
+				host1x_bo_kunmap(cmdbuf, last_page,
+						 cmdbuf_page_addr);
+				cmdbuf_page_addr = NULL;
+			}
+
+			last_page = U32_MAX;
+			cmdbuf = g->bo;
+		}
+
+		offset = g->offset + reloc->cmdbuf.offset;
+
+		if (last_page != offset >> PAGE_SHIFT) {
 			if (cmdbuf_page_addr)
 				host1x_bo_kunmap(cmdbuf, last_page,
 						 cmdbuf_page_addr);
 
 			cmdbuf_page_addr = host1x_bo_kmap(cmdbuf,
-					reloc->cmdbuf.offset >> PAGE_SHIFT);
-			last_page = reloc->cmdbuf.offset >> PAGE_SHIFT;
+							  offset >> PAGE_SHIFT);
+			last_page = offset >> PAGE_SHIFT;
 
 			if (unlikely(!cmdbuf_page_addr)) {
 				pr_err("Could not map cmdbuf for relocation\n");
@@ -273,7 +285,7 @@ static int do_relocs(struct host1x_job *job, struct host1x_job_gather *g)
 			}
 		}
 
-		target = cmdbuf_page_addr + (reloc->cmdbuf.offset & ~PAGE_MASK);
+		target = cmdbuf_page_addr + (offset & ~PAGE_MASK);
 patch_reloc:
 		*target = reloc_addr;
 	}
@@ -286,9 +298,8 @@ patch_reloc:
 
 int host1x_job_pin(struct host1x_job *job, struct device *dev)
 {
-	int err;
-	unsigned int i, j;
 	struct host1x *host = dev_get_drvdata(dev->parent);
+	int err;
 
 	/* bump syncpoints refcount */
 	host1x_syncpt_get(job->syncpt);
@@ -310,29 +321,7 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 	}
 
 	/* patch gathers */
-	for (i = 0; i < job->num_gathers; i++) {
-		struct host1x_job_gather *g = &job->gathers[i];
-
-		/* process each gather mem only once */
-		if (g->handled)
-			continue;
-
-		/* copy_gathers() sets gathers base if firewall is enabled */
-		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL))
-			g->base = job->gather_addr_phys[i];
-
-		for (j = i + 1; j < job->num_gathers; j++) {
-			if (job->gathers[j].bo == g->bo) {
-				job->gathers[j].handled = true;
-				job->gathers[j].base = g->base;
-			}
-		}
-
-		err = do_relocs(job, g);
-		if (err)
-			break;
-	}
-
+	err = do_relocs(job);
 out:
 	if (err)
 		host1x_job_unpin(job);

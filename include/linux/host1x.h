@@ -202,14 +202,14 @@ int host1x_job_submit(struct host1x_job *job);
 
 struct host1x_reloc {
 	struct {
-		struct host1x_bo *bo;
-		unsigned long offset;
+		u32 index;
+		u32 offset;
 	} cmdbuf;
 	struct {
 		struct host1x_bo *bo;
-		unsigned long offset;
+		u32 offset;
 	} target;
-	unsigned long shift;
+	u32 shift;
 };
 
 struct host1x_waitchk {
@@ -246,7 +246,6 @@ struct host1x_job {
 	unsigned int num_unpins;
 
 	dma_addr_t *addr_phys;
-	dma_addr_t *gather_addr_phys;
 	dma_addr_t *reloc_addr_phys;
 
 	/* Sync point, number of increments and end related to the submit */

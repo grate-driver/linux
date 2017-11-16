@@ -425,15 +425,52 @@ host1x_bo_lookup(struct drm_file *file, u32 handle)
 	return &bo->base;
 }
 
-static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
-				       struct drm_tegra_reloc __user *src,
-				       struct drm_device *drm,
-				       struct drm_file *file)
+static int host1x_cmdbuf_copy_from_user(struct drm_tegra_cmdbuf *dest,
+					u32 *dest_index,
+					struct drm_tegra_cmdbuf __user *src,
+					struct tegra_bo_reservation *resv,
+					unsigned int num_bos)
 {
-	u32 cmdbuf, target;
+	u32 bo_index;
 	int err;
 
-	err = get_user(cmdbuf, &src->cmdbuf.handle);
+	err = get_user(dest->words, &src->words);
+	if (err < 0)
+		return err;
+
+	err = get_user(dest->offset, &src->offset);
+	if (err < 0)
+		return err;
+
+	err = get_user(dest->class_id, &src->class_id);
+	if (err < 0)
+		return err;
+
+	err = get_user(bo_index, &src->index);
+	if (err < 0)
+		return err;
+
+	if (bo_index >= num_bos)
+		return -EINVAL;
+
+	/* userspace must explicitly denote command BO's */
+	if (!resv[bo_index].cmdbuf)
+		return -EINVAL;
+
+	*dest_index = bo_index;
+
+	return 0;
+}
+
+static int host1x_reloc_copy_from_user(struct host1x_reloc *dest,
+				       struct drm_tegra_reloc __user *src,
+				       struct tegra_bo_reservation *resv,
+				       unsigned int num_bos)
+{
+	u32 bo_index;
+	int err;
+
+	err = get_user(dest->cmdbuf.index, &src->cmdbuf.index);
 	if (err < 0)
 		return err;
 
@@ -441,7 +478,7 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 	if (err < 0)
 		return err;
 
-	err = get_user(target, &src->target.handle);
+	err = get_user(bo_index, &src->target.index);
 	if (err < 0)
 		return err;
 
@@ -453,17 +490,13 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 	if (err < 0)
 		return err;
 
-	err = get_user(*flags, &src->flags);
-	if (err < 0)
-		return err;
+	if (bo_index >= num_bos)
+		return -EINVAL;
 
-	dest->cmdbuf.bo = host1x_bo_lookup(file, cmdbuf);
-	if (!dest->cmdbuf.bo)
-		return -ENOENT;
+	if (resv[bo_index].cmdbuf)
+		return -EINVAL;
 
-	dest->target.bo = host1x_bo_lookup(file, target);
-	if (!dest->target.bo)
-		return -ENOENT;
+	dest->target.bo = &resv[bo_index].bo->base;
 
 	return 0;
 }
@@ -501,6 +534,7 @@ static int tegra_append_bo_reservations(struct tegra_bo_reservation *resv,
 					bool write, bool cmdbuf, bool skip)
 {
 	if (bo->resv_pending) {
+		/* forbid a non-cmdbuf BO to be used as cmdbuf */
 		if (resv[bo->resv_index].cmdbuf != cmdbuf)
 			return -EINVAL;
 
@@ -786,11 +820,13 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		     struct drm_tegra_submit *args, struct drm_device *drm,
 		     struct drm_file *file)
 {
+	unsigned int num_bos = args->num_bos;
 	unsigned int num_cmdbufs = args->num_cmdbufs;
 	unsigned int num_relocs = args->num_relocs;
 	unsigned int num_waitchks = args->num_waitchks;
 	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct tegra_drm *tegra = drm->dev_private;
+	struct drm_tegra_submit_bo __user *user_bos;
 	struct drm_tegra_cmdbuf __user *user_cmdbufs;
 	struct drm_tegra_reloc __user *user_relocs;
 	struct drm_tegra_waitchk __user *user_waitchks;
@@ -803,10 +839,11 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	struct ww_acquire_ctx acquire_ctx;
 	struct dma_fence *out_fence;
 	struct dma_fence *in_fence;
-	unsigned int num_bos;
 	u64 context_value;
-	int err;
+	unsigned int i;
+	int err = 0;
 
+	user_bos = u64_to_user_ptr(args->bos);
 	user_cmdbufs = u64_to_user_ptr(args->cmdbufs);
 	user_relocs = u64_to_user_ptr(args->relocs);
 	user_waitchks = u64_to_user_ptr(args->waitchks);
@@ -847,8 +884,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 			goto put;
 	}
 
-	num_bos = num_cmdbufs + num_relocs * 2;
-
+	/* reservation will hold reduced */
 	reservations = kmalloc_array(num_bos, sizeof(*reservations),
 				     GFP_KERNEL);
 	if (!reservations) {
@@ -856,81 +892,89 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		goto put;
 	}
 
-	/* reuse as an iterator later */
-	num_bos = 0;
+	if (args->num_bos)
+		mutex_lock(&tegra->lock);
 
-	/*
-	 * We will deduplicated reserved BO's by tracking reservation status
-	 * within the BO. A lock needs to be held since multiple clients could
-	 * issue submit simultaneously, tampering each others BO reservation
-	 * state.
-	 */
-	mutex_lock(&tegra->lock);
-
-	while (num_cmdbufs) {
-		struct drm_tegra_cmdbuf cmdbuf;
+	/* copy and resolve BO's from submit */
+	for (i = 0, num_bos = 0; i < args->num_bos; i++, num_bos++) {
 		struct host1x_bo *bo;
 		struct tegra_bo *obj;
+		u32 handle, flags;
+		bool cmdbuf;
+		bool write;
 		bool skip;
 
-		if (copy_from_user(&cmdbuf, user_cmdbufs, sizeof(cmdbuf))) {
-			err = -EFAULT;
-			goto fail;
-		}
+		err = get_user(handle, &user_bos[i].handle);
+		if (err < 0)
+			break;
 
-		bo = host1x_bo_lookup(file, cmdbuf.handle);
+		err = get_user(flags, &user_bos[i].flags);
+		if (err < 0)
+			break;
+
+		bo = host1x_bo_lookup(file, handle);
 		if (!bo) {
 			err = -ENOENT;
-			goto fail;
+			break;
 		}
 
 		obj = host1x_to_tegra_bo(bo);
-
-		host1x_job_add_gather(job, bo, cmdbuf.words, cmdbuf.offset,
-				      cmdbuf.class_id);
-		num_cmdbufs--;
-		user_cmdbufs++;
+		write = !!(flags & DRM_TEGRA_SUBMIT_BO_WRITE_MADV);
+		cmdbuf = !!(flags & DRM_TEGRA_SUBMIT_BO_IS_CMDBUF);
 
 		/*
 		 * We don't care about cmdbufs reservation if firewall
-		 * is enabled because their BOs will be cloned.
+		 * is enabled because these BO's will be cloned.
 		 */
-		skip = IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL);
+		skip = (IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL) && cmdbuf);
 
-		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
-						   false, true, skip);
+		if (cmdbuf && write) {
+			drm_gem_object_put_unlocked(&obj->gem);
+			err = -EINVAL;
+			break;
+		}
+
+		err = tegra_append_bo_reservations(reservations, obj, i,
+						   write, cmdbuf, skip);
+		if (err) {
+			drm_gem_object_put_unlocked(&obj->gem);
+			break;
+		}
+	}
+
+	if (args->num_bos) {
+		while (i--)
+			reservations[i].bo->resv_pending = false;
+
+		mutex_unlock(&tegra->lock);
+
 		if (err)
 			goto fail;
 	}
 
-	/* copy and resolve relocations from submit */
-	while (num_relocs--) {
-		struct host1x_reloc *reloc;
-		struct tegra_bo *obj;
-		u32 reloc_flags;
+	/* copy and resolve cmdbufs from submit */
+	for (i = 0; i < num_cmdbufs; i++) {
+		struct drm_tegra_cmdbuf cmdbuf;
+		u32 bo_index;
 
-		err = host1x_reloc_copy_from_user(&job->relocarray[num_relocs],
-						  &reloc_flags,
-						  &user_relocs[num_relocs],
-						  drm, file);
+		err = host1x_cmdbuf_copy_from_user(&cmdbuf, &bo_index,
+						   &user_cmdbufs[i],
+						   reservations, num_bos);
 		if (err < 0)
 			goto fail;
 
-		reloc = &job->relocarray[num_relocs];
-		obj = host1x_to_tegra_bo(reloc->cmdbuf.bo);
+		host1x_job_add_gather(job,
+				      &reservations[bo_index].bo->base,
+				      cmdbuf.words, cmdbuf.offset,
+				      cmdbuf.class_id);
+	}
 
-		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
-					!(reloc_flags & DRM_TEGRA_RELOC_READ_MADV),
-					true, true);
-		if (err)
-			goto fail;
-
-		obj = host1x_to_tegra_bo(reloc->target.bo);
-
-		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
-					!(reloc_flags & DRM_TEGRA_RELOC_READ_MADV),
-					false, false);
-		if (err)
+	/* copy and resolve relocations from submit */
+	while (num_relocs--) {
+		err = host1x_reloc_copy_from_user(&job->relocarray[num_relocs],
+						  &user_relocs[num_relocs],
+						  reservations, num_bos);
+		if (err < 0)
 			goto fail;
 	}
 
@@ -1043,12 +1087,8 @@ fail_unlock:
 	tegra_unlock_bo_reservations(&acquire_ctx, reservations, num_bos);
 
 fail:
-	while (num_bos--) {
+	while (num_bos--)
 		drm_gem_object_put_unlocked(&reservations[num_bos].bo->gem);
-		reservations[num_bos].bo->resv_pending = false;
-	}
-
-	mutex_unlock(&tegra->lock);
 
 	kfree(reservations);
 
