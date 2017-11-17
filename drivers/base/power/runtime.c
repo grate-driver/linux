@@ -1371,13 +1371,13 @@ EXPORT_SYMBOL_GPL(pm_runtime_no_callbacks);
  * Set the power.irq_safe flag, which tells the PM core that the
  * ->runtime_suspend() and ->runtime_resume() callbacks for this device should
  * always be invoked with the spinlock held and interrupts disabled.  It also
- * causes the parent's usage counter to be permanently incremented, preventing
- * the parent from runtime suspending -- otherwise an irq-safe child might have
- * to wait for a non-irq-safe parent.
+ * causes the parent's usage counter to be permanently incremented, unless the
+ * parent is also irq-safe. This prevents the parent from runtime suspending,
+ * otherwise an irq-safe child might have to wait for a non-irq-safe parent.
  */
 void pm_runtime_irq_safe(struct device *dev)
 {
-	if (dev->parent)
+	if (dev->parent && !pm_runtime_is_irq_safe(dev->parent))
 		pm_runtime_get_sync(dev->parent);
 	spin_lock_irq(&dev->power.lock);
 	dev->power.irq_safe = 1;
@@ -1508,7 +1508,7 @@ void pm_runtime_reinit(struct device *dev)
 			spin_lock_irq(&dev->power.lock);
 			dev->power.irq_safe = 0;
 			spin_unlock_irq(&dev->power.lock);
-			if (dev->parent)
+			if (dev->parent && !pm_runtime_is_irq_safe(dev->parent))
 				pm_runtime_put(dev->parent);
 		}
 	}
