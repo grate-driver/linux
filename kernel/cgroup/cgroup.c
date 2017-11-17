@@ -680,6 +680,7 @@ struct css_set init_css_set = {
 	 */
 	.dfl_cgrp		= &cgrp_dfl_root.cgrp,
 };
+EXPORT_SYMBOL_GPL(init_css_set);
 
 static int css_set_count	= 1;	/* 1 for init_css_set */
 
