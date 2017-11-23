@@ -3,6 +3,7 @@
 #include <asm/unwind_hints.h>
 #include <asm/cpufeatures.h>
 #include <asm/page_types.h>
+#include <asm/pgtable_types.h>
 
 /*
 
@@ -192,16 +193,20 @@ For 32-bit we have the following conventions - kernel is built with
 #ifdef CONFIG_KAISER
 
 /* KAISER PGDs are 8k.  Flip bit 12 to switch between the two halves: */
-#define KAISER_SWITCH_MASK (1<<PAGE_SHIFT)
+#define KAISER_SWITCH_PGTABLES_MASK (1<<PAGE_SHIFT)
+#define KAISER_SWITCH_MASK     (KAISER_SWITCH_PGTABLES_MASK|\
+				(1<<X86_CR3_KAISER_SWITCH_BIT))
 
 .macro ADJUST_KERNEL_CR3 reg:req
-	/* Clear "KAISER bit", point CR3 at kernel pagetables: */
-	andq	$(~KAISER_SWITCH_MASK), \reg
+	ALTERNATIVE "", "bts $63, \reg", X86_FEATURE_PCID
+	/* Clear PCID and "KAISER bit", point CR3 at kernel pagetables: */
+	andq    $(~KAISER_SWITCH_MASK), \reg
 .endm
 
 .macro ADJUST_USER_CR3 reg:req
-	/* Move CR3 up a page to the user page tables: */
-	orq	$(KAISER_SWITCH_MASK), \reg
+	ALTERNATIVE "", "bts $63, \reg", X86_FEATURE_PCID
+	/* Set user PCID bit, and move CR3 up a page to the user page tables: */
+	orq     $(KAISER_SWITCH_MASK), \reg
 .endm
 
 .macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
@@ -220,8 +225,14 @@ For 32-bit we have the following conventions - kernel is built with
 	movq	%cr3, %r\scratch_reg
 	movq	%r\scratch_reg, \save_reg
 	/*
-	 * Is the switch bit zero?  This means the address is
-	 * up in real KAISER patches in a moment.
+	 * Is the "switch mask" all zero?  That means that both of
+	 * these are zero:
+	 *
+	 *	1. The user/kernel PCID bit, and
+	 *	2. The user/kernel "bit" that points CR3 to the
+	 *	   bottom half of the 8k PGD
+	 *
+	 * That indicates a kernel CR3 value, not user/shadow.
 	 */
 	testq	$(KAISER_SWITCH_MASK), %r\scratch_reg
 	jz	.Ldone_\@

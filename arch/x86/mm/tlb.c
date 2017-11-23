@@ -100,6 +100,68 @@ static void choose_new_asid(struct mm_struct *next, u64 next_tlb_gen,
 	*need_flush = true;
 }
 
+/*
+ * Given a kernel asid, flush the corresponding KAISER
+ * user ASID.
+ */
+static void flush_user_asid(pgd_t *pgd, u16 kern_asid)
+{
+	/* There is no user ASID if KAISER is off */
+	if (!IS_ENABLED(CONFIG_KAISER))
+		return;
+	/*
+	 * We only have a single ASID if PCID is off and the CR3
+	 * write will have flushed it.
+	 */
+	if (!cpu_feature_enabled(X86_FEATURE_PCID))
+		return;
+	/*
+	 * With PCIDs enabled, write_cr3() only flushes TLB
+	 * entries for the current (kernel) ASID.  This leaves
+	 * old TLB entries for the user ASID in place and we must
+	 * flush that context separately.  We can theoretically
+	 * delay doing this until we actually load up the
+	 * userspace CR3, but do it here for simplicity.
+	 */
+	if (cpu_feature_enabled(X86_FEATURE_INVPCID)) {
+		invpcid_flush_single_context(user_asid(kern_asid));
+	} else {
+		/*
+		 * On systems with PCIDs, but no INVPCID, the only
+		 * way to flush a PCID is a CR3 write.  Note that
+		 * we use the kernel page tables with the *user*
+		 * ASID here.
+		 */
+		unsigned long user_asid_flush_cr3;
+		user_asid_flush_cr3 = build_cr3(pgd, user_asid(kern_asid));
+		write_cr3(user_asid_flush_cr3);
+		/*
+		 * We do not use PCIDs with KAISER unless we also
+		 * have INVPCID.  Getting here is unexpected.
+		 */
+		WARN_ON_ONCE(1);
+	}
+}
+
+static void load_new_mm_cr3(pgd_t *pgdir, u16 new_asid, bool need_flush)
+{
+	unsigned long new_mm_cr3;
+
+	if (need_flush) {
+		flush_user_asid(pgdir, new_asid);
+		new_mm_cr3 = build_cr3(pgdir, new_asid);
+	} else {
+		new_mm_cr3 = build_cr3_noflush(pgdir, new_asid);
+	}
+
+	/*
+	 * Caution: many callers of this function expect
+	 * that load_cr3() is serializing and orders TLB
+	 * fills with respect to the mm_cpumask writes.
+	 */
+	write_cr3(new_mm_cr3);
+}
+
 void leave_mm(int cpu)
 {
 	struct mm_struct *loaded_mm = this_cpu_read(cpu_tlbstate.loaded_mm);
@@ -230,7 +292,7 @@ void switch_mm_irqs_off(struct mm_struct *prev, struct mm_struct *next,
 		if (need_flush) {
 			this_cpu_write(cpu_tlbstate.ctxs[new_asid].ctx_id, next->context.ctx_id);
 			this_cpu_write(cpu_tlbstate.ctxs[new_asid].tlb_gen, next_tlb_gen);
-			write_cr3(build_cr3(next->pgd, new_asid));
+			load_new_mm_cr3(next->pgd, new_asid, true);
 
 			/*
 			 * NB: This gets called via leave_mm() in the idle path
@@ -243,7 +305,7 @@ void switch_mm_irqs_off(struct mm_struct *prev, struct mm_struct *next,
 			trace_tlb_flush_rcuidle(TLB_FLUSH_ON_TASK_SWITCH, TLB_FLUSH_ALL);
 		} else {
 			/* The new ASID is already up to date. */
-			write_cr3(build_cr3_noflush(next->pgd, new_asid));
+			load_new_mm_cr3(next->pgd, new_asid, false);
 
 			/* See above wrt _rcuidle. */
 			trace_tlb_flush_rcuidle(TLB_FLUSH_ON_TASK_SWITCH, 0);
