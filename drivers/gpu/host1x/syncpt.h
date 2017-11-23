@@ -81,4 +81,7 @@ u32 host1x_syncpt_load_wait_base(struct host1x_syncpt *sp);
 /* Indicate future operations by incrementing the sync point max. */
 u32 host1x_syncpt_incr_max(struct host1x_syncpt *sp, u32 incrs);
 
+/* Update sync point form hardware and set max to that value. */
+void host1x_syncpt_sync(struct host1x_syncpt *sp);
+
 #endif

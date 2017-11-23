@@ -97,7 +97,7 @@ static void cdma_start(struct host1x_cdma *cdma)
  * state (where DMA GET is set to DMA PUT), on a timeout we restore
  * DMA GET from an explicit value (so DMA may again be pending).
  */
-static void cdma_timeout_restart(struct host1x_cdma *cdma, u32 getptr)
+static void cdma_restart(struct host1x_cdma *cdma, u32 getptr)
 {
 	struct host1x *host1x = cdma_to_host1x(cdma);
 	struct host1x_channel *ch = cdma_to_channel(cdma);
@@ -163,16 +163,11 @@ static void cdma_stop(struct host1x_cdma *cdma)
 {
 	struct host1x_channel *ch = cdma_to_channel(cdma);
 
-	mutex_lock(&cdma->lock);
-
 	if (cdma->running) {
-		host1x_cdma_wait_locked(cdma, CDMA_EVENT_SYNC_QUEUE_EMPTY);
 		host1x_ch_writel(ch, HOST1X_CHANNEL_DMACTRL_DMASTOP,
 				 HOST1X_CHANNEL_DMACTRL);
 		cdma->running = false;
 	}
-
-	mutex_unlock(&cdma->lock);
 }
 
 static void cdma_hw_cmdproc_stop(struct host1x *host, struct host1x_channel *ch,
@@ -231,11 +226,11 @@ static void cdma_hw_reset(struct host1x *host, struct host1x_client *client)
  * Stops both channel's command processor and CDMA immediately.
  * Also, tears down the channel and resets corresponding module.
  */
-static void cdma_freeze(struct host1x_cdma *cdma)
+static void cdma_freeze(struct host1x_cdma *cdma,
+			struct host1x_client *client)
 {
 	struct host1x *host = cdma_to_host1x(cdma);
 	struct host1x_channel *ch = cdma_to_channel(cdma);
-	struct host1x_client *client = cdma->timeout.client;
 
 	if (cdma->torndown && !cdma->running) {
 		dev_warn(host->dev, "Already torn down\n");
@@ -251,29 +246,27 @@ static void cdma_freeze(struct host1x_cdma *cdma)
 		host1x_ch_readl(ch, HOST1X_CHANNEL_DMAPUT),
 		cdma->last_pos);
 
-	host1x_ch_writel(ch, HOST1X_CHANNEL_DMACTRL_DMASTOP,
-			 HOST1X_CHANNEL_DMACTRL);
-
+	cdma_stop(cdma);
 	cdma_hw_teardown(host, ch);
 	cdma_hw_reset(host, client);
 
-	cdma->running = false;
 	cdma->torndown = true;
 }
 
-static void cdma_resume(struct host1x_cdma *cdma, u32 getptr)
+static void cdma_resume(struct host1x_cdma *cdma)
 {
 	struct host1x *host1x = cdma_to_host1x(cdma);
 	struct host1x_channel *ch = cdma_to_channel(cdma);
 
-	dev_dbg(host1x->dev,
-		"resuming channel (id %u, DMAGET restart = 0x%x)\n",
-		ch->id, getptr);
+	if (!cdma->torndown) {
+		dev_warn(host1x->dev, "Already resumed\n");
+		return;
+	}
+
+	dev_dbg(host1x->dev, "resuming channel (id %u)\n", ch->id);
 
 	cdma_hw_cmdproc_stop(host1x, ch, false);
-
 	cdma->torndown = false;
-	cdma_timeout_restart(cdma, getptr);
 }
 
 /*
@@ -324,7 +317,7 @@ static void cdma_timeout_handler(struct work_struct *work)
 		 syncpt_val, cdma->timeout.syncpt_val);
 
 	/* stop HW, resetting channel/module */
-	host1x_hw_cdma_freeze(host1x, cdma);
+	cdma_freeze(cdma, cdma->timeout.client);
 
 	host1x_cdma_update_sync_queue(cdma, ch->dev);
 	mutex_unlock(&cdma->lock);
@@ -361,6 +354,7 @@ static const struct host1x_cdma_ops host1x_cdma_ops = {
 	.timeout_destroy = cdma_timeout_destroy,
 	.freeze = cdma_freeze,
 	.resume = cdma_resume,
+	.restart = cdma_restart,
 	.timeout_cpu_incr = cdma_timeout_cpu_incr,
 };
 
