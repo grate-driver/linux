@@ -51,8 +51,9 @@ struct host1x_cdma_ops {
 	void (*flush)(struct  host1x_cdma *cdma);
 	int (*timeout_init)(struct host1x_cdma *cdma, unsigned int syncpt);
 	void (*timeout_destroy)(struct host1x_cdma *cdma);
-	void (*freeze)(struct host1x_cdma *cdma);
-	void (*resume)(struct host1x_cdma *cdma, u32 getptr);
+	void (*freeze)(struct host1x_cdma *cdma, struct host1x_client *client);
+	void (*resume)(struct host1x_cdma *cdma);
+	void (*restart)(struct host1x_cdma *cdma, u32 getptr);
 	void (*timeout_cpu_incr)(struct host1x_cdma *cdma, u32 getptr,
 				 u32 syncpt_incrs, u32 syncval, u32 nr_slots);
 };
@@ -274,15 +275,23 @@ static inline void host1x_hw_cdma_timeout_destroy(struct host1x *host,
 }
 
 static inline void host1x_hw_cdma_freeze(struct host1x *host,
-					 struct host1x_cdma *cdma)
+					 struct host1x_cdma *cdma,
+					 struct host1x_client *client)
 {
-	host->cdma_op->freeze(cdma);
+	host->cdma_op->freeze(cdma, client);
 }
 
 static inline void host1x_hw_cdma_resume(struct host1x *host,
-					 struct host1x_cdma *cdma, u32 getptr)
+					 struct host1x_cdma *cdma)
 {
-	host->cdma_op->resume(cdma, getptr);
+	host->cdma_op->resume(cdma);
+}
+
+static inline void host1x_hw_cdma_restart(struct host1x *host,
+					  struct host1x_cdma *cdma,
+					  u32 getptr)
+{
+	host->cdma_op->restart(cdma, getptr);
 }
 
 static inline void host1x_hw_cdma_timeout_cpu_incr(struct host1x *host,

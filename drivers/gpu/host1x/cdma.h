@@ -81,20 +81,23 @@ struct host1x_cdma {
 	bool torndown;
 };
 
-#define cdma_to_channel(cdma) container_of(cdma, struct host1x_channel, cdma)
+#define cdma_to_channel(c) container_of(c, struct host1x_channel, cdma)
 #define cdma_to_host1x(cdma) dev_get_drvdata(cdma_to_channel(cdma)->dev->parent)
 #define pb_to_cdma(pb) container_of(pb, struct host1x_cdma, push_buffer)
 
 int host1x_cdma_init(struct host1x_cdma *cdma);
 int host1x_cdma_deinit(struct host1x_cdma *cdma);
 int host1x_cdma_begin(struct host1x_cdma *cdma, struct host1x_job *job);
-void host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2);
+int host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2);
 void host1x_cdma_end(struct host1x_cdma *cdma, struct host1x_job *job);
 void host1x_cdma_update(struct host1x_cdma *cdma);
 void host1x_cdma_peek(struct host1x_cdma *cdma, u32 dmaget, int slot,
 		      u32 *out);
-unsigned int host1x_cdma_wait_locked(struct host1x_cdma *cdma,
-				     enum cdma_event event);
+int host1x_cdma_wait_locked(struct host1x_cdma *cdma,
+			    enum cdma_event event);
 void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
 				   struct device *dev);
+void host1x_cdma_reset_locked(struct host1x_cdma *cdma,
+			      struct host1x_client *client);
+
 #endif
