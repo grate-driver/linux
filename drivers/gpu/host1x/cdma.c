@@ -172,20 +172,29 @@ static u32 host1x_pushbuffer_space(struct push_buffer *pb)
  *     - Return the amount of space (> 0)
  * Must be called with the cdma lock held.
  */
-unsigned int host1x_cdma_wait_locked(struct host1x_cdma *cdma,
-				     enum cdma_event event)
+int host1x_cdma_wait_locked(struct host1x_cdma *cdma, enum cdma_event event)
 {
 	for (;;) {
 		struct push_buffer *pb = &cdma->push_buffer;
-		unsigned int space;
+		int space;
+		bool idle;
+
+		idle = list_empty(&cdma->sync_queue);
 
 		switch (event) {
 		case CDMA_EVENT_SYNC_QUEUE_EMPTY:
-			space = list_empty(&cdma->sync_queue) ? 1 : 0;
+			space = idle ? 1 : 0;
 			break;
 
 		case CDMA_EVENT_PUSH_BUFFER_SPACE:
 			space = host1x_pushbuffer_space(pb);
+
+			/*
+			 * Semaphore below will lockup channel if CMDA
+			 * is idling.
+			 */
+			if (!space && idle)
+				return -ENOSPC;
 			break;
 
 		default:
@@ -401,7 +410,8 @@ void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
 	dev_dbg(dev, "%s: finished sync_queue modification\n", __func__);
 
 	/* roll back DMAGET and start up channel again */
-	host1x_hw_cdma_resume(host1x, cdma, restart_addr);
+	host1x_hw_cdma_resume(host1x, cdma);
+	host1x_hw_cdma_restart(host1x, cdma, restart_addr);
 }
 
 /*
@@ -483,10 +493,11 @@ int host1x_cdma_begin(struct host1x_cdma *cdma, struct host1x_job *job)
  * Push two words into a push buffer slot
  * Blocks as necessary if the push buffer is full.
  */
-void host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2)
+int host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2)
 {
 	struct host1x *host1x = cdma_to_host1x(cdma);
 	struct push_buffer *pb = &cdma->push_buffer;
+	int err;
 
 	if (host1x_debug_trace_cmdbuf)
 		trace_host1x_cdma_push(dev_name(cdma_to_channel(cdma)->dev),
@@ -494,11 +505,17 @@ void host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2)
 
 	if (host1x_pushbuffer_space(pb) == 0) {
 		host1x_hw_cdma_flush(host1x, cdma);
-		host1x_cdma_wait_locked(cdma, CDMA_EVENT_PUSH_BUFFER_SPACE);
+
+		err = host1x_cdma_wait_locked(cdma,
+					      CDMA_EVENT_PUSH_BUFFER_SPACE);
+		if (err < 0)
+			return err;
 	}
 
 	cdma->slots_used++;
 	host1x_pushbuffer_push(pb, op1, op2);
+
+	return 0;
 }
 
 /*
@@ -536,4 +553,35 @@ void host1x_cdma_update(struct host1x_cdma *cdma)
 	mutex_lock(&cdma->lock);
 	update_cdma_locked(cdma);
 	mutex_unlock(&cdma->lock);
+}
+
+/*
+ * Reset channels state and the clients module
+ */
+void host1x_cdma_reset_locked(struct host1x_cdma *cdma,
+			      struct host1x_client *client)
+{
+	struct host1x *host = cdma_to_host1x(cdma);
+
+	/*
+	 * There is no need to reset channel if CDMA hasn't been flushed.
+	 * In that case simply revert back pushbufs pointer to the initial
+	 * state.
+	 */
+	if (cdma->last_pos == cdma->first_get) {
+		cdma->push_buffer.pos = cdma->first_get;
+		return;
+	}
+
+	/* wait for jobs completion, if any */
+	host1x_cdma_wait_locked(cdma, CDMA_EVENT_SYNC_QUEUE_EMPTY);
+
+	/* stop the channel and reset client */
+	host1x_hw_cdma_freeze(host, cdma, client);
+
+	/* skip partially executed pushes */
+	host1x_pushbuffer_pop(&cdma->push_buffer, cdma->slots_used);
+
+	/* re-enable commands processor, keeping DMA stopped */
+	host1x_hw_cdma_resume(host, cdma);
 }

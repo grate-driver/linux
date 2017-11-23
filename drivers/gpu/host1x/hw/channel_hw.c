@@ -60,109 +60,135 @@ static void trace_write_gather(struct host1x_cdma *cdma, struct host1x_bo *bo,
 	}
 }
 
-static unsigned int prepend_waitchks(struct host1x_job *job,
-				     unsigned int wait_index,
-				     unsigned int gather_index,
-				     unsigned int *class)
+static int prepend_waitchks(struct host1x_job *job,
+			    unsigned int *wait_index,
+			    unsigned int gather_index,
+			    unsigned int *class)
 {
-	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
 	struct host1x_cdma *cdma = &job->channel->cdma;
+	struct host1x *host = cdma_to_host1x(cdma);
 	struct host1x_syncpt *waitchk_sp;
 	struct host1x_waitchk *waitchk;
+	unsigned int index = *wait_index;
+	int err;
 
 next_wait:
-	if (wait_index >= job->num_waitchks)
+	if (index >= job->num_waitchks)
 		goto out;
 
-	waitchk = &job->waitchks[wait_index];
+	waitchk = &job->waitchks[index];
 	waitchk_sp = host->syncpts + waitchk->syncpt_id;
 
 	if (waitchk->gather_index != gather_index)
 		goto out;
 
 	if (waitchk->relative)
-		host1x_cdma_push(cdma,
+		err = host1x_cdma_push(cdma,
 			host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
 				host1x_uclass_wait_syncpt_base_r(), 1),
 			host1x_class_host_wait_syncpt_base(waitchk->syncpt_id,
 							   waitchk_sp->base->id,
 							   waitchk->thresh));
 	else
-		host1x_cdma_push(cdma,
+		err = host1x_cdma_push(cdma,
 			host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
 				host1x_uclass_wait_syncpt_r(), 1),
 			host1x_class_host_wait_syncpt(waitchk->syncpt_id,
 						      waitchk->thresh));
+	if (err)
+		return err;
 
 	*class = HOST1X_CLASS_HOST1X;
-	wait_index++;
+	index++;
 
 	goto next_wait;
 out:
-	return wait_index;
+	*wait_index = index;
+
+	return 0;
 }
 
-static void submit_gathers(struct host1x_job *job)
+static int submit_gathers(struct host1x_job *job)
 {
 	struct host1x_cdma *cdma = &job->channel->cdma;
 	unsigned int class = 0;
 	unsigned int i, k;
+	int err;
 
 	for (i = 0, k = 0; i < job->num_gathers; i++) {
 		struct host1x_job_gather *g = &job->gathers[i];
 		u32 op1 = host1x_opcode_gather(g->words);
 		u32 op2 = g->base + g->offset;
 
-		k = prepend_waitchks(job, k, i, &class);
+		err = prepend_waitchks(job, &k, i, &class);
+		if (err)
+			return err;
 
-		if (class != g->class)
-			host1x_cdma_push(cdma,
-					 host1x_opcode_setclass(g->class, 0, 0),
-					 HOST1X_OPCODE_NOP);
+		if (class != g->class) {
+			err = host1x_cdma_push(cdma,
+					host1x_opcode_setclass(g->class, 0, 0),
+					HOST1X_OPCODE_NOP);
+			if (err)
+				return err;
+		}
 
 		trace_write_gather(cdma, g->bo, g->offset, op1 & 0xffff);
-		host1x_cdma_push(cdma, op1, op2);
+
+		err = host1x_cdma_push(cdma, op1, op2);
+		if (err)
+			return err;
 
 		class = g->class;
 	}
+
+	return 0;
 }
 
-static void channel_push_fence(struct host1x_channel *ch,
-			       struct dma_fence *fence)
+static int channel_push_fence(struct host1x_channel *ch,
+			      struct dma_fence *fence)
 {
 	struct host1x_fence *f = to_host1x_fence(fence);
 	u32 thresh = f->thresh;
 	u32 id = f->sp->id;
 
 	if (dma_fence_is_signaled(fence))
-		return;
+		return 0;
 
-	host1x_cdma_push(&ch->cdma,
-			 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
-				host1x_uclass_wait_syncpt_r(), 1),
-			 host1x_class_host_wait_syncpt(id, thresh));
+	return host1x_cdma_push(&ch->cdma,
+				host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+					host1x_uclass_wait_syncpt_r(), 1),
+				host1x_class_host_wait_syncpt(id, thresh));
 }
 
-static void push_fences(struct host1x_channel *ch, struct host1x_job *job)
+static int push_fences(struct host1x_channel *ch, struct host1x_job *job)
 {
 	struct dma_fence_array *array;
 	struct dma_fence *fence;
 	unsigned int i, k;
+	int err;
 
 	for (i = 0; i < job->num_fences; i++) {
 		fence = job->fences[i];
 		array = to_dma_fence_array(fence);
 		if (!array) {
-			channel_push_fence(ch, fence);
+			err = channel_push_fence(ch, fence);
+			if (err)
+				return err;
+
 			continue;
 		}
 
-		for (k = 0; k < array->num_fences; k++)
-			channel_push_fence(ch, array->fences[k]);
+		for (k = 0; k < array->num_fences; k++) {
+			err = channel_push_fence(ch, array->fences[k]);
+			if (err)
+				return err;
+		}
 	}
+
+	return 0;
 }
 
-static inline void synchronize_syncpt_base(struct host1x_job *job)
+static int synchronize_syncpt_base(struct host1x_job *job)
 {
 	struct host1x_syncpt *sp = job->syncpt;
 	unsigned int id;
@@ -171,23 +197,23 @@ static inline void synchronize_syncpt_base(struct host1x_job *job)
 	value = host1x_syncpt_read_max(sp);
 	id = sp->base->id;
 
-	host1x_cdma_push(&job->channel->cdma,
-			 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
-				HOST1X_UCLASS_LOAD_SYNCPT_BASE, 1),
-			 HOST1X_UCLASS_LOAD_SYNCPT_BASE_BASE_INDX_F(id) |
-			 HOST1X_UCLASS_LOAD_SYNCPT_BASE_VALUE_F(value));
+	return host1x_cdma_push(&job->channel->cdma,
+			host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+					HOST1X_UCLASS_LOAD_SYNCPT_BASE, 1),
+			HOST1X_UCLASS_LOAD_SYNCPT_BASE_BASE_INDX_F(id) |
+			HOST1X_UCLASS_LOAD_SYNCPT_BASE_VALUE_F(value));
 }
 
 static int channel_submit(struct host1x_job *job)
 {
 	struct host1x_channel *ch = job->channel;
+	struct host1x *host = cdma_to_host1x(&ch->cdma);
+	struct host1x_waitlist *completed_waiter;
 	struct host1x_syncpt *sp;
 	u32 user_syncpt_incrs = job->syncpt_incrs;
 	u32 prev_max = 0;
 	u32 syncval;
 	int err;
-	struct host1x_waitlist *completed_waiter = NULL;
-	struct host1x *host = dev_get_drvdata(ch->dev->parent);
 
 	sp = job->syncpt;
 	trace_host1x_channel_submit(dev_name(ch->dev),
@@ -201,39 +227,43 @@ static int channel_submit(struct host1x_job *job)
 	/* get submit lock */
 	err = mutex_lock_interruptible(&ch->submitlock);
 	if (err)
-		goto error;
+		return err;
 
 	completed_waiter = kzalloc(sizeof(*completed_waiter), GFP_KERNEL);
 	if (!completed_waiter) {
-		mutex_unlock(&ch->submitlock);
 		err = -ENOMEM;
-		goto error;
+		goto err_unlock;
 	}
 
 	/* begin a CDMA submit */
 	err = host1x_cdma_begin(&ch->cdma, job);
-	if (err) {
-		mutex_unlock(&ch->submitlock);
-		goto error;
-	}
+	if (err)
+		goto err_unlock;
 
 	if (job->serialize) {
 		/*
 		 * Force serialization by inserting a host wait for the
 		 * previous job to finish before this one can commence.
 		 */
-		host1x_cdma_push(&ch->cdma,
-				 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+		err = host1x_cdma_push(&ch->cdma,
+				host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
 					host1x_uclass_wait_syncpt_r(), 1),
-				 host1x_class_host_wait_syncpt(sp->id,
+				host1x_class_host_wait_syncpt(sp->id,
 					host1x_syncpt_read_max(sp)));
+		if (err)
+			goto err_reset;
 	}
 
-	push_fences(ch, job);
+	err = push_fences(ch, job);
+	if (err)
+		goto err_reset;
 
 	/* Synchronize base register to allow using it for relative waiting */
-	if (sp->base)
-		synchronize_syncpt_base(job);
+	if (sp->base) {
+		err = synchronize_syncpt_base(job);
+		if (err)
+			goto err_reset;
+	}
 
 	syncval = host1x_syncpt_incr_max(sp, user_syncpt_incrs + 1);
 
@@ -241,18 +271,22 @@ static int channel_submit(struct host1x_job *job)
 
 	job->syncpt_end = syncval;
 
-	submit_gathers(job);
+	err = submit_gathers(job);
+	if (err)
+		goto err_reset;
 
 	/*
 	 * Append job with a syncpoint increment, ensuring that all
 	 * outstanding operations are indeed completed before next job
 	 * kicks in, otherwise jobs serialization isn't guaranteed.
 	 */
-	host1x_cdma_push(&ch->cdma,
-			 host1x_opcode_nonincr(
-				 host1x_uclass_incr_syncpt_r(), 1),
-			 host1x_uclass_incr_syncpt_cond_f(0x1) |
-			 host1x_uclass_incr_syncpt_indx_f(sp->id));
+	err = host1x_cdma_push(&ch->cdma,
+			       host1x_opcode_nonincr(
+					host1x_uclass_incr_syncpt_r(), 1),
+			       host1x_uclass_incr_syncpt_cond_f(0x1) |
+			       host1x_uclass_incr_syncpt_indx_f(sp->id));
+	if (err)
+		goto err_reset;
 
 	/* end CDMA submit & stash pinned hMems into sync queue */
 	host1x_cdma_end(&ch->cdma, job);
@@ -268,8 +302,21 @@ static int channel_submit(struct host1x_job *job)
 
 	return 0;
 
-error:
+err_reset:
+	/*
+	 * Job could be partially executed, reset HW and synchronize
+	 * syncpoint to get into determined state.
+	 */
+	host1x_cdma_reset_locked(&ch->cdma, job->client);
+	host1x_syncpt_sync(sp);
+
+	/* CDMA was locked by host1x_cdma_begin() */
+	mutex_unlock(&ch->cdma.lock);
+
+err_unlock:
+	mutex_unlock(&ch->submitlock);
 	kfree(completed_waiter);
+
 	return err;
 }
 

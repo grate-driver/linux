@@ -676,3 +676,13 @@ void host1x_syncpt_put(struct host1x_syncpt *sp)
 	kref_put(&sp->refcount, release_syncpoint);
 }
 EXPORT_SYMBOL(host1x_syncpt_put);
+
+/*
+ * Update sync point form hardware and set max to that value
+ */
+void host1x_syncpt_sync(struct host1x_syncpt *sp)
+{
+	u32 value = host1x_syncpt_load(sp);
+
+	atomic_set(&sp->max_val, value);
+}
