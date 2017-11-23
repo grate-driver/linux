@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/scatterlist.h>
 #include <linux/dma-mapping.h>
@@ -166,6 +167,10 @@ static void cdma_stop(struct host1x_cdma *cdma)
 	if (cdma->running) {
 		host1x_ch_writel(ch, HOST1X_CHANNEL_DMACTRL_DMASTOP,
 				 HOST1X_CHANNEL_DMACTRL);
+
+		/* CDMA stopping is asynchronous */
+		usleep_range(1000, 2000);
+
 		cdma->running = false;
 	}
 }
