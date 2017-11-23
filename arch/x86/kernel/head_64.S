@@ -341,6 +341,14 @@ GLOBAL(early_recursion_flag)
 	.balign	PAGE_SIZE; \
 GLOBAL(name)
 
+#ifdef CONFIG_KAISER
+#define NEXT_PGD_PAGE(name) \
+	.balign 2 * PAGE_SIZE; \
+GLOBAL(name)
+#else
+#define NEXT_PGD_PAGE(name) NEXT_PAGE(name)
+#endif
+
 /* Automate the creation of 1 to 1 mapping pmd entries */
 #define PMDS(START, PERM, COUNT)			\
 	i = 0 ;						\
@@ -350,7 +358,7 @@ GLOBAL(name)
 	.endr
 
 	__INITDATA
-NEXT_PAGE(early_top_pgt)
+NEXT_PGD_PAGE(early_top_pgt)
 	.fill	511,8,0
 #ifdef CONFIG_X86_5LEVEL
 	.quad	level4_kernel_pgt - __START_KERNEL_map + _PAGE_TABLE_NOENC
@@ -364,7 +372,7 @@ NEXT_PAGE(early_dynamic_pgts)
 	.data
 
 #if defined(CONFIG_XEN_PV) || defined(CONFIG_XEN_PVH)
-NEXT_PAGE(init_top_pgt)
+NEXT_PGD_PAGE(init_top_pgt)
 	.quad   level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE_NOENC
 	.org    init_top_pgt + PGD_PAGE_OFFSET*8, 0
 	.quad   level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE_NOENC
@@ -381,7 +389,7 @@ NEXT_PAGE(level2_ident_pgt)
 	 */
 	PMDS(0, __PAGE_KERNEL_IDENT_LARGE_EXEC, PTRS_PER_PMD)
 #else
-NEXT_PAGE(init_top_pgt)
+NEXT_PGD_PAGE(init_top_pgt)
 	.fill	512,8,0
 #endif
 
