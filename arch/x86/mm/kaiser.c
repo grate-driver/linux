@@ -353,6 +353,26 @@ static void __init kaiser_init_all_pgds(void)
 	WARN_ON(__ret);							\
 } while (0)
 
+void kaiser_add_mapping_cpu_entry(int cpu)
+{
+	kaiser_add_user_map_early(get_cpu_gdt_ro(cpu), PAGE_SIZE,
+				  __PAGE_KERNEL_RO);
+
+	/* includes the entry stack */
+	kaiser_add_user_map_early(&get_cpu_entry_area(cpu)->tss,
+				  sizeof(get_cpu_entry_area(cpu)->tss),
+				  __PAGE_KERNEL | _PAGE_GLOBAL);
+
+	/* Entry code, so needs to be EXEC */
+	kaiser_add_user_map_early(&get_cpu_entry_area(cpu)->entry_trampoline,
+				  sizeof(get_cpu_entry_area(cpu)->entry_trampoline),
+				  __PAGE_KERNEL_RX | _PAGE_GLOBAL);
+
+	kaiser_add_user_map_early(&get_cpu_entry_area(cpu)->exception_stacks,
+				 sizeof(get_cpu_entry_area(cpu)->exception_stacks),
+				 __PAGE_KERNEL | _PAGE_GLOBAL);
+}
+
 extern char __per_cpu_user_mapped_start[], __per_cpu_user_mapped_end[];
 /*
  * If anything in here fails, we will likely die on one of the
@@ -393,6 +413,17 @@ void __init kaiser_init(void)
 	kaiser_add_user_map_early((void *)idt_descr.address,
 				  sizeof(gate_desc) * NR_VECTORS,
 				  __PAGE_KERNEL_RO | _PAGE_GLOBAL);
+
+	/*
+	 * We delay CPU 0's mappings because these structures are
+	 * created before the page allocator is up.  Deferring it
+	 * until here lets us use the plain page allocator
+	 * unconditionally in the page table code above.
+	 *
+	 * This is OK because kaiser_init() is called long before
+	 * we ever run userspace and need the KAISER mappings.
+	 */
+	kaiser_add_mapping_cpu_entry(0);
 }
 
 int kaiser_add_mapping(unsigned long addr, unsigned long size,

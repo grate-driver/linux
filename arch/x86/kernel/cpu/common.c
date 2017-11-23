@@ -4,6 +4,7 @@
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/percpu.h>
+#include <linux/kaiser.h>
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/delay.h>
@@ -584,6 +585,9 @@ static inline void setup_cpu_entry_area(int cpu)
 	__set_fixmap(get_cpu_entry_area_index(cpu, entry_trampoline),
 		     __pa_symbol(_entry_trampoline), PAGE_KERNEL_RX);
 #endif
+ 	/* CPU 0's mapping is done in kaiser_init() */
+	if (cpu)
+		kaiser_add_mapping_cpu_entry(cpu);
 }
 
 /* Load the original GDT from the per-cpu structure */

@@ -25,5 +25,8 @@ static inline int kaiser_add_mapping(unsigned long addr, unsigned long size,
 	return 0;
 }
 
+static inline void kaiser_add_mapping_cpu_entry(int cpu)
+{
+}
 #endif /* !CONFIG_KAISER */
 #endif /* _INCLUDE_KAISER_H */

@@ -34,6 +34,12 @@ extern int kaiser_add_mapping(unsigned long addr, unsigned long size,
 			      unsigned long flags);
 
 /**
+ *  kaiser_add_mapping_cpu_entry - map the cpu entry area
+ *  @cpu: the CPU for which the entry area is being mapped
+ */
+extern void kaiser_add_mapping_cpu_entry(int cpu);
+
+/**
  *  kaiser_remove_mapping - remove a kernel mapping from the userpage tables
  *  @addr: the start address of the range
  *  @size: the size of the range
