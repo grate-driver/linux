@@ -199,52 +199,59 @@ static void show_gather(struct output *o, phys_addr_t phys_addr,
 	}
 }
 
+static void show_job_gathers(struct output *o, struct host1x_job *job)
+{
+	unsigned int i;
+
+	host1x_debug_output(o, "\n%p: JOB, syncpt_id=%d, syncpt_val=%d, first_get=%08x, timeout=%d num_slots=%d, num_handles=%d\n",
+			    job, job->syncpt->id, job->syncpt_end,
+			    job->first_get, job->timeout,
+			    job->num_slots, job->num_unpins);
+
+	for (i = 0; i < job->num_gathers; i++) {
+		struct host1x_job_gather *g = &job->gathers[i];
+		u32 *mapped;
+
+		if (job->gather_copy_mapped)
+			mapped = job->gather_copy_mapped;
+		else
+			mapped = host1x_bo_mmap(g->bo);
+
+		if (!mapped) {
+			host1x_debug_output(o, "[could not mmap]\n");
+			continue;
+		}
+
+		host1x_debug_output(o, "    GATHER at %pad+%#x, %d words\n",
+				    &g->base, g->offset, g->words);
+
+		show_gather(o, g->base + g->offset, g->words, g->base,
+				mapped);
+
+		if (!job->gather_copy_mapped)
+			host1x_bo_munmap(g->bo, mapped);
+	}
+
+	host1x_debug_output(o, "BO's:\n");
+
+	for (i = 0; i < job->num_relocs; i++) {
+		struct host1x_job_unpin_data *unpin = &job->unpins[i];
+
+		host1x_debug_output(o, "    DMA at %pad size 0x%x\n",
+				    &job->reloc_addr_phys[i],
+				    host1x_bo_size(unpin->bo));
+	}
+}
+
 static void show_channel_gathers(struct output *o, struct host1x_cdma *cdma)
 {
 	struct host1x_job *job;
 
-	list_for_each_entry(job, &cdma->sync_queue, list) {
-		unsigned int i;
+	list_for_each_entry(job, &cdma->sync_queue, list)
+		show_job_gathers(o, job);
 
-		host1x_debug_output(o, "\n%p: JOB, syncpt_id=%d, syncpt_val=%d, first_get=%08x, timeout=%d num_slots=%d, num_handles=%d\n",
-				    job, job->syncpt->id, job->syncpt_end,
-				    job->first_get, job->timeout,
-				    job->num_slots, job->num_unpins);
-
-		for (i = 0; i < job->num_gathers; i++) {
-			struct host1x_job_gather *g = &job->gathers[i];
-			u32 *mapped;
-
-			if (job->gather_copy_mapped)
-				mapped = job->gather_copy_mapped;
-			else
-				mapped = host1x_bo_mmap(g->bo);
-
-			if (!mapped) {
-				host1x_debug_output(o, "[could not mmap]\n");
-				continue;
-			}
-
-			host1x_debug_output(o, "    GATHER at %pad+%#x, %d words\n",
-					    &g->base, g->offset, g->words);
-
-			show_gather(o, g->base + g->offset, g->words, g->base,
-				    mapped);
-
-			if (!job->gather_copy_mapped)
-				host1x_bo_munmap(g->bo, mapped);
-		}
-
-		host1x_debug_output(o, "BO's:\n");
-
-		for (i = 0; i < job->num_relocs; i++) {
-			struct host1x_job_unpin_data *unpin = &job->unpins[i];
-
-			host1x_debug_output(o, "    DMA at %pad size 0x%x\n",
-					    &job->reloc_addr_phys[i],
-					    host1x_bo_size(unpin->bo));
-		}
-	}
+	if (cdma->prepared_job)
+		show_job_gathers(o, cdma->prepared_job);
 }
 
 #if HOST1X_HW >= 6

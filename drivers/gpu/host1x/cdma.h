@@ -77,6 +77,7 @@ struct host1x_cdma {
 	struct push_buffer push_buffer;	/* channel's push buffer */
 	struct list_head sync_queue;	/* job queue */
 	struct buffer_timeout timeout;	/* channel's timeout state/wq */
+	struct host1x_job *prepared_job;/* current in-progress job */
 	bool running;
 	bool torndown;
 };
@@ -90,6 +91,7 @@ int host1x_cdma_deinit(struct host1x_cdma *cdma);
 int host1x_cdma_begin(struct host1x_cdma *cdma, struct host1x_job *job);
 int host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2);
 void host1x_cdma_end(struct host1x_cdma *cdma, struct host1x_job *job);
+void host1x_cdma_end_abort(struct host1x_cdma *cdma, struct host1x_job *job);
 void host1x_cdma_update(struct host1x_cdma *cdma);
 void host1x_cdma_peek(struct host1x_cdma *cdma, u32 dmaget, int slot,
 		      u32 *out);
