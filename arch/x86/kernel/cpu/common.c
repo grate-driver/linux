@@ -503,6 +503,22 @@ static void set_percpu_fixmap_pages(int fixmap_index, void *ptr, int pages, pgpr
 DEFINE_PER_CPU(struct cpu_entry_area *, cpu_entry_area);
 #endif
 
+#ifdef CONFIG_X86_64
+/*
+ * Special IST stacks which the CPU switches to when it calls
+ * an IST-marked descriptor entry. Up to 7 stacks (hardware
+ * limit), all of them are 4K, except the debug stack which
+ * is 8K.
+ */
+static const unsigned int exception_stack_sizes[N_EXCEPTION_STACKS] = {
+	  [0 ... N_EXCEPTION_STACKS - 1]	= EXCEPTION_STKSZ,
+	  [DEBUG_STACK - 1]			= DEBUG_STKSZ
+};
+
+static DEFINE_PER_CPU_PAGE_ALIGNED(char, exception_stacks
+	[(N_EXCEPTION_STACKS - 1) * EXCEPTION_STKSZ + DEBUG_STKSZ]);
+#endif
+
 /* Setup the fixmap mappings only once per-processor */
 static inline void setup_cpu_entry_area(int cpu)
 {
@@ -557,6 +573,14 @@ static inline void setup_cpu_entry_area(int cpu)
 #endif
 
 #ifdef CONFIG_X86_64
+	BUILD_BUG_ON(sizeof(exception_stacks) % PAGE_SIZE != 0);
+	BUILD_BUG_ON(sizeof(exception_stacks) !=
+		     sizeof(((struct cpu_entry_area *)0)->exception_stacks));
+	set_percpu_fixmap_pages(get_cpu_entry_area_index(cpu, exception_stacks),
+				&per_cpu(exception_stacks, cpu),
+				sizeof(exception_stacks) / PAGE_SIZE,
+				PAGE_KERNEL);
+
 	__set_fixmap(get_cpu_entry_area_index(cpu, entry_trampoline),
 		     __pa_symbol(_entry_trampoline), PAGE_KERNEL_RX);
 #endif
@@ -1407,20 +1431,6 @@ DEFINE_PER_CPU(unsigned int, irq_count) __visible = -1;
 DEFINE_PER_CPU(int, __preempt_count) = INIT_PREEMPT_COUNT;
 EXPORT_PER_CPU_SYMBOL(__preempt_count);
 
-/*
- * Special IST stacks which the CPU switches to when it calls
- * an IST-marked descriptor entry. Up to 7 stacks (hardware
- * limit), all of them are 4K, except the debug stack which
- * is 8K.
- */
-static const unsigned int exception_stack_sizes[N_EXCEPTION_STACKS] = {
-	  [0 ... N_EXCEPTION_STACKS - 1]	= EXCEPTION_STKSZ,
-	  [DEBUG_STACK - 1]			= DEBUG_STKSZ
-};
-
-static DEFINE_PER_CPU_PAGE_ALIGNED(char, exception_stacks
-	[(N_EXCEPTION_STACKS - 1) * EXCEPTION_STKSZ + DEBUG_STKSZ]);
-
 /* May not be marked __init: used by software suspend */
 void syscall_init(void)
 {
@@ -1629,7 +1639,7 @@ void cpu_init(void)
 	 * set up and load the per-CPU TSS
 	 */
 	if (!oist->ist[0]) {
-		char *estacks = per_cpu(exception_stacks, cpu);
+		char *estacks = get_cpu_entry_area(cpu)->exception_stacks;
 
 		for (v = 0; v < N_EXCEPTION_STACKS; v++) {
 			estacks += exception_stack_sizes[v];
