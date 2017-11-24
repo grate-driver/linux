@@ -94,7 +94,7 @@ void host1x_cdma_update(struct host1x_cdma *cdma);
 void host1x_cdma_peek(struct host1x_cdma *cdma, u32 dmaget, int slot,
 		      u32 *out);
 int host1x_cdma_wait_locked(struct host1x_cdma *cdma,
-			    enum cdma_event event);
+			    enum cdma_event event, bool interruptible);
 void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
 				   struct device *dev);
 void host1x_cdma_reset_locked(struct host1x_cdma *cdma,
