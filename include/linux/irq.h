@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _LINUX_IRQ_H
 #define _LINUX_IRQ_H
 
@@ -1009,7 +1010,7 @@ void irq_gc_mask_clr_bit(struct irq_data *d);
 void irq_gc_unmask_enable_reg(struct irq_data *d);
 void irq_gc_ack_set_bit(struct irq_data *d);
 void irq_gc_ack_clr_bit(struct irq_data *d);
-void irq_gc_mask_disable_reg_and_ack(struct irq_data *d);
+void irq_gc_mask_disable_and_ack_set(struct irq_data *d);
 void irq_gc_eoi(struct irq_data *d);
 int irq_gc_set_wake(struct irq_data *d, unsigned int on);
 
@@ -1112,6 +1113,28 @@ static inline u32 irq_reg_readl(struct irq_chip_generic *gc,
 	else
 		return readl(gc->reg_base + reg_offset);
 }
+
+struct irq_matrix;
+struct irq_matrix *irq_alloc_matrix(unsigned int matrix_bits,
+				    unsigned int alloc_start,
+				    unsigned int alloc_end);
+void irq_matrix_online(struct irq_matrix *m);
+void irq_matrix_offline(struct irq_matrix *m);
+void irq_matrix_assign_system(struct irq_matrix *m, unsigned int bit, bool replace);
+int irq_matrix_reserve_managed(struct irq_matrix *m, const struct cpumask *msk);
+void irq_matrix_remove_managed(struct irq_matrix *m, const struct cpumask *msk);
+int irq_matrix_alloc_managed(struct irq_matrix *m, unsigned int cpu);
+void irq_matrix_reserve(struct irq_matrix *m);
+void irq_matrix_remove_reserved(struct irq_matrix *m);
+int irq_matrix_alloc(struct irq_matrix *m, const struct cpumask *msk,
+		     bool reserved, unsigned int *mapped_cpu);
+void irq_matrix_free(struct irq_matrix *m, unsigned int cpu,
+		     unsigned int bit, bool managed);
+void irq_matrix_assign(struct irq_matrix *m, unsigned int bit);
+unsigned int irq_matrix_available(struct irq_matrix *m, bool cpudown);
+unsigned int irq_matrix_allocated(struct irq_matrix *m);
+unsigned int irq_matrix_reserved(struct irq_matrix *m);
+void irq_matrix_debug_show(struct seq_file *sf, struct irq_matrix *m, int ind);
 
 /* Contrary to Linux irqs, for hardware irqs the irq number 0 is valid */
 #define INVALID_HWIRQ	(~0UL)

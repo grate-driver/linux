@@ -85,6 +85,8 @@ EXPORT_SYMBOL_GPL(hyperv_cs);
 u32 *hv_vp_index;
 EXPORT_SYMBOL_GPL(hv_vp_index);
 
+u32 hv_max_vp_index;
+
 static int hv_cpu_init(unsigned int cpu)
 {
 	u64 msr_vp_index;
@@ -92,6 +94,9 @@ static int hv_cpu_init(unsigned int cpu)
 	hv_get_vp_index(msr_vp_index);
 
 	hv_vp_index[smp_processor_id()] = msr_vp_index;
+
+	if (msr_vp_index > hv_max_vp_index)
+		hv_max_vp_index = msr_vp_index;
 
 	return 0;
 }
@@ -108,7 +113,7 @@ void hyperv_init(void)
 	u64 guest_id;
 	union hv_x64_msr_hypercall_contents hypercall_msr;
 
-	if (x86_hyper != &x86_hyper_ms_hyperv)
+	if (x86_hyper_type != X86_HYPER_MS_HYPERV)
 		return;
 
 	/* Allocate percpu VP index */

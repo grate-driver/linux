@@ -407,10 +407,10 @@ static int mcp23s08_get(struct gpio_chip *chip, unsigned offset)
 	ret = mcp_read(mcp, MCP_GPIO, &status);
 	if (ret < 0)
 		status = 0;
-	else
+	else {
+		mcp->cached_gpio = status;
 		status = !!(status & (1 << offset));
-
-	mcp->cached_gpio = status;
+	}
 
 	mutex_unlock(&mcp->lock);
 	return status;
@@ -537,7 +537,7 @@ static irqreturn_t mcp23s08_irq(int irq, void *data)
 		    ((gpio_bit_changed || intcap_changed) &&
 			(BIT(i) & mcp->irq_fall) && !gpio_set) ||
 		    defval_changed) {
-			child_irq = irq_find_mapping(mcp->chip.irqdomain, i);
+			child_irq = irq_find_mapping(mcp->chip.irq.domain, i);
 			handle_nested_irq(child_irq);
 		}
 	}

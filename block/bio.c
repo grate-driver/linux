@@ -400,7 +400,7 @@ static void punt_bios_to_rescuer(struct bio_set *bs)
 
 /**
  * bio_alloc_bioset - allocate a bio for I/O
- * @gfp_mask:   the GFP_ mask given to the slab allocator
+ * @gfp_mask:   the GFP_* mask given to the slab allocator
  * @nr_iovecs:	number of iovecs to pre-allocate
  * @bs:		the bio_set to allocate from.
  *
@@ -917,17 +917,9 @@ int bio_iov_iter_get_pages(struct bio *bio, struct iov_iter *iter)
 }
 EXPORT_SYMBOL_GPL(bio_iov_iter_get_pages);
 
-struct submit_bio_ret {
-	struct completion event;
-	int error;
-};
-
 static void submit_bio_wait_endio(struct bio *bio)
 {
-	struct submit_bio_ret *ret = bio->bi_private;
-
-	ret->error = blk_status_to_errno(bio->bi_status);
-	complete(&ret->event);
+	complete(bio->bi_private);
 }
 
 /**
@@ -943,16 +935,15 @@ static void submit_bio_wait_endio(struct bio *bio)
  */
 int submit_bio_wait(struct bio *bio)
 {
-	struct submit_bio_ret ret;
+	DECLARE_COMPLETION_ONSTACK_MAP(done, bio->bi_disk->lockdep_map);
 
-	init_completion(&ret.event);
-	bio->bi_private = &ret;
+	bio->bi_private = &done;
 	bio->bi_end_io = submit_bio_wait_endio;
 	bio->bi_opf |= REQ_SYNC;
 	submit_bio(bio);
-	wait_for_completion_io(&ret.event);
+	wait_for_completion_io(&done);
 
-	return ret.error;
+	return blk_status_to_errno(bio->bi_status);
 }
 EXPORT_SYMBOL(submit_bio_wait);
 
@@ -1940,11 +1931,8 @@ void bioset_free(struct bio_set *bs)
 	if (bs->rescue_workqueue)
 		destroy_workqueue(bs->rescue_workqueue);
 
-	if (bs->bio_pool)
-		mempool_destroy(bs->bio_pool);
-
-	if (bs->bvec_pool)
-		mempool_destroy(bs->bvec_pool);
+	mempool_destroy(bs->bio_pool);
+	mempool_destroy(bs->bvec_pool);
 
 	bioset_integrity_free(bs);
 	bio_put_slab(bs);
@@ -2043,37 +2031,6 @@ int bio_associate_blkcg(struct bio *bio, struct cgroup_subsys_state *blkcg_css)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(bio_associate_blkcg);
-
-/**
- * bio_associate_current - associate a bio with %current
- * @bio: target bio
- *
- * Associate @bio with %current if it hasn't been associated yet.  Block
- * layer will treat @bio as if it were issued by %current no matter which
- * task actually issues it.
- *
- * This function takes an extra reference of @task's io_context and blkcg
- * which will be put when @bio is released.  The caller must own @bio,
- * ensure %current->io_context exists, and is responsible for synchronizing
- * calls to this function.
- */
-int bio_associate_current(struct bio *bio)
-{
-	struct io_context *ioc;
-
-	if (bio->bi_css)
-		return -EBUSY;
-
-	ioc = current->io_context;
-	if (!ioc)
-		return -ENOENT;
-
-	get_io_context_active(ioc);
-	bio->bi_ioc = ioc;
-	bio->bi_css = task_get_css(current, io_cgrp_id);
-	return 0;
-}
-EXPORT_SYMBOL_GPL(bio_associate_current);
 
 /**
  * bio_disassociate_task - undo bio_associate_current()

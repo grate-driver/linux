@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM sched
 
@@ -117,7 +118,7 @@ static inline long __trace_sched_switch_state(bool preempt, struct task_struct *
 	if (preempt)
 		return TASK_STATE_MAX;
 
-	return __get_task_state(p);
+	return task_state_index(p);
 }
 #endif /* CREATE_TRACE_POINTS */
 

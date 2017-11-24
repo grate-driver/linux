@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/mm/vmscan.c
  *
@@ -1867,7 +1868,7 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 		 * also allow kswapd to start writing pages during reclaim.
 		 */
 		if (stat.nr_unqueued_dirty == nr_taken) {
-			wakeup_flusher_threads(0, WB_REASON_VMSCAN);
+			wakeup_flusher_threads(WB_REASON_VMSCAN);
 			set_bit(PGDAT_DIRTY, &pgdat->flags);
 		}
 

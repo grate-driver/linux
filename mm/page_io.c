@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/mm/page_io.c
  *
@@ -407,7 +408,7 @@ int swap_readpage(struct page *page, bool do_poll)
 		if (!READ_ONCE(bio->bi_private))
 			break;
 
-		if (!blk_mq_poll(disk->queue, qc))
+		if (!blk_poll(disk->queue, qc))
 			break;
 	}
 	__set_current_state(TASK_RUNNING);

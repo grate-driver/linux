@@ -768,8 +768,7 @@ static void vmbus_device_release(struct device *device)
 	struct vmbus_channel *channel = hv_dev->channel;
 
 	mutex_lock(&vmbus_connection.channel_mutex);
-	hv_process_channel_removal(channel,
-				   channel->offermsg.child_relid);
+	hv_process_channel_removal(channel->offermsg.child_relid);
 	mutex_unlock(&vmbus_connection.channel_mutex);
 	kfree(hv_dev);
 
@@ -1535,7 +1534,7 @@ static int __init hv_acpi_init(void)
 {
 	int ret, t;
 
-	if (x86_hyper != &x86_hyper_ms_hyperv)
+	if (x86_hyper_type != X86_HYPER_MS_HYPERV)
 		return -ENODEV;
 
 	init_completion(&probe_event);

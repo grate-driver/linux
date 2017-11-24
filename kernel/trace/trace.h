@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 
 #ifndef _LINUX_KERNEL_TRACE_H
 #define _LINUX_KERNEL_TRACE_H
@@ -1459,7 +1460,7 @@ extern struct trace_event_file *find_event_file(struct trace_array *tr,
 
 static inline void *event_file_data(struct file *filp)
 {
-	return ACCESS_ONCE(file_inode(filp)->i_private);
+	return READ_ONCE(file_inode(filp)->i_private);
 }
 
 extern struct mutex event_mutex;

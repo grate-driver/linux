@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 dtb-$(CONFIG_DT_XLP_EVP)	+= xlp_evp.dtb
 dtb-$(CONFIG_DT_XLP_SVP)	+= xlp_svp.dtb
 dtb-$(CONFIG_DT_XLP_FVP)	+= xlp_fvp.dtb
@@ -8,6 +9,3 @@ obj-y				+= $(patsubst %.dtb, %.dtb.o, $(dtb-y))
 
 # Force kbuild to make empty built-in.o if necessary
 obj-				+= dummy.o
-
-always				:= $(dtb-y)
-clean-files			:= *.dtb *.dtb.S

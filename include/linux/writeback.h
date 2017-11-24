@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * include/linux/writeback.h
  */
@@ -39,28 +40,6 @@ struct backing_dev_info;
 enum writeback_sync_modes {
 	WB_SYNC_NONE,	/* Don't wait on anything */
 	WB_SYNC_ALL,	/* Wait on every mapping */
-};
-
-/*
- * why some writeback work was initiated
- */
-enum wb_reason {
-	WB_REASON_BACKGROUND,
-	WB_REASON_VMSCAN,
-	WB_REASON_SYNC,
-	WB_REASON_PERIODIC,
-	WB_REASON_LAPTOP_TIMER,
-	WB_REASON_FREE_MORE_MEM,
-	WB_REASON_FS_FREE_SPACE,
-	/*
-	 * There is no bdi forker thread any more and works are done
-	 * by emergency worker, however, this is TPs userland visible
-	 * and we'll be exposing exactly the same information,
-	 * so it has a mismatch name.
-	 */
-	WB_REASON_FORKER_THREAD,
-
-	WB_REASON_MAX,
 };
 
 /*
@@ -185,11 +164,11 @@ struct bdi_writeback;
 void writeback_inodes_sb(struct super_block *, enum wb_reason reason);
 void writeback_inodes_sb_nr(struct super_block *, unsigned long nr,
 							enum wb_reason reason);
-bool try_to_writeback_inodes_sb(struct super_block *, enum wb_reason reason);
-bool try_to_writeback_inodes_sb_nr(struct super_block *, unsigned long nr,
-				   enum wb_reason reason);
+void try_to_writeback_inodes_sb(struct super_block *sb, enum wb_reason reason);
 void sync_inodes_sb(struct super_block *);
-void wakeup_flusher_threads(long nr_pages, enum wb_reason reason);
+void wakeup_flusher_threads(enum wb_reason reason);
+void wakeup_flusher_threads_bdi(struct backing_dev_info *bdi,
+				enum wb_reason reason);
 void inode_wait_for_writeback(struct inode *inode);
 
 /* writeback.h requires fs.h; it, too, is not included from here. */

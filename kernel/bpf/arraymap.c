@@ -98,7 +98,7 @@ static struct bpf_map *array_map_alloc(union bpf_attr *attr)
 	array_size += (u64) attr->max_entries * elem_size * num_possible_cpus();
 
 	if (array_size >= U32_MAX - PAGE_SIZE ||
-	    elem_size > PCPU_MIN_UNIT_SIZE || bpf_array_alloc_percpu(array)) {
+	    bpf_array_alloc_percpu(array)) {
 		bpf_map_area_free(array);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -492,7 +492,7 @@ static void *perf_event_fd_array_get_ptr(struct bpf_map *map,
 
 	ee = ERR_PTR(-EOPNOTSUPP);
 	event = perf_file->private_data;
-	if (perf_event_read_local(event, &value) == -EOPNOTSUPP)
+	if (perf_event_read_local(event, &value, NULL, NULL) == -EOPNOTSUPP)
 		goto err_out;
 
 	ee = bpf_event_entry_gen(perf_file, map_file);

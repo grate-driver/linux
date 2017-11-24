@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *	Mac bong noise generator. Note - we ought to put a boingy noise
  *	here 8)
@@ -56,7 +57,7 @@ static void ( *mac_special_bell )( unsigned int, unsigned int, unsigned int );
 /*
  * our timer to start/continue/stop the bell
  */
-static DEFINE_TIMER(mac_sound_timer, mac_nosound, 0, 0);
+static DEFINE_TIMER(mac_sound_timer, mac_nosound);
 
 /*
  * Sort of initialize the sound chip (called from mac_mksound on the first

@@ -405,7 +405,7 @@ void free_tx_desc(struct adapter *adap, struct sge_txq *q,
  */
 static inline int reclaimable(const struct sge_txq *q)
 {
-	int hw_cidx = ntohs(ACCESS_ONCE(q->stat->cidx));
+	int hw_cidx = ntohs(READ_ONCE(q->stat->cidx));
 	hw_cidx -= q->cidx;
 	return hw_cidx < 0 ? hw_cidx + q->size : hw_cidx;
 }
@@ -1375,7 +1375,7 @@ out_free:	dev_kfree_skb_any(skb);
  */
 static inline void reclaim_completed_tx_imm(struct sge_txq *q)
 {
-	int hw_cidx = ntohs(ACCESS_ONCE(q->stat->cidx));
+	int hw_cidx = ntohs(READ_ONCE(q->stat->cidx));
 	int reclaim = hw_cidx - q->cidx;
 
 	if (reclaim < 0)
@@ -1537,7 +1537,13 @@ int t4_mgmt_tx(struct adapter *adap, struct sk_buff *skb)
  */
 static inline int is_ofld_imm(const struct sk_buff *skb)
 {
-	return skb->len <= MAX_IMM_TX_PKT_LEN;
+	struct work_request_hdr *req = (struct work_request_hdr *)skb->data;
+	unsigned long opcode = FW_WR_OP_G(ntohl(req->wr_hi));
+
+	if (opcode == FW_CRYPTO_LOOKASIDE_WR)
+		return skb->len <= SGE_MAX_WR_LEN;
+	else
+		return skb->len <= MAX_IMM_TX_PKT_LEN;
 }
 
 /**
