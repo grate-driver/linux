@@ -56,5 +56,6 @@ void host1x_debug_init(struct host1x *host1x);
 void host1x_debug_deinit(struct host1x *host1x);
 void host1x_debug_dump(struct host1x *host1x);
 void host1x_debug_dump_syncpts(struct host1x *host1x);
+void host1x_debug_dump_channel(struct host1x_channel *ch, bool lock);
 
 #endif

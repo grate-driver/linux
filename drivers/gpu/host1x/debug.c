@@ -67,19 +67,22 @@ void host1x_debug_cont(struct output *o, const char *fmt, ...)
 	o->fn(o->ctx, o->buf, len, true);
 }
 
-static int show_channel(struct host1x_channel *ch, void *data, bool show_fifo)
+static int show_channel(struct host1x_channel *ch, void *data,
+			bool show_fifo, bool lock_cdma)
 {
 	struct host1x *m = dev_get_drvdata(ch->dev->parent);
 	struct output *o = data;
 
-	mutex_lock(&ch->cdma.lock);
+	if (lock_cdma)
+		mutex_lock(&ch->cdma.lock);
 
 	if (show_fifo)
 		host1x_hw_show_channel_fifo(m, ch, o);
 
 	host1x_hw_show_channel_cdma(m, ch, o);
 
-	mutex_unlock(&ch->cdma.lock);
+	if (lock_cdma)
+		mutex_unlock(&ch->cdma.lock);
 
 	return 0;
 }
@@ -126,7 +129,8 @@ static void show_syncpts(struct host1x *m, struct output *o)
 	mutex_unlock(&m->syncpt_mutex);
 }
 
-static void show_all(struct host1x *m, struct output *o, bool show_fifo)
+static void show_all(struct host1x *m, struct output *o,
+		     bool show_fifo)
 {
 	int i;
 
@@ -138,7 +142,7 @@ static void show_all(struct host1x *m, struct output *o, bool show_fifo)
 		struct host1x_channel *ch = host1x_channel_get_index(m, i);
 
 		if (ch) {
-			show_channel(ch, o, show_fifo);
+			show_channel(ch, o, show_fifo, true);
 			host1x_channel_put(ch);
 		}
 	}
@@ -255,5 +259,16 @@ void host1x_debug_dump_syncpts(struct host1x *host1x)
 
 	host1x_debug_output_lock();
 	show_syncpts(host1x, &o);
+	host1x_debug_output_unlock();
+}
+
+void host1x_debug_dump_channel(struct host1x_channel *ch, bool lock)
+{
+	struct output o = {
+		.fn = write_to_printk
+	};
+
+	host1x_debug_output_lock();
+	show_channel(ch, &o, true, lock);
 	host1x_debug_output_unlock();
 }
