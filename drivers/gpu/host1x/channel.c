@@ -92,7 +92,8 @@ static void release_channel(struct kref *kref)
 	struct host1x_channel_list *chlist = &host->channel_list;
 
 	mutex_lock(&channel->cdma.lock);
-	host1x_cdma_wait_locked(&channel->cdma, CDMA_EVENT_SYNC_QUEUE_EMPTY);
+	host1x_cdma_wait_locked(&channel->cdma, CDMA_EVENT_SYNC_QUEUE_EMPTY,
+				false);
 	host1x_hw_cdma_stop(host, &channel->cdma);
 	host1x_cdma_deinit(&channel->cdma);
 	mutex_unlock(&channel->cdma.lock);

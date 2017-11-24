@@ -172,14 +172,14 @@ static u32 host1x_pushbuffer_space(struct push_buffer *pb)
  *     - Return the amount of space (> 0)
  * Must be called with the cdma lock held.
  */
-int host1x_cdma_wait_locked(struct host1x_cdma *cdma, enum cdma_event event)
+int host1x_cdma_wait_locked(struct host1x_cdma *cdma, enum cdma_event event,
+			    bool interruptible)
 {
-	for (;;) {
-		struct push_buffer *pb = &cdma->push_buffer;
-		int space;
-		bool idle;
+	struct push_buffer *pb = &cdma->push_buffer;
+	int space, ret = 0;
 
-		idle = list_empty(&cdma->sync_queue);
+	do {
+		bool idle = list_empty(&cdma->sync_queue);
 
 		switch (event) {
 		case CDMA_EVENT_SYNC_QUEUE_EMPTY:
@@ -198,8 +198,7 @@ int host1x_cdma_wait_locked(struct host1x_cdma *cdma, enum cdma_event event)
 			break;
 
 		default:
-			WARN_ON(1);
-			return -EINVAL;
+			unreachable();
 		}
 
 		if (space)
@@ -219,11 +218,16 @@ int host1x_cdma_wait_locked(struct host1x_cdma *cdma, enum cdma_event event)
 		cdma->event = event;
 
 		mutex_unlock(&cdma->lock);
-		down(&cdma->sem);
-		mutex_lock(&cdma->lock);
-	}
 
-	return 0;
+		if (interruptible)
+			ret = down_interruptible(&cdma->sem);
+		else
+			down(&cdma->sem);
+
+		mutex_lock(&cdma->lock);
+	} while (ret == 0);
+
+	return ret;
 }
 
 /*
@@ -506,8 +510,8 @@ int host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2)
 	if (host1x_pushbuffer_space(pb) == 0) {
 		host1x_hw_cdma_flush(host1x, cdma);
 
-		err = host1x_cdma_wait_locked(cdma,
-					      CDMA_EVENT_PUSH_BUFFER_SPACE);
+		err = host1x_cdma_wait_locked(
+				cdma, CDMA_EVENT_PUSH_BUFFER_SPACE, true);
 		if (err < 0)
 			return err;
 	}
@@ -574,7 +578,7 @@ void host1x_cdma_reset_locked(struct host1x_cdma *cdma,
 	}
 
 	/* wait for jobs completion, if any */
-	host1x_cdma_wait_locked(cdma, CDMA_EVENT_SYNC_QUEUE_EMPTY);
+	host1x_cdma_wait_locked(cdma, CDMA_EVENT_SYNC_QUEUE_EMPTY, false);
 
 	/* stop the channel and reset client */
 	host1x_hw_cdma_freeze(host, cdma, client);
