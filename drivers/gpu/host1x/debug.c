@@ -67,19 +67,22 @@ void host1x_debug_cont(struct output *o, const char *fmt, ...)
 	o->fn(o->ctx, o->buf, len, true);
 }
 
-static int show_channel(struct host1x_channel *ch, void *data, bool show_fifo)
+static int show_channel(struct host1x_channel *ch, void *data,
+			bool show_fifo, bool lock_cdma)
 {
 	struct host1x *m = dev_get_drvdata(ch->dev->parent);
 	struct output *o = data;
 
-	mutex_lock(&ch->cdma.lock);
+	if (lock_cdma)
+		mutex_lock(&ch->cdma.lock);
 
 	if (show_fifo)
 		host1x_hw_show_channel_fifo(m, ch, o);
 
 	host1x_hw_show_channel_cdma(m, ch, o);
 
-	mutex_unlock(&ch->cdma.lock);
+	if (lock_cdma)
+		mutex_unlock(&ch->cdma.lock);
 
 	return 0;
 }
@@ -126,7 +129,8 @@ static void show_syncpts(struct host1x *m, struct output *o)
 	mutex_unlock(&m->syncpt_mutex);
 }
 
-static void show_all(struct host1x *m, struct output *o, bool show_fifo)
+static void show_all(struct host1x *m, struct output *o,
+		     bool show_fifo, bool lock_cdma)
 {
 	int i;
 
@@ -138,7 +142,7 @@ static void show_all(struct host1x *m, struct output *o, bool show_fifo)
 		struct host1x_channel *ch = host1x_channel_get_index(m, i);
 
 		if (ch) {
-			show_channel(ch, o, show_fifo);
+			show_channel(ch, o, show_fifo, lock_cdma);
 			host1x_channel_put(ch);
 		}
 	}
@@ -151,7 +155,7 @@ static int host1x_debug_show_all(struct seq_file *s, void *unused)
 		.ctx = s
 	};
 
-	show_all(s->private, &o, true);
+	show_all(s->private, &o, true, true);
 
 	return 0;
 }
@@ -163,7 +167,7 @@ static int host1x_debug_show(struct seq_file *s, void *unused)
 		.ctx = s
 	};
 
-	show_all(s->private, &o, false);
+	show_all(s->private, &o, false, true);
 
 	return 0;
 }
@@ -236,14 +240,14 @@ void host1x_debug_deinit(struct host1x *host1x)
 		host1x_debugfs_exit(host1x);
 }
 
-void host1x_debug_dump(struct host1x *host1x)
+void host1x_debug_dump(struct host1x *host1x, bool lock_cdma)
 {
 	struct output o = {
 		.fn = write_to_printk
 	};
 
 	host1x_debug_output_lock();
-	show_all(host1x, &o, true);
+	show_all(host1x, &o, true, lock_cdma);
 	host1x_debug_output_unlock();
 }
 

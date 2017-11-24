@@ -54,7 +54,7 @@ void host1x_debug_output_lock(void);
 void host1x_debug_output_unlock(void);
 void host1x_debug_init(struct host1x *host1x);
 void host1x_debug_deinit(struct host1x *host1x);
-void host1x_debug_dump(struct host1x *host1x);
+void host1x_debug_dump(struct host1x *host1x, bool lock_cdma);
 void host1x_debug_dump_syncpts(struct host1x *host1x);
 
 #endif

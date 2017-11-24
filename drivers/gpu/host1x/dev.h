@@ -56,6 +56,7 @@ struct host1x_cdma_ops {
 	void (*restart)(struct host1x_cdma *cdma, u32 getptr);
 	void (*timeout_cpu_incr)(struct host1x_cdma *cdma, u32 getptr,
 				 u32 syncpt_incrs, u32 syncval, u32 nr_slots);
+	u32 (*position)(struct host1x_cdma *cdma);
 };
 
 struct host1x_pushbuffer_ops {
@@ -302,6 +303,12 @@ static inline void host1x_hw_cdma_timeout_cpu_incr(struct host1x *host,
 {
 	host->cdma_op->timeout_cpu_incr(cdma, getptr, syncpt_incrs, syncval,
 					nr_slots);
+}
+
+static inline u32 host1x_hw_cdma_position(struct host1x *host,
+					  struct host1x_cdma *cdma)
+{
+	return host->cdma_op->position(cdma);
 }
 
 static inline void host1x_hw_pushbuffer_init(struct host1x *host,

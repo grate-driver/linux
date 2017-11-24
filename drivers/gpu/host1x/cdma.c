@@ -18,6 +18,7 @@
 
 
 #include <asm/cacheflush.h>
+#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
 #include <linux/host1x.h>
@@ -156,12 +157,67 @@ static void host1x_pushbuffer_pop(struct push_buffer *pb, unsigned int slots)
 	pb->fence = (pb->fence + slots * 8) & (pb->size - 1);
 }
 
+static u32 pushbuffer_space(u32 pos, u32 fence, u32 size)
+{
+	/* Note that position is adjusted by 8 to avoid DMA GET == PUT */
+	return ((fence - (pos + 8)) & (size - 1)) / 8;
+}
+
 /*
  * Return the number of two word slots free in the push buffer
  */
 static u32 host1x_pushbuffer_space(struct push_buffer *pb)
 {
-	return ((pb->fence - pb->pos) & (pb->size - 1)) / 8;
+	return pushbuffer_space(pb->pos, pb->fence, pb->size);
+}
+
+/*
+ * Pop the completed pushes and return true if DMA fetching progressed.
+ * Otherwise return false.
+ */
+static bool host1x_pushbuffer_cdma_progressed(struct host1x *host1x,
+					      struct host1x_cdma *cdma,
+					      struct push_buffer *pb)
+{
+	u32 pos, space;
+
+	pos = host1x_hw_cdma_position(host1x, cdma);
+	space = pushbuffer_space(pb->fence, pos, pb->size);
+
+	if (space) {
+		host1x_pushbuffer_pop(pb, space);
+		cdma->first_get = pb->fence;
+		cdma->slots_used -= space;
+	}
+
+	return (space > 0);
+}
+
+/*
+ * Wait for DMA to progress and pushbuffer to gain some free space
+ * until timeout expired.
+ */
+static int host1x_pushbuffer_space_wait(struct host1x_cdma *cdma,
+					struct push_buffer *pb)
+{
+	struct host1x *host1x = cdma_to_host1x(cdma);
+	unsigned int tries = 30;
+	unsigned int i = 1;
+
+	do {
+		if (host1x_pushbuffer_cdma_progressed(host1x, cdma, pb))
+			break;
+
+		udelay(3 * i++);
+	} while (--tries);
+
+	if (!tries) {
+		dev_err(host1x->dev, "Timeout waiting channel %u to progress\n",
+			cdma->prepared_job->channel->id);
+		return -ETIMEDOUT;
+	}
+
+	return 0;
 }
 
 /*
@@ -191,10 +247,17 @@ int host1x_cdma_wait_locked(struct host1x_cdma *cdma, enum cdma_event event,
 
 			/*
 			 * Semaphore below will lockup channel if CMDA
-			 * is idling.
+			 * is idling. Assuming that DMA would progress,
+			 * try to poll-update DMA status and error out if
+			 * DMA got stuck for a substantial time.
 			 */
-			if (!space && idle)
-				return -ENOSPC;
+			if (!space && idle) {
+				ret = host1x_pushbuffer_space_wait(cdma, pb);
+				if (ret)
+					return ret;
+
+				space = host1x_pushbuffer_space(pb);
+			}
 			break;
 
 		default:
@@ -486,6 +549,7 @@ int host1x_cdma_begin(struct host1x_cdma *cdma, struct host1x_job *job)
 	if (!cdma->running)
 		host1x_hw_cdma_start(host1x, cdma);
 
+	cdma->prepared_job = job;
 	cdma->slots_used = 0;
 	cdma->first_get = cdma->push_buffer.pos;
 
@@ -536,6 +600,8 @@ void host1x_cdma_end(struct host1x_cdma *cdma,
 
 	host1x_hw_cdma_flush(host1x, cdma);
 
+	cdma->prepared_job = NULL;
+
 	job->first_get = cdma->first_get;
 	job->num_slots = cdma->slots_used;
 	host1x_job_get(job);
@@ -546,6 +612,25 @@ void host1x_cdma_end(struct host1x_cdma *cdma,
 		cdma_start_timer_locked(cdma, job);
 
 	trace_host1x_cdma_end(dev_name(job->channel->dev));
+	mutex_unlock(&cdma->lock);
+}
+
+/*
+ * End a cdma submit
+ * Stop CDMA abd cancel the current in-progress job, cleaning CDMA state
+ */
+void host1x_cdma_end_abort(struct host1x_cdma *cdma,
+			   struct host1x_job *job)
+{
+	/*
+	 * Job could be partially executed, reset HW and synchronize
+	 * syncpoint to get into determined state.
+	 */
+	host1x_cdma_reset_locked(cdma, job->client);
+	host1x_syncpt_sync(job->syncpt);
+
+	cdma->prepared_job = NULL;
+
 	mutex_unlock(&cdma->lock);
 }
 

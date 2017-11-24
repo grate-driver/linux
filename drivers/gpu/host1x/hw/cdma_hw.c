@@ -291,9 +291,9 @@ static void cdma_timeout_handler(struct work_struct *work)
 	host1x = cdma_to_host1x(cdma);
 	ch = cdma_to_channel(cdma);
 
-	host1x_debug_dump(cdma_to_host1x(cdma));
-
 	mutex_lock(&cdma->lock);
+
+	host1x_debug_dump(cdma_to_host1x(cdma), false);
 
 	if (!cdma->timeout.client) {
 		dev_dbg(host1x->dev,
@@ -350,6 +350,14 @@ static void cdma_timeout_destroy(struct host1x_cdma *cdma)
 	cdma->timeout.initialized = false;
 }
 
+/*
+ * Return DMA pointer value
+ */
+static u32 cdma_position(struct host1x_cdma *cdma)
+{
+	return host1x_ch_readl(cdma_to_channel(cdma), HOST1X_CHANNEL_DMAGET);
+}
+
 static const struct host1x_cdma_ops host1x_cdma_ops = {
 	.start = cdma_start,
 	.stop = cdma_stop,
@@ -361,6 +369,7 @@ static const struct host1x_cdma_ops host1x_cdma_ops = {
 	.resume = cdma_resume,
 	.restart = cdma_restart,
 	.timeout_cpu_incr = cdma_timeout_cpu_incr,
+	.position = cdma_position,
 };
 
 static const struct host1x_pushbuffer_ops host1x_pushbuffer_ops = {

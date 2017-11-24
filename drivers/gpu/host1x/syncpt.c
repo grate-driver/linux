@@ -301,7 +301,7 @@ int host1x_syncpt_wait(struct host1x_syncpt *sp, u32 thresh, long timeout,
 			host1x_debug_dump_syncpts(sp->host);
 
 			if (check_count == MAX_STUCK_CHECK_COUNT)
-				host1x_debug_dump(sp->host);
+				host1x_debug_dump(sp->host, true);
 
 			check_count++;
 		}

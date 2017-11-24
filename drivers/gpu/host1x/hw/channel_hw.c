@@ -303,15 +303,12 @@ static int channel_submit(struct host1x_job *job)
 	return 0;
 
 err_reset:
-	/*
-	 * Job could be partially executed, reset HW and synchronize
-	 * syncpoint to get into determined state.
-	 */
-	host1x_cdma_reset_locked(&ch->cdma, job->client);
-	host1x_syncpt_sync(sp);
+	/* dump channels state in a case of CDMA getting stuck */
+	if (err == -ETIMEDOUT)
+		host1x_debug_dump(host, false);
 
-	/* CDMA was locked by host1x_cdma_begin() */
-	mutex_unlock(&ch->cdma.lock);
+	/* end CDMA submit, canceling the job */
+	host1x_cdma_end_abort(&ch->cdma, job);
 
 err_unlock:
 	mutex_unlock(&ch->submitlock);
