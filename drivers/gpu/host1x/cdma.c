@@ -42,7 +42,8 @@
  * means that the push buffer is full, not empty.
  */
 
-#define HOST1X_PUSHBUFFER_SLOTS	512
+#define HOST1X_PUSHBUFFER_SLOTS		512
+#define HOST1X_PUSHBUFFER_FLUSH_PERIOD	8
 
 /*
  * Clean up push buffer resources
@@ -570,6 +571,10 @@ int host1x_cdma_push(struct host1x_cdma *cdma, u32 op1, u32 op2)
 	if (host1x_debug_trace_cmdbuf)
 		trace_host1x_cdma_push(dev_name(cdma_to_channel(cdma)->dev),
 				       op1, op2);
+
+	/* flush pushbuffer periodically to achieve better performance */
+	if (cdma->slots_used % HOST1X_PUSHBUFFER_FLUSH_PERIOD == 0)
+		host1x_hw_cdma_flush(host1x, cdma);
 
 	if (host1x_pushbuffer_space(pb) == 0) {
 		host1x_hw_cdma_flush(host1x, cdma);
