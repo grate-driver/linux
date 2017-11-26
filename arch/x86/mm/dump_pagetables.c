@@ -501,8 +501,10 @@ void ptdump_walk_pgd_level(struct seq_file *m, pgd_t *pgd)
 	ptdump_walk_pgd_level_core(m, pgd, false, true);
 }
 
-void ptdump_walk_pgd_level_debugfs(struct seq_file *m, pgd_t *pgd)
+void ptdump_walk_pgd_level_debugfs(struct seq_file *m, pgd_t *pgd, bool shadow)
 {
+	if (shadow)
+		pgd += PTRS_PER_PGD;
 	ptdump_walk_pgd_level_core(m, pgd, false, false);
 }
 EXPORT_SYMBOL_GPL(ptdump_walk_pgd_level_debugfs);
