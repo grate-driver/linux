@@ -42,6 +42,8 @@
 
 #define KAISER_WALK_ATOMIC  0x1
 
+static pteval_t kaiser_pte_mask __ro_after_init = ~(_PAGE_NX | _PAGE_GLOBAL);
+
 /*
  * At runtime, the only things we map are some things for CPU
  * hotplug, and stacks for new processes.  No two CPUs will ever
@@ -244,11 +246,14 @@ static pte_t *kaiser_shadow_pagetable_walk(unsigned long address,
 int kaiser_add_user_map(const void *__start_addr, unsigned long size,
 			unsigned long flags)
 {
-	pte_t *pte;
 	unsigned long start_addr = (unsigned long)__start_addr;
 	unsigned long address = start_addr & PAGE_MASK;
 	unsigned long end_addr = PAGE_ALIGN(start_addr + size);
 	unsigned long target_address;
+	pte_t *pte;
+
+	/* Clear not supported bits */
+	flags &= kaiser_pte_mask;
 
 	for (; address < end_addr; address += PAGE_SIZE) {
 		target_address = get_pa_from_kernel_map(address);
@@ -307,6 +312,11 @@ static void __init kaiser_init_all_pgds(void)
 {
 	pgd_t *pgd;
 	int i;
+
+	if (__supported_pte_mask & _PAGE_NX)
+		kaiser_pte_mask |= _PAGE_NX;
+	if (boot_cpu_has(X86_FEATURE_PGE))
+		kaiser_pte_mask |= _PAGE_GLOBAL;
 
 	pgd = kernel_to_shadow_pgdp(pgd_offset_k(0UL));
 	for (i = PTRS_PER_PGD / 2; i < PTRS_PER_PGD; i++) {
