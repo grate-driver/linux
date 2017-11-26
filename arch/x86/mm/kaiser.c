@@ -34,6 +34,7 @@
 #include <linux/mm.h>
 #include <linux/uaccess.h>
 
+#include <asm/cmdline.h>
 #include <asm/kaiser.h>
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -43,6 +44,16 @@
 #define KAISER_WALK_ATOMIC  0x1
 
 static pteval_t kaiser_pte_mask __ro_after_init = ~(_PAGE_NX | _PAGE_GLOBAL);
+
+/* Global flag for boot time kaiser enable/disable */
+bool kaiser_enabled __ro_after_init = true;
+DEFINE_STATIC_KEY_TRUE(kaiser_enabled_key);
+
+void __init kaiser_check_cmdline(void)
+{
+	if (cmdline_find_option_bool(boot_command_line, "nokaiser"))
+		kaiser_enabled = false;
+}
 
 /*
  * At runtime, the only things we map are some things for CPU
@@ -252,6 +263,9 @@ int kaiser_add_user_map(const void *__start_addr, unsigned long size,
 	unsigned long target_address;
 	pte_t *pte;
 
+	if (!kaiser_enabled)
+		return 0;
+
 	/* Clear not supported bits */
 	flags &= kaiser_pte_mask;
 
@@ -402,6 +416,9 @@ void __init kaiser_init(void)
 {
 	int cpu;
 
+	if (!kaiser_enabled)
+		return;
+
 	kaiser_init_all_pgds();
 
 	for_each_possible_cpu(cpu) {
@@ -436,6 +453,16 @@ void __init kaiser_init(void)
 	kaiser_add_mapping_cpu_entry(0);
 }
 
+static int __init kaiser_boottime_control(void)
+{
+	if (!kaiser_enabled) {
+		static_branch_disable(&kaiser_enabled_key);
+		pr_info("kaiser: Disabled on command line\n");
+	}
+	return 0;
+}
+subsys_initcall(kaiser_boottime_control);
+
 int kaiser_add_mapping(unsigned long addr, unsigned long size,
 		       unsigned long flags)
 {
@@ -445,6 +472,9 @@ int kaiser_add_mapping(unsigned long addr, unsigned long size,
 void kaiser_remove_mapping(unsigned long start, unsigned long size)
 {
 	unsigned long addr;
+
+	if (!kaiser_enabled)
+		return;
 
 	/* The shadow page tables always use small pages: */
 	for (addr = start; addr < start + size; addr += PAGE_SIZE) {

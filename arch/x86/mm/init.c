@@ -20,6 +20,7 @@
 #include <asm/kaslr.h>
 #include <asm/hypervisor.h>
 #include <asm/cpufeature.h>
+#include <asm/kaiser.h>
 
 /*
  * We need to define the tracepoints somewhere, and tlb.c
@@ -163,9 +164,8 @@ static int page_size_mask;
 
 static void enable_global_pages(void)
 {
-#ifndef CONFIG_KAISER
-	__supported_pte_mask |= _PAGE_GLOBAL;
-#endif
+	if (!kaiser_enabled)
+		__supported_pte_mask |= _PAGE_GLOBAL;
 }
 
 static void __init probe_page_size_mask(void)
@@ -656,6 +656,7 @@ void __init init_mem_mapping(void)
 {
 	unsigned long end;
 
+	kaiser_check_cmdline();
 	probe_page_size_mask();
 	setup_pcid();
 

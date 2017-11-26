@@ -56,6 +56,16 @@ extern void kaiser_remove_mapping(unsigned long start, unsigned long size);
  */
 extern void kaiser_init(void);
 
+/* True if kaiser is enabled at boot time */
+extern struct static_key_true kaiser_enabled_key;
+extern bool kaiser_enabled;
+extern void kaiser_check_cmdline(void);
+
+#else /* CONFIG_KAISER */
+
+#define kaiser_enabled		(false)
+static inline void kaiser_check_cmdline(void) { }
+
 #endif
 
 #endif /* __ASSEMBLY__ */

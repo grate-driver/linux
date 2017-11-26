@@ -175,6 +175,9 @@ static inline p4d_t *shadow_to_kernel_p4dp(p4d_t *p4dp)
 {
 	return ptr_clear_bit(p4dp, KAISER_PGTABLE_SWITCH_BIT);
 }
+
+extern bool kaiser_enabled;
+
 #endif /* CONFIG_KAISER */
 
 /*
@@ -208,6 +211,9 @@ static inline bool pgd_userspace_access(pgd_t pgd)
 static inline pgd_t kaiser_set_shadow_pgd(pgd_t *pgdp, pgd_t pgd)
 {
 #ifdef CONFIG_KAISER
+	if (!kaiser_enabled)
+		return pgd;
+
 	if (pgd_userspace_access(pgd)) {
 		if (pgdp_maps_userspace(pgdp)) {
 			/*

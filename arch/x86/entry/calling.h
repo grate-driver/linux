@@ -210,18 +210,23 @@ For 32-bit we have the following conventions - kernel is built with
 .endm
 
 .macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
+	STATIC_JUMP_IF_FALSE .Lend_\@, kaiser_enabled_key, def=1
 	mov	%cr3, \scratch_reg
 	ADJUST_KERNEL_CR3 \scratch_reg
 	mov	\scratch_reg, %cr3
+.Lend_\@:
 .endm
 
 .macro SWITCH_TO_USER_CR3 scratch_reg:req
+	STATIC_JUMP_IF_FALSE .Lend_\@, kaiser_enabled_key, def=1
 	mov	%cr3, \scratch_reg
 	ADJUST_USER_CR3 \scratch_reg
 	mov	\scratch_reg, %cr3
+.Lend_\@:
 .endm
 
 .macro SAVE_AND_SWITCH_TO_KERNEL_CR3 scratch_reg:req save_reg:req
+	STATIC_JUMP_IF_FALSE .Ldone_\@, kaiser_enabled_key, def=1
 	movq	%cr3, %r\scratch_reg
 	movq	%r\scratch_reg, \save_reg
 	/*
@@ -244,11 +249,13 @@ For 32-bit we have the following conventions - kernel is built with
 .endm
 
 .macro RESTORE_CR3 save_reg:req
+	STATIC_JUMP_IF_FALSE .Lend_\@, kaiser_enabled_key, def=1
 	/*
 	 * The CR3 write could be avoided when not changing its value,
 	 * but would require a CR3 read *and* a scratch register.
 	 */
 	movq	\save_reg, %cr3
+.Lend_\@:
 .endm
 
 #else /* CONFIG_KAISER=n: */

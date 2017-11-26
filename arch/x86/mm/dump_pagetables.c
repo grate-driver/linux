@@ -20,6 +20,7 @@
 #include <linux/seq_file.h>
 
 #include <asm/pgtable.h>
+#include <asm/kaiser.h>
 
 /*
  * The dumper groups pagetable entries of the same type into one, and for
@@ -503,7 +504,7 @@ void ptdump_walk_pgd_level(struct seq_file *m, pgd_t *pgd)
 
 void ptdump_walk_pgd_level_debugfs(struct seq_file *m, pgd_t *pgd, bool shadow)
 {
-	if (shadow)
+	if (shadow && kaiser_enabled)
 		pgd += PTRS_PER_PGD;
 	ptdump_walk_pgd_level_core(m, pgd, false, false);
 }
@@ -514,6 +515,8 @@ void ptdump_walk_shadow_pgd_level_checkwx(void)
 #ifdef CONFIG_KAISER
 	pgd_t *pgd = (pgd_t *) &init_top_pgt;
 
+	if (!kaiser_enabled)
+		return;
 	pr_info("x86/mm: Checking shadow page tables\n");
 	pgd += PTRS_PER_PGD;
 	ptdump_walk_pgd_level_core(NULL, pgd, true, false);
