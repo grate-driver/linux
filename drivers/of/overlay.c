@@ -760,13 +760,13 @@ int of_overlay_apply(struct device_node *tree, int *ovcs_id)
 
 	goto out;
 
-err_overlay_unlock:
-	of_overlay_mutex_unlock();
-
 err_free_overlay_changeset:
 	free_overlay_changeset(ovcs);
 
 	mutex_unlock(&of_mutex);
+
+err_overlay_unlock:
+	of_overlay_mutex_unlock();
 
 out:
 	pr_debug("%s() err=%d\n", __func__, ret);
