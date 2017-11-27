@@ -5586,6 +5586,12 @@ sub process {
 			}
 		}
 
+# check for smp_read_barrier_depends and read_barrier_depends
+		if ($line =~ /\b(smp_|)read_barrier_depends\(/) {
+			WARN("READ_BARRIER_DEPENDS",
+			     "Dependency barriers should only be used in READ_ONCE or DEC Alpha code" . $herecurr);
+		}
+
 # check of hardware specific defines
 		if ($line =~ m@^.\s*\#\s*if.*\b(__i386__|__powerpc64__|__sun__|__s390x__)\b@ && $realfile !~ m@include/asm-@) {
 			CHK("ARCH_DEFINES",
