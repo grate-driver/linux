@@ -76,6 +76,7 @@
 #include <linux/slab.h>
 #include <linux/perf_event.h>
 #include <linux/ptrace.h>
+#include <linux/kaiser.h>
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
 #include <linux/sched_clock.h>
@@ -505,6 +506,8 @@ static void __init mm_init(void)
 	pgtable_init();
 	vmalloc_init();
 	ioremap_huge_init();
+	/* This just needs to be done before we first run userspace: */
+	kaiser_init();
 }
 
 asmlinkage __visible void __init start_kernel(void)

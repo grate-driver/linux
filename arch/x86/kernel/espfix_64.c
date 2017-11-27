@@ -33,6 +33,7 @@
 
 #include <linux/init.h>
 #include <linux/init_task.h>
+#include <linux/kaiser.h>
 #include <linux/kernel.h>
 #include <linux/percpu.h>
 #include <linux/gfp.h>
@@ -60,8 +61,8 @@
 #define PGALLOC_GFP (GFP_KERNEL | __GFP_NOTRACK | __GFP_ZERO)
 
 /* This contains the *bottom* address of the espfix stack */
-DEFINE_PER_CPU_READ_MOSTLY(unsigned long, espfix_stack);
-DEFINE_PER_CPU_READ_MOSTLY(unsigned long, espfix_waddr);
+DEFINE_PER_CPU_USER_MAPPED(unsigned long, espfix_stack);
+DEFINE_PER_CPU_USER_MAPPED(unsigned long, espfix_waddr);
 
 /* Initialization mutex - should this be a spinlock? */
 static DEFINE_MUTEX(espfix_init_mutex);
@@ -128,6 +129,23 @@ void __init init_espfix_bsp(void)
 	pgd = &init_top_pgt[pgd_index(ESPFIX_BASE_ADDR)];
 	p4d = p4d_alloc(&init_mm, pgd, ESPFIX_BASE_ADDR);
 	p4d_populate(&init_mm, p4d, espfix_pud_page);
+
+	/*
+	 * Just copy the top-level PGD that is mapping the espfix
+	 * area to ensure it is mapped into the shadow user page
+	 * tables.
+	 *
+	 * For 5-level paging, the espfix pgd was populated when
+	 * kaiser_init() pre-populated all the pgd entries.  The above
+	 * p4d_alloc() would never do anything and the p4d_populate()
+	 * would be done to a p4d already mapped in the userspace pgd.
+	 */
+#ifdef CONFIG_KAISER
+	if (CONFIG_PGTABLE_LEVELS <= 4) {
+		set_pgd(kernel_to_shadow_pgdp(pgd),
+			__pgd(_KERNPG_TABLE | (p4d_pfn(*p4d) << PAGE_SHIFT)));
+	}
+#endif
 
 	/* Randomize the locations */
 	init_espfix_random();
@@ -208,4 +226,10 @@ done:
 	per_cpu(espfix_stack, cpu) = addr;
 	per_cpu(espfix_waddr, cpu) = (unsigned long)stack_page
 				      + (addr & ~PAGE_MASK);
+	/*
+	 * _PAGE_GLOBAL is not really required.  This is not a hot
+	 * path, but we do it here for consistency.
+	 */
+	kaiser_add_mapping((unsigned long)stack_page, PAGE_SIZE,
+			__PAGE_KERNEL | _PAGE_GLOBAL);
 }

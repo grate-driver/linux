@@ -131,9 +131,145 @@ static inline pud_t native_pudp_get_and_clear(pud_t *xp)
 #endif
 }
 
+#ifdef CONFIG_KAISER
+/*
+ * All top-level KAISER page tables are order-1 pages (8k-aligned
+ * and 8k in size).  The kernel one is at the beginning 4k and
+ * the user (shadow) one is in the last 4k.  To switch between
+ * them, you just need to flip the 12th bit in their addresses.
+ */
+#define KAISER_PGTABLE_SWITCH_BIT	PAGE_SHIFT
+
+/*
+ * This generates better code than the inline assembly in
+ * __set_bit().
+ */
+static inline void *ptr_set_bit(void *ptr, int bit)
+{
+	unsigned long __ptr = (unsigned long)ptr;
+
+	__ptr |= BIT(bit);
+	return (void *)__ptr;
+}
+static inline void *ptr_clear_bit(void *ptr, int bit)
+{
+	unsigned long __ptr = (unsigned long)ptr;
+
+	__ptr &= ~BIT(bit);
+	return (void *)__ptr;
+}
+
+static inline pgd_t *kernel_to_shadow_pgdp(pgd_t *pgdp)
+{
+	return ptr_set_bit(pgdp, KAISER_PGTABLE_SWITCH_BIT);
+}
+static inline pgd_t *shadow_to_kernel_pgdp(pgd_t *pgdp)
+{
+	return ptr_clear_bit(pgdp, KAISER_PGTABLE_SWITCH_BIT);
+}
+static inline p4d_t *kernel_to_shadow_p4dp(p4d_t *p4dp)
+{
+	return ptr_set_bit(p4dp, KAISER_PGTABLE_SWITCH_BIT);
+}
+static inline p4d_t *shadow_to_kernel_p4dp(p4d_t *p4dp)
+{
+	return ptr_clear_bit(p4dp, KAISER_PGTABLE_SWITCH_BIT);
+}
+
+extern bool kaiser_enabled;
+
+#endif /* CONFIG_KAISER */
+
+/*
+ * Page table pages are page-aligned.  The lower half of the top
+ * level is used for userspace and the top half for the kernel.
+ *
+ * Returns true for parts of the PGD that map userspace and
+ * false for the parts that map the kernel.
+ */
+static inline bool pgdp_maps_userspace(void *__ptr)
+{
+	unsigned long ptr = (unsigned long)__ptr;
+
+	return (ptr & ~PAGE_MASK) < (PAGE_SIZE / 2);
+}
+
+/*
+ * Does this PGD allow access from userspace?
+ */
+static inline bool pgd_userspace_access(pgd_t pgd)
+{
+	return pgd.pgd & _PAGE_USER;
+}
+
+/*
+ * Take a PGD location (pgdp) and a pgd value that needs
+ * to be set there.  Populates the shadow and returns
+ * the resulting PGD that must be set in the kernel copy
+ * of the page tables.
+ */
+static inline pgd_t kaiser_set_shadow_pgd(pgd_t *pgdp, pgd_t pgd)
+{
+#ifdef CONFIG_KAISER
+	if (!kaiser_enabled)
+		return pgd;
+
+	if (pgd_userspace_access(pgd)) {
+		if (pgdp_maps_userspace(pgdp)) {
+			/*
+			 * The user/shadow page tables get the full
+			 * PGD, accessible from userspace:
+			 */
+			kernel_to_shadow_pgdp(pgdp)->pgd = pgd.pgd;
+			/*
+			 * For the copy of the pgd that the kernel
+			 * uses, make it unusable to userspace.  This
+			 * ensures if we get out to userspace with the
+			 * wrong CR3 value, userspace will crash
+			 * instead of running.
+			 */
+			if (__supported_pte_mask & _PAGE_NX)
+				pgd.pgd |= _PAGE_NX;
+		}
+	} else if (pgd_userspace_access(*pgdp)) {
+		/*
+		 * We are clearing a _PAGE_USER PGD for which we
+		 * presumably populated the shadow.  We must now
+		 * clear the shadow PGD entry.
+		 */
+		if (pgdp_maps_userspace(pgdp)) {
+			kernel_to_shadow_pgdp(pgdp)->pgd = pgd.pgd;
+		} else {
+			/*
+			 * Attempted to clear a _PAGE_USER PGD which
+			 * is in the kernel porttion of the address
+			 * space.  PGDs are pre-populated and we
+			 * never clear them.
+			 */
+			WARN_ON_ONCE(1);
+		}
+	} else {
+		/*
+		 * _PAGE_USER was not set in either the PGD being set
+		 * or cleared.  All kernel PGDs should be
+		 * pre-populated so this should never happen after
+		 * boot.
+		 */
+		WARN_ON_ONCE(system_state == SYSTEM_RUNNING);
+	}
+#endif
+	/* return the copy of the PGD we want the kernel to use: */
+	return pgd;
+}
+
+
 static inline void native_set_p4d(p4d_t *p4dp, p4d_t p4d)
 {
+#if defined(CONFIG_KAISER) && !defined(CONFIG_X86_5LEVEL)
+	p4dp->pgd = kaiser_set_shadow_pgd(&p4dp->pgd, p4d.pgd);
+#else
 	*p4dp = p4d;
+#endif
 }
 
 static inline void native_p4d_clear(p4d_t *p4d)
@@ -147,7 +283,11 @@ static inline void native_p4d_clear(p4d_t *p4d)
 
 static inline void native_set_pgd(pgd_t *pgdp, pgd_t pgd)
 {
+#ifdef CONFIG_KAISER
+	*pgdp = kaiser_set_shadow_pgd(pgdp, pgd);
+#else
 	*pgdp = pgd;
+#endif
 }
 
 static inline void native_pgd_clear(pgd_t *pgd)

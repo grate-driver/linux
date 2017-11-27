@@ -4,6 +4,7 @@
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/percpu.h>
+#include <linux/kaiser.h>
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/delay.h>
@@ -490,12 +491,43 @@ void load_percpu_segment(int cpu)
 	load_stack_canary_segment();
 }
 
-/* Setup the fixmap mapping only once per-processor */
-static inline void setup_fixmap_gdt(int cpu)
+static void set_percpu_fixmap_pages(int fixmap_index, void *ptr, int pages, pgprot_t prot)
+{
+	int i;
+
+	for (i = 0; i < pages; i++)
+		__set_fixmap(fixmap_index - i, per_cpu_ptr_to_phys(ptr + i*PAGE_SIZE), prot);
+}
+
+#ifdef CONFIG_X86_32
+/* The 32-bit entry code needs to find cpu_entry_area. */
+DEFINE_PER_CPU(struct cpu_entry_area *, cpu_entry_area);
+#endif
+
+#ifdef CONFIG_X86_64
+/*
+ * Special IST stacks which the CPU switches to when it calls
+ * an IST-marked descriptor entry. Up to 7 stacks (hardware
+ * limit), all of them are 4K, except the debug stack which
+ * is 8K.
+ */
+static const unsigned int exception_stack_sizes[N_EXCEPTION_STACKS] = {
+	  [0 ... N_EXCEPTION_STACKS - 1]	= EXCEPTION_STKSZ,
+	  [DEBUG_STACK - 1]			= DEBUG_STKSZ
+};
+
+static DEFINE_PER_CPU_PAGE_ALIGNED(char, exception_stacks
+	[(N_EXCEPTION_STACKS - 1) * EXCEPTION_STKSZ + DEBUG_STKSZ]);
+#endif
+
+/* Setup the fixmap mappings only once per-processor */
+static inline void setup_cpu_entry_area(int cpu)
 {
 #ifdef CONFIG_X86_64
+	extern char _entry_trampoline[];
+
 	/* On 64-bit systems, we use a read-only fixmap GDT. */
-	pgprot_t prot = PAGE_KERNEL_RO;
+	pgprot_t gdt_prot = PAGE_KERNEL_RO;
 #else
 	/*
 	 * On native 32-bit systems, the GDT cannot be read-only because
@@ -506,11 +538,56 @@ static inline void setup_fixmap_gdt(int cpu)
 	 * On Xen PV, the GDT must be read-only because the hypervisor requires
 	 * it.
 	 */
-	pgprot_t prot = boot_cpu_has(X86_FEATURE_XENPV) ?
+	pgprot_t gdt_prot = boot_cpu_has(X86_FEATURE_XENPV) ?
 		PAGE_KERNEL_RO : PAGE_KERNEL;
 #endif
 
-	__set_fixmap(get_cpu_gdt_ro_index(cpu), get_cpu_gdt_paddr(cpu), prot);
+	__set_fixmap(get_cpu_entry_area_index(cpu, gdt), get_cpu_gdt_paddr(cpu), gdt_prot);
+
+	/*
+	 * The Intel SDM says (Volume 3, 7.2.1):
+	 *
+	 *  Avoid placing a page boundary in the part of the TSS that the
+	 *  processor reads during a task switch (the first 104 bytes). The
+	 *  processor may not correctly perform address translations if a
+	 *  boundary occurs in this area. During a task switch, the processor
+	 *  reads and writes into the first 104 bytes of each TSS (using
+	 *  contiguous physical addresses beginning with the physical address
+	 *  of the first byte of the TSS). So, after TSS access begins, if
+	 *  part of the 104 bytes is not physically contiguous, the processor
+	 *  will access incorrect information without generating a page-fault
+	 *  exception.
+	 *
+	 * There are also a lot of errata involving the TSS spanning a page
+	 * boundary.  Assert that we're not doing that.
+	 */
+	BUILD_BUG_ON((offsetof(struct tss_struct, x86_tss) ^
+		      offsetofend(struct tss_struct, x86_tss)) & PAGE_MASK);
+	BUILD_BUG_ON(sizeof(struct tss_struct) % PAGE_SIZE != 0);
+	set_percpu_fixmap_pages(get_cpu_entry_area_index(cpu, tss),
+				&per_cpu(cpu_tss, cpu),
+				sizeof(struct tss_struct) / PAGE_SIZE,
+				PAGE_KERNEL);
+
+#ifdef CONFIG_X86_32
+	this_cpu_write(cpu_entry_area, get_cpu_entry_area(cpu));
+#endif
+
+#ifdef CONFIG_X86_64
+	BUILD_BUG_ON(sizeof(exception_stacks) % PAGE_SIZE != 0);
+	BUILD_BUG_ON(sizeof(exception_stacks) !=
+		     sizeof(((struct cpu_entry_area *)0)->exception_stacks));
+	set_percpu_fixmap_pages(get_cpu_entry_area_index(cpu, exception_stacks),
+				&per_cpu(exception_stacks, cpu),
+				sizeof(exception_stacks) / PAGE_SIZE,
+				PAGE_KERNEL);
+
+	__set_fixmap(get_cpu_entry_area_index(cpu, entry_trampoline),
+		     __pa_symbol(_entry_trampoline), PAGE_KERNEL_RX);
+#endif
+ 	/* CPU 0's mapping is done in kaiser_init() */
+	if (cpu)
+		kaiser_add_mapping_cpu_entry(cpu);
 }
 
 /* Load the original GDT from the per-cpu structure */
@@ -1259,11 +1336,7 @@ void enable_sep_cpu(void)
 
 	tss->x86_tss.ss1 = __KERNEL_CS;
 	wrmsr(MSR_IA32_SYSENTER_CS, tss->x86_tss.ss1, 0);
-
-	wrmsr(MSR_IA32_SYSENTER_ESP,
-	      (unsigned long)tss + offsetofend(struct tss_struct, SYSENTER_stack),
-	      0);
-
+	wrmsr(MSR_IA32_SYSENTER_ESP, (unsigned long)(cpu_SYSENTER_stack(cpu) + 1), 0);
 	wrmsr(MSR_IA32_SYSENTER_EIP, (unsigned long)entry_SYSENTER_32, 0);
 
 	put_cpu();
@@ -1357,25 +1430,19 @@ DEFINE_PER_CPU(unsigned int, irq_count) __visible = -1;
 DEFINE_PER_CPU(int, __preempt_count) = INIT_PREEMPT_COUNT;
 EXPORT_PER_CPU_SYMBOL(__preempt_count);
 
-/*
- * Special IST stacks which the CPU switches to when it calls
- * an IST-marked descriptor entry. Up to 7 stacks (hardware
- * limit), all of them are 4K, except the debug stack which
- * is 8K.
- */
-static const unsigned int exception_stack_sizes[N_EXCEPTION_STACKS] = {
-	  [0 ... N_EXCEPTION_STACKS - 1]	= EXCEPTION_STKSZ,
-	  [DEBUG_STACK - 1]			= DEBUG_STKSZ
-};
-
-static DEFINE_PER_CPU_PAGE_ALIGNED(char, exception_stacks
-	[(N_EXCEPTION_STACKS - 1) * EXCEPTION_STKSZ + DEBUG_STKSZ]);
-
 /* May not be marked __init: used by software suspend */
 void syscall_init(void)
 {
+	extern char _entry_trampoline[];
+	extern char entry_SYSCALL_64_trampoline[];
+
+	int cpu = smp_processor_id();
+	unsigned long SYSCALL64_entry_trampoline =
+		(unsigned long)get_cpu_entry_area(cpu)->entry_trampoline +
+		(entry_SYSCALL_64_trampoline - _entry_trampoline);
+
 	wrmsr(MSR_STAR, 0, (__USER32_CS << 16) | __KERNEL_CS);
-	wrmsrl(MSR_LSTAR, (unsigned long)entry_SYSCALL_64);
+	wrmsrl(MSR_LSTAR, SYSCALL64_entry_trampoline);
 
 #ifdef CONFIG_IA32_EMULATION
 	wrmsrl(MSR_CSTAR, (unsigned long)entry_SYSCALL_compat);
@@ -1386,7 +1453,7 @@ void syscall_init(void)
 	 * AMD doesn't allow SYSENTER in long mode (either 32- or 64-bit).
 	 */
 	wrmsrl_safe(MSR_IA32_SYSENTER_CS, (u64)__KERNEL_CS);
-	wrmsrl_safe(MSR_IA32_SYSENTER_ESP, 0ULL);
+	wrmsrl_safe(MSR_IA32_SYSENTER_ESP, (unsigned long)(cpu_SYSENTER_stack(cpu) + 1));
 	wrmsrl_safe(MSR_IA32_SYSENTER_EIP, (u64)entry_SYSENTER_compat);
 #else
 	wrmsrl(MSR_CSTAR, (unsigned long)ignore_sysret);
@@ -1448,7 +1515,7 @@ EXPORT_PER_CPU_SYMBOL(__preempt_count);
  * the top of the kernel stack.  Use an extra percpu variable to track the
  * top of the kernel stack directly.
  */
-DEFINE_PER_CPU(unsigned long, cpu_current_top_of_stack) =
+DEFINE_PER_CPU_USER_MAPPED(unsigned long, cpu_current_top_of_stack) =
 	(unsigned long)&init_thread_union + THREAD_SIZE;
 EXPORT_PER_CPU_SYMBOL(cpu_current_top_of_stack);
 
@@ -1569,7 +1636,7 @@ void cpu_init(void)
 	 * set up and load the per-CPU TSS
 	 */
 	if (!oist->ist[0]) {
-		char *estacks = per_cpu(exception_stacks, cpu);
+		char *estacks = get_cpu_entry_area(cpu)->exception_stacks;
 
 		for (v = 0; v < N_EXCEPTION_STACKS; v++) {
 			estacks += exception_stack_sizes[v];
@@ -1580,7 +1647,7 @@ void cpu_init(void)
 		}
 	}
 
-	t->x86_tss.io_bitmap_base = offsetof(struct tss_struct, io_bitmap);
+	t->x86_tss.io_bitmap_base = IO_BITMAP_OFFSET;
 
 	/*
 	 * <= is required because the CPU will access up to
@@ -1595,12 +1662,15 @@ void cpu_init(void)
 	initialize_tlbstate_and_flush();
 	enter_lazy_tlb(&init_mm, me);
 
+	setup_cpu_entry_area(cpu);
+
 	/*
-	 * Initialize the TSS.  Don't bother initializing sp0, as the initial
-	 * task never enters user mode.
+	 * Initialize the TSS.  sp0 points to the entry trampoline stack
+	 * regardless of what task is running.
 	 */
-	set_tss_desc(cpu, t);
+	set_tss_desc(cpu, &get_cpu_entry_area(cpu)->tss.x86_tss);
 	load_TR_desc();
+	load_sp0((unsigned long)(cpu_SYSENTER_stack(cpu) + 1));
 
 	load_mm_ldt(&init_mm);
 
@@ -1612,7 +1682,6 @@ void cpu_init(void)
 	if (is_uv_system())
 		uv_cpu_init();
 
-	setup_fixmap_gdt(cpu);
 	load_fixmap_gdt(cpu);
 }
 
@@ -1653,16 +1722,18 @@ void cpu_init(void)
 	initialize_tlbstate_and_flush();
 	enter_lazy_tlb(&init_mm, curr);
 
+	setup_cpu_entry_area(cpu);
+
 	/*
 	 * Initialize the TSS.  Don't bother initializing sp0, as the initial
 	 * task never enters user mode.
 	 */
-	set_tss_desc(cpu, t);
+	set_tss_desc(cpu, &get_cpu_entry_area(cpu)->tss.x86_tss);
 	load_TR_desc();
 
 	load_mm_ldt(&init_mm);
 
-	t->x86_tss.io_bitmap_base = offsetof(struct tss_struct, io_bitmap);
+	t->x86_tss.io_bitmap_base = IO_BITMAP_OFFSET;
 
 #ifdef CONFIG_DOUBLEFAULT
 	/* Set up doublefault TSS pointer in the GDT */
@@ -1674,7 +1745,6 @@ void cpu_init(void)
 
 	fpu__init_cpu();
 
-	setup_fixmap_gdt(cpu);
 	load_fixmap_gdt(cpu);
 }
 #endif

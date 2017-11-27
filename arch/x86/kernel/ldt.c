@@ -11,6 +11,7 @@
 #include <linux/gfp.h>
 #include <linux/sched.h>
 #include <linux/string.h>
+#include <linux/kaiser.h>
 #include <linux/mm.h>
 #include <linux/smp.h>
 #include <linux/syscalls.h>
@@ -57,11 +58,21 @@ static void flush_ldt(void *__mm)
 	refresh_ldt_segments();
 }
 
+static void __free_ldt_struct(struct ldt_struct *ldt)
+{
+	if (ldt->nr_entries * LDT_ENTRY_SIZE > PAGE_SIZE)
+		vfree_atomic(ldt->entries);
+	else
+		free_page((unsigned long)ldt->entries);
+	kfree(ldt);
+}
+
 /* The caller must call finalize_ldt_struct on the result. LDT starts zeroed. */
 static struct ldt_struct *alloc_ldt_struct(unsigned int num_entries)
 {
 	struct ldt_struct *new_ldt;
 	unsigned int alloc_size;
+	int ret;
 
 	if (num_entries > LDT_ENTRIES)
 		return NULL;
@@ -89,6 +100,12 @@ static struct ldt_struct *alloc_ldt_struct(unsigned int num_entries)
 		return NULL;
 	}
 
+	ret = kaiser_add_mapping((unsigned long)new_ldt->entries, alloc_size,
+				 __PAGE_KERNEL | _PAGE_GLOBAL);
+	if (ret) {
+		__free_ldt_struct(new_ldt);
+		return NULL;
+	}
 	new_ldt->nr_entries = num_entries;
 	return new_ldt;
 }
@@ -115,12 +132,10 @@ static void free_ldt_struct(struct ldt_struct *ldt)
 	if (likely(!ldt))
 		return;
 
+	kaiser_remove_mapping((unsigned long)ldt->entries,
+			      ldt->nr_entries * LDT_ENTRY_SIZE);
 	paravirt_free_ldt(ldt->entries, ldt->nr_entries);
-	if (ldt->nr_entries * LDT_ENTRY_SIZE > PAGE_SIZE)
-		vfree_atomic(ldt->entries);
-	else
-		free_page((unsigned long)ldt->entries);
-	kfree(ldt);
+	__free_ldt_struct(ldt);
 }
 
 /*

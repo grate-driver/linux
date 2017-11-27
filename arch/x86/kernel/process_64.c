@@ -59,7 +59,7 @@
 #include <asm/unistd_32_ia32.h>
 #endif
 
-__visible DEFINE_PER_CPU(unsigned long, rsp_scratch);
+__visible DEFINE_PER_CPU_USER_MAPPED(unsigned long, rsp_scratch);
 
 /* Prints also some state that isn't saved in the pt_regs */
 void __show_regs(struct pt_regs *regs, int all)
@@ -69,9 +69,8 @@ void __show_regs(struct pt_regs *regs, int all)
 	unsigned int fsindex, gsindex;
 	unsigned int ds, cs, es;
 
-	printk(KERN_DEFAULT "RIP: %04lx:%pS\n", regs->cs, (void *)regs->ip);
-	printk(KERN_DEFAULT "RSP: %04lx:%016lx EFLAGS: %08lx", regs->ss,
-		regs->sp, regs->flags);
+	show_iret_regs(regs);
+
 	if (regs->orig_ax != -1)
 		pr_cont(" ORIG_RAX: %016lx\n", regs->orig_ax);
 	else
@@ -88,6 +87,9 @@ void __show_regs(struct pt_regs *regs, int all)
 	printk(KERN_DEFAULT "R13: %016lx R14: %016lx R15: %016lx\n",
 	       regs->r13, regs->r14, regs->r15);
 
+	if (!all)
+		return;
+
 	asm("movl %%ds,%0" : "=r" (ds));
 	asm("movl %%cs,%0" : "=r" (cs));
 	asm("movl %%es,%0" : "=r" (es));
@@ -97,9 +99,6 @@ void __show_regs(struct pt_regs *regs, int all)
 	rdmsrl(MSR_FS_BASE, fs);
 	rdmsrl(MSR_GS_BASE, gs);
 	rdmsrl(MSR_KERNEL_GS_BASE, shadowgs);
-
-	if (!all)
-		return;
 
 	cr0 = read_cr0();
 	cr2 = read_cr2();
@@ -462,6 +461,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 * Switch the PDA and FPU contexts.
 	 */
 	this_cpu_write(current_task, next_p);
+	this_cpu_write(cpu_current_top_of_stack, task_top_of_stack(next_p));
 
 	/* Reload sp0. */
 	update_sp0(next_p);

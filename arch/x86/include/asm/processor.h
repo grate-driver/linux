@@ -163,7 +163,7 @@ enum cpuid_regs_idx {
 extern struct cpuinfo_x86	boot_cpu_data;
 extern struct cpuinfo_x86	new_cpu_data;
 
-extern struct tss_struct	doublefault_tss;
+extern struct x86_hw_tss	doublefault_tss;
 extern __u32			cpu_caps_cleared[NCAPINTS];
 extern __u32			cpu_caps_set[NCAPINTS];
 
@@ -253,6 +253,11 @@ static inline void load_cr3(pgd_t *pgdir)
 	write_cr3(__sme_pa(pgdir));
 }
 
+/*
+ * Note that while the legacy 'TSS' name comes from 'Task State Segment',
+ * on modern x86 CPUs the TSS also holds information important to 64-bit mode,
+ * unrelated to the task-switch mechanism:
+ */
 #ifdef CONFIG_X86_32
 /* This is the TSS defined by the hardware. */
 struct x86_hw_tss {
@@ -305,7 +310,13 @@ struct x86_hw_tss {
 struct x86_hw_tss {
 	u32			reserved1;
 	u64			sp0;
+
+	/*
+	 * We store cpu_current_top_of_stack in sp1 so it's always accessible.
+	 * Linux does not use ring 1, so sp1 is not otherwise needed.
+	 */
 	u64			sp1;
+
 	u64			sp2;
 	u64			reserved2;
 	u64			ist[7];
@@ -323,12 +334,24 @@ struct x86_hw_tss {
 #define IO_BITMAP_BITS			65536
 #define IO_BITMAP_BYTES			(IO_BITMAP_BITS/8)
 #define IO_BITMAP_LONGS			(IO_BITMAP_BYTES/sizeof(long))
-#define IO_BITMAP_OFFSET		offsetof(struct tss_struct, io_bitmap)
+#define IO_BITMAP_OFFSET		(offsetof(struct tss_struct, io_bitmap) - offsetof(struct tss_struct, x86_tss))
 #define INVALID_IO_BITMAP_OFFSET	0x8000
+
+struct SYSENTER_stack {
+	unsigned long		words[64];
+};
 
 struct tss_struct {
 	/*
-	 * The hardware state:
+	 * Space for the temporary SYSENTER stack, used for SYSENTER
+	 * and the entry trampoline as well.
+	 */
+	struct SYSENTER_stack	SYSENTER_stack;
+
+	/*
+	 * The fixed hardware portion.  This must not cross a page boundary
+	 * at risk of violating the SDM's advice and potentially triggering
+	 * errata.
 	 */
 	struct x86_hw_tss	x86_tss;
 
@@ -339,18 +362,9 @@ struct tss_struct {
 	 * be within the limit.
 	 */
 	unsigned long		io_bitmap[IO_BITMAP_LONGS + 1];
+} __aligned(PAGE_SIZE);
 
-#ifdef CONFIG_X86_32
-	/*
-	 * Space for the temporary SYSENTER stack.
-	 */
-	unsigned long		SYSENTER_stack_canary;
-	unsigned long		SYSENTER_stack[64];
-#endif
-
-} ____cacheline_aligned;
-
-DECLARE_PER_CPU_SHARED_ALIGNED(struct tss_struct, cpu_tss);
+DECLARE_PER_CPU_PAGE_ALIGNED(struct tss_struct, cpu_tss);
 
 /*
  * sizeof(unsigned long) coming from an extra "long" at the end
@@ -364,6 +378,8 @@ DECLARE_PER_CPU_SHARED_ALIGNED(struct tss_struct, cpu_tss);
 
 #ifdef CONFIG_X86_32
 DECLARE_PER_CPU(unsigned long, cpu_current_top_of_stack);
+#else
+#define cpu_current_top_of_stack cpu_tss.x86_tss.sp1
 #endif
 
 /*
@@ -535,12 +551,12 @@ static inline void native_swapgs(void)
 
 static inline unsigned long current_top_of_stack(void)
 {
-#ifdef CONFIG_X86_64
-	return this_cpu_read_stable(cpu_tss.x86_tss.sp0);
-#else
-	/* sp0 on x86_32 is special in and around vm86 mode. */
+	/*
+	 *  We can't read directly from tss.sp0: sp0 on x86_32 is special in
+	 *  and around vm86 mode and sp0 on x86_64 is special because of the
+	 *  entry trampoline.
+	 */
 	return this_cpu_read_stable(cpu_current_top_of_stack);
-#endif
 }
 
 static inline bool on_thread_stack(void)
