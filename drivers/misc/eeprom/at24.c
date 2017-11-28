@@ -24,6 +24,7 @@
 #include <linux/acpi.h>
 #include <linux/i2c.h>
 #include <linux/nvmem-provider.h>
+#include <linux/regmap.h>
 #include <linux/platform_data/at24.h>
 #include <linux/pm_runtime.h>
 
@@ -55,6 +56,11 @@
  * which won't work on pure SMBus systems.
  */
 
+struct at24_client {
+	struct i2c_client *client;
+	struct regmap *regmap;
+};
+
 struct at24_data {
 	struct at24_platform_data chip;
 	int use_smbus;
@@ -81,7 +87,7 @@ struct at24_data {
 	 * Some chips tie up multiple I2C addresses; dummy devices reserve
 	 * them for us, and we'll use them with SMBus calls.
 	 */
-	struct i2c_client *client[];
+	struct at24_client client[];
 };
 
 /*
@@ -274,7 +280,7 @@ static struct i2c_client *at24_translate_offset(struct at24_data *at24,
 		*offset &= 0xff;
 	}
 
-	return at24->client[i];
+	return at24->client[i].client;
 }
 
 static ssize_t at24_eeprom_read_smbus(struct at24_data *at24, char *buf,
@@ -680,6 +686,16 @@ static void at24_get_pdata(struct device *dev, struct at24_platform_data *chip)
 	}
 }
 
+static const struct regmap_config regmap_config_8 = {
+	.reg_bits = 8,
+	.val_bits = 8,
+};
+
+static const struct regmap_config regmap_config_16 = {
+	.reg_bits = 16,
+	.val_bits = 8,
+};
+
 static int at24_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	struct at24_platform_data chip;
@@ -690,6 +706,7 @@ static int at24_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	struct at24_data *at24;
 	int err;
 	unsigned i, num_addresses;
+	const struct regmap_config *config;
 	u8 test_byte;
 
 	if (client->dev.platform_data) {
@@ -781,8 +798,13 @@ static int at24_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		num_addresses =	DIV_ROUND_UP(chip.byte_len,
 			(chip.flags & AT24_FLAG_ADDR16) ? 65536 : 256);
 
+	if (chip.flags & AT24_FLAG_ADDR16)
+		config = &regmap_config_16;
+	else
+		config = &regmap_config_8;
+
 	at24 = devm_kzalloc(&client->dev, sizeof(struct at24_data) +
-		num_addresses * sizeof(struct i2c_client *), GFP_KERNEL);
+		num_addresses * sizeof(struct at24_client), GFP_KERNEL);
 	if (!at24)
 		return -ENOMEM;
 
@@ -791,6 +813,11 @@ static int at24_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	at24->use_smbus_write = use_smbus_write;
 	at24->chip = chip;
 	at24->num_addresses = num_addresses;
+
+	at24->client[0].client = client;
+	at24->client[0].regmap = devm_regmap_init_i2c(client, config);
+	if (IS_ERR(at24->client[0].regmap))
+		return PTR_ERR(at24->client[0].regmap);
 
 	if ((chip.flags & AT24_FLAG_SERIAL) && (chip.flags & AT24_FLAG_MAC)) {
 		dev_err(&client->dev,
@@ -839,16 +866,20 @@ static int at24_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		}
 	}
 
-	at24->client[0] = client;
-
 	/* use dummy devices for multiple-address chips */
 	for (i = 1; i < num_addresses; i++) {
-		at24->client[i] = i2c_new_dummy(client->adapter,
-					client->addr + i);
-		if (!at24->client[i]) {
+		at24->client[i].client = i2c_new_dummy(client->adapter,
+						       client->addr + i);
+		if (!at24->client[i].client) {
 			dev_err(&client->dev, "address 0x%02x unavailable\n",
 					client->addr + i);
 			err = -EADDRINUSE;
+			goto err_clients;
+		}
+		at24->client[i].regmap = devm_regmap_init_i2c(
+					at24->client[i].client, config);
+		if (IS_ERR(at24->client[i].regmap)) {
+			err = PTR_ERR(at24->client[i].regmap);
 			goto err_clients;
 		}
 	}
@@ -909,8 +940,8 @@ static int at24_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 err_clients:
 	for (i = 1; i < num_addresses; i++)
-		if (at24->client[i])
-			i2c_unregister_device(at24->client[i]);
+		if (at24->client[i].client)
+			i2c_unregister_device(at24->client[i].client);
 
 	pm_runtime_disable(&client->dev);
 
@@ -927,7 +958,7 @@ static int at24_remove(struct i2c_client *client)
 	nvmem_unregister(at24->nvmem);
 
 	for (i = 1; i < at24->num_addresses; i++)
-		i2c_unregister_device(at24->client[i]);
+		i2c_unregister_device(at24->client[i].client);
 
 	pm_runtime_disable(&client->dev);
 	pm_runtime_set_suspended(&client->dev);
