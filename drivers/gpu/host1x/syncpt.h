@@ -46,6 +46,9 @@ struct host1x_syncpt {
 	struct host1x_syncpt_intr intr;
 
 	struct kref refcount;
+
+	u64 context;
+	u64 seqno;
 };
 
 /* Initialize sync point array  */
