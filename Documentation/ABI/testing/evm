@@ -36,7 +36,8 @@ Description:
 		which has already been measured as part of the trusted
 		boot.  For more information on creating and loading
 		existing trusted/encrypted keys, refer to:
-		Documentation/keys-trusted-encrypted.txt. Both dracut
+
+		Documentation/security/keys/trusted-encrypted.rst. Both dracut
 		(via 97masterkey and 98integrity) and systemd (via
 		core/ima-setup) have support for loading keys at boot
 		time.
