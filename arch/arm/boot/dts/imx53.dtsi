@@ -303,6 +303,7 @@
 				compatible = "usb-nop-xceiv";
 				clocks = <&clks IMX5_CLK_USB_PHY1_GATE>;
 				clock-names = "main_clk";
+				#phy-cells = <0>;
 				status = "okay";
 			};
 
@@ -310,6 +311,7 @@
 				compatible = "usb-nop-xceiv";
 				clocks = <&clks IMX5_CLK_USB_PHY2_GATE>;
 				clock-names = "main_clk";
+				#phy-cells = <0>;
 				status = "okay";
 			};
 
@@ -431,15 +433,6 @@
 				clocks = <&clks IMX5_CLK_GPT_IPG_GATE>,
 					 <&clks IMX5_CLK_GPT_HF_GATE>;
 				clock-names = "ipg", "per";
-			};
-
-			srtc: srtc@53fa4000 {
-				compatible = "fsl,imx53-rtc", "fsl,imx25-rtc";
-				reg = <0x53fa4000 0x4000>;
-				interrupts = <24>;
-				interrupt-parent = <&tzic>;
-				clocks = <&clks IMX5_CLK_SRTC_GATE>;
-				clock-names = "ipg";
 			};
 
 			iomuxc: iomuxc@53fa8000 {

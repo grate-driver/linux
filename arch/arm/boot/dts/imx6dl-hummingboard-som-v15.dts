@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2014 Russell King
+ * Copyright (C) 2014 Rabeeh Khoury (rabeeh@solid-run.com)
+ * Based on dt work by Russell King
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -40,20 +41,12 @@
  */
 /dts-v1/;
 
-#include "imx6q.dtsi"
+#include "imx6dl.dtsi"
 #include "imx6qdl-sr-som.dtsi"
-#include "imx6qdl-sr-som-brcm.dtsi"
-#include "imx6qdl-cubox-i.dtsi"
+#include "imx6qdl-sr-som-ti.dtsi"
+#include "imx6qdl-hummingboard.dtsi"
 
 / {
-	model = "SolidRun Cubox-i Dual/Quad";
-	compatible = "solidrun,cubox-i/q", "fsl,imx6q";
-};
-
-&sata {
-	status = "okay";
-	fsl,transmit-level-mV = <1104>;
-	fsl,transmit-boost-mdB = <0>;
-	fsl,transmit-atten-16ths = <9>;
-	fsl,no-spread-spectrum;
+	model = "SolidRun HummingBoard Solo/DualLite (1.5som)";
+	compatible = "solidrun,hummingboard/dl", "fsl,imx6dl";
 };
