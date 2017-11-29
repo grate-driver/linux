@@ -245,15 +245,6 @@
 			samsung,syscon-phandle = <&pmu_system_controller>;
 		};
 
-		g2d@10850000 {
-			compatible = "samsung,exynos5250-g2d";
-			reg = <0x10850000 0x1000>;
-			interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&clock CLK_G2D>;
-			clock-names = "fimg2d";
-			iommus = <&sysmmu_g2d>;
-		};
-
 		mfc: codec@11000000 {
 			compatible = "samsung,mfc-v6";
 			reg = <0x11000000 0x10000>;
@@ -739,14 +730,6 @@
 			status = "disabled";
 		};
 
-		sss@10830000 {
-			compatible = "samsung,exynos4210-secss";
-			reg = <0x10830000 0x300>;
-			interrupts = <GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&clock CLK_SSS>;
-			clock-names = "secss";
-		};
-
 		sysmmu_g2d: sysmmu@10A60000 {
 			compatible = "samsung,exynos-sysmmu";
 			reg = <0x10A60000 0x1000>;
@@ -1024,6 +1007,13 @@
 	iommus = <&sysmmu_fimd1>;
 };
 
+&g2d {
+	iommus = <&sysmmu_g2d>;
+	clocks = <&clock CLK_G2D>;
+	clock-names = "fimg2d";
+	status = "okay";
+};
+
 &i2c_0 {
 	clocks = <&clock CLK_I2C0>;
 	clock-names = "i2c";
@@ -1090,6 +1080,11 @@
 	clock-names = "uart", "clk_uart_baud0";
 	dmas = <&pdma1 17>, <&pdma1 18>;
 	dma-names = "rx", "tx";
+};
+
+&sss {
+	clocks = <&clock CLK_SSS>;
+	clock-names = "secss";
 };
 
 #include "exynos5250-pinctrl.dtsi"

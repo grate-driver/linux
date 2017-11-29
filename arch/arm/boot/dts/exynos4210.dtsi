@@ -64,6 +64,12 @@
 		};
 	};
 
+	arm_pmu {
+		compatible = "arm,cortex-a9-pmu";
+		interrupt-parent = <&combiner>;
+		interrupts = <2 2>, <3 2>;
+	};
+
 	sysram: sysram@2020000 {
 		compatible = "mmio-sram";
 		reg = <0x02020000 0x20000>;
