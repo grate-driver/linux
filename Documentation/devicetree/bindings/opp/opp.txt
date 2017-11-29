@@ -45,6 +45,11 @@ Devices supporting OPPs must set their "operating-points-v2" property with
 phandle to a OPP table in their DT node. The OPP core will use this phandle to
 find the operating points for the device.
 
+This can contain more than one phandle for power domain providers that provide
+multiple power domains. That is, one phandle for each power domain. If only one
+phandle is available, then the same OPP table will be used for all power domains
+provided by the power domain provider.
+
 If required, this can be extended for SoC vendor specific bindings. Such bindings
 should be documented as Documentation/devicetree/bindings/power/<vendor>-opp.txt
 and should have a compatible description like: "operating-points-v2-<vendor>".
@@ -153,6 +158,19 @@ Optional properties:
   above example, Z1 & Z2 refer to the version hierarchy Z.
 
 - status: Marks the node enabled/disabled.
+
+- power-domain-opp: This contains phandle to one of the OPP nodes of the power
+  domain. This specifies the minimum required OPP of the power domain for the
+  functioning of the device in this OPP (where this property is present). This
+  property can only be set for a device if the device node contains the
+  "power-domains" property. Also, either all or none of the OPP nodes in an OPP
+  table should have it set.
+
+
+On some platforms the exact frequency or voltage may be hidden from the OS by
+the firmware and the "opp-hz" or the "opp-microvolt" properties may contain
+magic values that represent the frequency or voltage in a firmware dependent
+way, for example an index of an array in the firmware.
 
 Example 1: Single cluster Dual-core ARM cortex A9, switch DVFS states together.
 
