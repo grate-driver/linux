@@ -133,7 +133,6 @@ struct btrfs_device {
 
 	struct btrfs_work work;
 	struct rcu_head rcu;
-	struct work_struct rcu_work;
 
 	/* readahead state */
 	spinlock_t reada_lock;
@@ -489,15 +488,16 @@ int btrfs_finish_chunk_alloc(struct btrfs_trans_handle *trans,
 int btrfs_remove_chunk(struct btrfs_trans_handle *trans,
 		       struct btrfs_fs_info *fs_info, u64 chunk_offset);
 
-static inline int btrfs_dev_stats_dirty(struct btrfs_device *dev)
-{
-	return atomic_read(&dev->dev_stats_ccnt);
-}
-
 static inline void btrfs_dev_stat_inc(struct btrfs_device *dev,
 				      int index)
 {
 	atomic_inc(dev->dev_stat_values + index);
+	/*
+	 * This memory barrier orders stores updating statistics before stores
+	 * updating dev_stats_ccnt.
+	 *
+	 * It pairs with smp_rmb() in btrfs_run_dev_stats().
+	 */
 	smp_mb__before_atomic();
 	atomic_inc(&dev->dev_stats_ccnt);
 }
@@ -514,7 +514,13 @@ static inline int btrfs_dev_stat_read_and_reset(struct btrfs_device *dev,
 	int ret;
 
 	ret = atomic_xchg(dev->dev_stat_values + index, 0);
-	smp_mb__before_atomic();
+	/*
+	 * atomic_xchg implies a full memory barriers as per atomic_t.txt:
+	 * - RMW operations that have a return value are fully ordered;
+	 *
+	 * This implicit memory barriers is paired with the smp_rmb in
+	 * btrfs_run_dev_stats
+	 */
 	atomic_inc(&dev->dev_stats_ccnt);
 	return ret;
 }
@@ -523,6 +529,12 @@ static inline void btrfs_dev_stat_set(struct btrfs_device *dev,
 				      int index, unsigned long val)
 {
 	atomic_set(dev->dev_stat_values + index, val);
+	/*
+	 * This memory barrier orders stores updating statistics before stores
+	 * updating dev_stats_ccnt.
+	 *
+	 * It pairs with smp_rmb() in btrfs_run_dev_stats().
+	 */
 	smp_mb__before_atomic();
 	atomic_inc(&dev->dev_stats_ccnt);
 }
@@ -542,7 +554,5 @@ void btrfs_set_fs_info_ptr(struct btrfs_fs_info *fs_info);
 void btrfs_reset_fs_info_ptr(struct btrfs_fs_info *fs_info);
 
 bool btrfs_check_rw_degradable(struct btrfs_fs_info *fs_info);
-void btrfs_report_missing_device(struct btrfs_fs_info *fs_info, u64 devid,
-				 u8 *uuid);
 
 #endif
