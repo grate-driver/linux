@@ -116,7 +116,8 @@ struct extent_io_ops {
 	 */
 	int (*fill_delalloc)(void *private_data, struct page *locked_page,
 			     u64 start, u64 end, int *page_started,
-			     unsigned long *nr_written);
+			     unsigned long *nr_written,
+			     struct writeback_control *wbc);
 
 	int (*writepage_start_hook)(struct page *page, u64 start, u64 end);
 	void (*writepage_end_io_hook)(struct page *page, u64 start, u64 end,
@@ -299,19 +300,22 @@ int clear_record_extent_bits(struct extent_io_tree *tree, u64 start, u64 end,
 		unsigned bits, struct extent_changeset *changeset);
 int clear_extent_bit(struct extent_io_tree *tree, u64 start, u64 end,
 		     unsigned bits, int wake, int delete,
-		     struct extent_state **cached, gfp_t mask);
+		     struct extent_state **cached);
+int __clear_extent_bit(struct extent_io_tree *tree, u64 start, u64 end,
+		     unsigned bits, int wake, int delete,
+		     struct extent_state **cached, gfp_t mask,
+		     struct extent_changeset *changeset);
 
 static inline int unlock_extent(struct extent_io_tree *tree, u64 start, u64 end)
 {
-	return clear_extent_bit(tree, start, end, EXTENT_LOCKED, 1, 0, NULL,
-				GFP_NOFS);
+	return clear_extent_bit(tree, start, end, EXTENT_LOCKED, 1, 0, NULL);
 }
 
 static inline int unlock_extent_cached(struct extent_io_tree *tree, u64 start,
 		u64 end, struct extent_state **cached, gfp_t mask)
 {
-	return clear_extent_bit(tree, start, end, EXTENT_LOCKED, 1, 0, cached,
-				mask);
+	return __clear_extent_bit(tree, start, end, EXTENT_LOCKED, 1, 0, cached,
+				mask, NULL);
 }
 
 static inline int clear_extent_bits(struct extent_io_tree *tree, u64 start,
@@ -322,8 +326,7 @@ static inline int clear_extent_bits(struct extent_io_tree *tree, u64 start,
 	if (bits & EXTENT_LOCKED)
 		wake = 1;
 
-	return clear_extent_bit(tree, start, end, bits, wake, 0, NULL,
-			GFP_NOFS);
+	return clear_extent_bit(tree, start, end, bits, wake, 0, NULL);
 }
 
 int set_record_extent_bits(struct extent_io_tree *tree, u64 start, u64 end,
@@ -339,10 +342,10 @@ static inline int set_extent_bits(struct extent_io_tree *tree, u64 start,
 }
 
 static inline int clear_extent_uptodate(struct extent_io_tree *tree, u64 start,
-		u64 end, struct extent_state **cached_state, gfp_t mask)
+		u64 end, struct extent_state **cached_state)
 {
-	return clear_extent_bit(tree, start, end, EXTENT_UPTODATE, 0, 0,
-				cached_state, mask);
+	return __clear_extent_bit(tree, start, end, EXTENT_UPTODATE, 0, 0,
+				cached_state, GFP_NOFS, NULL);
 }
 
 static inline int set_extent_dirty(struct extent_io_tree *tree, u64 start,
@@ -357,7 +360,7 @@ static inline int clear_extent_dirty(struct extent_io_tree *tree, u64 start,
 {
 	return clear_extent_bit(tree, start, end,
 				EXTENT_DIRTY | EXTENT_DELALLOC |
-				EXTENT_DO_ACCOUNTING, 0, 0, NULL, GFP_NOFS);
+				EXTENT_DO_ACCOUNTING, 0, 0, NULL);
 }
 
 int convert_extent_bit(struct extent_io_tree *tree, u64 start, u64 end,
@@ -365,10 +368,11 @@ int convert_extent_bit(struct extent_io_tree *tree, u64 start, u64 end,
 		       struct extent_state **cached_state);
 
 static inline int set_extent_delalloc(struct extent_io_tree *tree, u64 start,
-		u64 end, struct extent_state **cached_state)
+				      u64 end, unsigned int extra_bits,
+				      struct extent_state **cached_state)
 {
 	return set_extent_bit(tree, start, end,
-			      EXTENT_DELALLOC | EXTENT_UPTODATE,
+			      EXTENT_DELALLOC | EXTENT_UPTODATE | extra_bits,
 			      NULL, cached_state, GFP_NOFS);
 }
 
@@ -400,23 +404,19 @@ int find_first_extent_bit(struct extent_io_tree *tree, u64 start,
 int extent_invalidatepage(struct extent_io_tree *tree,
 			  struct page *page, unsigned long offset);
 int extent_write_full_page(struct extent_io_tree *tree, struct page *page,
-			  get_extent_t *get_extent,
 			  struct writeback_control *wbc);
 int extent_write_locked_range(struct extent_io_tree *tree, struct inode *inode,
-			      u64 start, u64 end, get_extent_t *get_extent,
-			      int mode);
+			      u64 start, u64 end, int mode);
 int extent_writepages(struct extent_io_tree *tree,
 		      struct address_space *mapping,
-		      get_extent_t *get_extent,
 		      struct writeback_control *wbc);
 int btree_write_cache_pages(struct address_space *mapping,
 			    struct writeback_control *wbc);
 int extent_readpages(struct extent_io_tree *tree,
 		     struct address_space *mapping,
-		     struct list_head *pages, unsigned nr_pages,
-		     get_extent_t get_extent);
+		     struct list_head *pages, unsigned nr_pages);
 int extent_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
-		__u64 start, __u64 len, get_extent_t *get_extent);
+		__u64 start, __u64 len);
 void set_page_extent_mapped(struct page *page);
 
 struct extent_buffer *alloc_extent_buffer(struct btrfs_fs_info *fs_info,
@@ -435,7 +435,7 @@ void free_extent_buffer_stale(struct extent_buffer *eb);
 #define WAIT_PAGE_LOCK	2
 int read_extent_buffer_pages(struct extent_io_tree *tree,
 			     struct extent_buffer *eb, int wait,
-			     get_extent_t *get_extent, int mirror_num);
+			     int mirror_num);
 void wait_on_extent_buffer_writeback(struct extent_buffer *eb);
 
 static inline unsigned long num_extent_pages(u64 start, u64 len)
