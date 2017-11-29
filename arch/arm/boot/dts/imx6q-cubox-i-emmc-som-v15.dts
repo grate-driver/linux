@@ -42,11 +42,12 @@
 
 #include "imx6q.dtsi"
 #include "imx6qdl-sr-som.dtsi"
-#include "imx6qdl-sr-som-brcm.dtsi"
+#include "imx6qdl-sr-som-ti.dtsi"
+#include "imx6qdl-sr-som-emmc.dtsi"
 #include "imx6qdl-cubox-i.dtsi"
 
 / {
-	model = "SolidRun Cubox-i Dual/Quad";
+	model = "SolidRun Cubox-i Dual/Quad (1.5som+emmc)";
 	compatible = "solidrun,cubox-i/q", "fsl,imx6q";
 };
 
