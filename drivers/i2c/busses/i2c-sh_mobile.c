@@ -40,21 +40,21 @@
 /* BUS:     S     A8     ACK   P(*)                                         */
 /* IRQ:       DTE   WAIT                                                    */
 /* ICIC:                                                                    */
-/* ICCR: 0x94 0x90                                                          */
+/* ICCR: 0x94       0x90                                                    */
 /* ICDR:      A8                                                            */
 /*                                                                          */
 /* 1 byte transmit                                                          */
 /* BUS:     S     A8     ACK   D8(1)   ACK   P(*)                           */
 /* IRQ:       DTE   WAIT         WAIT                                       */
 /* ICIC:      -DTE                                                          */
-/* ICCR: 0x94       0x90                                                    */
+/* ICCR: 0x94                    0x90                                       */
 /* ICDR:      A8    D8(1)                                                   */
 /*                                                                          */
 /* 2 byte transmit                                                          */
 /* BUS:     S     A8     ACK   D8(1)   ACK   D8(2)   ACK   P(*)             */
 /* IRQ:       DTE   WAIT         WAIT          WAIT                         */
 /* ICIC:      -DTE                                                          */
-/* ICCR: 0x94                    0x90                                       */
+/* ICCR: 0x94                                  0x90                         */
 /* ICDR:      A8    D8(1)        D8(2)                                      */
 /*                                                                          */
 /* 3 bytes or more, +---------+ gets repeated                               */
@@ -113,7 +113,6 @@ enum sh_mobile_i2c_op {
 	OP_TX_FIRST,
 	OP_TX,
 	OP_TX_STOP,
-	OP_TX_STOP_DATA,
 	OP_TX_TO_RX,
 	OP_RX,
 	OP_RX_STOP,
@@ -298,37 +297,6 @@ static int sh_mobile_i2c_init(struct sh_mobile_i2c_data *pd)
 	return 0;
 }
 
-static void activate_ch(struct sh_mobile_i2c_data *pd)
-{
-	/* Wake up device and enable clock */
-	pm_runtime_get_sync(pd->dev);
-	clk_prepare_enable(pd->clk);
-
-	/* Enable channel and configure rx ack */
-	iic_set_clr(pd, ICCR, ICCR_ICE, 0);
-
-	/* Mask all interrupts */
-	iic_wr(pd, ICIC, 0);
-
-	/* Set the clock */
-	iic_wr(pd, ICCL, pd->iccl & 0xff);
-	iic_wr(pd, ICCH, pd->icch & 0xff);
-}
-
-static void deactivate_ch(struct sh_mobile_i2c_data *pd)
-{
-	/* Clear/disable interrupts */
-	iic_wr(pd, ICSR, 0);
-	iic_wr(pd, ICIC, 0);
-
-	/* Disable channel */
-	iic_set_clr(pd, ICCR, 0, ICCR_ICE);
-
-	/* Disable clock and mark device as idle */
-	clk_disable_unprepare(pd->clk);
-	pm_runtime_put_sync(pd->dev);
-}
-
 static unsigned char i2c_op(struct sh_mobile_i2c_data *pd,
 			    enum sh_mobile_i2c_op op, unsigned char data)
 {
@@ -350,10 +318,7 @@ static unsigned char i2c_op(struct sh_mobile_i2c_data *pd,
 	case OP_TX: /* write data */
 		iic_wr(pd, ICDR, data);
 		break;
-	case OP_TX_STOP_DATA: /* write data and issue a stop afterwards */
-		iic_wr(pd, ICDR, data);
-		/* fallthrough */
-	case OP_TX_STOP: /* issue a stop */
+	case OP_TX_STOP: /* issue a stop (or rep_start) */
 		iic_wr(pd, ICCR, pd->send_stop ? ICCR_ICE | ICCR_TRS
 					       : ICCR_ICE | ICCR_TRS | ICCR_BBSY);
 		break;
@@ -387,11 +352,6 @@ static bool sh_mobile_i2c_is_first_byte(struct sh_mobile_i2c_data *pd)
 	return pd->pos == -1;
 }
 
-static bool sh_mobile_i2c_is_last_byte(struct sh_mobile_i2c_data *pd)
-{
-	return pd->pos == pd->msg->len - 1;
-}
-
 static void sh_mobile_i2c_get_data(struct sh_mobile_i2c_data *pd,
 				   unsigned char *buf)
 {
@@ -409,20 +369,12 @@ static int sh_mobile_i2c_isr_tx(struct sh_mobile_i2c_data *pd)
 	unsigned char data;
 
 	if (pd->pos == pd->msg->len) {
-		/* Send stop if we haven't yet (DMA case) */
-		if (pd->send_stop && pd->stop_after_dma)
-			i2c_op(pd, OP_TX_STOP, 0);
+		i2c_op(pd, OP_TX_STOP, 0);
 		return 1;
 	}
 
 	sh_mobile_i2c_get_data(pd, &data);
-
-	if (sh_mobile_i2c_is_last_byte(pd))
-		i2c_op(pd, OP_TX_STOP_DATA, data);
-	else if (sh_mobile_i2c_is_first_byte(pd))
-		i2c_op(pd, OP_TX_FIRST, data);
-	else
-		i2c_op(pd, OP_TX, data);
+	i2c_op(pd, sh_mobile_i2c_is_first_byte(pd) ? OP_TX_FIRST : OP_TX, data);
 
 	pd->pos++;
 	return 0;
@@ -464,8 +416,9 @@ static int sh_mobile_i2c_isr_rx(struct sh_mobile_i2c_data *pd)
 				break;
 			}
 			data = i2c_op(pd, OP_RX_STOP_DATA, 0);
-		} else
+		} else if (real_pos >= 0) {
 			data = i2c_op(pd, OP_RX, 0);
+		}
 
 		if (real_pos >= 0)
 			pd->msg->buf[real_pos] = data;
@@ -651,10 +604,10 @@ static int start_ch(struct sh_mobile_i2c_data *pd, struct i2c_msg *usr_msg,
 
 	if (do_init) {
 		/* Initialize channel registers */
-		iic_set_clr(pd, ICCR, 0, ICCR_ICE);
+		iic_wr(pd, ICCR, ICCR_SCP);
 
 		/* Enable channel and configure rx ack */
-		iic_set_clr(pd, ICCR, ICCR_ICE, 0);
+		iic_wr(pd, ICCR, ICCR_ICE | ICCR_SCP);
 
 		/* Set the clock */
 		iic_wr(pd, ICCL, pd->iccl & 0xff);
@@ -731,7 +684,8 @@ static int sh_mobile_i2c_xfer(struct i2c_adapter *adapter,
 	int i;
 	long timeout;
 
-	activate_ch(pd);
+	/* Wake up device and enable clock */
+	pm_runtime_get_sync(pd->dev);
 
 	/* Process all messages */
 	for (i = 0; i < num; i++) {
@@ -768,11 +722,13 @@ static int sh_mobile_i2c_xfer(struct i2c_adapter *adapter,
 			break;
 	}
 
-	deactivate_ch(pd);
+	/* Disable channel */
+	iic_wr(pd, ICCR, ICCR_SCP);
 
-	if (!err)
-		err = num;
-	return err;
+	/* Disable clock and mark device as idle */
+	pm_runtime_put_sync(pd->dev);
+
+	return err ?: num;
 }
 
 static u32 sh_mobile_i2c_func(struct i2c_adapter *adapter)
