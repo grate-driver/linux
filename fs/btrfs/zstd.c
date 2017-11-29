@@ -26,11 +26,14 @@
 #define ZSTD_BTRFS_MAX_WINDOWLOG 17
 #define ZSTD_BTRFS_MAX_INPUT (1 << ZSTD_BTRFS_MAX_WINDOWLOG)
 #define ZSTD_BTRFS_DEFAULT_LEVEL 3
+// Max supported by the algorithm is 22, but gains for small blocks (128KB)
+// are limited, thus we cap at 15.
+#define ZSTD_BTRFS_MAX_LEVEL 15
 
-static ZSTD_parameters zstd_get_btrfs_parameters(size_t src_len)
+static ZSTD_parameters zstd_get_btrfs_parameters(size_t src_len, int level)
 {
-	ZSTD_parameters params = ZSTD_getParams(ZSTD_BTRFS_DEFAULT_LEVEL,
-						src_len, 0);
+	ZSTD_parameters params = ZSTD_getParams(level, src_len, 0);
+	BUG_ON(level > ZSTD_maxCLevel());
 
 	if (params.cParams.windowLog > ZSTD_BTRFS_MAX_WINDOWLOG)
 		params.cParams.windowLog = ZSTD_BTRFS_MAX_WINDOWLOG;
@@ -45,6 +48,7 @@ struct workspace {
 	struct list_head list;
 	ZSTD_inBuffer in_buf;
 	ZSTD_outBuffer out_buf;
+	int level;
 };
 
 static void zstd_free_workspace(struct list_head *ws)
@@ -59,7 +63,8 @@ static void zstd_free_workspace(struct list_head *ws)
 static struct list_head *zstd_alloc_workspace(void)
 {
 	ZSTD_parameters params =
-			zstd_get_btrfs_parameters(ZSTD_BTRFS_MAX_INPUT);
+			zstd_get_btrfs_parameters(ZSTD_BTRFS_MAX_INPUT,
+						  ZSTD_BTRFS_MAX_LEVEL);
 	struct workspace *workspace;
 
 	workspace = kzalloc(sizeof(*workspace), GFP_KERNEL);
@@ -101,7 +106,7 @@ static int zstd_compress_pages(struct list_head *ws,
 	unsigned long len = *total_out;
 	const unsigned long nr_dest_pages = *out_pages;
 	unsigned long max_out = nr_dest_pages * PAGE_SIZE;
-	ZSTD_parameters params = zstd_get_btrfs_parameters(len);
+	ZSTD_parameters params = zstd_get_btrfs_parameters(len, workspace->level);
 
 	*out_pages = 0;
 	*total_out = 0;
@@ -427,6 +432,10 @@ finish:
 
 static void zstd_set_level(struct list_head *ws, unsigned int type)
 {
+	struct workspace *workspace = list_entry(ws, struct workspace, list);
+	unsigned level = (type & 0xF0) >> 4;
+
+	workspace->level = level > 0 ? level : ZSTD_BTRFS_DEFAULT_LEVEL;
 }
 
 const struct btrfs_compress_op btrfs_zstd_compress = {
