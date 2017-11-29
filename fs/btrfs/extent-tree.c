@@ -2894,7 +2894,7 @@ int btrfs_check_space_for_delayed_refs(struct btrfs_trans_handle *trans,
 	struct btrfs_block_rsv *global_rsv;
 	u64 num_heads = trans->transaction->delayed_refs.num_heads_ready;
 	u64 csum_bytes = trans->transaction->delayed_refs.pending_csums;
-	u64 num_dirty_bgs = trans->transaction->num_dirty_bgs;
+	unsigned int num_dirty_bgs = trans->transaction->num_dirty_bgs;
 	u64 num_bytes, num_dirty_bgs_bytes;
 	int ret = 0;
 
@@ -4952,12 +4952,12 @@ static int may_commit_transaction(struct btrfs_fs_info *fs_info,
 		bytes = 0;
 	else
 		bytes -= delayed_rsv->size;
+	spin_unlock(&delayed_rsv->lock);
+
 	if (percpu_counter_compare(&space_info->total_bytes_pinned,
 				   bytes) < 0) {
-		spin_unlock(&delayed_rsv->lock);
 		return -ENOSPC;
 	}
-	spin_unlock(&delayed_rsv->lock);
 
 commit:
 	trans = btrfs_join_transaction(fs_info->extent_root);
@@ -5745,8 +5745,8 @@ int btrfs_block_rsv_refill(struct btrfs_root *root,
  * or return if we already have enough space.  This will also handle the resreve
  * tracepoint for the reserved amount.
  */
-int btrfs_inode_rsv_refill(struct btrfs_inode *inode,
-			   enum btrfs_reserve_flush_enum flush)
+static int btrfs_inode_rsv_refill(struct btrfs_inode *inode,
+				  enum btrfs_reserve_flush_enum flush)
 {
 	struct btrfs_root *root = inode->root;
 	struct btrfs_block_rsv *block_rsv = &inode->block_rsv;
