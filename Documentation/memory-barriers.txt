@@ -227,17 +227,19 @@ There are some minimal guarantees that may be expected of a CPU:
  (*) On any given CPU, dependent memory accesses will be issued in order, with
      respect to itself.  This means that for:
 
-	Q = READ_ONCE(P); smp_read_barrier_depends(); D = READ_ONCE(*Q);
+	Q = READ_ONCE(P); D = READ_ONCE(*Q);
 
      the CPU will issue the following memory operations:
 
 	Q = LOAD P, D = LOAD *Q
 
      and always in that order.  On most systems, smp_read_barrier_depends()
-     does nothing, but it is required for DEC Alpha.  The READ_ONCE()
-     is required to prevent compiler mischief.  Please note that you
-     should normally use something like rcu_dereference() instead of
-     open-coding smp_read_barrier_depends().
+     does nothing, but it is required for DEC Alpha, and is supplied by
+     READ_ONCE().  The READ_ONCE() is also required to prevent compiler
+     mischief.  Please note that you should almost always use something
+     like READ_ONCE() or rcu_dereference() instead of open-coding
+     smp_read_barrier_depends(), the only exceptions being in DEC Alpha
+     architecture-specific code and in ACCESS_ONCE itself.
 
  (*) Overlapping loads and stores within a particular CPU will appear to be
      ordered within that CPU.  This means that for:
@@ -1815,7 +1817,7 @@ The Linux kernel has eight basic CPU memory barriers:
 	GENERAL		mb()			smp_mb()
 	WRITE		wmb()			smp_wmb()
 	READ		rmb()			smp_rmb()
-	DATA DEPENDENCY	read_barrier_depends()	smp_read_barrier_depends()
+	DATA DEPENDENCY				READ_ONCE()
 
 
 All memory barriers except the data dependency barriers imply a compiler
