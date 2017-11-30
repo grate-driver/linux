@@ -2136,9 +2136,10 @@ out:
 static int ocfs2_prepare_inode_for_write(struct file *file,
 					 loff_t pos, size_t count, int wait)
 {
-	int ret = 0, meta_level = 0;
+	int ret = 0, meta_level = 0, overwrite_io = 0;
 	struct dentry *dentry = file->f_path.dentry;
 	struct inode *inode = d_inode(dentry);
+	struct buffer_head *di_bh = NULL;
 	loff_t end;
 
 	/*
@@ -2149,12 +2150,35 @@ static int ocfs2_prepare_inode_for_write(struct file *file,
 		if (wait)
 			ret = ocfs2_inode_lock(inode, NULL, meta_level);
 		else
-			ret = ocfs2_try_inode_lock(inode, NULL, meta_level);
+			ret = ocfs2_try_inode_lock(inode,
+				overwrite_io ? NULL : &di_bh, meta_level);
 		if (ret < 0) {
 			meta_level = -1;
 			if (ret != -EAGAIN)
 				mlog_errno(ret);
 			goto out;
+		}
+
+		/*
+		 * Check if IO will overwrite allocated blocks in case
+		 * IOCB_NOWAIT flag is set.
+		 */
+		if (!wait && !overwrite_io) {
+			overwrite_io = 1;
+			if (!down_read_trylock(&OCFS2_I(inode)->ip_alloc_sem)) {
+				ret = -EAGAIN;
+				goto out_unlock;
+			}
+
+			ret = ocfs2_overwrite_io(inode, di_bh, pos, count);
+			brelse(di_bh);
+			di_bh = NULL;
+			up_read(&OCFS2_I(inode)->ip_alloc_sem);
+			if (ret < 0) {
+				if (ret != -EAGAIN)
+					mlog_errno(ret);
+				goto out_unlock;
+			}
 		}
 
 		/* Clear suid / sgid if necessary. We do this here
@@ -2205,6 +2229,8 @@ static int ocfs2_prepare_inode_for_write(struct file *file,
 out_unlock:
 	trace_ocfs2_prepare_inode_for_write(OCFS2_I(inode)->ip_blkno,
 					    pos, count, wait);
+
+	brelse(di_bh);
 
 	if (meta_level >= 0)
 		ocfs2_inode_unlock(inode, meta_level);
@@ -2296,13 +2322,6 @@ static ssize_t ocfs2_file_write_iter(struct kiocb *iocb,
 		goto out;
 	}
 	count = ret;
-
-	if (direct_io && nowait) {
-		if (!ocfs2_overwrite_io(inode, iocb->ki_pos, count, 0)) {
-			ret = -EAGAIN;
-			goto out;
-		}
-	}
 
 	ret = ocfs2_prepare_inode_for_write(file, iocb->ki_pos, count, !nowait);
 	if (ret < 0) {
