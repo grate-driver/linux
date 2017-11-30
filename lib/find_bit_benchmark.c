@@ -114,28 +114,8 @@ static int __init test_find_next_and_bit(const void *bitmap,
 	for (cnt = i = 0; i < BITMAP_LEN; cnt++)
 		i = find_next_and_bit(bitmap, bitmap2, BITMAP_LEN, i+1);
 	cycles = get_cycles() - cycles;
-	pr_err("find_next_and_bit: %ld cycles, %ld iterations\n", (long)cycles,
-		cnt);
-
-	return 0;
-}
-
-static int __init test_find_next_and_bit_ref(const void *bitmap,
-		const void *bitmap2, unsigned long len)
-{
-	unsigned long i, cnt;
-	cycles_t cycles;
-
-	cycles = get_cycles();
-	for (cnt = i = 0; i < BITMAP_LEN; cnt++)
-		while ((i = find_next_bit(bitmap, BITMAP_LEN, i + 1))
-			< BITMAP_LEN)
-			if (test_bit(i, bitmap2))
-				break;
-
-	cycles = get_cycles() - cycles;
-	pr_err("find_next_and_bit_ref: %ld cycles, %ld iterations\n",
-		(long)cycles, cnt);
+	pr_err("find_next_and_bit:\t\t%llu cycles, %ld iterations\n",
+		(u64)cycles, cnt);
 
 	return 0;
 }
@@ -153,7 +133,6 @@ static int __init find_bit_test(void)
 	test_find_next_zero_bit(bitmap, BITMAP_LEN);
 	test_find_last_bit(bitmap, BITMAP_LEN);
 	test_find_first_bit(bitmap, BITMAP_LEN);
-	test_find_next_and_bit_ref(bitmap, bitmap2, BITMAP_LEN);
 	test_find_next_and_bit(bitmap, bitmap2, BITMAP_LEN);
 
 	pr_err("\nStart testing find_bit() with sparse bitmap\n");
@@ -170,7 +149,6 @@ static int __init find_bit_test(void)
 	test_find_next_zero_bit(bitmap, BITMAP_LEN);
 	test_find_last_bit(bitmap, BITMAP_LEN);
 	test_find_first_bit(bitmap, BITMAP_LEN);
-	test_find_next_and_bit_ref(bitmap, bitmap2, BITMAP_LEN);
 	test_find_next_and_bit(bitmap, bitmap2, BITMAP_LEN);
 
 	/*

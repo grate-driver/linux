@@ -87,7 +87,7 @@
  *                                      Position next zero bit in *addr >= bit
  *  find_next_bit(addr, nbits, bit)     Position next set bit in *addr >= bit
  *  find_next_and_bit(addr1, addr2, nbits, bit)
- *                                      Same as find_first_bit, but in
+ *                                      Same as find_next_bit, but in
  *                                      (*addr1 & *addr2)
  *
  */
