@@ -66,6 +66,13 @@ static const unsigned freqs[] = { 400000, 300000, 200000, 100000 };
 bool use_spi_crc = 1;
 module_param(use_spi_crc, bool, 0);
 
+#ifdef CONFIG_MMC_MQ_DEFAULT
+bool mmc_use_blk_mq = true;
+#else
+bool mmc_use_blk_mq = false;
+#endif
+module_param_named(use_blk_mq, mmc_use_blk_mq, bool, S_IWUSR | S_IRUGO);
+
 static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
@@ -656,37 +663,6 @@ bool mmc_is_req_done(struct mmc_host *host, struct mmc_request *mrq)
 		return completion_done(&mrq->completion);
 }
 EXPORT_SYMBOL(mmc_is_req_done);
-
-/**
- *	mmc_pre_req - Prepare for a new request
- *	@host: MMC host to prepare command
- *	@mrq: MMC request to prepare for
- *
- *	mmc_pre_req() is called in prior to mmc_start_req() to let
- *	host prepare for the new request. Preparation of a request may be
- *	performed while another request is running on the host.
- */
-static void mmc_pre_req(struct mmc_host *host, struct mmc_request *mrq)
-{
-	if (host->ops->pre_req)
-		host->ops->pre_req(host, mrq);
-}
-
-/**
- *	mmc_post_req - Post process a completed request
- *	@host: MMC host to post process command
- *	@mrq: MMC request to post process for
- *	@err: Error, if non zero, clean up any resources made in pre_req
- *
- *	Let the host post process a completed request. Post processing of
- *	a request may be performed while another reuqest is running.
- */
-static void mmc_post_req(struct mmc_host *host, struct mmc_request *mrq,
-			 int err)
-{
-	if (host->ops->post_req)
-		host->ops->post_req(host, mrq, err);
-}
 
 /**
  * mmc_finalize_areq() - finalize an asynchronous request

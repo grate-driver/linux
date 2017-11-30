@@ -63,7 +63,13 @@ MODULE_ALIAS("mmc:block");
 #endif
 #define MODULE_PARAM_PREFIX "mmcblk."
 
-#define MMC_BLK_TIMEOUT_MS  (10 * 60 * 1000)        /* 10 minute timeout */
+/*
+ * Set a 10 second timeout for polling write request busy state. Note, mmc core
+ * is setting a 3 second timeout for SD cards, and SDHCI has long had a 10
+ * second software timer to timeout the whole request, so 10 seconds should be
+ * ample.
+ */
+#define MMC_BLK_TIMEOUT_MS  (10 * 1000)
 #define MMC_SANITIZE_REQ_TIMEOUT 240000
 #define MMC_EXTRACT_INDEX_FROM_ARG(x) ((x & 0x00FF0000) >> 16)
 
@@ -112,6 +118,7 @@ struct mmc_blk_data {
 #define MMC_BLK_WRITE		BIT(1)
 #define MMC_BLK_DISCARD		BIT(2)
 #define MMC_BLK_SECDISCARD	BIT(3)
+#define MMC_BLK_CQE_RECOVERY	BIT(4)
 
 	/*
 	 * Only set in main mmc_blk_data associated
@@ -122,6 +129,10 @@ struct mmc_blk_data {
 	struct device_attribute force_ro;
 	struct device_attribute power_ro_lock;
 	int	area_type;
+
+	/* debugfs files (only in main mmc_blk_data) */
+	struct dentry *status_dentry;
+	struct dentry *ext_csd_dentry;
 };
 
 /* Device type for RPMB character devices */
@@ -185,7 +196,7 @@ static void mmc_blk_put(struct mmc_blk_data *md)
 	md->usage--;
 	if (md->usage == 0) {
 		int devidx = mmc_get_devidx(md->disk);
-		blk_cleanup_queue(md->queue.queue);
+		blk_put_queue(md->queue.queue);
 		ida_simple_remove(&mmc_blk_ida, devidx);
 		put_disk(md->disk);
 		kfree(md);
@@ -233,9 +244,14 @@ static ssize_t power_ro_lock_store(struct device *dev,
 
 	/* Dispatch locking to the block layer */
 	req = blk_get_request(mq->queue, REQ_OP_DRV_OUT, __GFP_RECLAIM);
+	if (IS_ERR(req)) {
+		count = PTR_ERR(req);
+		goto out_put;
+	}
 	req_to_mmc_queue_req(req)->drv_op = MMC_DRV_OP_BOOT_WP;
 	blk_execute_rq(mq->queue, NULL, req, 0);
 	ret = req_to_mmc_queue_req(req)->drv_op_result;
+	blk_put_request(req);
 
 	if (!ret) {
 		pr_info("%s: Locking boot partition ro until next power on\n",
@@ -248,7 +264,7 @@ static ssize_t power_ro_lock_store(struct device *dev,
 				set_disk_ro(part_md->disk, 1);
 			}
 	}
-
+out_put:
 	mmc_blk_put(md);
 	return count;
 }
@@ -624,6 +640,10 @@ static int mmc_blk_ioctl_cmd(struct mmc_blk_data *md,
 	req = blk_get_request(mq->queue,
 		idata->ic.write_flag ? REQ_OP_DRV_OUT : REQ_OP_DRV_IN,
 		__GFP_RECLAIM);
+	if (IS_ERR(req)) {
+		err = PTR_ERR(req);
+		goto cmd_done;
+	}
 	idatas[0] = idata;
 	req_to_mmc_queue_req(req)->drv_op =
 		rpmb ? MMC_DRV_OP_IOCTL_RPMB : MMC_DRV_OP_IOCTL;
@@ -691,6 +711,10 @@ static int mmc_blk_ioctl_multi_cmd(struct mmc_blk_data *md,
 	req = blk_get_request(mq->queue,
 		idata[0]->ic.write_flag ? REQ_OP_DRV_OUT : REQ_OP_DRV_IN,
 		__GFP_RECLAIM);
+	if (IS_ERR(req)) {
+		err = PTR_ERR(req);
+		goto cmd_err;
+	}
 	req_to_mmc_queue_req(req)->drv_op =
 		rpmb ? MMC_DRV_OP_IOCTL_RPMB : MMC_DRV_OP_IOCTL;
 	req_to_mmc_queue_req(req)->drv_op_data = idata;
@@ -904,14 +928,55 @@ static int mmc_sd_num_wr_blocks(struct mmc_card *card, u32 *written_blocks)
 	return 0;
 }
 
+static unsigned int mmc_blk_clock_khz(struct mmc_host *host)
+{
+	if (host->actual_clock)
+		return host->actual_clock / 1000;
+
+	/* Clock may be subject to a divisor, fudge it by a factor of 2. */
+	if (host->ios.clock)
+		return host->ios.clock / 2000;
+
+	/* How can there be no clock */
+	WARN_ON_ONCE(1);
+	return 100; /* 100 kHz is minimum possible value */
+}
+
+static unsigned int mmc_blk_data_timeout_ms(struct mmc_host *host,
+					    struct mmc_data *data)
+{
+	unsigned int ms = DIV_ROUND_UP(data->timeout_ns, 1000000);
+	unsigned int khz;
+
+	if (data->timeout_clks) {
+		khz = mmc_blk_clock_khz(host);
+		ms += DIV_ROUND_UP(data->timeout_clks, khz);
+	}
+
+	return ms;
+}
+
+static inline bool mmc_blk_in_tran_state(u32 status)
+{
+	/*
+	 * Some cards mishandle the status bits, so make sure to check both the
+	 * busy indication and the card state.
+	 */
+	return status & R1_READY_FOR_DATA &&
+	       (R1_CURRENT_STATE(status) == R1_STATE_TRAN);
+}
+
 static int card_busy_detect(struct mmc_card *card, unsigned int timeout_ms,
-		bool hw_busy_detect, struct request *req, bool *gen_err)
+			    bool hw_busy_detect, struct request *req,
+			    u32 *resp_errs)
 {
 	unsigned long timeout = jiffies + msecs_to_jiffies(timeout_ms);
 	int err = 0;
 	u32 status;
 
 	do {
+		bool done = time_after(jiffies, timeout);
+
 		err = __mmc_send_status(card, &status, 5);
 		if (err) {
 			pr_err("%s: error %d requesting status\n",
@@ -919,11 +984,9 @@ static int card_busy_detect(struct mmc_card *card, unsigned int timeout_ms,
 			return err;
 		}
 
-		if (status & R1_ERROR) {
-			pr_err("%s: %s: error sending status cmd, status %#x\n",
-				req->rq_disk->disk_name, __func__, status);
-			*gen_err = true;
-		}
+		/* Accumulate any response error bits seen */
+		if (resp_errs)
+			*resp_errs |= status;
 
 		/* We may rely on the host hw to handle busy detection.*/
 		if ((card->host->caps & MMC_CAP_WAIT_WHILE_BUSY) &&
@@ -934,10 +997,10 @@ static int card_busy_detect(struct mmc_card *card, unsigned int timeout_ms,
 		 * Timeout if the device never becomes ready for data and never
 		 * leaves the program state.
 		 */
-		if (time_after(jiffies, timeout)) {
-			pr_err("%s: Card stuck in programming state! %s %s\n",
+		if (done) {
+			pr_err("%s: Card stuck in wrong state! %s %s status: %#x\n",
 				mmc_hostname(card->host),
-				req->rq_disk->disk_name, __func__);
+				req->rq_disk->disk_name, __func__, status);
 			return -ETIMEDOUT;
 		}
 
@@ -946,8 +1009,25 @@ static int card_busy_detect(struct mmc_card *card, unsigned int timeout_ms,
 		 * so make sure to check both the busy
 		 * indication and the card state.
 		 */
-	} while (!(status & R1_READY_FOR_DATA) ||
-		 (R1_CURRENT_STATE(status) == R1_STATE_PRG));
+	} while (!mmc_blk_in_tran_state(status));
+
+	return err;
+}
+
+static int card_busy_detect_err(struct mmc_card *card, unsigned int timeout_ms,
+				bool hw_busy_detect, struct request *req,
+				bool *gen_err)
+{
+	u32 resp_errs = 0;
+	int err;
+
+	err = card_busy_detect(card, timeout_ms, hw_busy_detect, req,
+			       &resp_errs);
+	if (resp_errs & R1_ERROR) {
+		pr_err("%s: %s: error sending status cmd, status %#x\n",
+		       req->rq_disk->disk_name, __func__, resp_errs);
+		*gen_err = true;
+	}
 
 	return err;
 }
@@ -994,7 +1074,8 @@ static int send_stop(struct mmc_card *card, unsigned int timeout_ms,
 		*gen_err = true;
 	}
 
-	return card_busy_detect(card, timeout_ms, use_r1b_resp, req, gen_err);
+	return card_busy_detect_err(card, timeout_ms, use_r1b_resp, req,
+				    gen_err);
 }
 
 #define ERR_NOMEDIUM	3
@@ -1122,9 +1203,10 @@ static int mmc_blk_cmd_recovery(struct mmc_card *card, struct request *req,
 	 */
 	if (R1_CURRENT_STATE(status) == R1_STATE_DATA ||
 	    R1_CURRENT_STATE(status) == R1_STATE_RCV) {
-		err = send_stop(card,
-			DIV_ROUND_UP(brq->data.timeout_ns, 1000000),
-			req, gen_err, &stop_status);
+		unsigned int timeout;
+
+		timeout = mmc_blk_data_timeout_ms(card->host, &brq->data);
+		err = send_stop(card, timeout, req, gen_err, &stop_status);
 		if (err) {
 			pr_err("%s: error %d sending stop command\n",
 			       req->rq_disk->disk_name, err);
@@ -1203,6 +1285,14 @@ static inline void mmc_blk_reset_success(struct mmc_blk_data *md, int type)
 	md->reset_done &= ~type;
 }
 
+static void mmc_blk_end_request(struct request *req, blk_status_t error)
+{
+	if (req->mq_ctx)
+		blk_mq_end_request(req, error);
+	else
+		blk_end_request_all(req, error);
+}
+
 /*
  * The non-block commands come back from the block layer after it queued it and
  * processed it with all other requests and then they get issued in this
@@ -1264,7 +1354,7 @@ static void mmc_blk_issue_drv_op(struct mmc_queue *mq, struct request *req)
 		break;
 	}
 	mq_rq->drv_op_result = ret;
-	blk_end_request_all(req, ret ? BLK_STS_IOERR : BLK_STS_OK);
+	mmc_blk_end_request(req, ret ? BLK_STS_IOERR : BLK_STS_OK);
 }
 
 static void mmc_blk_issue_discard_rq(struct mmc_queue *mq, struct request *req)
@@ -1307,7 +1397,7 @@ static void mmc_blk_issue_discard_rq(struct mmc_queue *mq, struct request *req)
 	else
 		mmc_blk_reset_success(md, type);
 fail:
-	blk_end_request(req, status, blk_rq_bytes(req));
+	mmc_blk_end_request(req, status);
 }
 
 static void mmc_blk_issue_secdiscard_rq(struct mmc_queue *mq,
@@ -1377,7 +1467,7 @@ out_retry:
 	if (!err)
 		mmc_blk_reset_success(md, type);
 out:
-	blk_end_request(req, status, blk_rq_bytes(req));
+	mmc_blk_end_request(req, status);
 }
 
 static void mmc_blk_issue_flush(struct mmc_queue *mq, struct request *req)
@@ -1387,7 +1477,7 @@ static void mmc_blk_issue_flush(struct mmc_queue *mq, struct request *req)
 	int ret = 0;
 
 	ret = mmc_flush_cache(card);
-	blk_end_request_all(req, ret ? BLK_STS_IOERR : BLK_STS_OK);
+	mmc_blk_end_request(req, ret ? BLK_STS_IOERR : BLK_STS_OK);
 }
 
 /*
@@ -1413,14 +1503,17 @@ static inline void mmc_apply_rel_rw(struct mmc_blk_request *brq,
 	}
 }
 
-#define CMD_ERRORS							\
-	(R1_OUT_OF_RANGE |	/* Command argument out of range */	\
-	 R1_ADDRESS_ERROR |	/* Misaligned address */		\
+#define CMD_ERRORS_EXCL_OOR						\
+	(R1_ADDRESS_ERROR |	/* Misaligned address */		\
 	 R1_BLOCK_LEN_ERROR |	/* Transferred block length incorrect */\
 	 R1_WP_VIOLATION |	/* Tried to write to protected block */	\
 	 R1_CARD_ECC_FAILED |	/* Card ECC failed */			\
 	 R1_CC_ERROR |		/* Card controller error */		\
 	 R1_ERROR)		/* General/unknown error */
+
+#define CMD_ERRORS							\
+	(CMD_ERRORS_EXCL_OOR |						\
+	 R1_OUT_OF_RANGE)	/* Command argument out of range */	\
 
 static void mmc_blk_eval_resp_error(struct mmc_blk_request *brq)
 {
@@ -1529,8 +1622,8 @@ static enum mmc_blk_status mmc_blk_err_check(struct mmc_card *card,
 			gen_err = true;
 		}
 
-		err = card_busy_detect(card, MMC_BLK_TIMEOUT_MS, false, req,
-					&gen_err);
+		err = card_busy_detect_err(card, MMC_BLK_TIMEOUT_MS, false, req,
+					   &gen_err);
 		if (err)
 			return MMC_BLK_CMD_ERR;
 	}
@@ -1698,6 +1791,138 @@ static void mmc_blk_data_prep(struct mmc_queue *mq, struct mmc_queue_req *mqrq,
 		*do_data_tag_p = do_data_tag;
 }
 
+#define MMC_CQE_RETRIES 2
+
+static void mmc_blk_cqe_complete_rq(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_request *mrq = &mqrq->brq.mrq;
+	struct request_queue *q = req->q;
+	struct mmc_host *host = mq->card->host;
+	unsigned long flags;
+	bool put_card;
+	int err;
+
+	mmc_cqe_post_req(host, mrq);
+
+	if (mrq->cmd && mrq->cmd->error)
+		err = mrq->cmd->error;
+	else if (mrq->data && mrq->data->error)
+		err = mrq->data->error;
+	else
+		err = 0;
+
+	if (err) {
+		if (mqrq->retries++ < MMC_CQE_RETRIES)
+			blk_mq_requeue_request(req, true);
+		else
+			blk_mq_end_request(req, BLK_STS_IOERR);
+	} else if (mrq->data) {
+		if (blk_update_request(req, BLK_STS_OK, mrq->data->bytes_xfered))
+			blk_mq_requeue_request(req, true);
+		else
+			__blk_mq_end_request(req, BLK_STS_OK);
+	} else {
+		blk_mq_end_request(req, BLK_STS_OK);
+	}
+
+	spin_lock_irqsave(q->queue_lock, flags);
+
+	mq->in_flight[mmc_issue_type(mq, req)] -= 1;
+
+	put_card = (mmc_tot_in_flight(mq) == 0);
+
+	mmc_cqe_check_busy(mq);
+
+	spin_unlock_irqrestore(q->queue_lock, flags);
+
+	if (!mq->cqe_busy)
+		blk_mq_run_hw_queues(q, true);
+
+	if (put_card)
+		mmc_put_card(mq->card, &mq->ctx);
+}
+
+void mmc_blk_cqe_recovery(struct mmc_queue *mq)
+{
+	struct mmc_card *card = mq->card;
+	struct mmc_host *host = card->host;
+	int err;
+
+	pr_debug("%s: CQE recovery start\n", mmc_hostname(host));
+
+	err = mmc_cqe_recovery(host);
+	if (err)
+		mmc_blk_reset(mq->blkdata, host, MMC_BLK_CQE_RECOVERY);
+	else
+		mmc_blk_reset_success(mq->blkdata, MMC_BLK_CQE_RECOVERY);
+
+	pr_debug("%s: CQE recovery done\n", mmc_hostname(host));
+}
+
+static void mmc_blk_cqe_req_done(struct mmc_request *mrq)
+{
+	struct mmc_queue_req *mqrq = container_of(mrq, struct mmc_queue_req,
+						  brq.mrq);
+	struct request *req = mmc_queue_req_to_req(mqrq);
+	struct request_queue *q = req->q;
+	struct mmc_queue *mq = q->queuedata;
+
+	/*
+	 * Block layer timeouts race with completions which means the normal
+	 * completion path cannot be used during recovery.
+	 */
+	if (mq->in_recovery)
+		mmc_blk_cqe_complete_rq(mq, req);
+	else
+		blk_mq_complete_request(req);
+}
+
+static int mmc_blk_cqe_start_req(struct mmc_host *host, struct mmc_request *mrq)
+{
+	mrq->done		= mmc_blk_cqe_req_done;
+	mrq->recovery_notifier	= mmc_cqe_recovery_notifier;
+
+	return mmc_cqe_start_req(host, mrq);
+}
+
+static struct mmc_request *mmc_blk_cqe_prep_dcmd(struct mmc_queue_req *mqrq,
+						 struct request *req)
+{
+	struct mmc_blk_request *brq = &mqrq->brq;
+
+	memset(brq, 0, sizeof(*brq));
+
+	brq->mrq.cmd = &brq->cmd;
+	brq->mrq.tag = req->tag;
+
+	return &brq->mrq;
+}
+
+static int mmc_blk_cqe_issue_flush(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_request *mrq = mmc_blk_cqe_prep_dcmd(mqrq, req);
+
+	mrq->cmd->opcode = MMC_SWITCH;
+	mrq->cmd->arg = (MMC_SWITCH_MODE_WRITE_BYTE << 24) |
+			(EXT_CSD_FLUSH_CACHE << 16) |
+			(1 << 8) |
+			EXT_CSD_CMD_SET_NORMAL;
+	mrq->cmd->flags = MMC_CMD_AC | MMC_RSP_R1B;
+
+	return mmc_blk_cqe_start_req(mq->card->host, mrq);
+}
+
+static int mmc_blk_cqe_issue_rw_rq(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+
+	mmc_blk_data_prep(mq, mqrq, 0, NULL, NULL);
+
+	return mmc_blk_cqe_start_req(mq->card->host, &mqrq->brq.mrq);
+}
+
 static void mmc_blk_rw_rq_prep(struct mmc_queue_req *mqrq,
 			       struct mmc_card *card,
 			       int disable_multi,
@@ -1764,6 +1989,637 @@ static void mmc_blk_rw_rq_prep(struct mmc_queue_req *mqrq,
 	}
 
 	mqrq->areq.err_check = mmc_blk_err_check;
+}
+
+#define MMC_MAX_RETRIES		5
+#define MMC_DATA_RETRIES	2
+#define MMC_NO_RETRIES		(MMC_MAX_RETRIES + 1)
+
+static int mmc_blk_send_stop(struct mmc_card *card, unsigned int timeout)
+{
+	struct mmc_command cmd = {
+		.opcode = MMC_STOP_TRANSMISSION,
+		.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_AC,
+		/* Some hosts wait for busy anyway, so provide a busy timeout */
+		.busy_timeout = timeout,
+	};
+
+	return mmc_wait_for_cmd(card->host, &cmd, 5);
+}
+
+static int mmc_blk_fix_state(struct mmc_card *card, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_blk_request *brq = &mqrq->brq;
+	unsigned int timeout = mmc_blk_data_timeout_ms(card->host, &brq->data);
+	int err;
+
+	mmc_retune_hold_now(card->host);
+
+	mmc_blk_send_stop(card, timeout);
+
+	err = card_busy_detect(card, timeout, false, req, NULL);
+
+	mmc_retune_release(card->host);
+
+	return err;
+}
+
+#define MMC_READ_SINGLE_RETRIES	2
+
+/* Single sector read during recovery */
+static void mmc_blk_read_single(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_request *mrq = &mqrq->brq.mrq;
+	struct mmc_card *card = mq->card;
+	struct mmc_host *host = card->host;
+	blk_status_t error = BLK_STS_OK;
+	int retries = 0;
+
+	do {
+		u32 status;
+		int err;
+
+		mmc_blk_rw_rq_prep(mqrq, card, 1, mq);
+
+		mmc_wait_for_req(host, mrq);
+
+		err = mmc_send_status(card, &status);
+		if (err)
+			goto error_exit;
+
+		if (!mmc_host_is_spi(host) &&
+		    !mmc_blk_in_tran_state(status)) {
+			err = mmc_blk_fix_state(card, req);
+			if (err)
+				goto error_exit;
+		}
+
+		if (mrq->cmd->error && retries++ < MMC_READ_SINGLE_RETRIES)
+			continue;
+
+		retries = 0;
+
+		if (mrq->cmd->error ||
+		    mrq->data->error ||
+		    (!mmc_host_is_spi(host) &&
+		     (mrq->cmd->resp[0] & CMD_ERRORS || status & CMD_ERRORS)))
+			error = BLK_STS_IOERR;
+		else
+			error = BLK_STS_OK;
+
+	} while (blk_update_request(req, error, 512));
+
+	return;
+
+error_exit:
+	mrq->data->bytes_xfered = 0;
+	blk_update_request(req, BLK_STS_IOERR, 512);
+	/* Let it try the remaining request again */
+	if (mqrq->retries > MMC_MAX_RETRIES - 1)
+		mqrq->retries = MMC_MAX_RETRIES - 1;
+}
+
+static inline bool mmc_blk_oor_valid(struct mmc_blk_request *brq)
+{
+	return !!brq->mrq.sbc;
+}
+
+static inline u32 mmc_blk_stop_err_bits(struct mmc_blk_request *brq)
+{
+	return mmc_blk_oor_valid(brq) ? CMD_ERRORS : CMD_ERRORS_EXCL_OOR;
+}
+
+/*
+ * Check for errors the host controller driver might not have seen such as
+ * response mode errors or invalid card state.
+ */
+static bool mmc_blk_status_error(struct request *req, u32 status)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_blk_request *brq = &mqrq->brq;
+	struct mmc_queue *mq = req->q->queuedata;
+	u32 stop_err_bits;
+
+	if (mmc_host_is_spi(mq->card->host))
+		return 0;
+
+	stop_err_bits = mmc_blk_stop_err_bits(brq);
+
+	return brq->cmd.resp[0]  & CMD_ERRORS    ||
+	       brq->stop.resp[0] & stop_err_bits ||
+	       status            & stop_err_bits ||
+	       (rq_data_dir(req) == WRITE && !mmc_blk_in_tran_state(status));
+}
+
+static inline bool mmc_blk_cmd_started(struct mmc_blk_request *brq)
+{
+	return !brq->sbc.error && !brq->cmd.error &&
+	       !(brq->cmd.resp[0] & CMD_ERRORS);
+}
+
+/*
+ * Requests are completed by mmc_blk_mq_complete_rq() which sets simple
+ * policy:
+ * 1. A request that has transferred at least some data is considered
+ * successful and will be requeued if there is remaining data to
+ * transfer.
+ * 2. Otherwise the number of retries is incremented and the request
+ * will be requeued if there are remaining retries.
+ * 3. Otherwise the request will be errored out.
+ * That means mmc_blk_mq_complete_rq() is controlled by bytes_xfered and
+ * mqrq->retries. So there are only 4 possible actions here:
+ *	1. do not accept the bytes_xfered value i.e. set it to zero
+ *	2. change mqrq->retries to determine the number of retries
+ *	3. try to reset the card
+ *	4. read one sector at a time
+ */
+static void mmc_blk_mq_rw_recovery(struct mmc_queue *mq, struct request *req)
+{
+	int type = rq_data_dir(req) == READ ? MMC_BLK_READ : MMC_BLK_WRITE;
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_blk_request *brq = &mqrq->brq;
+	struct mmc_blk_data *md = mq->blkdata;
+	struct mmc_card *card = mq->card;
+	u32 status;
+	u32 blocks;
+	int err;
+
+	/*
+	 * Some errors the host driver might not have seen. Set the number of
+	 * bytes transferred to zero in that case.
+	 */
+	err = __mmc_send_status(card, &status, 0);
+	if (err || mmc_blk_status_error(req, status))
+		brq->data.bytes_xfered = 0;
+
+	mmc_retune_release(card->host);
+
+	/*
+	 * Try again to get the status. This also provides an opportunity for
+	 * re-tuning.
+	 */
+	if (err)
+		err = __mmc_send_status(card, &status, 0);
+
+	/*
+	 * Nothing more to do after the number of bytes transferred has been
+	 * updated and there is no card.
+	 */
+	if (err && mmc_detect_card_removed(card->host))
+		return;
+
+	/* Try to get back to "tran" state */
+	if (!mmc_host_is_spi(mq->card->host) &&
+	    (err || !mmc_blk_in_tran_state(status)))
+		err = mmc_blk_fix_state(mq->card, req);
+
+	/*
+	 * Special case for SD cards where the card might record the number of
+	 * blocks written.
+	 */
+	if (!err && mmc_blk_cmd_started(brq) && mmc_card_sd(card) &&
+	    rq_data_dir(req) == WRITE) {
+		if (mmc_sd_num_wr_blocks(card, &blocks))
+			brq->data.bytes_xfered = 0;
+		else
+			brq->data.bytes_xfered = blocks << 9;
+	}
+
+	/* Reset if the card is in a bad state */
+	if (!mmc_host_is_spi(mq->card->host) &&
+	    err && mmc_blk_reset(md, card->host, type)) {
+		pr_err("%s: recovery failed!\n", req->rq_disk->disk_name);
+		mqrq->retries = MMC_NO_RETRIES;
+		return;
+	}
+
+	/*
+	 * If anything was done, just return and if there is anything remaining
+	 * on the request it will get requeued.
+	 */
+	if (brq->data.bytes_xfered)
+		return;
+
+	/* Reset before last retry */
+	if (mqrq->retries + 1 == MMC_MAX_RETRIES)
+		mmc_blk_reset(md, card->host, type);
+
+	/* Command errors fail fast, so use all MMC_MAX_RETRIES */
+	if (brq->sbc.error || brq->cmd.error)
+		return;
+
+	/* Reduce the remaining retries for data errors */
+	if (mqrq->retries < MMC_MAX_RETRIES - MMC_DATA_RETRIES) {
+		mqrq->retries = MMC_MAX_RETRIES - MMC_DATA_RETRIES;
+		return;
+	}
+
+	/* FIXME: Missing single sector read for large sector size */
+	if (!mmc_large_sector(card) && rq_data_dir(req) == READ &&
+	    brq->data.blocks > 1) {
+		/* Read one sector at a time */
+		mmc_blk_read_single(mq, req);
+		return;
+	}
+}
+
+static inline bool mmc_blk_rq_error(struct mmc_blk_request *brq)
+{
+	mmc_blk_eval_resp_error(brq);
+
+	return brq->sbc.error || brq->cmd.error || brq->stop.error ||
+	       brq->data.error || brq->cmd.resp[0] & CMD_ERRORS;
+}
+
+static int mmc_blk_card_busy(struct mmc_card *card, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	u32 status = 0;
+	int err;
+
+	if (mmc_host_is_spi(card->host) || rq_data_dir(req) == READ)
+		return 0;
+
+	err = card_busy_detect(card, MMC_BLK_TIMEOUT_MS, false, req, &status);
+
+	/*
+	 * Do not assume data transferred correctly if there are any error bits
+	 * set.
+	 */
+	if (status & mmc_blk_stop_err_bits(&mqrq->brq)) {
+		mqrq->brq.data.bytes_xfered = 0;
+		err = err ? err : -EIO;
+	}
+
+	/* Copy the exception bit so it will be seen later on */
+	if (mmc_card_mmc(card) && status & R1_EXCEPTION_EVENT)
+		mqrq->brq.cmd.resp[0] |= R1_EXCEPTION_EVENT;
+
+	return err;
+}
+
+static inline void mmc_blk_rw_reset_success(struct mmc_queue *mq,
+					    struct request *req)
+{
+	int type = rq_data_dir(req) == READ ? MMC_BLK_READ : MMC_BLK_WRITE;
+
+	mmc_blk_reset_success(mq->blkdata, type);
+}
+
+static void mmc_blk_mq_complete_rq(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	unsigned int nr_bytes = mqrq->brq.data.bytes_xfered;
+
+	if (nr_bytes) {
+		if (blk_update_request(req, BLK_STS_OK, nr_bytes))
+			blk_mq_requeue_request(req, true);
+		else
+			__blk_mq_end_request(req, BLK_STS_OK);
+	} else if (!blk_rq_bytes(req)) {
+		__blk_mq_end_request(req, BLK_STS_IOERR);
+	} else if (mqrq->retries++ < MMC_MAX_RETRIES) {
+		blk_mq_requeue_request(req, true);
+	} else {
+		if (mmc_card_removed(mq->card))
+			req->rq_flags |= RQF_QUIET;
+		blk_mq_end_request(req, BLK_STS_IOERR);
+	}
+}
+
+static bool mmc_blk_urgent_bkops_needed(struct mmc_queue *mq,
+					struct mmc_queue_req *mqrq)
+{
+	return mmc_card_mmc(mq->card) && !mmc_host_is_spi(mq->card->host) &&
+	       (mqrq->brq.cmd.resp[0] & R1_EXCEPTION_EVENT ||
+		mqrq->brq.stop.resp[0] & R1_EXCEPTION_EVENT);
+}
+
+static void mmc_blk_urgent_bkops(struct mmc_queue *mq,
+				 struct mmc_queue_req *mqrq)
+{
+	if (mmc_blk_urgent_bkops_needed(mq, mqrq))
+		mmc_start_bkops(mq->card, true);
+}
+
+void mmc_blk_mq_complete(struct request *req)
+{
+	struct mmc_queue *mq = req->q->queuedata;
+
+	if (mq->use_cqe)
+		mmc_blk_cqe_complete_rq(mq, req);
+	else
+		mmc_blk_mq_complete_rq(mq, req);
+}
+
+static void mmc_blk_mq_poll_completion(struct mmc_queue *mq,
+				       struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_host *host = mq->card->host;
+
+	if (mmc_blk_rq_error(&mqrq->brq) ||
+	    mmc_blk_card_busy(mq->card, req)) {
+		mmc_blk_mq_rw_recovery(mq, req);
+	} else {
+		mmc_blk_rw_reset_success(mq, req);
+		mmc_retune_release(host);
+	}
+
+	mmc_blk_urgent_bkops(mq, mqrq);
+}
+
+static void mmc_blk_mq_dec_in_flight(struct mmc_queue *mq, struct request *req)
+{
+	struct request_queue *q = req->q;
+	unsigned long flags;
+	bool put_card;
+
+	spin_lock_irqsave(q->queue_lock, flags);
+
+	mq->in_flight[mmc_issue_type(mq, req)] -= 1;
+
+	put_card = (mmc_tot_in_flight(mq) == 0);
+
+	spin_unlock_irqrestore(q->queue_lock, flags);
+
+	if (put_card)
+		mmc_put_card(mq->card, &mq->ctx);
+}
+
+static void mmc_blk_mq_post_req(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_request *mrq = &mqrq->brq.mrq;
+	struct mmc_host *host = mq->card->host;
+
+	mmc_post_req(host, mrq, 0);
+
+	/*
+	 * Block layer timeouts race with completions which means the normal
+	 * completion path cannot be used during recovery.
+	 */
+	if (mq->in_recovery)
+		mmc_blk_mq_complete_rq(mq, req);
+	else
+		blk_mq_complete_request(req);
+
+	mmc_blk_mq_dec_in_flight(mq, req);
+}
+
+void mmc_blk_mq_recovery(struct mmc_queue *mq)
+{
+	struct request *req = mq->recovery_req;
+	struct mmc_host *host = mq->card->host;
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+
+	mq->recovery_req = NULL;
+	mq->rw_wait = false;
+
+	if (mmc_blk_rq_error(&mqrq->brq)) {
+		mmc_retune_hold_now(host);
+		mmc_blk_mq_rw_recovery(mq, req);
+	}
+
+	mmc_blk_urgent_bkops(mq, mqrq);
+
+	mmc_blk_mq_post_req(mq, req);
+}
+
+static void mmc_blk_mq_complete_prev_req(struct mmc_queue *mq,
+					 struct request **prev_req)
+{
+	if (mmc_host_done_complete(mq->card->host))
+		return;
+
+	mutex_lock(&mq->complete_lock);
+
+	if (!mq->complete_req)
+		goto out_unlock;
+
+	mmc_blk_mq_poll_completion(mq, mq->complete_req);
+
+	if (prev_req)
+		*prev_req = mq->complete_req;
+	else
+		mmc_blk_mq_post_req(mq, mq->complete_req);
+
+	mq->complete_req = NULL;
+
+out_unlock:
+	mutex_unlock(&mq->complete_lock);
+}
+
+void mmc_blk_mq_complete_work(struct work_struct *work)
+{
+	struct mmc_queue *mq = container_of(work, struct mmc_queue,
+					    complete_work);
+
+	mmc_blk_mq_complete_prev_req(mq, NULL);
+}
+
+static void mmc_blk_mq_req_done(struct mmc_request *mrq)
+{
+	struct mmc_queue_req *mqrq = container_of(mrq, struct mmc_queue_req,
+						  brq.mrq);
+	struct request *req = mmc_queue_req_to_req(mqrq);
+	struct request_queue *q = req->q;
+	struct mmc_queue *mq = q->queuedata;
+	struct mmc_host *host = mq->card->host;
+	unsigned long flags;
+
+	if (!mmc_host_done_complete(host)) {
+		bool waiting;
+
+		/*
+		 * We cannot complete the request in this context, so record
+		 * that there is a request to complete, and that a following
+		 * request does not need to wait (although it does need to
+		 * complete complete_req first).
+		 */
+		spin_lock_irqsave(q->queue_lock, flags);
+		mq->complete_req = req;
+		mq->rw_wait = false;
+		waiting = mq->waiting;
+		spin_unlock_irqrestore(q->queue_lock, flags);
+
+		/*
+		 * If 'waiting' then the waiting task will complete this
+		 * request, otherwise queue a work to do it. Note that
+		 * complete_work may still race with the dispatch of a following
+		 * request.
+		 */
+		if (waiting)
+			wake_up(&mq->wait);
+		else
+			kblockd_schedule_work(&mq->complete_work);
+
+		return;
+	}
+
+	/* Take the recovery path for errors or urgent background operations */
+	if (mmc_blk_rq_error(&mqrq->brq) ||
+	    mmc_blk_urgent_bkops_needed(mq, mqrq)) {
+		spin_lock_irqsave(q->queue_lock, flags);
+		mq->recovery_needed = true;
+		mq->recovery_req = req;
+		spin_unlock_irqrestore(q->queue_lock, flags);
+		wake_up(&mq->wait);
+		schedule_work(&mq->recovery_work);
+		return;
+	}
+
+	mmc_blk_rw_reset_success(mq, req);
+
+	mq->rw_wait = false;
+	wake_up(&mq->wait);
+
+	mmc_blk_mq_post_req(mq, req);
+}
+
+static bool mmc_blk_rw_wait_cond(struct mmc_queue *mq, int *err)
+{
+	struct request_queue *q = mq->queue;
+	unsigned long flags;
+	bool done;
+
+	/*
+	 * Wait while there is another request in progress, but not if recovery
+	 * is needed. Also indicate whether there is a request waiting to start.
+	 */
+	spin_lock_irqsave(q->queue_lock, flags);
+	if (mq->recovery_needed) {
+		*err = -EBUSY;
+		done = true;
+	} else {
+		done = !mq->rw_wait;
+	}
+	mq->waiting = !done;
+	spin_unlock_irqrestore(q->queue_lock, flags);
+
+	return done;
+}
+
+static int mmc_blk_rw_wait(struct mmc_queue *mq, struct request **prev_req)
+{
+	int err = 0;
+
+	wait_event(mq->wait, mmc_blk_rw_wait_cond(mq, &err));
+
+	/* Always complete the previous request if there is one */
+	mmc_blk_mq_complete_prev_req(mq, prev_req);
+
+	return err;
+}
+
+static int mmc_blk_mq_issue_rw_rq(struct mmc_queue *mq,
+				  struct request *req)
+{
+	struct mmc_queue_req *mqrq = req_to_mmc_queue_req(req);
+	struct mmc_host *host = mq->card->host;
+	struct request *prev_req = NULL;
+	int err = 0;
+
+	mmc_blk_rw_rq_prep(mqrq, mq->card, 0, mq);
+
+	mqrq->brq.mrq.done = mmc_blk_mq_req_done;
+
+	mmc_pre_req(host, &mqrq->brq.mrq);
+
+	err = mmc_blk_rw_wait(mq, &prev_req);
+	if (err)
+		goto out_post_req;
+
+	mq->rw_wait = true;
+
+	err = mmc_start_request(host, &mqrq->brq.mrq);
+
+	if (prev_req)
+		mmc_blk_mq_post_req(mq, prev_req);
+
+	if (err)
+		mq->rw_wait = false;
+
+	/* Release re-tuning here where there is no synchronization required */
+	if (err || mmc_host_done_complete(host))
+		mmc_retune_release(host);
+
+out_post_req:
+	if (err)
+		mmc_post_req(host, &mqrq->brq.mrq, err);
+
+	return err;
+}
+
+static int mmc_blk_wait_for_idle(struct mmc_queue *mq, struct mmc_host *host)
+{
+	if (mq->use_cqe)
+		return host->cqe_ops->cqe_wait_for_idle(host);
+
+	return mmc_blk_rw_wait(mq, NULL);
+}
+
+enum mmc_issued mmc_blk_mq_issue_rq(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_blk_data *md = mq->blkdata;
+	struct mmc_card *card = md->queue.card;
+	struct mmc_host *host = card->host;
+	int ret;
+
+	ret = mmc_blk_part_switch(card, md->part_type);
+	if (ret)
+		return MMC_REQ_FAILED_TO_START;
+
+	switch (mmc_issue_type(mq, req)) {
+	case MMC_ISSUE_SYNC:
+		ret = mmc_blk_wait_for_idle(mq, host);
+		if (ret)
+			return MMC_REQ_BUSY;
+		switch (req_op(req)) {
+		case REQ_OP_DRV_IN:
+		case REQ_OP_DRV_OUT:
+			mmc_blk_issue_drv_op(mq, req);
+			break;
+		case REQ_OP_DISCARD:
+			mmc_blk_issue_discard_rq(mq, req);
+			break;
+		case REQ_OP_SECURE_ERASE:
+			mmc_blk_issue_secdiscard_rq(mq, req);
+			break;
+		case REQ_OP_FLUSH:
+			mmc_blk_issue_flush(mq, req);
+			break;
+		default:
+			WARN_ON_ONCE(1);
+			return MMC_REQ_FAILED_TO_START;
+		}
+		return MMC_REQ_FINISHED;
+	case MMC_ISSUE_DCMD:
+	case MMC_ISSUE_ASYNC:
+		switch (req_op(req)) {
+		case REQ_OP_FLUSH:
+			ret = mmc_blk_cqe_issue_flush(mq, req);
+			break;
+		case REQ_OP_READ:
+		case REQ_OP_WRITE:
+			if (mq->use_cqe)
+				ret = mmc_blk_cqe_issue_rw_rq(mq, req);
+			else
+				ret = mmc_blk_mq_issue_rw_rq(mq, req);
+			break;
+		default:
+			WARN_ON_ONCE(1);
+			ret = -EINVAL;
+		}
+		if (!ret)
+			return MMC_REQ_STARTED;
+		return ret == -EBUSY ? MMC_REQ_BUSY : MMC_REQ_FAILED_TO_START;
+	default:
+		WARN_ON_ONCE(1);
+		return MMC_REQ_FAILED_TO_START;
+	}
 }
 
 static bool mmc_blk_rw_cmd_err(struct mmc_blk_data *md, struct mmc_card *card,
@@ -1894,7 +2750,11 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 		case MMC_BLK_SUCCESS:
 		case MMC_BLK_PARTIAL:
 			/*
-			 * A block was successfully transferred.
+			 * Reset success, and accept bytes_xfered. For
+			 * MMC_BLK_PARTIAL re-submit the remaining request. For
+			 * MMC_BLK_SUCCESS error out the remaining request (it
+			 * could not be re-submitted anyway if a next request
+			 * had already begun).
 			 */
 			mmc_blk_reset_success(md, type);
 
@@ -1914,6 +2774,14 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 			}
 			break;
 		case MMC_BLK_CMD_ERR:
+			/*
+			 * For SD cards, get bytes written, but do not accept
+			 * bytes_xfered if that fails. For MMC cards accept
+			 * bytes_xfered. Then try to reset. If reset fails then
+			 * error out the remaining request, otherwise retry
+			 * once (N.B mmc_blk_reset() will not succeed twice in a
+			 * row).
+			 */
 			req_pending = mmc_blk_rw_cmd_err(md, card, brq, old_req, req_pending);
 			if (mmc_blk_reset(md, card->host, type)) {
 				if (req_pending)
@@ -1930,11 +2798,20 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 			}
 			break;
 		case MMC_BLK_RETRY:
+			/*
+			 * Do not accept bytes_xfered, but retry up to 5 times,
+			 * otherwise same as abort.
+			 */
 			retune_retry_done = brq->retune_retry_done;
 			if (retry++ < 5)
 				break;
 			/* Fall through */
 		case MMC_BLK_ABORT:
+			/*
+			 * Do not accept bytes_xfered, but try to reset. If
+			 * reset succeeds, try once more, otherwise error out
+			 * the request.
+			 */
 			if (!mmc_blk_reset(md, card->host, type))
 				break;
 			mmc_blk_rw_cmd_abort(mq, card, old_req, mq_rq);
@@ -1943,6 +2820,13 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 		case MMC_BLK_DATA_ERR: {
 			int err;
 
+			/*
+			 * Do not accept bytes_xfered, but try to reset. If
+			 * reset succeeds, try once more. If reset fails with
+			 * ENODEV which means the partition is wrong, then error
+			 * out the request. Otherwise attempt to read one sector
+			 * at a time.
+			 */
 			err = mmc_blk_reset(md, card->host, type);
 			if (!err)
 				break;
@@ -1954,6 +2838,10 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 			/* Fall through */
 		}
 		case MMC_BLK_ECC_ERR:
+			/*
+			 * Do not accept bytes_xfered. If reading more than one
+			 * sector, try reading one sector at a time.
+			 */
 			if (brq->data.blocks > 1) {
 				/* Redo read one sector at a time */
 				pr_warn("%s: retrying using single block read\n",
@@ -1975,10 +2863,12 @@ static void mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *new_req)
 			}
 			break;
 		case MMC_BLK_NOMEDIUM:
+			/* Do not accept bytes_xfered. Error out the request */
 			mmc_blk_rw_cmd_abort(mq, card, old_req, mq_rq);
 			mmc_blk_rw_try_restart(mq, new_req, mqrq_cur);
 			return;
 		default:
+			/* Do not accept bytes_xfered. Error out the request */
 			pr_err("%s: Unhandled return value (%d)",
 					old_req->rq_disk->disk_name, status);
 			mmc_blk_rw_cmd_abort(mq, card, old_req, mq_rq);
@@ -2138,6 +3028,17 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
 		goto err_putdisk;
 
 	md->queue.blkdata = md;
+
+	/*
+	 * Keep an extra reference to the queue so that we can shutdown the
+	 * queue (i.e. call blk_cleanup_queue()) while there are still
+	 * references to the 'md'. The corresponding blk_put_queue() is in
+	 * mmc_blk_put().
+	 */
+	if (!blk_get_queue(md->queue.queue)) {
+		mmc_cleanup_queue(&md->queue);
+		goto err_putdisk;
+	}
 
 	md->disk->major	= MMC_BLOCK_MAJOR;
 	md->disk->first_minor = devidx * perdev_minors;
@@ -2454,10 +3355,6 @@ static void mmc_blk_remove_req(struct mmc_blk_data *md)
 		 * from being accepted.
 		 */
 		card = md->queue.card;
-		spin_lock_irq(md->queue.queue->queue_lock);
-		queue_flag_set(QUEUE_FLAG_BYPASS, md->queue.queue);
-		spin_unlock_irq(md->queue.queue->queue_lock);
-		blk_set_queue_dying(md->queue.queue);
 		mmc_cleanup_queue(&md->queue);
 		if (md->disk->flags & GENHD_FL_UP) {
 			device_remove_file(disk_to_dev(md->disk), &md->force_ro);
@@ -2550,6 +3447,8 @@ static int mmc_dbg_card_status_get(void *data, u64 *val)
 
 	/* Ask the block layer about the card status */
 	req = blk_get_request(mq->queue, REQ_OP_DRV_IN, __GFP_RECLAIM);
+	if (IS_ERR(req))
+		return PTR_ERR(req);
 	req_to_mmc_queue_req(req)->drv_op = MMC_DRV_OP_GET_CARD_STATUS;
 	blk_execute_rq(mq->queue, NULL, req, 0);
 	ret = req_to_mmc_queue_req(req)->drv_op_result;
@@ -2557,6 +3456,7 @@ static int mmc_dbg_card_status_get(void *data, u64 *val)
 		*val = ret;
 		ret = 0;
 	}
+	blk_put_request(req);
 
 	return ret;
 }
@@ -2583,10 +3483,15 @@ static int mmc_ext_csd_open(struct inode *inode, struct file *filp)
 
 	/* Ask the block layer for the EXT CSD */
 	req = blk_get_request(mq->queue, REQ_OP_DRV_IN, __GFP_RECLAIM);
+	if (IS_ERR(req)) {
+		err = PTR_ERR(req);
+		goto out_free;
+	}
 	req_to_mmc_queue_req(req)->drv_op = MMC_DRV_OP_GET_EXT_CSD;
 	req_to_mmc_queue_req(req)->drv_op_data = &ext_csd;
 	blk_execute_rq(mq->queue, NULL, req, 0);
 	err = req_to_mmc_queue_req(req)->drv_op_result;
+	blk_put_request(req);
 	if (err) {
 		pr_err("FAILED %d\n", err);
 		goto out_free;
@@ -2632,7 +3537,7 @@ static const struct file_operations mmc_dbg_ext_csd_fops = {
 	.llseek		= default_llseek,
 };
 
-static int mmc_blk_add_debugfs(struct mmc_card *card)
+static int mmc_blk_add_debugfs(struct mmc_card *card, struct mmc_blk_data *md)
 {
 	struct dentry *root;
 
@@ -2642,26 +3547,51 @@ static int mmc_blk_add_debugfs(struct mmc_card *card)
 	root = card->debugfs_root;
 
 	if (mmc_card_mmc(card) || mmc_card_sd(card)) {
-		if (!debugfs_create_file("status", S_IRUSR, root, card,
-					 &mmc_dbg_card_status_fops))
+		md->status_dentry =
+			debugfs_create_file("status", S_IRUSR, root, card,
+					    &mmc_dbg_card_status_fops);
+		if (!md->status_dentry)
 			return -EIO;
 	}
 
 	if (mmc_card_mmc(card)) {
-		if (!debugfs_create_file("ext_csd", S_IRUSR, root, card,
-					 &mmc_dbg_ext_csd_fops))
+		md->ext_csd_dentry =
+			debugfs_create_file("ext_csd", S_IRUSR, root, card,
+					    &mmc_dbg_ext_csd_fops);
+		if (!md->ext_csd_dentry)
 			return -EIO;
 	}
 
 	return 0;
 }
 
+static void mmc_blk_remove_debugfs(struct mmc_card *card,
+				   struct mmc_blk_data *md)
+{
+	if (!card->debugfs_root)
+		return;
+
+	if (!IS_ERR_OR_NULL(md->status_dentry)) {
+		debugfs_remove(md->status_dentry);
+		md->status_dentry = NULL;
+	}
+
+	if (!IS_ERR_OR_NULL(md->ext_csd_dentry)) {
+		debugfs_remove(md->ext_csd_dentry);
+		md->ext_csd_dentry = NULL;
+	}
+}
 
 #else
 
-static int mmc_blk_add_debugfs(struct mmc_card *card)
+static int mmc_blk_add_debugfs(struct mmc_card *card, struct mmc_blk_data *md)
 {
 	return 0;
+}
+
+static void mmc_blk_remove_debugfs(struct mmc_card *card,
+				   struct mmc_blk_data *md)
+{
 }
 
 #endif /* CONFIG_DEBUG_FS */
@@ -2703,7 +3633,7 @@ static int mmc_blk_probe(struct mmc_card *card)
 	}
 
 	/* Add two debugfs entries */
-	mmc_blk_add_debugfs(card);
+	mmc_blk_add_debugfs(card, md);
 
 	pm_runtime_set_autosuspend_delay(&card->dev, 3000);
 	pm_runtime_use_autosuspend(&card->dev);
@@ -2729,6 +3659,7 @@ static void mmc_blk_remove(struct mmc_card *card)
 {
 	struct mmc_blk_data *md = dev_get_drvdata(&card->dev);
 
+	mmc_blk_remove_debugfs(card, md);
 	mmc_blk_remove_parts(card, md);
 	pm_runtime_get_sync(&card->dev);
 	mmc_claim_host(card->host);
