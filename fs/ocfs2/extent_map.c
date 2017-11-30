@@ -833,34 +833,17 @@ out:
 }
 
 /* Is IO overwriting allocated blocks? */
-int ocfs2_overwrite_io(struct inode *inode, u64 map_start, u64 map_len,
-		       int wait)
+int ocfs2_overwrite_io(struct inode *inode, struct buffer_head *di_bh,
+		       u64 map_start, u64 map_len)
 {
 	int ret = 0, is_last;
 	u32 mapping_end, cpos;
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
-	struct buffer_head *di_bh = NULL;
 	struct ocfs2_extent_rec rec;
-
-	if (wait)
-		ret = ocfs2_inode_lock(inode, &di_bh, 0);
-	else
-		ret = ocfs2_try_inode_lock(inode, &di_bh, 0);
-	if (ret)
-		goto out;
-
-	if (wait)
-		down_read(&OCFS2_I(inode)->ip_alloc_sem);
-	else {
-		if (!down_read_trylock(&OCFS2_I(inode)->ip_alloc_sem)) {
-			ret = -EAGAIN;
-			goto out_unlock1;
-		}
-	}
 
 	if ((OCFS2_I(inode)->ip_dyn_features & OCFS2_INLINE_DATA_FL) &&
 	   ((map_start + map_len) <= i_size_read(inode)))
-		goto out_unlock2;
+		goto out;
 
 	cpos = map_start >> osb->s_clustersize_bits;
 	mapping_end = ocfs2_clusters_for_bytes(inode->i_sb,
@@ -871,7 +854,7 @@ int ocfs2_overwrite_io(struct inode *inode, u64 map_start, u64 map_len,
 						 NULL, &rec, &is_last);
 		if (ret) {
 			mlog_errno(ret);
-			goto out_unlock2;
+			goto out;
 		}
 
 		if (rec.e_blkno == 0ULL)
@@ -885,18 +868,9 @@ int ocfs2_overwrite_io(struct inode *inode, u64 map_start, u64 map_len,
 	}
 
 	if (cpos < mapping_end)
-		ret = 1;
-
-out_unlock2:
-	brelse(di_bh);
-
-	up_read(&OCFS2_I(inode)->ip_alloc_sem);
-
-out_unlock1:
-	ocfs2_inode_unlock(inode, 0);
-
+		ret = -EAGAIN;
 out:
-	return (ret ? 0 : 1);
+	return ret;
 }
 
 int ocfs2_seek_data_hole_offset(struct file *file, loff_t *offset, int whence)
