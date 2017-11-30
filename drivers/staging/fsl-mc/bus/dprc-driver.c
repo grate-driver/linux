@@ -39,8 +39,6 @@ static int __fsl_mc_device_remove_if_not_in_mc(struct device *dev, void *data)
 	struct fsl_mc_child_objs *objs;
 	struct fsl_mc_device *mc_dev;
 
-	WARN_ON(!dev);
-	WARN_ON(!data);
 	mc_dev = to_fsl_mc_device(dev);
 	objs = data;
 
@@ -60,8 +58,6 @@ static int __fsl_mc_device_remove_if_not_in_mc(struct device *dev, void *data)
 
 static int __fsl_mc_device_remove(struct device *dev, void *data)
 {
-	WARN_ON(!dev);
-	WARN_ON(data);
 	fsl_mc_device_remove(to_fsl_mc_device(dev));
 	return 0;
 }
@@ -386,11 +382,11 @@ static irqreturn_t dprc_irq0_handler_thread(int irq_num, void *arg)
 	dev_dbg(dev, "DPRC IRQ %d triggered on CPU %u\n",
 		irq_num, smp_processor_id());
 
-	if (WARN_ON(!(mc_dev->flags & FSL_MC_IS_DPRC)))
+	if (!(mc_dev->flags & FSL_MC_IS_DPRC))
 		return IRQ_HANDLED;
 
 	mutex_lock(&mc_bus->scan_mutex);
-	if (WARN_ON(!msi_desc || msi_desc->irq != (u32)irq_num))
+	if (!msi_desc || msi_desc->irq != (u32)irq_num)
 		goto out;
 
 	status = 0;
@@ -453,8 +449,6 @@ static int disable_dprc_irq(struct fsl_mc_device *mc_dev)
 	int error;
 	struct fsl_mc_io *mc_io = mc_dev->mc_io;
 
-	WARN_ON(mc_dev->obj_desc.irq_count != 1);
-
 	/*
 	 * Disable generation of interrupt, while we configure it:
 	 */
@@ -495,8 +489,6 @@ static int register_dprc_irq_handler(struct fsl_mc_device *mc_dev)
 {
 	int error;
 	struct fsl_mc_device_irq *irq = mc_dev->irqs[0];
-
-	WARN_ON(mc_dev->obj_desc.irq_count != 1);
 
 	/*
 	 * NOTE: devm_request_threaded_irq() invokes the device-specific
@@ -601,20 +593,20 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 	bool msi_domain_set = false;
 	u16 major_ver, minor_ver;
 
-	if (WARN_ON(strcmp(mc_dev->obj_desc.type, "dprc") != 0))
+	if (!is_fsl_mc_bus_dprc(mc_dev))
 		return -EINVAL;
 
-	if (WARN_ON(dev_get_msi_domain(&mc_dev->dev)))
+	if (dev_get_msi_domain(&mc_dev->dev))
 		return -EINVAL;
 
 	if (!mc_dev->mc_io) {
 		/*
 		 * This is a child DPRC:
 		 */
-		if (WARN_ON(!dev_is_fsl_mc(parent_dev)))
+		if (!dev_is_fsl_mc(parent_dev))
 			return -EINVAL;
 
-		if (WARN_ON(mc_dev->obj_desc.region_count == 0))
+		if (mc_dev->obj_desc.region_count == 0)
 			return -EINVAL;
 
 		region_size = resource_size(mc_dev->regions);
@@ -642,7 +634,7 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 		 */
 		struct irq_domain *mc_msi_domain;
 
-		if (WARN_ON(dev_is_fsl_mc(parent_dev)))
+		if (dev_is_fsl_mc(parent_dev))
 			return -EINVAL;
 
 		error = fsl_mc_find_msi_domain(parent_dev,
@@ -753,12 +745,12 @@ static int dprc_remove(struct fsl_mc_device *mc_dev)
 	int error;
 	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(mc_dev);
 
-	if (WARN_ON(strcmp(mc_dev->obj_desc.type, "dprc") != 0))
+	if (!is_fsl_mc_bus_dprc(mc_dev))
 		return -EINVAL;
-	if (WARN_ON(!mc_dev->mc_io))
+	if (!mc_dev->mc_io)
 		return -EINVAL;
 
-	if (WARN_ON(!mc_bus->irq_resources))
+	if (!mc_bus->irq_resources)
 		return -EINVAL;
 
 	if (dev_get_msi_domain(&mc_dev->dev))

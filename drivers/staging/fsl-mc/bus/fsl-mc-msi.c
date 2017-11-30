@@ -47,7 +47,7 @@ static void fsl_mc_msi_update_dom_ops(struct msi_domain_info *info)
 {
 	struct msi_domain_ops *ops = info->ops;
 
-	if (WARN_ON(!ops))
+	if (!ops)
 		return;
 
 	/*
@@ -73,7 +73,7 @@ static void __fsl_mc_msi_write_msg(struct fsl_mc_device *mc_bus_dev,
 	if (msi_desc->msg.address_lo == 0x0 && msi_desc->msg.address_hi == 0x0)
 		return;
 
-	if (WARN_ON(!owner_mc_dev))
+	if (!owner_mc_dev)
 		return;
 
 	irq_cfg.paddr = ((u64)msi_desc->msg.address_hi << 32) |
@@ -124,7 +124,6 @@ static void fsl_mc_msi_write_msg(struct irq_data *irq_data,
 	struct fsl_mc_device_irq *mc_dev_irq =
 		&mc_bus->irq_resources[msi_desc->fsl_mc.msi_index];
 
-	WARN_ON(mc_dev_irq->msi_desc != msi_desc);
 	msi_desc->msg = *msg;
 
 	/*
@@ -137,7 +136,7 @@ static void fsl_mc_msi_update_chip_ops(struct msi_domain_info *info)
 {
 	struct irq_chip *chip = info->chip;
 
-	if (WARN_ON(!chip))
+	if (!chip)
 		return;
 
 	/*
@@ -239,7 +238,7 @@ int fsl_mc_msi_domain_alloc_irqs(struct device *dev,
 	struct irq_domain *msi_domain;
 	int error;
 
-	if (WARN_ON(!list_empty(dev_to_msi_list(dev))))
+	if (!list_empty(dev_to_msi_list(dev)))
 		return -EINVAL;
 
 	error = fsl_mc_msi_alloc_descs(dev, irq_count);
@@ -247,7 +246,7 @@ int fsl_mc_msi_domain_alloc_irqs(struct device *dev,
 		return error;
 
 	msi_domain = dev_get_msi_domain(dev);
-	if (WARN_ON(!msi_domain)) {
+	if (!msi_domain) {
 		error = -EINVAL;
 		goto cleanup_msi_descs;
 	}
@@ -275,12 +274,12 @@ void fsl_mc_msi_domain_free_irqs(struct device *dev)
 	struct irq_domain *msi_domain;
 
 	msi_domain = dev_get_msi_domain(dev);
-	if (WARN_ON(!msi_domain))
+	if (!msi_domain)
 		return;
 
 	msi_domain_free_irqs(msi_domain, dev);
 
-	if (WARN_ON(list_empty(dev_to_msi_list(dev))))
+	if (list_empty(dev_to_msi_list(dev)))
 		return;
 
 	fsl_mc_msi_free_descs(dev);

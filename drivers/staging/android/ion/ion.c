@@ -1,42 +1,32 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- *
  * drivers/staging/android/ion/ion.c
  *
  * Copyright (C) 2011 Google, Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
+#include <linux/anon_inodes.h>
+#include <linux/debugfs.h>
 #include <linux/device.h>
+#include <linux/dma-buf.h>
 #include <linux/err.h>
+#include <linux/export.h>
 #include <linux/file.h>
 #include <linux/freezer.h>
 #include <linux/fs.h>
-#include <linux/anon_inodes.h>
+#include <linux/idr.h>
 #include <linux/kthread.h>
 #include <linux/list.h>
 #include <linux/memblock.h>
 #include <linux/miscdevice.h>
-#include <linux/export.h>
 #include <linux/mm.h>
 #include <linux/mm_types.h>
 #include <linux/rbtree.h>
-#include <linux/slab.h>
+#include <linux/sched/task.h>
 #include <linux/seq_file.h>
+#include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/vmalloc.h>
-#include <linux/debugfs.h>
-#include <linux/dma-buf.h>
-#include <linux/idr.h>
-#include <linux/sched/task.h>
 
 #include "ion.h"
 

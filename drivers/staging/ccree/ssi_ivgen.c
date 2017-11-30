@@ -143,7 +143,7 @@ int ssi_ivgen_init_sram_pool(struct ssi_drvdata *drvdata)
 
 	/* Generate initial pool */
 	rc = ssi_ivgen_generate_pool(ivgen_ctx, iv_seq, &iv_seq_len);
-	if (unlikely(rc != 0))
+	if (unlikely(rc))
 		return rc;
 
 	/* Fire-and-forget */
@@ -198,7 +198,7 @@ int ssi_ivgen_init(struct ssi_drvdata *drvdata)
 
 	ivgen_ctx = drvdata->ivgen_handle;
 
-	/* Allocate pool's header for intial enc. key/IV */
+	/* Allocate pool's header for initial enc. key/IV */
 	ivgen_ctx->pool_meta = dma_alloc_coherent(device, SSI_IVPOOL_META_SIZE,
 						  &ivgen_ctx->pool_meta_dma,
 						  GFP_KERNEL);
@@ -209,7 +209,7 @@ int ssi_ivgen_init(struct ssi_drvdata *drvdata)
 		goto out;
 	}
 	/* Allocate IV pool in SRAM */
-	ivgen_ctx->pool = ssi_sram_mgr_alloc(drvdata, SSI_IVPOOL_SIZE);
+	ivgen_ctx->pool = cc_sram_alloc(drvdata, SSI_IVPOOL_SIZE);
 	if (ivgen_ctx->pool == NULL_SRAM_ADDR) {
 		dev_err(device, "SRAM pool exhausted\n");
 		rc = -ENOMEM;
@@ -228,7 +228,8 @@ out:
  *
  * \param drvdata Driver private context
  * \param iv_out_dma Array of physical IV out addresses
- * \param iv_out_dma_len Length of iv_out_dma array (additional elements of iv_out_dma array are ignore)
+ * \param iv_out_dma_len Length of iv_out_dma array (additional elements
+ *                       of iv_out_dma array are ignore)
  * \param iv_out_size May be 8 or 16 bytes long
  * \param iv_seq IN/OUT array to the descriptors sequence
  * \param iv_seq_len IN/OUT pointer to the sequence length
@@ -248,8 +249,8 @@ int ssi_ivgen_getiv(
 	struct device *dev = drvdata_to_dev(drvdata);
 	unsigned int t;
 
-	if ((iv_out_size != CC_AES_IV_SIZE) &&
-	    (iv_out_size != CTR_RFC3686_IV_SIZE)) {
+	if (iv_out_size != CC_AES_IV_SIZE &&
+	    iv_out_size != CTR_RFC3686_IV_SIZE) {
 		return -EINVAL;
 	}
 	if ((iv_out_dma_len + 1) > SSI_IVPOOL_SEQ_LEN) {
@@ -257,7 +258,9 @@ int ssi_ivgen_getiv(
 		return -EINVAL;
 	}
 
-	//check that number of generated IV is limited to max dma address iv buffer size
+	/* check that number of generated IV is limited to max dma address
+	 * iv buffer size
+	 */
 	if (iv_out_dma_len > SSI_MAX_IVGEN_DMA_ADDRESSES) {
 		/* The sequence will be longer than allowed */
 		return -EINVAL;

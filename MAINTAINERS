@@ -7314,9 +7314,8 @@ F:	drivers/tty/ipwireless/
 IPX NETWORK LAYER
 L:	netdev@vger.kernel.org
 S:	Odd fixes
-F:	include/net/ipx.h
 F:	include/uapi/linux/ipx.h
-F:	net/ipx/
+F:	drivers/staging/ipx/
 
 IRDA SUBSYSTEM
 M:	Samuel Ortiz <samuel@sortiz.org>
@@ -9367,7 +9366,7 @@ F:	drivers/net/ethernet/natsemi/natsemi.c
 NCP FILESYSTEM
 M:	Petr Vandrovec <petr@vandrovec.name>
 S:	Odd Fixes
-F:	fs/ncpfs/
+F:	drivers/staging/ncpfs/
 
 NCR 5380 SCSI DRIVERS
 M:	Finn Thain <fthain@telegraphics.com.au>

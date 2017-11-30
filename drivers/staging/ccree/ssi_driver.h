@@ -63,8 +63,10 @@
 #define SSI_CC_HAS_MULTI2 0
 #define SSI_CC_HAS_CMAC 1
 
-#define SSI_AXI_IRQ_MASK ((1 << DX_AXIM_CFG_BRESPMASK_BIT_SHIFT) | (1 << DX_AXIM_CFG_RRESPMASK_BIT_SHIFT) |	\
-			(1 << DX_AXIM_CFG_INFLTMASK_BIT_SHIFT) | (1 << DX_AXIM_CFG_COMPMASK_BIT_SHIFT))
+#define SSI_AXI_IRQ_MASK ((1 << DX_AXIM_CFG_BRESPMASK_BIT_SHIFT) | \
+			  (1 << DX_AXIM_CFG_RRESPMASK_BIT_SHIFT) | \
+			  (1 << DX_AXIM_CFG_INFLTMASK_BIT_SHIFT) | \
+			  (1 << DX_AXIM_CFG_COMPMASK_BIT_SHIFT))
 
 #define SSI_AXI_ERR_IRQ_MASK BIT(DX_HOST_IRR_AXI_ERR_INT_BIT_SHIFT)
 
@@ -95,20 +97,19 @@
  * field in the HW descriptor. The DMA engine +8 that value.
  */
 
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-
 #define SSI_MAX_IVGEN_DMA_ADDRESSES	3
 struct ssi_crypto_req {
-	void (*user_cb)(struct device *dev, void *req, void __iomem *cc_base);
+	void (*user_cb)(struct device *dev, void *req);
 	void *user_arg;
 	dma_addr_t ivgen_dma_addr[SSI_MAX_IVGEN_DMA_ADDRESSES];
 	/* For the first 'ivgen_dma_addr_len' addresses of this array,
 	 * generated IV would be placed in it by send_request().
 	 * Same generated IV for all addresses!
 	 */
-	unsigned int ivgen_dma_addr_len; /* Amount of 'ivgen_dma_addr' elements to be filled. */
-	unsigned int ivgen_size; /* The generated IV size required, 8/16 B allowed. */
+	/* Amount of 'ivgen_dma_addr' elements to be filled. */
+	unsigned int ivgen_dma_addr_len;
+	/* The generated IV size required, 8/16 B allowed. */
+	unsigned int ivgen_size;
 	struct completion seq_compl; /* request completion */
 };
 
@@ -124,10 +125,7 @@ struct ssi_drvdata {
 	int irq;
 	u32 irq_mask;
 	u32 fw_ver;
-	/* Calibration time of start/stop
-	 * monitor descriptors
-	 */
-	u32 monitor_null_cycles;
+	struct completion hw_queue_avail; /* wait for HW queue availability */
 	struct platform_device *plat_dev;
 	ssi_sram_addr_t mlli_sram_addr;
 	void *buff_mgr_handle;
@@ -181,7 +179,8 @@ static inline struct device *drvdata_to_dev(struct ssi_drvdata *drvdata)
 }
 
 #ifdef DX_DUMP_BYTES
-void dump_byte_array(const char *name, const u8 *the_array, unsigned long size);
+void dump_byte_array(const char *name, const u8 *the_array,
+		     unsigned long size);
 #else
 static inline void dump_byte_array(const char *name, const u8 *the_array,
 				   unsigned long size) {};

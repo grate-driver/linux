@@ -111,23 +111,27 @@ static irqreturn_t cc_isr(int irq, void *dev_id)
 
 	drvdata->irq = irr;
 	/* Completion interrupt - most probable */
-	if (likely((irr & SSI_COMP_IRQ_MASK) != 0)) {
-		/* Mask AXI completion interrupt - will be unmasked in Deferred service handler */
+	if (likely((irr & SSI_COMP_IRQ_MASK))) {
+		/* Mask AXI completion interrupt - will be unmasked in
+		 * Deferred service handler
+		 */
 		cc_iowrite(drvdata, CC_REG(HOST_IMR), imr | SSI_COMP_IRQ_MASK);
 		irr &= ~SSI_COMP_IRQ_MASK;
 		complete_request(drvdata);
 	}
 #ifdef CC_SUPPORT_FIPS
 	/* TEE FIPS interrupt */
-	if (likely((irr & SSI_GPR0_IRQ_MASK) != 0)) {
-		/* Mask interrupt - will be unmasked in Deferred service handler */
+	if (likely((irr & SSI_GPR0_IRQ_MASK))) {
+		/* Mask interrupt - will be unmasked in Deferred service
+		 * handler
+		 */
 		cc_iowrite(drvdata, CC_REG(HOST_IMR), imr | SSI_GPR0_IRQ_MASK);
 		irr &= ~SSI_GPR0_IRQ_MASK;
 		fips_handler(drvdata);
 	}
 #endif
 	/* AXI error interrupt */
-	if (unlikely((irr & SSI_AXI_ERR_IRQ_MASK) != 0)) {
+	if (unlikely((irr & SSI_AXI_ERR_IRQ_MASK))) {
 		u32 axi_err;
 
 		/* Read the AXI error ID */
@@ -138,7 +142,7 @@ static irqreturn_t cc_isr(int irq, void *dev_id)
 		irr &= ~SSI_AXI_ERR_IRQ_MASK;
 	}
 
-	if (unlikely(irr != 0)) {
+	if (unlikely(irr)) {
 		dev_dbg(dev, "IRR includes unknown cause bits (0x%08X)\n",
 			irr);
 		/* Just warning */
@@ -199,7 +203,6 @@ int init_cc_regs(struct ssi_drvdata *drvdata, bool is_probe)
 static int init_cc_resources(struct platform_device *plat_dev)
 {
 	struct resource *req_mem_cc_regs = NULL;
-	void __iomem *cc_base = NULL;
 	struct ssi_drvdata *new_drvdata;
 	struct device *dev = &plat_dev->dev;
 	struct device_node *np = dev->of_node;
@@ -232,8 +235,6 @@ static int init_cc_resources(struct platform_device *plat_dev)
 	dev_dbg(dev, "CC registers mapped from %pa to 0x%p\n",
 		&req_mem_cc_regs->start, new_drvdata->cc_base);
 
-	cc_base = new_drvdata->cc_base;
-
 	/* Then IRQ */
 	new_drvdata->irq = platform_get_irq(plat_dev, 0);
 	if (new_drvdata->irq < 0) {
@@ -249,6 +250,8 @@ static int init_cc_resources(struct platform_device *plat_dev)
 		return rc;
 	}
 	dev_dbg(dev, "Registered to IRQ: %d\n", new_drvdata->irq);
+
+	init_completion(&new_drvdata->hw_queue_avail);
 
 	if (!plat_dev->dev.dma_mask)
 		plat_dev->dev.dma_mask = &plat_dev->dev.coherent_dma_mask;
@@ -292,32 +295,32 @@ static int init_cc_resources(struct platform_device *plat_dev)
 		 DRV_MODULE_VERSION);
 
 	rc = init_cc_regs(new_drvdata, true);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "init_cc_regs failed\n");
 		goto post_clk_err;
 	}
 
 #ifdef ENABLE_CC_SYSFS
 	rc = ssi_sysfs_init(&dev->kobj, new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "init_stat_db failed\n");
 		goto post_regs_err;
 	}
 #endif
 
 	rc = ssi_fips_init(new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "SSI_FIPS_INIT failed 0x%x\n", rc);
 		goto post_sysfs_err;
 	}
 	rc = ssi_sram_mgr_init(new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "ssi_sram_mgr_init failed\n");
 		goto post_fips_init_err;
 	}
 
 	new_drvdata->mlli_sram_addr =
-		ssi_sram_mgr_alloc(new_drvdata, MAX_MLLI_BUFF_SIZE);
+		cc_sram_alloc(new_drvdata, MAX_MLLI_BUFF_SIZE);
 	if (unlikely(new_drvdata->mlli_sram_addr == NULL_SRAM_ADDR)) {
 		dev_err(dev, "Failed to alloc MLLI Sram buffer\n");
 		rc = -ENOMEM;
@@ -325,45 +328,45 @@ static int init_cc_resources(struct platform_device *plat_dev)
 	}
 
 	rc = request_mgr_init(new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "request_mgr_init failed\n");
 		goto post_sram_mgr_err;
 	}
 
-	rc = ssi_buffer_mgr_init(new_drvdata);
-	if (unlikely(rc != 0)) {
+	rc = cc_buffer_mgr_init(new_drvdata);
+	if (unlikely(rc)) {
 		dev_err(dev, "buffer_mgr_init failed\n");
 		goto post_req_mgr_err;
 	}
 
-	rc = ssi_power_mgr_init(new_drvdata);
-	if (unlikely(rc != 0)) {
+	rc = cc_pm_init(new_drvdata);
+	if (unlikely(rc)) {
 		dev_err(dev, "ssi_power_mgr_init failed\n");
 		goto post_buf_mgr_err;
 	}
 
 	rc = ssi_ivgen_init(new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "ssi_ivgen_init failed\n");
 		goto post_power_mgr_err;
 	}
 
 	/* Allocate crypto algs */
 	rc = ssi_ablkcipher_alloc(new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "ssi_ablkcipher_alloc failed\n");
 		goto post_ivgen_err;
 	}
 
 	/* hash must be allocated before aead since hash exports APIs */
 	rc = ssi_hash_alloc(new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "ssi_hash_alloc failed\n");
 		goto post_cipher_err;
 	}
 
 	rc = ssi_aead_alloc(new_drvdata);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc)) {
 		dev_err(dev, "ssi_aead_alloc failed\n");
 		goto post_hash_err;
 	}
@@ -383,9 +386,9 @@ post_cipher_err:
 post_ivgen_err:
 	ssi_ivgen_fini(new_drvdata);
 post_power_mgr_err:
-	ssi_power_mgr_fini(new_drvdata);
+	cc_pm_fini(new_drvdata);
 post_buf_mgr_err:
-	 ssi_buffer_mgr_fini(new_drvdata);
+	 cc_buffer_mgr_fini(new_drvdata);
 post_req_mgr_err:
 	request_mgr_fini(new_drvdata);
 post_sram_mgr_err:
@@ -418,8 +421,8 @@ static void cleanup_cc_resources(struct platform_device *plat_dev)
 	ssi_hash_free(drvdata);
 	ssi_ablkcipher_free(drvdata);
 	ssi_ivgen_fini(drvdata);
-	ssi_power_mgr_fini(drvdata);
-	ssi_buffer_mgr_fini(drvdata);
+	cc_pm_fini(drvdata);
+	cc_buffer_mgr_fini(drvdata);
 	request_mgr_fini(drvdata);
 	ssi_sram_mgr_fini(drvdata);
 	ssi_fips_fini(drvdata);
@@ -477,7 +480,7 @@ static int cc7x_probe(struct platform_device *plat_dev)
 
 	/* Map registers space */
 	rc = init_cc_resources(plat_dev);
-	if (rc != 0)
+	if (rc)
 		return rc;
 
 	dev_info(dev, "ARM ccree device initialized\n");
@@ -498,13 +501,13 @@ static int cc7x_remove(struct platform_device *plat_dev)
 	return 0;
 }
 
-#if defined(CONFIG_PM_RUNTIME) || defined(CONFIG_PM_SLEEP)
+#if defined(CONFIG_PM)
 static const struct dev_pm_ops arm_cc7x_driver_pm = {
-	SET_RUNTIME_PM_OPS(ssi_power_mgr_runtime_suspend, ssi_power_mgr_runtime_resume, NULL)
+	SET_RUNTIME_PM_OPS(cc_pm_suspend, cc_pm_resume, NULL)
 };
 #endif
 
-#if defined(CONFIG_PM_RUNTIME) || defined(CONFIG_PM_SLEEP)
+#if defined(CONFIG_PM)
 #define	DX_DRIVER_RUNTIME_PM	(&arm_cc7x_driver_pm)
 #else
 #define	DX_DRIVER_RUNTIME_PM	NULL

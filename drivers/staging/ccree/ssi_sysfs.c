@@ -32,29 +32,44 @@ static ssize_t ssi_sys_regdump_show(struct kobject *kobj,
 	int offset = 0;
 
 	register_value = cc_ioread(drvdata, CC_REG(HOST_SIGNATURE));
-	offset += scnprintf(buf + offset, PAGE_SIZE - offset, "%s \t(0x%lX)\t 0x%08X\n", "HOST_SIGNATURE       ", DX_HOST_SIGNATURE_REG_OFFSET, register_value);
+	offset += scnprintf(buf + offset, PAGE_SIZE - offset,
+			    "%s \t(0x%lX)\t 0x%08X\n", "HOST_SIGNATURE       ",
+			    DX_HOST_SIGNATURE_REG_OFFSET, register_value);
 	register_value = cc_ioread(drvdata, CC_REG(HOST_IRR));
-	offset += scnprintf(buf + offset, PAGE_SIZE - offset, "%s \t(0x%lX)\t 0x%08X\n", "HOST_IRR             ", DX_HOST_IRR_REG_OFFSET, register_value);
+	offset += scnprintf(buf + offset, PAGE_SIZE - offset,
+			    "%s \t(0x%lX)\t 0x%08X\n", "HOST_IRR             ",
+			    DX_HOST_IRR_REG_OFFSET, register_value);
 	register_value = cc_ioread(drvdata, CC_REG(HOST_POWER_DOWN_EN));
-	offset += scnprintf(buf + offset, PAGE_SIZE - offset, "%s \t(0x%lX)\t 0x%08X\n", "HOST_POWER_DOWN_EN   ", DX_HOST_POWER_DOWN_EN_REG_OFFSET, register_value);
+	offset += scnprintf(buf + offset, PAGE_SIZE - offset,
+			    "%s \t(0x%lX)\t 0x%08X\n", "HOST_POWER_DOWN_EN   ",
+			    DX_HOST_POWER_DOWN_EN_REG_OFFSET, register_value);
 	register_value =  cc_ioread(drvdata, CC_REG(AXIM_MON_ERR));
-	offset += scnprintf(buf + offset, PAGE_SIZE - offset, "%s \t(0x%lX)\t 0x%08X\n", "AXIM_MON_ERR         ", DX_AXIM_MON_ERR_REG_OFFSET, register_value);
+	offset += scnprintf(buf + offset, PAGE_SIZE - offset,
+			    "%s \t(0x%lX)\t 0x%08X\n", "AXIM_MON_ERR         ",
+			    DX_AXIM_MON_ERR_REG_OFFSET, register_value);
 	register_value = cc_ioread(drvdata, CC_REG(DSCRPTR_QUEUE_CONTENT));
-	offset += scnprintf(buf + offset, PAGE_SIZE - offset, "%s \t(0x%lX)\t 0x%08X\n", "DSCRPTR_QUEUE_CONTENT", DX_DSCRPTR_QUEUE_CONTENT_REG_OFFSET, register_value);
+	offset += scnprintf(buf + offset, PAGE_SIZE - offset,
+			    "%s \t(0x%lX)\t 0x%08X\n", "DSCRPTR_QUEUE_CONTENT",
+			    DX_DSCRPTR_QUEUE_CONTENT_REG_OFFSET,
+			    register_value);
 	return offset;
 }
 
 static ssize_t ssi_sys_help_show(struct kobject *kobj,
 				 struct kobj_attribute *attr, char *buf)
 {
-	char *help_str[] = {
-				"cat reg_dump              ", "Print several of CC register values",
+	static const char * const help_str[] = {
+				"cat reg_dump              ",
+				"Print several of CC register values",
 				};
 	int i = 0, offset = 0;
 
 	offset += scnprintf(buf + offset, PAGE_SIZE - offset, "Usage:\n");
-	for (i = 0; i < ARRAY_SIZE(help_str); i += 2)
-	   offset += scnprintf(buf + offset, PAGE_SIZE - offset, "%s\t\t%s\n", help_str[i], help_str[i + 1]);
+	for (i = 0; i < ARRAY_SIZE(help_str); i += 2) {
+		offset += scnprintf(buf + offset, PAGE_SIZE - offset,
+				    "%s\t\t%s\n", help_str[i],
+				    help_str[i + 1]);
+	}
 
 	return offset;
 }
@@ -82,8 +97,10 @@ static struct kobj_attribute ssi_sys_top_level_attrs[] = {
 	__ATTR(dump_regs, 0444, ssi_sys_regdump_show, NULL),
 	__ATTR(help, 0444, ssi_sys_help_show, NULL),
 #if defined CC_CYCLE_COUNT
-	__ATTR(stats_host, 0664, ssi_sys_stat_host_db_show, ssi_sys_stats_host_db_clear),
-	__ATTR(stats_cc, 0664, ssi_sys_stat_cc_db_show, ssi_sys_stats_cc_db_clear),
+	__ATTR(stats_host, 0664, ssi_sys_stat_host_db_show,
+	       ssi_sys_stats_host_db_clear),
+	__ATTR(stats_cc, 0664, ssi_sys_stat_cc_db_show,
+	       ssi_sys_stats_cc_db_clear),
 #endif
 
 };
@@ -145,8 +162,11 @@ static void sys_free_dir(struct sys_dir *sys_dir)
 
 	kfree(sys_dir->sys_dir_attr_list);
 
-	if (sys_dir->sys_dir_kobj)
+	if (sys_dir->sys_dir_kobj) {
+		sysfs_remove_group(sys_dir->sys_dir_kobj,
+				   &sys_dir->sys_dir_attr_group);
 		kobject_put(sys_dir->sys_dir_kobj);
+	}
 }
 
 int ssi_sysfs_init(struct kobject *sys_dev_obj, struct ssi_drvdata *drvdata)

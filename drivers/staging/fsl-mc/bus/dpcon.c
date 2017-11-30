@@ -78,7 +78,7 @@ int dpcon_open(struct fsl_mc_io *mc_io,
 
 	return 0;
 }
-EXPORT_SYMBOL(dpcon_open);
+EXPORT_SYMBOL_GPL(dpcon_open);
 
 /**
  * dpcon_close() - Close the control session of the object
@@ -105,7 +105,7 @@ int dpcon_close(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_close);
+EXPORT_SYMBOL_GPL(dpcon_close);
 
 /**
  * dpcon_enable() - Enable the DPCON
@@ -129,7 +129,7 @@ int dpcon_enable(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_enable);
+EXPORT_SYMBOL_GPL(dpcon_enable);
 
 /**
  * dpcon_disable() - Disable the DPCON
@@ -153,43 +153,7 @@ int dpcon_disable(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_disable);
-
-/**
- * dpcon_is_enabled() -	Check if the DPCON is enabled.
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPCON object
- * @en:		Returns '1' if object is enabled; '0' otherwise
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dpcon_is_enabled(struct fsl_mc_io *mc_io,
-		     u32 cmd_flags,
-		     u16 token,
-		     int *en)
-{
-	struct mc_command cmd = { 0 };
-	struct dpcon_rsp_is_enabled *dpcon_rsp;
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPCON_CMDID_IS_ENABLED,
-					  cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	dpcon_rsp = (struct dpcon_rsp_is_enabled *)cmd.params;
-	*en = dpcon_rsp->enabled & DPCON_ENABLE;
-
-	return 0;
-}
-EXPORT_SYMBOL(dpcon_is_enabled);
+EXPORT_SYMBOL_GPL(dpcon_disable);
 
 /**
  * dpcon_reset() - Reset the DPCON, returns the object to initial state.
@@ -212,7 +176,7 @@ int dpcon_reset(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_reset);
+EXPORT_SYMBOL_GPL(dpcon_reset);
 
 /**
  * dpcon_get_attributes() - Retrieve DPCON attributes.
@@ -250,7 +214,7 @@ int dpcon_get_attributes(struct fsl_mc_io *mc_io,
 
 	return 0;
 }
-EXPORT_SYMBOL(dpcon_get_attributes);
+EXPORT_SYMBOL_GPL(dpcon_get_attributes);
 
 /**
  * dpcon_set_notification() - Set DPCON notification destination
@@ -281,37 +245,4 @@ int dpcon_set_notification(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_set_notification);
-
-/**
- * dpcon_get_api_version - Get Data Path Concentrator API version
- * @mc_io:	Pointer to MC portal's DPCON object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @major_ver:	Major version of DPCON API
- * @minor_ver:	Minor version of DPCON API
- *
- * Return:	'0' on Success; Error code otherwise
- */
-int dpcon_get_api_version(struct fsl_mc_io *mc_io,
-			  u32 cmd_flags,
-			  u16 *major_ver,
-			  u16 *minor_ver)
-{
-	struct mc_command cmd = { 0 };
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPCON_CMDID_GET_API_VERSION,
-					  cmd_flags, 0);
-
-	/* send command to mc */
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	mc_cmd_read_api_version(&cmd, major_ver, minor_ver);
-
-	return 0;
-}
-EXPORT_SYMBOL(dpcon_get_api_version);
+EXPORT_SYMBOL_GPL(dpcon_set_notification);

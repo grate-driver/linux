@@ -325,7 +325,7 @@ static inline void mc_cmd_read_api_version(struct mc_command *cmd,
 struct fsl_mc_io {
 	struct device *dev;
 	u16 flags;
-	u16 portal_size;
+	u32 portal_size;
 	phys_addr_t portal_phys_addr;
 	void __iomem *portal_virt_addr;
 	struct fsl_mc_device *dpmcp_dev;
@@ -397,5 +397,60 @@ int __must_check fsl_mc_allocate_irqs(struct fsl_mc_device *mc_dev);
 void fsl_mc_free_irqs(struct fsl_mc_device *mc_dev);
 
 extern struct bus_type fsl_mc_bus_type;
+
+extern struct device_type fsl_mc_bus_dprc_type;
+extern struct device_type fsl_mc_bus_dpni_type;
+extern struct device_type fsl_mc_bus_dpio_type;
+extern struct device_type fsl_mc_bus_dpsw_type;
+extern struct device_type fsl_mc_bus_dpbp_type;
+extern struct device_type fsl_mc_bus_dpcon_type;
+extern struct device_type fsl_mc_bus_dpmcp_type;
+extern struct device_type fsl_mc_bus_dpmac_type;
+extern struct device_type fsl_mc_bus_dprtc_type;
+
+static inline bool is_fsl_mc_bus_dprc(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dprc_type;
+}
+
+static inline bool is_fsl_mc_bus_dpni(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dpni_type;
+}
+
+static inline bool is_fsl_mc_bus_dpio(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dpio_type;
+}
+
+static inline bool is_fsl_mc_bus_dpsw(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dpsw_type;
+}
+
+static inline bool is_fsl_mc_bus_dpbp(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dpbp_type;
+}
+
+static inline bool is_fsl_mc_bus_dpcon(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dpcon_type;
+}
+
+static inline bool is_fsl_mc_bus_dpmcp(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dpmcp_type;
+}
+
+static inline bool is_fsl_mc_bus_dpmac(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dpmac_type;
+}
+
+static inline bool is_fsl_mc_bus_dprtc(const struct fsl_mc_device *mc_dev)
+{
+	return mc_dev->dev.type == &fsl_mc_bus_dprtc_type;
+}
 
 #endif /* _FSL_MC_H_ */

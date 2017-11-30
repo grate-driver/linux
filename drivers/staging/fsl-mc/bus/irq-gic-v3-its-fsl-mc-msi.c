@@ -32,11 +32,11 @@ static int its_fsl_mc_msi_prepare(struct irq_domain *msi_domain,
 	struct fsl_mc_device *mc_bus_dev;
 	struct msi_domain_info *msi_info;
 
-	if (WARN_ON(!dev_is_fsl_mc(dev)))
+	if (!dev_is_fsl_mc(dev))
 		return -EINVAL;
 
 	mc_bus_dev = to_fsl_mc_device(dev);
-	if (WARN_ON(!(mc_bus_dev->flags & FSL_MC_IS_DPRC)))
+	if (!(mc_bus_dev->flags & FSL_MC_IS_DPRC))
 		return -EINVAL;
 
 	/*
@@ -92,9 +92,6 @@ int __init its_fsl_mc_msi_init(void)
 			pr_err("%pOF: unable to create fsl-mc domain\n", np);
 			continue;
 		}
-
-		WARN_ON(mc_msi_domain->host_data !=
-			&its_fsl_mc_msi_domain_info);
 
 		pr_info("fsl-mc MSI: %pOF domain created\n", np);
 	}

@@ -716,7 +716,8 @@ pi433_write(struct file *filp, const char __user *buf,
 {
 	struct pi433_instance	*instance;
 	struct pi433_device	*device;
-	int                     copied, retval;
+	int                     retval;
+	unsigned int		copied;
 
 	instance = filp->private_data;
 	device = instance->device;
@@ -927,8 +928,7 @@ static int setup_GPIOs(struct pi433_device *device)
 		{
 			retval = PTR_ERR(device->gpiod[i]);
 			/* release already allocated gpios */
-			for (i--; i>=0; i--)
-			{
+			for (i--; i >= 0; i--) {
 				free_irq(device->irq_num[i], device);
 				gpiod_put(device->gpiod[i]);
 			}
@@ -967,7 +967,7 @@ static void free_GPIOs(struct pi433_device *device)
 {
 	int i;
 
-	for (i=0; i<NUM_DIO; i++)
+	for (i = 0; i < NUM_DIO; i++)
 	{
 		/* check if gpiod is valid */
 		if ( IS_ERR(device->gpiod[i]) )
@@ -989,7 +989,7 @@ static int pi433_get_minor(struct pi433_device *device)
 		device->minor = retval;
 		retval = 0;
 	} else if (retval == -ENOSPC) {
-		dev_err(device->dev, "too many pi433 devices\n");
+		dev_err(&device->spi->dev, "too many pi433 devices\n");
 		retval = -EINVAL;
 	}
 	mutex_unlock(&minor_lock);
@@ -1097,19 +1097,10 @@ static int pi433_probe(struct spi_device *spi)
 	SET_CHECKED(rf69_set_output_power_level	(spi, 13));
 	SET_CHECKED(rf69_set_antenna_impedance	(spi, fiftyOhm));
 
-	/* start tx thread */
-	device->tx_task_struct = kthread_run(pi433_tx_thread,
-					     device,
-					     "pi433_tx_task");
-	if (IS_ERR(device->tx_task_struct)) {
-		dev_dbg(device->dev, "start of send thread failed");
-		goto send_thread_failed;
-	}
-
 	/* determ minor number */
 	retval = pi433_get_minor(device);
 	if (retval) {
-		dev_dbg(device->dev, "get of minor number failed");
+		dev_dbg(&spi->dev, "get of minor number failed");
 		goto minor_failed;
 	}
 
@@ -1119,7 +1110,8 @@ static int pi433_probe(struct spi_device *spi)
 				    &spi->dev,
 				    device->devt,
 				    device,
-				    "pi433");
+				    "pi433.%d",
+				    device->minor);
 	if (IS_ERR(device->dev)) {
 		pr_err("pi433: device register failed\n");
 		retval = PTR_ERR(device->dev);
@@ -1130,6 +1122,16 @@ static int pi433_probe(struct spi_device *spi)
 			"created device for major %d, minor %d\n",
 			MAJOR(pi433_dev),
 			device->minor);
+	}
+
+	/* start tx thread */
+	device->tx_task_struct = kthread_run(pi433_tx_thread,
+					     device,
+					     "pi433.%d_tx_task",
+					     device->minor);
+	if (IS_ERR(device->tx_task_struct)) {
+		dev_dbg(device->dev, "start of send thread failed");
+		goto send_thread_failed;
 	}
 
 	/* create cdev */
@@ -1148,12 +1150,12 @@ static int pi433_probe(struct spi_device *spi)
 	return 0;
 
 cdev_failed:
+	kthread_stop(device->tx_task_struct);
+send_thread_failed:
 	device_destroy(pi433_class, device->devt);
 device_create_failed:
 	pi433_free_minor(device);
 minor_failed:
-	kthread_stop(device->tx_task_struct);
-send_thread_failed:
 	free_GPIOs(device);
 GPIO_failed:
 	kfree(device);
@@ -1230,14 +1232,16 @@ static int __init pi433_init(void)
 
 	pi433_class = class_create(THIS_MODULE, "pi433");
 	if (IS_ERR(pi433_class)) {
-		unregister_chrdev(MAJOR(pi433_dev), pi433_spi_driver.driver.name);
+		unregister_chrdev(MAJOR(pi433_dev),
+				  pi433_spi_driver.driver.name);
 		return PTR_ERR(pi433_class);
 	}
 
 	status = spi_register_driver(&pi433_spi_driver);
 	if (status < 0) {
 		class_destroy(pi433_class);
-		unregister_chrdev(MAJOR(pi433_dev), pi433_spi_driver.driver.name);
+		unregister_chrdev(MAJOR(pi433_dev),
+				  pi433_spi_driver.driver.name);
 	}
 
 	return status;
