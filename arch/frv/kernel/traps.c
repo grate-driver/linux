@@ -633,6 +633,15 @@ void show_backtrace(struct pt_regs *frame, unsigned long sp)
 
 } /* end show_backtrace() */
 
+void abort(void)
+{
+	BUG();
+
+	/* if that doesn't kill us, halt */
+	panic("Oops failed to kill thread");
+}
+EXPORT_SYMBOL(abort);
+
 /*****************************************************************************/
 /*
  * initialise traps

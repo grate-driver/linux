@@ -14,6 +14,8 @@ struct zonelist;
 struct notifier_block;
 struct mem_cgroup;
 struct task_struct;
+struct alloc_context;
+struct page;
 
 /*
  * Details of the page allocation that triggered the oom killer that are used to
@@ -37,6 +39,15 @@ struct oom_control {
 	 * for display purposes.
 	 */
 	const int order;
+
+	/* Context for really last second allocation attempt. */
+	const struct alloc_context *ac;
+	/*
+	 * Set by the OOM killer if ac != NULL and last second allocation
+	 * attempt succeeded. If ac != NULL, the caller must check for
+	 * page != NULL.
+	 */
+	struct page *page;
 
 	/* Used by oom implementation, do not set */
 	unsigned long totalpages;
@@ -101,6 +112,8 @@ extern bool oom_killer_disable(signed long timeout);
 extern void oom_killer_enable(void);
 
 extern struct task_struct *find_lock_task_mm(struct task_struct *p);
+
+extern struct page *alloc_pages_before_oomkill(const struct oom_control *oc);
 
 /* sysctls */
 extern int sysctl_oom_dump_tasks;

@@ -1334,16 +1334,22 @@ void setup_new_exec(struct linux_binprm * bprm)
 	if (bprm->secureexec) {
 		/* Make sure parent cannot signal privileged process. */
 		current->pdeath_signal = 0;
+		current->signal->pdeath_signal_proc = 0;
 
 		/*
 		 * For secureexec, reset the stack limit to sane default to
 		 * avoid bad behavior from the prior rlimits. This has to
 		 * happen before arch_pick_mmap_layout(), which examines
 		 * RLIMIT_STACK, but after the point of no return to avoid
-		 * needing to clean up the change on failure.
+		 * races from other threads changing the limits. This also
+		 * must be protected from races with prlimit() calls.
 		 */
+		task_lock(current->group_leader);
 		if (current->signal->rlim[RLIMIT_STACK].rlim_cur > _STK_LIM)
 			current->signal->rlim[RLIMIT_STACK].rlim_cur = _STK_LIM;
+		if (current->signal->rlim[RLIMIT_STACK].rlim_max > _STK_LIM)
+			current->signal->rlim[RLIMIT_STACK].rlim_max = _STK_LIM;
+		task_unlock(current->group_leader);
 	}
 
 	arch_pick_mmap_layout(current->mm);
