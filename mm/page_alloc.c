@@ -3325,8 +3325,9 @@ __alloc_pages_may_oom(gfp_t gfp_mask, unsigned int order,
 		.memcg = NULL,
 		.gfp_mask = gfp_mask,
 		.order = order,
+		.ac = ac,
 	};
-	struct page *page;
+	struct page *page = NULL;
 
 	*did_some_progress = 0;
 
@@ -3339,19 +3340,6 @@ __alloc_pages_may_oom(gfp_t gfp_mask, unsigned int order,
 		schedule_timeout_uninterruptible(1);
 		return NULL;
 	}
-
-	/*
-	 * Go through the zonelist yet one more time, keep very high watermark
-	 * here, this is only to catch a parallel oom killing, we must fail if
-	 * we're still under heavy pressure. But make sure that this reclaim
-	 * attempt shall not depend on __GFP_DIRECT_RECLAIM && !__GFP_NORETRY
-	 * allocation which will never fail due to oom_lock already held.
-	 */
-	page = get_page_from_freelist((gfp_mask | __GFP_HARDWALL) &
-				      ~__GFP_DIRECT_RECLAIM, order,
-				      ALLOC_WMARK_HIGH|ALLOC_CPUSET, ac);
-	if (page)
-		goto out;
 
 	/* Coredumps can quickly deplete all memory reserves */
 	if (current->flags & PF_DUMPCORE)
@@ -3387,16 +3375,18 @@ __alloc_pages_may_oom(gfp_t gfp_mask, unsigned int order,
 		goto out;
 
 	/* Exhausted what can be done so it's blamo time */
-	if (out_of_memory(&oc) || WARN_ON_ONCE(gfp_mask & __GFP_NOFAIL)) {
+	if (out_of_memory(&oc)) {
+		*did_some_progress = 1;
+		page = oc.page;
+	} else if (WARN_ON_ONCE(gfp_mask & __GFP_NOFAIL)) {
 		*did_some_progress = 1;
 
 		/*
 		 * Help non-failing allocations by giving them access to memory
 		 * reserves
 		 */
-		if (gfp_mask & __GFP_NOFAIL)
-			page = __alloc_pages_cpuset_fallback(gfp_mask, order,
-					ALLOC_NO_WATERMARKS, ac);
+		page = __alloc_pages_cpuset_fallback(gfp_mask, order,
+						     ALLOC_NO_WATERMARKS, ac);
 	}
 out:
 	mutex_unlock(&oom_lock);
@@ -4154,6 +4144,24 @@ fail:
 			"page allocation failure: order:%u", order);
 got_pg:
 	return page;
+}
+
+struct page *alloc_pages_before_oomkill(const struct oom_control *oc)
+{
+	/*
+	 * Go through the zonelist yet one more time, keep very high watermark
+	 * here, this is only to catch a parallel oom killing, we must fail if
+	 * we're still under heavy pressure. But make sure that this reclaim
+	 * attempt shall not depend on __GFP_DIRECT_RECLAIM && !__GFP_NORETRY
+	 * allocation which will never fail due to oom_lock already held.
+	 */
+	int alloc_flags = ALLOC_CPUSET | ALLOC_WMARK_HIGH;
+	gfp_t gfp_mask = oc->gfp_mask | __GFP_HARDWALL;
+
+	if (!oc->ac)
+		return NULL;
+	gfp_mask &= ~__GFP_DIRECT_RECLAIM;
+	return get_page_from_freelist(gfp_mask, oc->order, alloc_flags, oc->ac);
 }
 
 static inline bool prepare_alloc_pages(gfp_t gfp_mask, unsigned int order,
