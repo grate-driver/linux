@@ -22,9 +22,12 @@
  ********************************************************************/
 
 #define LPFC_NVME_DEFAULT_SEGS		(64 + 1)	/* 256K IOs */
-#define LPFC_NVME_WQSIZE		256
+#define LPFC_NVME_WQSIZE		1024
+#define LPFC_NVME_CQSIZE		4096
 
 #define LPFC_NVME_ERSP_LEN		0x20
+
+#define LPFC_NVME_WAIT_TMO              10
 
 struct lpfc_nvme_qhandle {
 	uint32_t index;		/* WQ index to use */
