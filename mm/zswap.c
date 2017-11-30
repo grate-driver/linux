@@ -984,16 +984,10 @@ static int zswap_is_page_same_filled(void *ptr, unsigned long *value)
 
 static void zswap_fill_page(void *ptr, unsigned long value)
 {
-	unsigned int pos;
 	unsigned long *page;
 
 	page = (unsigned long *)ptr;
-	if (value == 0)
-		memset(page, 0, PAGE_SIZE);
-	else {
-		for (pos = 0; pos < PAGE_SIZE / sizeof(*page); pos++)
-			page[pos] = value;
-	}
+	memset_l(page, value, PAGE_SIZE / sizeof(unsigned long));
 }
 
 /*********************************
