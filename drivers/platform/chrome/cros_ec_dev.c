@@ -304,8 +304,8 @@ static void cros_ec_sensors_register(struct cros_ec_dev *ec)
 
 	resp = (struct ec_response_motion_sense *)msg->data;
 	sensor_num = resp->dump.sensor_count;
-	/* Allocate 2 extra sensors in case lid angle or FIFO are needed */
-	sensor_cells = kzalloc(sizeof(struct mfd_cell) * (sensor_num + 2),
+	/* Allocate one extra sensor for MOTION_SENSE_FIFO if needed */
+	sensor_cells = kzalloc(sizeof(struct mfd_cell) * (sensor_num + 1),
 			       GFP_KERNEL);
 	if (sensor_cells == NULL)
 		goto error;
@@ -361,23 +361,15 @@ static void cros_ec_sensors_register(struct cros_ec_dev *ec)
 		sensor_type[resp->info.type]++;
 		id++;
 	}
-	if (sensor_type[MOTIONSENSE_TYPE_ACCEL] >= 2) {
-		sensor_platforms[id].sensor_num = sensor_num;
-
-		sensor_cells[id].name = "cros-ec-angle";
-		sensor_cells[id].id = 0;
-		sensor_cells[id].platform_data = &sensor_platforms[id];
-		sensor_cells[id].pdata_size =
-			sizeof(struct cros_ec_sensor_platform);
-		id++;
-	}
+	if (sensor_type[MOTIONSENSE_TYPE_ACCEL] >= 2)
+		ec->has_kb_wake_angle = true;
 	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
 		sensor_cells[id].name = "cros-ec-ring";
 		id++;
 	}
 
-	ret = mfd_add_devices(ec->dev, 0, sensor_cells, id,
-			      NULL, 0, NULL);
+	ret = devm_mfd_add_devices(ec->dev, 0, sensor_cells, id,
+				   NULL, 0, NULL);
 	if (ret)
 		dev_err(ec->dev, "failed to add EC sensors\n");
 
@@ -423,6 +415,15 @@ static int ec_device_probe(struct platform_device *pdev)
 		goto failed;
 	}
 
+	/* check whether this EC is a sensor hub. */
+	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE)) {
+		pr_err("has EC_FEATURE_MOTION_SENSE\n");
+		cros_ec_sensors_register(ec);
+	}
+
+	/* Take control of the lightbar from the EC. */
+	lb_manual_suspend_ctrl(ec, 1);
+
 	retval = cdev_device_add(&ec->cdev, &ec->class_dev);
 	if (retval) {
 		dev_err(dev, "cdev_device_add failed => %d\n", retval);
@@ -431,13 +432,6 @@ static int ec_device_probe(struct platform_device *pdev)
 
 	if (cros_ec_debugfs_init(ec))
 		dev_warn(dev, "failed to create debugfs directory\n");
-
-	/* check whether this EC is a sensor hub. */
-	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE))
-		cros_ec_sensors_register(ec);
-
-	/* Take control of the lightbar from the EC. */
-	lb_manual_suspend_ctrl(ec, 1);
 
 	return 0;
 
@@ -460,6 +454,14 @@ static int ec_device_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static void ec_device_shutdown(struct platform_device *pdev)
+{
+	struct cros_ec_dev *ec = dev_get_drvdata(&pdev->dev);
+
+	/* Be sure to clear up debugfs delayed works */
+	cros_ec_debugfs_remove(ec);
+}
+
 static const struct platform_device_id cros_ec_id[] = {
 	{ "cros-ec-ctl", 0 },
 	{ /* sentinel */ },
@@ -469,6 +471,8 @@ MODULE_DEVICE_TABLE(platform, cros_ec_id);
 static __maybe_unused int ec_device_suspend(struct device *dev)
 {
 	struct cros_ec_dev *ec = dev_get_drvdata(dev);
+
+	cros_ec_debugfs_suspend(ec);
 
 	lb_suspend(ec);
 
@@ -480,6 +484,8 @@ static __maybe_unused int ec_device_resume(struct device *dev)
 	struct cros_ec_dev *ec = dev_get_drvdata(dev);
 
 	lb_resume(ec);
+
+	cros_ec_debugfs_resume(ec);
 
 	return 0;
 }
@@ -498,6 +504,7 @@ static struct platform_driver cros_ec_dev_driver = {
 	},
 	.probe = ec_device_probe,
 	.remove = ec_device_remove,
+	.shutdown = ec_device_shutdown,
 };
 
 static int __init cros_ec_dev_init(void)
