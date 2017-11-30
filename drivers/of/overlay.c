@@ -580,9 +580,9 @@ static int init_overlay_changeset(struct overlay_changeset *ovcs,
 				of_node_put(fragment->overlay);
 				ret = -EINVAL;
 				goto err_free_fragments;
-			} else {
-				cnt++;
 			}
+
+			cnt++;
 		}
 	}
 
@@ -660,14 +660,14 @@ static void free_overlay_changeset(struct overlay_changeset *ovcs)
  * A non-zero return value will not have created the changeset if error is from:
  *   - parameter checks
  *   - building the changeset
- *   - overlay changset pre-apply notifier
+ *   - overlay changeset pre-apply notifier
  *
  * If an error is returned by an overlay changeset pre-apply notifier
  * then no further overlay changeset pre-apply notifier will be called.
  *
  * A non-zero return value will have created the changeset if error is from:
  *   - overlay changeset entry notifier
- *   - overlay changset post-apply notifier
+ *   - overlay changeset post-apply notifier
  *
  * If an error is returned by an overlay changeset post-apply notifier
  * then no further overlay changeset post-apply notifier will be called.
@@ -736,13 +736,11 @@ int of_overlay_apply(struct device_node *tree, int *ovcs_id)
 			devicetree_state_flags |= DTSF_APPLY_FAIL;
 		}
 		goto err_free_overlay_changeset;
-	} else {
-		ret = __of_changeset_apply_notify(&ovcs->cset);
-		if (ret)
-			pr_err("overlay changeset entry notify error %d\n",
-			       ret);
-		/* fall through */
 	}
+
+	ret = __of_changeset_apply_notify(&ovcs->cset);
+	if (ret)
+		pr_err("overlay changeset entry notify error %d\n", ret);
 
 	list_add_tail(&ovcs->ovcs_list, &ovcs_list);
 	*ovcs_id = ovcs->id;
@@ -760,13 +758,13 @@ int of_overlay_apply(struct device_node *tree, int *ovcs_id)
 
 	goto out;
 
-err_overlay_unlock:
-	of_overlay_mutex_unlock();
-
 err_free_overlay_changeset:
 	free_overlay_changeset(ovcs);
 
 	mutex_unlock(&of_mutex);
+
+err_overlay_unlock:
+	of_overlay_mutex_unlock();
 
 out:
 	pr_debug("%s() err=%d\n", __func__, ret);
@@ -871,7 +869,7 @@ static int overlay_removal_is_ok(struct overlay_changeset *remove_ovcs)
  *
  * A non-zero return value will not revert the changeset if error is from:
  *   - parameter checks
- *   - overlay changset pre-remove notifier
+ *   - overlay changeset pre-remove notifier
  *   - overlay changeset entry revert
  *
  * If an error is returned by an overlay changeset pre-remove notifier
@@ -882,7 +880,7 @@ static int overlay_removal_is_ok(struct overlay_changeset *remove_ovcs)
  *
  * A non-zero return value will revert the changeset if error is from:
  *   - overlay changeset entry notifier
- *   - overlay changset post-remove notifier
+ *   - overlay changeset post-remove notifier
  *
  * If an error is returned by an overlay changeset post-remove notifier
  * then no further overlay changeset post-remove notifier will be called.
@@ -931,14 +929,11 @@ int of_overlay_remove(int *ovcs_id)
 		if (ret_apply)
 			devicetree_state_flags |= DTSF_REVERT_FAIL;
 		goto out_unlock;
-	} else {
-		ret = __of_changeset_revert_notify(&ovcs->cset);
-		if (ret) {
-			pr_err("overlay changeset entry notify error %d\n",
-			       ret);
-			/* fall through - changeset was reverted */
-		}
 	}
+
+	ret = __of_changeset_revert_notify(&ovcs->cset);
+	if (ret)
+		pr_err("overlay changeset entry notify error %d\n", ret);
 
 	*ovcs_id = 0;
 
