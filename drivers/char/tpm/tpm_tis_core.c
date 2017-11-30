@@ -31,6 +31,72 @@
 #include "tpm.h"
 #include "tpm_tis_core.h"
 
+/* This is a polling delay to check for status and burstcount.
+ * As per ddwg input, expectation is that status check and burstcount
+ * check should return within few usecs.
+ */
+#define TPM_POLL_SLEEP	1  /* msec */
+
+static bool wait_for_tpm_stat_cond(struct tpm_chip *chip, u8 mask,
+					bool check_cancel, bool *canceled)
+{
+	u8 status = chip->ops->status(chip);
+
+	*canceled = false;
+	if ((status & mask) == mask)
+		return true;
+	if (check_cancel && chip->ops->req_canceled(chip, status)) {
+		*canceled = true;
+		return true;
+	}
+	return false;
+}
+
+static int wait_for_tpm_stat(struct tpm_chip *chip, u8 mask,
+		unsigned long timeout, wait_queue_head_t *queue,
+		bool check_cancel)
+{
+	unsigned long stop;
+	long rc;
+	u8 status;
+	bool canceled = false;
+
+	/* check current status */
+	status = chip->ops->status(chip);
+	if ((status & mask) == mask)
+		return 0;
+
+	stop = jiffies + timeout;
+
+	if (chip->flags & TPM_CHIP_FLAG_IRQ) {
+again:
+		timeout = stop - jiffies;
+		if ((long)timeout <= 0)
+			return -ETIME;
+		rc = wait_event_interruptible_timeout(*queue,
+			wait_for_tpm_stat_cond(chip, mask, check_cancel,
+					       &canceled),
+			timeout);
+		if (rc > 0) {
+			if (canceled)
+				return -ECANCELED;
+			return 0;
+		}
+		if (rc == -ERESTARTSYS && freezing(current)) {
+			clear_thread_flag(TIF_SIGPENDING);
+			goto again;
+		}
+	} else {
+		do {
+			tpm_msleep(TPM_POLL_SLEEP);
+			status = chip->ops->status(chip);
+			if ((status & mask) == mask)
+				return 0;
+		} while (time_before(jiffies, stop));
+	}
+	return -ETIME;
+}
+
 /* Before we attempt to access the TPM we must see that the valid bit is set.
  * The specification says that this bit is 0 at reset and remains 0 until the
  * 'TPM has gone through its self test and initialization and has established
@@ -164,7 +230,7 @@ static int get_burstcount(struct tpm_chip *chip)
 		burstcnt = (value >> 8) & 0xFFFF;
 		if (burstcnt)
 			return burstcnt;
-		tpm_msleep(TPM_TIMEOUT);
+		tpm_msleep(TPM_POLL_SLEEP);
 	} while (time_before(jiffies, stop));
 	return -EBUSY;
 }
@@ -256,7 +322,6 @@ static int tpm_tis_send_data(struct tpm_chip *chip, const u8 *buf, size_t len)
 {
 	struct tpm_tis_data *priv = dev_get_drvdata(&chip->dev);
 	int rc, status, burstcnt;
-	size_t count = 0;
 	bool itpm = priv->flags & TPM_TIS_ITPM_WORKAROUND;
 
 	status = tpm_tis_status(chip);
@@ -270,35 +335,24 @@ static int tpm_tis_send_data(struct tpm_chip *chip, const u8 *buf, size_t len)
 		}
 	}
 
-	while (count < len - 1) {
-		burstcnt = get_burstcount(chip);
-		if (burstcnt < 0) {
-			dev_err(&chip->dev, "Unable to read burstcount\n");
-			rc = burstcnt;
-			goto out_err;
-		}
-		burstcnt = min_t(int, burstcnt, len - count - 1);
-		rc = tpm_tis_write_bytes(priv, TPM_DATA_FIFO(priv->locality),
-					 burstcnt, buf + count);
-		if (rc < 0)
-			goto out_err;
-
-		count += burstcnt;
-
-		if (wait_for_tpm_stat(chip, TPM_STS_VALID, chip->timeout_c,
-					&priv->int_queue, false) < 0) {
-			rc = -ETIME;
-			goto out_err;
-		}
-		status = tpm_tis_status(chip);
-		if (!itpm && (status & TPM_STS_DATA_EXPECT) == 0) {
-			rc = -EIO;
-			goto out_err;
-		}
+	/*
+	 * Get the initial burstcount to ensure TPM is ready to
+	 * accept data.
+	 */
+	burstcnt = get_burstcount(chip);
+	if (burstcnt < 0) {
+		dev_err(&chip->dev, "Unable to read burstcount\n");
+		rc = burstcnt;
+		goto out_err;
 	}
 
+	rc = tpm_tis_write_bytes(priv, TPM_DATA_FIFO(priv->locality),
+			len - 1, buf);
+	if (rc < 0)
+		goto out_err;
+
 	/* write last byte */
-	rc = tpm_tis_write8(priv, TPM_DATA_FIFO(priv->locality), buf[count]);
+	rc = tpm_tis_write8(priv, TPM_DATA_FIFO(priv->locality), buf[len-1]);
 	if (rc < 0)
 		goto out_err;
 
