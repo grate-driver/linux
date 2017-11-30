@@ -2248,6 +2248,9 @@ choice
 
 	config LEGACY_VSYSCALL_NATIVE
 		bool "Native"
+		# The VSYSCALL page comes from the kernel page tables
+		# and is not available when KAISER is enabled.
+		depends on ! KAISER
 		help
 		  Actual executable code is located in the fixed vsyscall
 		  address mapping, implementing time() efficiently. Since
@@ -2264,6 +2267,11 @@ choice
 		  which could be used in certain rare security vulnerability
 		  exploits. This configuration is recommended when userspace
 		  still uses the vsyscall area.
+
+		  When KAISER is enabled, the vsyscall area will become
+		  unreadable.  This emulation option still works, but KAISER
+		  will make it harder to do things like trace code using the
+		  emulation.
 
 	config LEGACY_VSYSCALL_NONE
 		bool "None"
