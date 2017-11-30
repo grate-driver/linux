@@ -1759,8 +1759,7 @@ int ocfs2_try_rw_lock(struct inode *inode, int write)
 
 	level = write ? DLM_LOCK_EX : DLM_LOCK_PR;
 
-	status = ocfs2_cluster_lock(OCFS2_SB(inode->i_sb), lockres, level,
-				    DLM_LKF_NOQUEUE, 0);
+	status = ocfs2_cluster_lock(osb, lockres, level, DLM_LKF_NOQUEUE, 0);
 	return status;
 }
 
