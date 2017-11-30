@@ -19,6 +19,8 @@ enum {
 #define offsetof(TYPE, MEMBER)	((size_t)&((TYPE *)0)->MEMBER)
 #endif
 
+#define sizeof_field(structure, field) sizeof((((structure *)0)->field))
+
 /**
  * offsetofend(TYPE, MEMBER)
  *
