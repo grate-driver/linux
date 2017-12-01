@@ -14,6 +14,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/slab.h>
+
 #include "dev.h"
 #include "debug.h"
 #include "firewall.h"
@@ -180,7 +182,10 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 	struct host1x_firewall fw;
 	size_t offset = 0;
 	size_t size = 0;
+	void *g_data = NULL;
+	unsigned int g_words_prev = 0;
 	unsigned int i, k;
+	int ret = 0;
 
 	fw.dev = dev;
 	fw.job = job;
@@ -213,21 +218,37 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 
 	for (i = 0; i < job->num_gathers; i++) {
 		struct host1x_job_gather *g = &job->gathers[i];
-		void *gather;
+		void *gather, *tmp;
+
+		/*
+		 * Use an intermediate buffer to utilize CPU caching for
+		 * gather validation.
+		 */
+		if (g_words_prev < g->words) {
+			tmp = krealloc(g_data, g->words * sizeof(u32),
+				       GFP_KERNEL);
+			if (!tmp) {
+				ret = -ENOMEM;
+				break;
+			}
+
+			g_words_prev = g->words;
+			g_data = tmp;
+		}
 
 		/* Copy the gather */
 		gather = host1x_bo_mmap(g->bo);
-		memcpy(job->gather_copy_mapped + offset, gather + g->offset,
-		       g->words * sizeof(u32));
+		memcpy(g_data, gather + g->offset, g->words * sizeof(u32));
 		host1x_bo_munmap(g->bo, gather);
 
-		/* Store the location in the buffer */
-		g->base = job->gather_copy;
-		g->offset = offset;
-
 		/* Validate jobs gather */
-		if (host1x_hw_firewall_validate(host, &fw, g, i)) {
-			/* convert offset to number of words */
+		ret = host1x_hw_firewall_validate(host, &fw, g, i, g_data);
+
+		memcpy(job->gather_copy_mapped + offset, g_data,
+		       g->words * sizeof(u32));
+
+		if (ret) {
+			/* Convert offset to number of words */
 			offset /= sizeof(u32);
 			offset += fw.offset + 1;
 
@@ -243,38 +264,42 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 				     "words totally\n",
 				fw.offset, i, offset);
 
-			host1x_debug_output_unlock();
-
-			return -EINVAL;
+			break;
 		}
+
+		/* Store the location in the buffer */
+		g->base = job->gather_copy;
+		g->offset = offset;
 
 		offset += g->words * sizeof(u32);
 	}
 
 	/* No relocs and syncpts should remain at this point */
-	if (fw.num_relocs || fw.syncpt_incrs)
-		goto fw_err;
+	if (ret == 0 && (fw.num_relocs || fw.syncpt_incrs)) {
+		FW_ERR("Debug dump:\n");
+
+		for (i = 0; i < job->num_gathers; i++)
+			host1x_firewall_dump_gather(host, job, &job->gathers[i],
+						    CDMA_GATHER_MAX_FETCHES_NB);
+
+		dev_err(dev, "Command stream validation failed\n");
+
+		if (fw.num_relocs)
+			FW_ERR("Job has invalid number of relocations, "
+			       "%u left\n",
+			       fw.num_relocs);
+
+		if (fw.syncpt_incrs)
+			FW_ERR("Job has invalid number of syncpoint "
+			       "increments, %u left\n",
+			       fw.syncpt_incrs);
+
+		ret = -EINVAL;
+	}
 
 	host1x_debug_output_unlock();
 
-	return 0;
+	kfree(g_data);
 
-fw_err:
-	FW_ERR("Debug dump:\n");
-
-	for (i = 0; i < job->num_gathers; i++)
-		host1x_firewall_dump_gather(host, job, &job->gathers[i],
-					    CDMA_GATHER_MAX_FETCHES_NB);
-
-	if (fw.num_relocs)
-		FW_ERR("Job has invalid number of relocations, %u left\n",
-		       fw.num_relocs);
-
-	if (fw.syncpt_incrs)
-		FW_ERR("Job has invalid number of syncpoint increments, "
-		       "%u left\n", fw.syncpt_incrs);
-
-	host1x_debug_output_unlock();
-
-	return -EINVAL;
+	return ret;
 }
