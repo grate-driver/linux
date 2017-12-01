@@ -270,9 +270,9 @@ static int check_nonincr(struct host1x_firewall *fw)
 }
 
 static int firewall_validate_gather(struct host1x_firewall *fw,
-				    struct host1x_job_gather *g)
+				    struct host1x_job_gather *g,
+				    u32 *cmdbuf_base)
 {
-	u32 *cmdbuf_base = fw->job->gather_copy_mapped + g->offset;
 	int ret = 0;
 
 	fw->cmdbuf_base = cmdbuf_base;
