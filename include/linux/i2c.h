@@ -63,10 +63,68 @@ struct property_entry;
  * transmit an arbitrary number of messages without interruption.
  * @count must be be less than 64k since msg.len is u16.
  */
-extern int i2c_master_send(const struct i2c_client *client, const char *buf,
-			   int count);
-extern int i2c_master_recv(const struct i2c_client *client, char *buf,
-			   int count);
+extern int i2c_transfer_buffer_flags(const struct i2c_client *client,
+				     char *buf, int count, u16 flags);
+
+/**
+ * i2c_master_recv - issue a single I2C message in master receive mode
+ * @client: Handle to slave device
+ * @buf: Where to store data read from slave
+ * @count: How many bytes to read, must be less than 64k since msg.len is u16
+ *
+ * Returns negative errno, or else the number of bytes read.
+ */
+static inline int i2c_master_recv(const struct i2c_client *client,
+				  char *buf, int count)
+{
+	return i2c_transfer_buffer_flags(client, buf, count, I2C_M_RD);
+};
+
+/**
+ * i2c_master_recv_dmasafe - issue a single I2C message in master receive mode
+ *			     using a DMA safe buffer
+ * @client: Handle to slave device
+ * @buf: Where to store data read from slave, must be safe to use with DMA
+ * @count: How many bytes to read, must be less than 64k since msg.len is u16
+ *
+ * Returns negative errno, or else the number of bytes read.
+ */
+static inline int i2c_master_recv_dmasafe(const struct i2c_client *client,
+					  char *buf, int count)
+{
+	return i2c_transfer_buffer_flags(client, buf, count,
+					 I2C_M_RD | I2C_M_DMA_SAFE);
+};
+
+/**
+ * i2c_master_send - issue a single I2C message in master transmit mode
+ * @client: Handle to slave device
+ * @buf: Data that will be written to the slave
+ * @count: How many bytes to write, must be less than 64k since msg.len is u16
+ *
+ * Returns negative errno, or else the number of bytes written.
+ */
+static inline int i2c_master_send(const struct i2c_client *client,
+				  const char *buf, int count)
+{
+	return i2c_transfer_buffer_flags(client, (char *)buf, count, 0);
+};
+
+/**
+ * i2c_master_send_dmasafe - issue a single I2C message in master transmit mode
+ *			     using a DMA safe buffer
+ * @client: Handle to slave device
+ * @buf: Data that will be written to the slave, must be safe to use with DMA
+ * @count: How many bytes to write, must be less than 64k since msg.len is u16
+ *
+ * Returns negative errno, or else the number of bytes written.
+ */
+static inline int i2c_master_send_dmasafe(const struct i2c_client *client,
+					  const char *buf, int count)
+{
+	return i2c_transfer_buffer_flags(client, (char *)buf, count,
+					 I2C_M_DMA_SAFE);
+};
 
 /* Transfer num messages.
  */
@@ -767,6 +825,9 @@ static inline u8 i2c_8bit_addr_from_msg(const struct i2c_msg *msg)
 {
 	return (msg->addr << 1) | (msg->flags & I2C_M_RD ? 1 : 0);
 }
+
+u8 *i2c_get_dma_safe_msg_buf(struct i2c_msg *msg, unsigned int threshold);
+void i2c_release_dma_safe_msg_buf(struct i2c_msg *msg, u8 *buf);
 
 int i2c_handle_smbus_host_notify(struct i2c_adapter *adap, unsigned short addr);
 /**
