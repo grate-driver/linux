@@ -5992,7 +5992,7 @@ int btrfs_subvolume_reserve_metadata(struct btrfs_root *root,
 	if (test_bit(BTRFS_FS_QUOTA_ENABLED, &fs_info->flags)) {
 		/* One for parent inode, two for dir entries */
 		num_bytes = 3 * fs_info->nodesize;
-		ret = btrfs_qgroup_reserve_meta(root, num_bytes, true);
+		ret = btrfs_qgroup_reserve_meta_prealloc(root, num_bytes, true);
 		if (ret)
 			return ret;
 	} else {
@@ -6011,7 +6011,7 @@ int btrfs_subvolume_reserve_metadata(struct btrfs_root *root,
 		ret = btrfs_block_rsv_migrate(global_rsv, rsv, num_bytes, 1);
 
 	if (ret && *qgroup_reserved)
-		btrfs_qgroup_free_meta(root, *qgroup_reserved);
+		btrfs_qgroup_free_meta_prealloc(root, *qgroup_reserved);
 
 	return ret;
 }
@@ -6087,7 +6087,7 @@ int btrfs_delalloc_reserve_metadata(struct btrfs_inode *inode, u64 num_bytes)
 	spin_unlock(&inode->lock);
 
 	if (test_bit(BTRFS_FS_QUOTA_ENABLED, &fs_info->flags)) {
-		ret = btrfs_qgroup_reserve_meta(root,
+		ret = btrfs_qgroup_reserve_meta_prealloc(root,
 				nr_extents * fs_info->nodesize, true);
 		if (ret)
 			goto out_fail;
@@ -6095,7 +6095,7 @@ int btrfs_delalloc_reserve_metadata(struct btrfs_inode *inode, u64 num_bytes)
 
 	ret = btrfs_inode_rsv_refill(inode, flush);
 	if (unlikely(ret)) {
-		btrfs_qgroup_free_meta(root,
+		btrfs_qgroup_free_meta_prealloc(root,
 				       nr_extents * fs_info->nodesize);
 		goto out_fail;
 	}
