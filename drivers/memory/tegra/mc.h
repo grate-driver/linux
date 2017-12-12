@@ -16,14 +16,24 @@
 
 static inline u32 mc_readl(struct tegra_mc *mc, unsigned long offset)
 {
+	if (mc->soc->tegra20 && offset >= 0x24)
+		return readl(mc->regs2 + offset - 0x3c);
+
 	return readl(mc->regs + offset);
 }
 
 static inline void mc_writel(struct tegra_mc *mc, u32 value,
 			     unsigned long offset)
 {
+	if (mc->soc->tegra20 && offset >= 0x24)
+		return writel(value, mc->regs2 + offset - 0x3c);
+
 	writel(value, mc->regs + offset);
 }
+
+#ifdef CONFIG_ARCH_TEGRA_2x_SOC
+extern const struct tegra_mc_soc tegra20_mc_soc;
+#endif
 
 #ifdef CONFIG_ARCH_TEGRA_3x_SOC
 extern const struct tegra_mc_soc tegra30_mc_soc;
