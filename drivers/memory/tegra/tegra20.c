@@ -63,10 +63,33 @@ static const struct tegra_mc_client tegra20_mc_clients[] = {
 	{ .name = "vdetpmw" },
 };
 
+static const struct tegra_mc_module tegra20_mc_modules[] = {
+	[TEGRA_MEMORY_CLIENT_AVP]	= { .hw_id =  0, .valid = true },
+	[TEGRA_MEMORY_CLIENT_DC]	= { .hw_id =  1, .valid = true },
+	[TEGRA_MEMORY_CLIENT_DCB]	= { .hw_id =  2, .valid = true },
+	[TEGRA_MEMORY_CLIENT_EPP]	= { .hw_id =  3, .valid = true },
+	[TEGRA_MEMORY_CLIENT_2D]	= { .hw_id =  4, .valid = true },
+	[TEGRA_MEMORY_CLIENT_HOST1X]	= { .hw_id =  5, .valid = true },
+	[TEGRA_MEMORY_CLIENT_ISP]	= { .hw_id =  6, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPCORE]	= { .hw_id =  7, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPEA]	= { .hw_id =  8, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPEB]	= { .hw_id =  9, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPEC]	= { .hw_id = 10, .valid = true },
+	[TEGRA_MEMORY_CLIENT_3D]	= { .hw_id = 11, .valid = true },
+	[TEGRA_MEMORY_CLIENT_PPCS]	= { .hw_id = 12, .valid = true },
+	[TEGRA_MEMORY_CLIENT_VDE]	= { .hw_id = 13, .valid = true },
+	[TEGRA_MEMORY_CLIENT_VI]	= { .hw_id = 14, .valid = true },
+};
+
 const struct tegra_mc_soc tegra20_mc_soc = {
 	.clients = tegra20_mc_clients,
 	.num_clients = ARRAY_SIZE(tegra20_mc_clients),
 	.num_address_bits = 32,
 	.client_id_mask = 0x3f,
 	.tegra20 = true,
+	.modules = tegra20_mc_modules,
+	.num_modules = ARRAY_SIZE(tegra20_mc_modules),
+	.reg_client_ctrl = 0x100,
+	.reg_client_hotresetn = 0x104,
+	.reg_client_flush_status = 0x140,
 };

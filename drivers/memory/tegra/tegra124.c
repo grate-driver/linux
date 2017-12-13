@@ -1012,6 +1012,30 @@ static const struct tegra_smmu_group_soc tegra124_groups[] = {
 	},
 };
 
+static const struct tegra_mc_module tegra124_mc_modules[] = {
+	[TEGRA_MEMORY_CLIENT_AFI]	= { .hw_id =  0, .valid = true },
+	[TEGRA_MEMORY_CLIENT_AVP]	= { .hw_id =  1, .valid = true },
+	[TEGRA_MEMORY_CLIENT_DC]	= { .hw_id =  2, .valid = true },
+	[TEGRA_MEMORY_CLIENT_DCB]	= { .hw_id =  3, .valid = true },
+	[TEGRA_MEMORY_CLIENT_HOST1X]	= { .hw_id =  6, .valid = true },
+	[TEGRA_MEMORY_CLIENT_HDA]	= { .hw_id =  7, .valid = true },
+	[TEGRA_MEMORY_CLIENT_ISP2]	= { .hw_id =  8, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPCORE]	= { .hw_id =  9, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPCORELP]	= { .hw_id = 10, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MSENC]	= { .hw_id = 11, .valid = true },
+	[TEGRA_MEMORY_CLIENT_PPCS]	= { .hw_id = 14, .valid = true },
+	[TEGRA_MEMORY_CLIENT_SATA]	= { .hw_id = 15, .valid = true },
+	[TEGRA_MEMORY_CLIENT_VDE]	= { .hw_id = 16, .valid = true },
+	[TEGRA_MEMORY_CLIENT_VI]	= { .hw_id = 17, .valid = true },
+	[TEGRA_MEMORY_CLIENT_VIC]	= { .hw_id = 18, .valid = true },
+	[TEGRA_MEMORY_CLIENT_XUSB_HOST]	= { .hw_id = 19, .valid = true },
+	[TEGRA_MEMORY_CLIENT_XUSB_DEV]	= { .hw_id = 20, .valid = true },
+	[TEGRA_MEMORY_CLIENT_TSEC]	= { .hw_id = 22, .valid = true },
+	[TEGRA_MEMORY_CLIENT_SDMMC1]	= { .hw_id = 29, .valid = true },
+	[TEGRA_MEMORY_CLIENT_SDMMC2]	= { .hw_id = 30, .valid = true },
+	[TEGRA_MEMORY_CLIENT_SDMMC3]	= { .hw_id = 31, .valid = true },
+};
+
 #ifdef CONFIG_ARCH_TEGRA_124_SOC
 static const struct tegra_smmu_soc tegra124_smmu_soc = {
 	.clients = tegra124_mc_clients,
@@ -1035,6 +1059,10 @@ const struct tegra_mc_soc tegra124_mc_soc = {
 	.smmu = &tegra124_smmu_soc,
 	.emem_regs = tegra124_mc_emem_regs,
 	.num_emem_regs = ARRAY_SIZE(tegra124_mc_emem_regs),
+	.modules = tegra124_mc_modules,
+	.num_modules = ARRAY_SIZE(tegra124_mc_modules),
+	.reg_client_ctrl = 0x200,
+	.reg_client_flush_status = 0x204,
 };
 #endif /* CONFIG_ARCH_TEGRA_124_SOC */
 
@@ -1059,5 +1087,9 @@ const struct tegra_mc_soc tegra132_mc_soc = {
 	.atom_size = 32,
 	.client_id_mask = 0x7f,
 	.smmu = &tegra132_smmu_soc,
+	.modules = tegra124_mc_modules,
+	.num_modules = ARRAY_SIZE(tegra124_mc_modules),
+	.reg_client_ctrl = 0x200,
+	.reg_client_flush_status = 0x204,
 };
 #endif /* CONFIG_ARCH_TEGRA_132_SOC */

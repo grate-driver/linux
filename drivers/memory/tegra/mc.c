@@ -7,11 +7,13 @@
  */
 
 #include <linux/clk.h>
+#include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/reset.h>
 #include <linux/slab.h>
 #include <linux/sort.h>
 
@@ -80,6 +82,172 @@ static const struct of_device_id tegra_mc_of_match[] = {
 	{ }
 };
 MODULE_DEVICE_TABLE(of, tegra_mc_of_match);
+
+static int terga_mc_flush_dma(struct tegra_mc *mc, unsigned int id)
+{
+	unsigned int hw_id = mc->soc->modules[id].hw_id;
+	u32 value, reg_poll = mc->soc->reg_client_flush_status;
+	int retries = 3;
+
+	value = mc_readl(mc, mc->soc->reg_client_ctrl);
+
+	if (mc->soc->tegra20)
+		value &= ~BIT(hw_id);
+	else
+		value |= BIT(hw_id);
+
+	/* block clients DMA requests */
+	mc_writel(mc, value, mc->soc->reg_client_ctrl);
+
+	/* wait for completion of the outstanding DMA requests */
+	if (mc->soc->tegra20) {
+		while (mc_readl(mc, reg_poll + hw_id * sizeof(u32)) != 0) {
+			if (!retries--)
+				return -EBUSY;
+
+			usleep_range(1000, 2000);
+		}
+	} else {
+		while ((mc_readl(mc, reg_poll) & BIT(hw_id)) == 0) {
+			if (!retries--)
+				return -EBUSY;
+
+			usleep_range(1000, 2000);
+		}
+	}
+
+	return 0;
+}
+
+static int terga_mc_unblock_dma(struct tegra_mc *mc, unsigned int id)
+{
+	unsigned int hw_id = mc->soc->modules[id].hw_id;
+	u32 value;
+
+	value = mc_readl(mc, mc->soc->reg_client_ctrl);
+
+	if (mc->soc->tegra20)
+		value |= BIT(hw_id);
+	else
+		value &= ~BIT(hw_id);
+
+	mc_writel(mc, value, mc->soc->reg_client_ctrl);
+
+	return 0;
+}
+
+static int terga_mc_hotreset_assert(struct tegra_mc *mc, unsigned int id)
+{
+	unsigned int hw_id = mc->soc->modules[id].hw_id;
+	u32 value;
+
+	if (mc->soc->tegra20) {
+		value = mc_readl(mc, mc->soc->reg_client_hotresetn);
+
+		mc_writel(mc, value & ~BIT(hw_id),
+			  mc->soc->reg_client_hotresetn);
+	}
+
+	return 0;
+}
+
+static int terga_mc_hotreset_deassert(struct tegra_mc *mc, unsigned int id)
+{
+	unsigned int hw_id = mc->soc->modules[id].hw_id;
+	u32 value;
+
+	if (mc->soc->tegra20) {
+		value = mc_readl(mc, mc->soc->reg_client_hotresetn);
+
+		mc_writel(mc, value | BIT(hw_id),
+			  mc->soc->reg_client_hotresetn);
+	}
+
+	return 0;
+}
+
+static int tegra_mc_hot_reset_assert(struct tegra_mc *mc, unsigned int id,
+				     struct reset_control *rst)
+{
+	int err;
+
+	/*
+	 * Block clients DMA requests and wait for completion of the
+	 * outstanding requests.
+	 */
+	err = terga_mc_flush_dma(mc, id);
+	if (err) {
+		dev_err(mc->dev, "Failed to flush DMA: %d\n", err);
+		return err;
+	}
+
+	/* put in reset HW that corresponds to the memory client */
+	err = reset_control_assert(rst);
+	if (err) {
+		dev_err(mc->dev, "Failed to assert HW reset: %d\n", err);
+		return err;
+	}
+
+	/* clear the client requests sitting before arbitration */
+	err = terga_mc_hotreset_assert(mc, id);
+	if (err) {
+		dev_err(mc->dev, "Failed to hot reset client: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
+static int tegra_mc_hot_reset_deassert(struct tegra_mc *mc, unsigned int id,
+				       struct reset_control *rst)
+{
+	int err;
+
+	/* take out client from hot reset */
+	err = terga_mc_hotreset_deassert(mc, id);
+	if (err) {
+		dev_err(mc->dev, "Failed to deassert hot reset: %d\n", err);
+		return err;
+	}
+
+	/* take out from reset corresponding clients HW */
+	err = reset_control_deassert(rst);
+	if (err) {
+		dev_err(mc->dev, "Failed to deassert HW reset: %d\n", err);
+		return err;
+	}
+
+	/* allow new DMA requests to proceed to arbitration */
+	err = terga_mc_unblock_dma(mc, id);
+	if (err) {
+		dev_err(mc->dev, "Failed to unblock client: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
+static int tegra_mc_hot_reset(struct tegra_mc *mc, unsigned int id,
+			      struct reset_control *rst, unsigned long usecs)
+{
+	int err;
+
+	err = tegra_mc_hot_reset_assert(mc, id, rst);
+	if (err)
+		return err;
+
+	/* make sure that reset is propagated */
+	if (usecs < 15)
+		udelay(usecs);
+	else
+		usleep_range(usecs, usecs + 500);
+
+	err = tegra_mc_hot_reset_deassert(mc, id, rst);
+	if (err)
+		return err;
+
+	return 0;
+}
 
 static int tegra_mc_setup_latency_allowance(struct tegra_mc *mc)
 {
@@ -416,6 +584,7 @@ static int tegra_mc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	platform_set_drvdata(pdev, mc);
+	mutex_init(&mc->lock);
 	mc->soc = match->data;
 	mc->dev = &pdev->dev;
 
@@ -498,6 +667,86 @@ static struct platform_driver tegra_mc_driver = {
 	.prevent_deferred_probe = true,
 	.probe = tegra_mc_probe,
 };
+
+static int tegra_mc_match(struct device *dev, void *data)
+{
+	return of_match_node(tegra_mc_of_match, dev->of_node) != NULL;
+}
+
+static struct tegra_mc *tegra_mc_find_device(void)
+{
+	struct device *dev;
+
+	dev = driver_find_device(&tegra_mc_driver.driver, NULL, NULL,
+				 tegra_mc_match);
+	if (!dev)
+		return NULL;
+
+	return dev_get_drvdata(dev);
+}
+
+int tegra_memory_client_hot_reset(unsigned int id, struct reset_control *rst,
+				  unsigned long usecs)
+{
+	struct tegra_mc *mc;
+	int ret;
+
+	mc = tegra_mc_find_device();
+	if (!mc)
+		return -ENODEV;
+
+	if (id >= mc->soc->num_modules || !mc->soc->modules[id].valid)
+		return -EINVAL;
+
+	mutex_lock(&mc->lock);
+	ret = tegra_mc_hot_reset(mc, id, rst, usecs);
+	mutex_unlock(&mc->lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tegra_memory_client_hot_reset);
+
+int tegra_memory_client_hot_reset_assert(unsigned int id,
+					 struct reset_control *rst)
+{
+	struct tegra_mc *mc;
+	int ret;
+
+	mc = tegra_mc_find_device();
+	if (!mc)
+		return -ENODEV;
+
+	if (id >= mc->soc->num_modules || !mc->soc->modules[id].valid)
+		return -EINVAL;
+
+	mutex_lock(&mc->lock);
+	ret = tegra_mc_hot_reset_assert(mc, id, rst);
+	mutex_unlock(&mc->lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tegra_memory_client_hot_reset_assert);
+
+int tegra_memory_client_hot_reset_deassert(unsigned int id,
+					   struct reset_control *rst)
+{
+	struct tegra_mc *mc;
+	int ret;
+
+	mc = tegra_mc_find_device();
+	if (!mc)
+		return -ENODEV;
+
+	if (id >= mc->soc->num_modules || !mc->soc->modules[id].valid)
+		return -EINVAL;
+
+	mutex_lock(&mc->lock);
+	ret = tegra_mc_hot_reset_deassert(mc, id, rst);
+	mutex_unlock(&mc->lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tegra_memory_client_hot_reset_deassert);
 
 static int tegra_mc_init(void)
 {

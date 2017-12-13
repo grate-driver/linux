@@ -938,6 +938,27 @@ static const struct tegra_smmu_soc tegra114_smmu_soc = {
 	.num_asids = 4,
 };
 
+static const struct tegra_mc_module tegra114_mc_modules[] = {
+	[TEGRA_MEMORY_CLIENT_AFI]	= { .hw_id =  0, .valid = true },
+	[TEGRA_MEMORY_CLIENT_AVP]	= { .hw_id =  1, .valid = true },
+	[TEGRA_MEMORY_CLIENT_DC]	= { .hw_id =  2, .valid = true },
+	[TEGRA_MEMORY_CLIENT_DCB]	= { .hw_id =  3, .valid = true },
+	[TEGRA_MEMORY_CLIENT_EPP]	= { .hw_id =  4, .valid = true },
+	[TEGRA_MEMORY_CLIENT_2D]	= { .hw_id =  5, .valid = true },
+	[TEGRA_MEMORY_CLIENT_HOST1X]	= { .hw_id =  6, .valid = true },
+	[TEGRA_MEMORY_CLIENT_HDA]	= { .hw_id =  7, .valid = true },
+	[TEGRA_MEMORY_CLIENT_ISP]	= { .hw_id =  8, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPCORE]	= { .hw_id =  9, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPCORELP]	= { .hw_id = 10, .valid = true },
+	[TEGRA_MEMORY_CLIENT_MPE]	= { .hw_id = 11, .valid = true },
+	[TEGRA_MEMORY_CLIENT_3D0]	= { .hw_id = 12, .valid = true },
+	[TEGRA_MEMORY_CLIENT_3D1]	= { .hw_id = 13, .valid = true },
+	[TEGRA_MEMORY_CLIENT_PPCS]	= { .hw_id = 14, .valid = true },
+	[TEGRA_MEMORY_CLIENT_SATA]	= { .hw_id = 15, .valid = true },
+	[TEGRA_MEMORY_CLIENT_VDE]	= { .hw_id = 16, .valid = true },
+	[TEGRA_MEMORY_CLIENT_VI]	= { .hw_id = 17, .valid = true },
+};
+
 const struct tegra_mc_soc tegra114_mc_soc = {
 	.clients = tegra114_mc_clients,
 	.num_clients = ARRAY_SIZE(tegra114_mc_clients),
@@ -945,4 +966,8 @@ const struct tegra_mc_soc tegra114_mc_soc = {
 	.atom_size = 32,
 	.client_id_mask = 0x7f,
 	.smmu = &tegra114_smmu_soc,
+	.modules = tegra114_mc_modules,
+	.num_modules = ARRAY_SIZE(tegra114_mc_modules),
+	.reg_client_ctrl = 0x200,
+	.reg_client_flush_status = 0x204,
 };
