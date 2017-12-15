@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
+#include <soc/tegra/mc.h>
 #include <soc/tegra/pmc.h>
 
 #include "uapi.h"
@@ -844,7 +845,8 @@ static int tegra_vde_ioctl_decode_h264(struct tegra_vde *vde,
 	 * We rely on the VDE registers reset value, otherwise VDE
 	 * causes bus lockup.
 	 */
-	ret = reset_control_reset(vde->rst);
+	ret = tegra_memory_client_hot_reset(TEGRA_MEMORY_CLIENT_VDE,
+					    vde->rst, 100);
 	if (ret) {
 		dev_err(dev, "Failed to reset HW: %d\n", ret);
 		goto put_runtime_pm;
@@ -874,7 +876,8 @@ static int tegra_vde_ioctl_decode_h264(struct tegra_vde *vde,
 		ret = timeout;
 	}
 
-	err = reset_control_assert(vde->rst);
+	err = tegra_memory_client_hot_reset_assert(TEGRA_MEMORY_CLIENT_VDE,
+						   vde->rst);
 	if (err)
 		dev_err(dev, "Failed to assert HW reset: %d\n", err);
 
