@@ -51,7 +51,7 @@ void host1x_channel_list_free(struct host1x_channel_list *chlist)
 
 int host1x_job_submit(struct host1x_job *job)
 {
-	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
+	struct host1x *host = job->channel->host;
 
 	return host1x_hw_channel_submit(host, job);
 }
@@ -88,12 +88,12 @@ static void release_channel(struct kref *kref)
 {
 	struct host1x_channel *channel =
 		container_of(kref, struct host1x_channel, refcount);
-	struct host1x *host = dev_get_drvdata(channel->dev->parent);
+	struct host1x *host = channel->host;
 	struct host1x_channel_list *chlist = &host->channel_list;
 
 	mutex_lock(&channel->cdma.lock);
-	host1x_cdma_wait_locked(&channel->cdma, CDMA_EVENT_SYNC_QUEUE_EMPTY,
-				false);
+	host1x_cdma_wait_locked(&channel->cdma, NULL,
+				CDMA_EVENT_SYNC_QUEUE_EMPTY, false);
 	host1x_hw_cdma_stop(host, &channel->cdma);
 	host1x_cdma_deinit(&channel->cdma);
 	mutex_unlock(&channel->cdma.lock);
@@ -133,9 +133,8 @@ static struct host1x_channel *acquire_unused_channel(struct host1x *host)
  * Allocates a new host1x channel for @device. May return NULL if CDMA
  * initialization fails.
  */
-struct host1x_channel *host1x_channel_request(struct device *dev)
+struct host1x_channel *host1x_channel_request(struct host1x *host)
 {
-	struct host1x *host = dev_get_drvdata(dev->parent);
 	struct host1x_channel_list *chlist = &host->channel_list;
 	struct host1x_channel *channel;
 	int err;
@@ -146,7 +145,7 @@ struct host1x_channel *host1x_channel_request(struct device *dev)
 
 	kref_init(&channel->refcount);
 	mutex_init(&channel->submitlock);
-	channel->dev = dev;
+	channel->host = host;
 
 	err = host1x_hw_channel_init(host, channel, channel->id);
 	if (err < 0)
@@ -164,7 +163,7 @@ struct host1x_channel *host1x_channel_request(struct device *dev)
 fail:
 	clear_bit(channel->id, chlist->allocated_channels);
 
-	dev_err(dev, "failed to initialize channel\n");
+	dev_err(host->dev, "failed to initialize channel\n");
 
 	return NULL;
 }

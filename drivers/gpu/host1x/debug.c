@@ -70,7 +70,7 @@ void host1x_debug_cont(struct output *o, const char *fmt, ...)
 static int show_channel(struct host1x_channel *ch, void *data,
 			bool show_fifo, bool lock_cdma)
 {
-	struct host1x *m = dev_get_drvdata(ch->dev->parent);
+	struct host1x *m = ch->host;
 	struct output *o = data;
 
 	if (lock_cdma)

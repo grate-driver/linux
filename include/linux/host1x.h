@@ -191,7 +191,7 @@ u64 host1x_syncpt_get_fence_context(struct host1x_syncpt *sp);
 struct host1x_channel;
 struct host1x_job;
 
-struct host1x_channel *host1x_channel_request(struct device *dev);
+struct host1x_channel *host1x_channel_request(struct host1x *host);
 struct host1x_channel *host1x_channel_get(struct host1x_channel *channel);
 void host1x_channel_put(struct host1x_channel *channel);
 int host1x_job_submit(struct host1x_job *job);

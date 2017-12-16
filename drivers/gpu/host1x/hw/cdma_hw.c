@@ -280,6 +280,7 @@ static void cdma_timeout_handler(struct work_struct *work)
 	struct host1x_cdma *cdma;
 	struct host1x *host1x;
 	struct host1x_channel *ch;
+	struct host1x_client *client;
 
 	cdma = container_of(to_delayed_work(work), struct host1x_cdma,
 			    timeout.wq);
@@ -290,7 +291,8 @@ static void cdma_timeout_handler(struct work_struct *work)
 
 	mutex_lock(&cdma->lock);
 
-	if (!cdma->timeout.client) {
+	client = cdma->timeout.client;
+	if (!client) {
 		dev_dbg(host1x->dev,
 			"cdma_timeout: expired, but has no clientid\n");
 		mutex_unlock(&cdma->lock);
@@ -317,9 +319,9 @@ static void cdma_timeout_handler(struct work_struct *work)
 		 syncpt_val, cdma->timeout.syncpt_val);
 
 	/* stop HW, resetting channel/module */
-	cdma_freeze(cdma, cdma->timeout.client);
+	cdma_freeze(cdma, client);
 
-	host1x_cdma_update_sync_queue(cdma, ch->dev);
+	host1x_cdma_update_sync_queue(cdma, client->dev);
 	mutex_unlock(&cdma->lock);
 }
 

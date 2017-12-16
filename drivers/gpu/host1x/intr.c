@@ -110,14 +110,14 @@ static void reset_threshold_interrupt(struct host1x *host,
 
 static void action_submit_complete(struct host1x_waitlist *waiter)
 {
-	struct host1x_channel *channel = waiter->data;
+	struct host1x_submit_waiter *submit_waiter =
+		container_of(waiter, struct host1x_submit_waiter, base);
 
-	host1x_cdma_update(&channel->cdma);
+	host1x_cdma_update(submit_waiter->cdma);
 
 	/*  Add nr_completed to trace */
-	trace_host1x_channel_submit_complete(dev_name(channel->dev),
+	trace_host1x_channel_submit_complete(dev_name(submit_waiter->dev),
 					     waiter->count, waiter->thresh);
-
 }
 
 static void action_wakeup(struct host1x_waitlist *waiter)

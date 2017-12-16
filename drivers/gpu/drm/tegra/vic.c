@@ -140,6 +140,7 @@ static int vic_init(struct host1x_client *client)
 	struct tegra_drm_client *drm = host1x_to_drm_client(client);
 	struct iommu_group *group = iommu_group_get(client->dev);
 	struct drm_device *dev = dev_get_drvdata(client->parent);
+	struct host1x *host = dev_get_drvdata(client->dev->parent);
 	struct tegra_drm *tegra = dev->dev_private;
 	struct vic *vic = to_vic(drm);
 	int err;
@@ -162,7 +163,7 @@ static int vic_init(struct host1x_client *client)
 			goto detach;
 	}
 
-	vic->channel = host1x_channel_request(client->dev);
+	vic->channel = host1x_channel_request(host);
 	if (!vic->channel) {
 		err = -ENOMEM;
 		goto detach;

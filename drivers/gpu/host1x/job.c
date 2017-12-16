@@ -332,7 +332,7 @@ EXPORT_SYMBOL(host1x_job_pin);
 
 void host1x_job_unpin(struct host1x_job *job)
 {
-	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
+	struct host1x *host = dev_get_drvdata(job->client->dev->parent);
 	unsigned int i;
 
 	for (i = 0; i < job->num_unpins; i++) {
@@ -350,7 +350,7 @@ void host1x_job_unpin(struct host1x_job *job)
 	}
 
 	if (job->gather_copy_size)
-		dma_free_wc(job->channel->dev, job->gather_copy_size,
+		dma_free_wc(job->client->dev, job->gather_copy_size,
 			    job->gather_copy_mapped, job->gather_copy);
 
 	if (job->syncpt)

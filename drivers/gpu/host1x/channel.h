@@ -37,8 +37,8 @@ struct host1x_channel {
 	unsigned int id;
 	struct mutex submitlock;
 	void __iomem *regs;
-	struct device *dev;
 	struct host1x_cdma cdma;
+	struct host1x *host;
 };
 
 /* channel list operations */

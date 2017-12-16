@@ -20,6 +20,19 @@
 #include "../cdma.h"
 #include "../channel.h"
 
+static const char *host1x_debug_show_class_name(u32 class)
+{
+	switch (class) {
+	case HOST1X_CLASS_HOST1X:
+		return "HOST1X";
+
+	case HOST1X_CLASS_VIC:
+		return "VIC";
+	}
+
+	return "Unknown";
+}
+
 static void host1x_debug_show_channel_cdma(struct host1x *host,
 					   struct host1x_channel *ch,
 					   struct output *o)
@@ -36,7 +49,8 @@ static void host1x_debug_show_channel_cdma(struct host1x *host,
 	class = host1x_ch_readl(ch, HOST1X_CHANNEL_CMDP_CLASS);
 	ch_stat = host1x_ch_readl(ch, HOST1X_CHANNEL_CHANNELSTAT);
 
-	host1x_debug_output(o, "%u-%s: ", ch->id, dev_name(ch->dev));
+	host1x_debug_output(o, "%u-%s: ", ch->id,
+			    host1x_debug_show_class_name(class));
 
 	if (dmactrl & HOST1X_CHANNEL_DMACTRL_DMASTOP ||
 	    !ch->cdma.push_buffer.mapped) {
