@@ -377,6 +377,9 @@ static void update_cdma_locked(struct host1x_cdma *cdma)
 				signal = true;
 		}
 
+		if (job->client->ops && job->client->ops->pm_put)
+			job->client->ops->pm_put(job->client);
+
 		list_del(&job->list);
 		host1x_job_put(job);
 	}

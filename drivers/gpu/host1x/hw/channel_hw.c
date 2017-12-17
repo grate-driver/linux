@@ -218,6 +218,13 @@ static int channel_submit(struct host1x_job *job)
 	u32 syncval;
 	int err;
 
+	/* enable clients HW */
+	if (job->client->ops && job->client->ops->pm_get) {
+		err = job->client->ops->pm_get(job->client);
+		if (err)
+			return err;
+	}
+
 	sp = job->syncpt;
 	trace_host1x_channel_submit(dev_name(job->client->dev),
 				    job->num_gathers, job->num_relocs,
@@ -230,7 +237,7 @@ static int channel_submit(struct host1x_job *job)
 	/* get submit lock */
 	err = mutex_lock_interruptible(&ch->submitlock);
 	if (err)
-		return err;
+		goto err_pm_put;
 
 	completed_waiter = kzalloc(sizeof(*completed_waiter), GFP_KERNEL);
 	if (!completed_waiter) {
@@ -320,6 +327,10 @@ err_reset:
 err_unlock:
 	mutex_unlock(&ch->submitlock);
 	kfree(completed_waiter);
+
+err_pm_put:
+	if (job->client->ops && job->client->ops->pm_put)
+		job->client->ops->pm_put(job->client);
 
 	return err;
 }

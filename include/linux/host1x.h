@@ -44,11 +44,15 @@ struct host1x_client;
  * @init: host1x client initialization code
  * @exit: host1x client tear down code
  * @reset: host1x client HW reset code
+ * @pm_get: host1x client PM enable code
+ * @pm_put: host1x client PM disable code
  */
 struct host1x_client_ops {
 	int (*init)(struct host1x_client *client);
 	int (*exit)(struct host1x_client *client);
 	int (*reset)(struct host1x_client *client);
+	int (*pm_get)(struct host1x_client *client);
+	int (*pm_put)(struct host1x_client *client);
 };
 
 /**
