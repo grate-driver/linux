@@ -52,29 +52,11 @@ static void vic_writel(struct vic *vic, u32 value, unsigned int offset)
 	writel(value, vic->regs + offset);
 }
 
-static int vic_runtime_resume(struct device *dev)
-{
-	struct vic *vic = dev_get_drvdata(dev);
-
-	return clk_prepare_enable(vic->clk);
-}
-
-static int vic_runtime_suspend(struct device *dev)
-{
-	struct vic *vic = dev_get_drvdata(dev);
-
-	clk_disable_unprepare(vic->clk);
-
-	vic->booted = false;
-
-	return 0;
-}
-
 static int vic_boot(struct vic *vic)
 {
 	u32 fce_ucode_size, fce_bin_data_offset;
 	void *hdr;
-	int err = 0;
+	int err;
 
 	if (vic->booted)
 		return 0;
@@ -110,6 +92,35 @@ static int vic_boot(struct vic *vic)
 	}
 
 	vic->booted = true;
+
+	return 0;
+}
+
+static int vic_runtime_resume(struct device *dev)
+{
+	struct vic *vic = dev_get_drvdata(dev);
+	int err;
+
+	err = clk_prepare_enable(vic->clk);
+	if (err)
+		return err;
+
+	err = vic_boot(vic);
+	if (err) {
+		clk_disable_unprepare(vic->clk);
+		return err;
+	}
+
+	return 0;
+}
+
+static int vic_runtime_suspend(struct device *dev)
+{
+	struct vic *vic = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(vic->clk);
+
+	vic->booted = false;
 
 	return 0;
 }
@@ -216,26 +227,40 @@ static int vic_exit(struct host1x_client *client)
 	return 0;
 }
 
-static const struct host1x_client_ops vic_client_ops = {
-	.init = vic_init,
-	.exit = vic_exit,
-};
-
-static int vic_open_channel(struct tegra_drm_client *client,
-			    struct tegra_drm_context *context)
+static int vic_pm_get(struct host1x_client *client)
 {
-	struct vic *vic = to_vic(client);
+	struct tegra_drm_client *drm = host1x_to_drm_client(client);
+	struct vic *vic = to_vic(drm);
 	int err;
 
 	err = pm_runtime_get_sync(vic->dev);
 	if (err < 0)
 		return err;
 
-	err = vic_boot(vic);
-	if (err < 0) {
-		pm_runtime_put(vic->dev);
-		return err;
-	}
+	return 0;
+}
+
+static int vic_pm_put(struct host1x_client *client)
+{
+	struct tegra_drm_client *drm = host1x_to_drm_client(client);
+	struct vic *vic = to_vic(drm);
+
+	pm_runtime_put(vic->dev);
+
+	return 0;
+}
+
+static const struct host1x_client_ops vic_client_ops = {
+	.init = vic_init,
+	.exit = vic_exit,
+	.pm_get = vic_pm_get,
+	.pm_put = vic_pm_put,
+};
+
+static int vic_open_channel(struct tegra_drm_client *client,
+			    struct tegra_drm_context *context)
+{
+	struct vic *vic = to_vic(client);
 
 	context->channel = host1x_channel_get(vic->channel);
 	if (!context->channel) {
@@ -248,11 +273,7 @@ static int vic_open_channel(struct tegra_drm_client *client,
 
 static void vic_close_channel(struct tegra_drm_context *context)
 {
-	struct vic *vic = to_vic(context->client);
-
 	host1x_channel_put(context->channel);
-
-	pm_runtime_put(vic->dev);
 }
 
 static const struct tegra_drm_client_ops vic_ops = {
