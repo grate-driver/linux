@@ -2429,7 +2429,6 @@ static int qgroup_reserve(struct btrfs_root *root, u64 num_bytes, bool enforce,
 	    capable(CAP_SYS_RESOURCE))
 		enforce = false;
 
-retry:
 	spin_lock(&fs_info->qgroup_lock);
 	quota_root = fs_info->quota_root;
 	if (!quota_root)
