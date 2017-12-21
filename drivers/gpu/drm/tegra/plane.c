@@ -43,7 +43,6 @@ tegra_plane_atomic_duplicate_state(struct drm_plane *plane)
 {
 	struct tegra_plane_state *state = to_tegra_plane_state(plane->state);
 	struct tegra_plane_state *copy;
-	unsigned int i;
 
 	copy = kmalloc(sizeof(*copy), GFP_KERNEL);
 	if (!copy)
@@ -53,10 +52,6 @@ tegra_plane_atomic_duplicate_state(struct drm_plane *plane)
 	copy->tiling = state->tiling;
 	copy->format = state->format;
 	copy->swap = state->swap;
-	copy->opaque = state->opaque;
-
-	for (i = 0; i < 3; i++)
-		copy->dependent[i] = state->dependent[i];
 
 	return &copy->base;
 }
@@ -261,123 +256,111 @@ static bool __drm_format_has_alpha(u32 format)
  * This is applicable to Tegra20 and Tegra30 only where the opaque formats can
  * be emulated using the alpha formats and alpha blending disabled.
  */
-bool tegra_plane_format_has_alpha(unsigned int format)
+unsigned int tegra_plane_format_adjust(unsigned int opaque)
 {
-	switch (format) {
-	case WIN_COLOR_DEPTH_B5G5R5A1:
-	case WIN_COLOR_DEPTH_A1B5G5R5:
-	case WIN_COLOR_DEPTH_R8G8B8A8:
-	case WIN_COLOR_DEPTH_B8G8R8A8:
-		return true;
-	}
-
-	return false;
-}
-
-int tegra_plane_format_get_alpha(unsigned int opaque, unsigned int *alpha)
-{
-	if (tegra_plane_format_is_yuv(opaque, NULL)) {
-		*alpha = opaque;
-		return 0;
-	}
-
 	switch (opaque) {
 	case WIN_COLOR_DEPTH_B5G5R5X1:
-		*alpha = WIN_COLOR_DEPTH_B5G5R5A1;
-		return 0;
+		return WIN_COLOR_DEPTH_B5G5R5A1;
 
 	case WIN_COLOR_DEPTH_X1B5G5R5:
-		*alpha = WIN_COLOR_DEPTH_A1B5G5R5;
-		return 0;
+		return WIN_COLOR_DEPTH_A1B5G5R5;
 
 	case WIN_COLOR_DEPTH_R8G8B8X8:
-		*alpha = WIN_COLOR_DEPTH_R8G8B8A8;
-		return 0;
+		return WIN_COLOR_DEPTH_R8G8B8A8;
 
 	case WIN_COLOR_DEPTH_B8G8R8X8:
-		*alpha = WIN_COLOR_DEPTH_B8G8R8A8;
-		return 0;
+		return WIN_COLOR_DEPTH_B8G8R8A8;
 	}
 
-	return -EINVAL;
+	return opaque;
 }
 
-unsigned int tegra_plane_get_overlap_index(struct tegra_plane *plane,
-					   struct tegra_plane *other)
+int tegra_plane_update_blending_state(struct tegra_plane *tegra,
+				      struct tegra_plane_state *state)
 {
-	unsigned int index = 0, i;
+	u32 blend_transparent = BLEND_WEIGHT1(0) | BLEND_WEIGHT0(0);
+	u32 blend_opaque = BLEND_WEIGHT1(255) | BLEND_WEIGHT0(255);
+	struct tegra_dc_blend_state *blend_state;
+	struct tegra_dc_blend_state *win_a_state;
+	struct tegra_dc_blend_state *win_b_state;
+	struct tegra_dc_blend_state *win_c_state;
+	struct tegra_dc_state *dc_state;
+	struct drm_crtc_state *crtc_state;
 
-	WARN_ON(plane == other);
+	crtc_state = drm_atomic_get_crtc_state(state->base.state,
+					       state->base.crtc);
+	if (IS_ERR(crtc_state))
+		return PTR_ERR(crtc_state);
 
-	for (i = 0; i < 3; i++) {
-		if (i == plane->index)
-			continue;
+	dc_state = to_dc_state(crtc_state);
+	blend_state = &dc_state->blend[tegra->index];
+	blend_state->opaque = !__drm_format_has_alpha(
+					state->base.fb->format->format);
 
-		if (i == other->index)
-			break;
+	win_a_state = &dc_state->blend[0];
+	win_b_state = &dc_state->blend[1];
+	win_c_state = &dc_state->blend[2];
 
-		index++;
+	/* setup blending state for window A */
+
+	if (win_b_state->opaque) {
+		win_a_state->to_win_x = blend_transparent;
+	} else {
+		if (win_a_state->opaque)
+			win_a_state->to_win_x = BLEND_CONTROL_DEPENDENT;
+		else
+			win_a_state->to_win_x = BLEND_CONTROL_ALPHA;
 	}
 
-	return index;
-}
+	if (win_c_state->opaque) {
+		win_a_state->to_win_y = blend_transparent;
+	} else {
+		if (win_a_state->opaque)
+			win_a_state->to_win_y = BLEND_CONTROL_DEPENDENT;
+		else
+			win_a_state->to_win_y = BLEND_CONTROL_ALPHA;
+	}
 
-void tegra_plane_check_dependent(struct tegra_plane *tegra,
-				 struct tegra_plane_state *state)
-{
-	struct drm_plane_state *old, *new;
-	struct drm_plane *plane;
-	unsigned int zpos[2];
-	unsigned int i;
+	if (win_b_state->opaque || win_c_state->opaque) {
+		win_a_state->to_win_xy = blend_transparent;
+	} else {
+		if (win_a_state->opaque)
+			win_a_state->to_win_xy = BLEND_CONTROL_DEPENDENT;
+		else
+			win_a_state->to_win_xy = BLEND_CONTROL_ALPHA;
+	}
 
-	for (i = 0; i < 3; i++)
-		state->dependent[i] = false;
+	/* setup blending state for window B */
 
-	for (i = 0; i < 2; i++)
-		zpos[i] = 0;
+	if (win_b_state->opaque)
+		win_b_state->to_win_x = blend_opaque;
+	else
+		win_b_state->to_win_x = BLEND_CONTROL_ALPHA;
 
-	for_each_oldnew_plane_in_state(state->base.state, plane, old, new, i) {
-		struct tegra_plane *p = to_tegra_plane(plane);
-		unsigned index;
-
-		/* skip this plane and planes on different CRTCs */
-		if (p == tegra || new->crtc != state->base.crtc)
-			continue;
-
-		index = tegra_plane_get_overlap_index(tegra, p);
-
-		/*
-		 * If any of the other planes is on top of this plane and uses
-		 * a format with an alpha component, mark this plane as being
-		 * dependent, meaning it's alpha value will be 1 minus the sum
-		 * of alpha components of the overlapping planes.
-		 */
-		if (p->index > tegra->index) {
-			if (__drm_format_has_alpha(new->fb->format->format))
-				state->dependent[index] = true;
-
-			/* keep track of the Z position */
-			zpos[index] = p->index;
+	if (win_c_state->opaque) {
+		win_b_state->to_win_y = blend_transparent;
+		win_b_state->to_win_xy = blend_transparent;
+	} else {
+		if (win_b_state->opaque) {
+			win_b_state->to_win_y = BLEND_CONTROL_DEPENDENT;
+			win_b_state->to_win_xy = BLEND_CONTROL_DEPENDENT;
+		} else {
+			win_b_state->to_win_y = BLEND_CONTROL_ALPHA;
+			win_b_state->to_win_xy = BLEND_CONTROL_ALPHA;
 		}
 	}
 
-	/*
-	 * The region where three windows overlap is the intersection of the
-	 * two regions where two windows overlap. It contributes to the area
-	 * if any of the windows on top of it have an alpha component.
-	 */
-	for (i = 0; i < 2; i++)
-		state->dependent[2] = state->dependent[2] ||
-				      state->dependent[i];
+	/* setup blending state for window C */
 
-	/*
-	 * However, if any of the windows on top of this window is opaque, it
-	 * will completely conceal this window within that area, so avoid the
-	 * window from contributing to the area.
-	 */
-	for (i = 0; i < 2; i++) {
-		if (zpos[i] > tegra->index)
-			state->dependent[2] = state->dependent[2] &&
-					      state->dependent[i];
+	if (win_c_state->opaque) {
+		win_c_state->to_win_x = blend_opaque;
+		win_c_state->to_win_y = blend_opaque;
+		win_c_state->to_win_xy = blend_opaque;
+	} else {
+		win_c_state->to_win_x = BLEND_CONTROL_ALPHA;
+		win_c_state->to_win_y = BLEND_CONTROL_ALPHA;
+		win_c_state->to_win_xy = BLEND_CONTROL_ALPHA;
 	}
+
+	return 0;
 }

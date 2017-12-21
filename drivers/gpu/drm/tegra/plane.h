@@ -40,10 +40,6 @@ struct tegra_plane_state {
 	struct tegra_bo_tiling tiling;
 	u32 format;
 	u32 swap;
-
-	/* used for legacy blending support only */
-	bool opaque;
-	bool dependent[3];
 };
 
 static inline struct tegra_plane_state *
@@ -62,9 +58,8 @@ int tegra_plane_state_add(struct tegra_plane *plane,
 
 int tegra_plane_format(u32 fourcc, u32 *format, u32 *swap);
 bool tegra_plane_format_is_yuv(unsigned int format, bool *planar);
-bool tegra_plane_format_has_alpha(unsigned int format);
-int tegra_plane_format_get_alpha(unsigned int opaque, unsigned int *alpha);
-void tegra_plane_check_dependent(struct tegra_plane *tegra,
-				 struct tegra_plane_state *state);
+unsigned int tegra_plane_format_adjust(unsigned int opaque);
+int tegra_plane_update_blending_state(struct tegra_plane *tegra,
+				      struct tegra_plane_state *state);
 
 #endif /* TEGRA_PLANE_H */

@@ -154,55 +154,12 @@ static inline u32 compute_initial_dda(unsigned int in)
 
 static void tegra_plane_setup_blending_legacy(struct tegra_plane *plane)
 {
-	u32 background[3] = {
-		BLEND_WEIGHT1(0) | BLEND_WEIGHT0(0) | BLEND_COLOR_KEY_NONE,
-		BLEND_WEIGHT1(0) | BLEND_WEIGHT0(0) | BLEND_COLOR_KEY_NONE,
-		BLEND_WEIGHT1(0) | BLEND_WEIGHT0(0) | BLEND_COLOR_KEY_NONE,
-	};
 	u32 foreground = BLEND_WEIGHT1(255) | BLEND_WEIGHT0(255) |
 			 BLEND_COLOR_KEY_NONE;
 	u32 blendnokey = BLEND_WEIGHT1(255) | BLEND_WEIGHT0(255);
-	struct tegra_plane_state *state;
-	unsigned int i;
 
-	state = to_tegra_plane_state(plane->base.state);
-
-	/* alpha contribution is 1 minus sum of overlapping windows */
-	for (i = 0; i < 3; i++) {
-		if (state->dependent[i])
-			background[i] |= BLEND_CONTROL_DEPENDENT;
-	}
-
-	/* enable alpha blending if pixel format has an alpha component */
-	if (!state->opaque)
-		foreground |= BLEND_CONTROL_ALPHA;
-
-	/*
-	 * Disable blending and assume Window A is the bottom-most window,
-	 * Window C is the top-most window and Window B is in the middle.
-	 */
 	tegra_plane_writel(plane, blendnokey, DC_WIN_BLEND_NOKEY);
 	tegra_plane_writel(plane, foreground, DC_WIN_BLEND_1WIN);
-
-	switch (plane->index) {
-	case 0:
-		tegra_plane_writel(plane, background[0], DC_WIN_BLEND_2WIN_X);
-		tegra_plane_writel(plane, background[1], DC_WIN_BLEND_2WIN_Y);
-		tegra_plane_writel(plane, background[2], DC_WIN_BLEND_3WIN_XY);
-		break;
-
-	case 1:
-		tegra_plane_writel(plane, foreground, DC_WIN_BLEND_2WIN_X);
-		tegra_plane_writel(plane, background[1], DC_WIN_BLEND_2WIN_Y);
-		tegra_plane_writel(plane, background[2], DC_WIN_BLEND_3WIN_XY);
-		break;
-
-	case 2:
-		tegra_plane_writel(plane, foreground, DC_WIN_BLEND_2WIN_X);
-		tegra_plane_writel(plane, foreground, DC_WIN_BLEND_2WIN_Y);
-		tegra_plane_writel(plane, foreground, DC_WIN_BLEND_3WIN_XY);
-		break;
-	}
 }
 
 static void tegra_plane_setup_blending(struct tegra_plane *plane,
@@ -456,17 +413,11 @@ static int tegra_plane_atomic_check(struct drm_plane *plane,
 	 * be emulated by disabling alpha blending for the plane.
 	 */
 	if (!dc->soc->supports_blending) {
-		if (!tegra_plane_format_has_alpha(format)) {
-			err = tegra_plane_format_get_alpha(format, &format);
-			if (err < 0)
-				return err;
+		format = tegra_plane_format_adjust(format);
 
-			plane_state->opaque = true;
-		} else {
-			plane_state->opaque = false;
-		}
-
-		tegra_plane_check_dependent(tegra, plane_state);
+		err = tegra_plane_update_blending_state(tegra, plane_state);
+		if (err < 0)
+			return err;
 	}
 
 	plane_state->format = format;
@@ -990,6 +941,7 @@ tegra_crtc_atomic_duplicate_state(struct drm_crtc *crtc)
 {
 	struct tegra_dc_state *state = to_dc_state(crtc->state);
 	struct tegra_dc_state *copy;
+	unsigned int i;
 
 	copy = kmalloc(sizeof(*copy), GFP_KERNEL);
 	if (!copy)
@@ -1000,6 +952,9 @@ tegra_crtc_atomic_duplicate_state(struct drm_crtc *crtc)
 	copy->pclk = state->pclk;
 	copy->div = state->div;
 	copy->planes = state->planes;
+
+	for (i = 0; i < 3; i++)
+		copy->blend[i] = state->blend[i];
 
 	return &copy->base;
 }
@@ -1753,7 +1708,29 @@ static void tegra_crtc_atomic_flush(struct drm_crtc *crtc,
 {
 	struct tegra_dc_state *state = to_dc_state(crtc->state);
 	struct tegra_dc *dc = to_tegra_dc(crtc);
+	struct tegra_dc_blend_state *bs;
+	struct tegra_plane *plane;
+	struct drm_plane *p;
 	u32 value;
+
+	if (!dc->soc->supports_blending) {
+		drm_for_each_plane(p, crtc->dev) {
+			if (!(p->possible_crtcs & drm_crtc_mask(crtc)))
+				continue;
+
+			plane = to_tegra_plane(p);
+			bs = &state->blend[plane->index];
+
+			tegra_plane_writel(plane, bs->to_win_x,
+					   DC_WIN_BLEND_2WIN_X);
+
+			tegra_plane_writel(plane,bs->to_win_y,
+					   DC_WIN_BLEND_2WIN_Y);
+
+			tegra_plane_writel(plane, bs->to_win_xy,
+					   DC_WIN_BLEND_3WIN_XY);
+		}
+	}
 
 	value = state->planes << 8 | GENERAL_UPDATE;
 	tegra_dc_writel(dc, value, DC_CMD_STATE_CONTROL);

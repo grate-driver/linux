@@ -18,6 +18,13 @@
 
 struct tegra_output;
 
+struct tegra_dc_blend_state {
+	u32 to_win_x;
+	u32 to_win_y;
+	u32 to_win_xy;
+	bool opaque;
+};
+
 struct tegra_dc_state {
 	struct drm_crtc_state base;
 
@@ -26,6 +33,8 @@ struct tegra_dc_state {
 	unsigned int div;
 
 	u32 planes;
+
+	struct tegra_dc_blend_state blend[3];
 };
 
 static inline struct tegra_dc_state *to_dc_state(struct drm_crtc_state *state)
