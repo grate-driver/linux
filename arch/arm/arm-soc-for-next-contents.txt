@@ -1,0 +1,86 @@
+next/soc
+	patch
+		arm64: defconfig: enable new trigger modes for leds
+	renesas/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc-for-v4.16
+	patch
+		MAINTAINERS: Add self as extended maintainer for a slew of files
+		arm64: defconfig: enable CONFIG_UNIPHIER_EFUSE
+	ep93xx/soc
+		https://github.com/sverdlin/ep93xx tags/bk3
+	omap/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/soc-signed
+	<no branch> (2b1f0fa116595cab831deffc2ba3f0fe9a9840a3)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.15/defconfig-v2-signed
+	samsung/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-4.16
+	tegra/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-soc-2
+	mediatek/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-soc
+
+next/dt
+	patch
+		ARM: dts: efm32: Add generic compatible string for I2C EEPROM
+		ARM: dts: lpc18xx: Add generic compatible string for I2C EEPROM
+		ARM: dts: socfpga: Add generic compatible string for I2C EEPROM
+		ARM: make ARCH_S3C24XX select USE_OF and clean-up boot/dts/Makefile
+		arm64: dts: qcom: apq8016-sbc: Allow USR4 LED to notify kernel panic
+		arm64: dts: hisilicon: hi3660-hikey960: Allow USR4 LED to notify kernel panic
+		arm64: dts: hisilicon: hi6220-hikey: Allow USR1 LED to notify kernel panic
+	renesas/dt-bindings
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt-bindings-for-v4.16
+	renesas/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt-for-v4.16
+	renesas/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm64-dt-for-v4.16
+	amlogic/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt
+	amlogic/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64
+	omap/dt-clk
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-clk-signed
+		contains omap/soc
+	omap/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-signed
+	gemini/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemni-dts-1
+	samsung/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.16
+	samsung/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-4.16
+	tegra/dt-bindings
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-dt-bindings
+	tegra/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-arm-dt
+	tegra/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-arm64-dt
+	mediatek/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-dts32
+	mediatek/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-dts64
+
+next/drivers
+	drivers/tee
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-async-supplicant-for-v4.16
+	<no branch> (c18a7ac3398d0cef29749f9568666db8321aa4c9)
+		https://github.com/rogerq/linux tags/gpmc-omap-for-v4.16-immutable
+	drivers/tee-2
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-dynamic-shm-for-v4.16
+	tegra/memory
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-memory
+		contains tegra/dt-bindings
+
+fixes
+	patch
+		ARM: dts: exynos: Enable Mixer node for Exynos5800 Peach Pi machine
+		ARM: dts: aspeed-g4: Correct VUART IRQ number
+	<no branch> (912d7985f3cef1b901a4fd9fede549b919fe7ac3)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.15-rockchip-dts32fixes-1
+	<no branch> (bc631943faba6fc3f755748091ada31798fb7d50)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.15-rockchip-dts64fixes-1
+	<no branch> (bc53e3aa88e8240823c1c440e6bab3c3a5ba5f59)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/abelloni/linux tags/at91-ab-4.15-dt-fixes
+	<no branch> (451df7d110b82998c04a80d0de0f1e79aaa7792a)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-fixes-for-v4.15
+
