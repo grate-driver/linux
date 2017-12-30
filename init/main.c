@@ -504,6 +504,8 @@ static void __init mm_init(void)
 	pgtable_init();
 	vmalloc_init();
 	ioremap_huge_init();
+	/* Should be run before the first non-init thread is created */
+	init_espfix_bsp();
 }
 
 asmlinkage __visible void __init start_kernel(void)
@@ -589,6 +591,12 @@ asmlinkage __visible void __init start_kernel(void)
 	radix_tree_init();
 
 	/*
+	 * Set up housekeeping before setting up workqueues to allow the unbound
+	 * workqueue to take non-housekeeping into account.
+	 */
+	housekeeping_init();
+
+	/*
 	 * Allow workqueue creation and work item queueing/cancelling
 	 * early.  Work item execution depends on kthreads and starts after
 	 * workqueue_init().
@@ -605,7 +613,6 @@ asmlinkage __visible void __init start_kernel(void)
 	early_irq_init();
 	init_IRQ();
 	tick_init();
-	housekeeping_init();
 	rcu_init_nohz();
 	init_timers();
 	hrtimers_init();
@@ -673,10 +680,6 @@ asmlinkage __visible void __init start_kernel(void)
 #ifdef CONFIG_X86
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
-#endif
-#ifdef CONFIG_X86_ESPFIX64
-	/* Should be run before the first non-init thread is created */
-	init_espfix_bsp();
 #endif
 	thread_stack_cache_init();
 	cred_init();
