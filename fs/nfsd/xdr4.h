@@ -390,7 +390,6 @@ struct nfsd4_write {
 	u32		wr_stable_how;      /* request */
 	u32		wr_buflen;          /* request */
 	struct kvec	wr_head;
-	struct page **	wr_pagelist;        /* request */
 
 	u32		wr_bytes_written;   /* response */
 	u32		wr_how_written;     /* response */

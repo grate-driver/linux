@@ -969,24 +969,6 @@ out:
 	return status;
 }
 
-static int fill_in_write_vector(struct kvec *vec, struct nfsd4_write *write)
-{
-        int i = 1;
-        int buflen = write->wr_buflen;
-
-        vec[0].iov_base = write->wr_head.iov_base;
-        vec[0].iov_len = min_t(int, buflen, write->wr_head.iov_len);
-        buflen -= vec[0].iov_len;
-
-        while (buflen) {
-                vec[i].iov_base = page_address(write->wr_pagelist[i - 1]);
-                vec[i].iov_len = min_t(int, PAGE_SIZE, buflen);
-                buflen -= vec[i].iov_len;
-                i++;
-        }
-        return i;
-}
-
 static __be32
 nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	    union nfsd4_op_u *u)
@@ -995,8 +977,8 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	stateid_t *stateid = &write->wr_stateid;
 	struct file *filp = NULL;
 	__be32 status = nfs_ok;
+	unsigned int nvecs;
 	unsigned long cnt;
-	int nvecs;
 
 	if (write->wr_offset >= OFFSET_MAX)
 		return nfserr_inval;
@@ -1012,12 +994,12 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	write->wr_how_written = write->wr_stable_how;
 	gen_boot_verifier(&write->wr_verifier, SVC_NET(rqstp));
 
-	nvecs = fill_in_write_vector(rqstp->rq_vec, write);
-	WARN_ON_ONCE(nvecs > ARRAY_SIZE(rqstp->rq_vec));
-
+	nvecs = svc_fill_write_vector(rqstp, &write->wr_head, cnt);
+	if (!nvecs)
+		return nfserr_io;
 	status = nfsd_vfs_write(rqstp, &cstate->current_fh, filp,
-				write->wr_offset, rqstp->rq_vec, nvecs, &cnt,
-				write->wr_how_written);
+				write->wr_offset, rqstp->rq_vec, nvecs,
+				&cnt, write->wr_how_written);
 	fput(filp);
 
 	write->wr_bytes_written = cnt;
