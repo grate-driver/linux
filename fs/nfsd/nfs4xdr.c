@@ -648,6 +648,7 @@ nfsd4_decode_commit(struct nfsd4_compoundargs *argp, struct nfsd4_commit *commit
 static __be32
 nfsd4_decode_create(struct nfsd4_compoundargs *argp, struct nfsd4_create *create)
 {
+	struct kvec *head;
 	DECODE_HEAD;
 
 	READ_BUF(4);
@@ -656,10 +657,13 @@ nfsd4_decode_create(struct nfsd4_compoundargs *argp, struct nfsd4_create *create
 	case NF4LNK:
 		READ_BUF(4);
 		create->cr_datalen = be32_to_cpup(p++);
+		if (create->cr_datalen == 0)
+			return nfserr_inval;
+		head = argp->rqstp->rq_arg.head;
+		create->cr_first.iov_base = p;
+		create->cr_first.iov_len = head->iov_len;
+		create->cr_first.iov_len -= (char *)p - (char *)head->iov_base;
 		READ_BUF(create->cr_datalen);
-		create->cr_data = svcxdr_dupstr(argp, p, create->cr_datalen);
-		if (!create->cr_data)
-			return nfserr_jukebox;
 		break;
 	case NF4BLK:
 	case NF4CHR:

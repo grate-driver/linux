@@ -605,6 +605,13 @@ nfsd4_create(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	switch (create->cr_type) {
 	case NF4LNK:
+		if (create->cr_datalen > NFS4_MAXPATHLEN)
+			return nfserr_nametoolong;
+		create->cr_data =
+			svc_fill_symlink_pathname(rqstp, &create->cr_first,
+						  create->cr_datalen);
+		if (IS_ERR(create->cr_data))
+			return nfserrno(PTR_ERR(create->cr_data));
 		status = nfsd_symlink(rqstp, &cstate->current_fh,
 				      create->cr_name, create->cr_namelen,
 				      create->cr_data, &resfh);
