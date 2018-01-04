@@ -10,7 +10,7 @@ next/soc
 		https://github.com/sverdlin/ep93xx tags/bk3
 	omap/soc
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/soc-signed
-	<no branch> (2b1f0fa116595cab831deffc2ba3f0fe9a9840a3)
+	omap/defconfig
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.15/defconfig-v2-signed
 	samsung/soc
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-4.16
@@ -18,6 +18,8 @@ next/soc
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-soc-2
 	mediatek/soc
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-soc
+	patch
+		soc: Add SoC driver for Gemini
 
 next/dt
 	patch
@@ -59,6 +61,15 @@ next/dt
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-dts32
 	mediatek/dt64
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-dts64
+	rockchip/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.16-rockchip-dts32-1
+	rockchip/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.16-rockchip-dts64-1
+	patch
+		arm64: dts: add syscon for whale2 platform
+		arm64: dts: add clocks for SC9860
+	<no branch> (ea6f23f59331f11494ef966429a0f8672b5d4109)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts-update-2
 
 next/drivers
 	drivers/tee
@@ -70,6 +81,8 @@ next/drivers
 	tegra/memory
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-memory
 		contains tegra/dt-bindings
+	patch
+		tee: optee: fix header dependencies
 
 fixes
 	patch
@@ -83,4 +96,12 @@ fixes
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/abelloni/linux tags/at91-ab-4.15-dt-fixes
 	<no branch> (451df7d110b82998c04a80d0de0f1e79aaa7792a)
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-fixes-for-v4.15
-
+	patch
+		ARM: dts: ls1021a: fix incorrect clock references
+		ARM: dts: tango4: remove bogus interrupt-controller property
+	<no branch> (7d2901f809c110bd9a261e879d59efe62e3bc758)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-fixes-for-v4.15
+	<no branch> (eac6a3639decefcc8eb0941dd3cebe79993670ad)
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.15
+	patch
+		arm64: dts: uniphier: fix gpio-ranges property of PXs3 SoC
