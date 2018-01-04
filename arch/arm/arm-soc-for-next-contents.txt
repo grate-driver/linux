@@ -68,13 +68,15 @@ next/dt
 	patch
 		arm64: dts: add syscon for whale2 platform
 		arm64: dts: add clocks for SC9860
-	<no branch> (ea6f23f59331f11494ef966429a0f8672b5d4109)
+	gemini/dt-2
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts-update-2
+	patch
+		arm64: dts: sprd: remove broken header inclusion
 
 next/drivers
 	drivers/tee
 		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-async-supplicant-for-v4.16
-	<no branch> (c18a7ac3398d0cef29749f9568666db8321aa4c9)
+	drivers/gpmc-omap
 		https://github.com/rogerq/linux tags/gpmc-omap-for-v4.16-immutable
 	drivers/tee-2
 		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-dynamic-shm-for-v4.16
