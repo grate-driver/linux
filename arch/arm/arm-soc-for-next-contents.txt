@@ -20,6 +20,8 @@ next/soc
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-soc
 	patch
 		soc: Add SoC driver for Gemini
+	renesas/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig-for-v4.16
 
 next/dt
 	patch
@@ -72,6 +74,16 @@ next/dt
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts-update-2
 	patch
 		arm64: dts: sprd: remove broken header inclusion
+	broadcom/devicetree
+		http://github.com/Broadcom/stblinux tags/arm-soc/for-4.16/devicetree
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-4.16-v2
+	actions/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-actions tags/actions-arm-dt-for-4.16
+	actions/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-actions tags/actions-arm64-dt-for-4.16
+	renesas/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm64-dt2-for-v4.16
 
 next/drivers
 	drivers/tee
@@ -85,25 +97,10 @@ next/drivers
 		contains tegra/dt-bindings
 	patch
 		tee: optee: fix header dependencies
+	broadcom/drivers
+		http://github.com/Broadcom/stblinux tags/arm-soc/for-4.16/drivers
+	actions/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-actions tags/actions-drivers-for-4.16
 
 fixes
-	patch
-		ARM: dts: exynos: Enable Mixer node for Exynos5800 Peach Pi machine
-		ARM: dts: aspeed-g4: Correct VUART IRQ number
-	<no branch> (912d7985f3cef1b901a4fd9fede549b919fe7ac3)
-		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.15-rockchip-dts32fixes-1
-	<no branch> (bc631943faba6fc3f755748091ada31798fb7d50)
-		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.15-rockchip-dts64fixes-1
-	<no branch> (bc53e3aa88e8240823c1c440e6bab3c3a5ba5f59)
-		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/abelloni/linux tags/at91-ab-4.15-dt-fixes
-	<no branch> (451df7d110b82998c04a80d0de0f1e79aaa7792a)
-		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-fixes-for-v4.15
-	patch
-		ARM: dts: ls1021a: fix incorrect clock references
-		ARM: dts: tango4: remove bogus interrupt-controller property
-	<no branch> (7d2901f809c110bd9a261e879d59efe62e3bc758)
-		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-fixes-for-v4.15
-	<no branch> (eac6a3639decefcc8eb0941dd3cebe79993670ad)
-		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.15
-	patch
-		arm64: dts: uniphier: fix gpio-ranges property of PXs3 SoC
+
