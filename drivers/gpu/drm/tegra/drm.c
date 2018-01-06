@@ -1271,6 +1271,7 @@ static int tegra_gem_set_tiling(struct drm_device *drm, void *data,
 				struct drm_file *file)
 {
 	struct drm_tegra_gem_set_tiling *args = data;
+	struct tegra_drm *tegra = drm->dev_private;
 	enum tegra_bo_tiling_mode mode;
 	struct drm_gem_object *gem;
 	unsigned long value = 0;
@@ -1312,8 +1313,10 @@ static int tegra_gem_set_tiling(struct drm_device *drm, void *data,
 
 	bo = to_tegra_bo(gem);
 
+	mutex_lock(&tegra->lock);
 	bo->tiling.mode = mode;
 	bo->tiling.value = value;
+	mutex_unlock(&tegra->lock);
 
 	drm_gem_object_put_unlocked(gem);
 
@@ -1324,6 +1327,7 @@ static int tegra_gem_get_tiling(struct drm_device *drm, void *data,
 				struct drm_file *file)
 {
 	struct drm_tegra_gem_get_tiling *args = data;
+	struct tegra_drm *tegra = drm->dev_private;
 	struct drm_gem_object *gem;
 	struct tegra_bo *bo;
 	int err = 0;
@@ -1333,6 +1337,8 @@ static int tegra_gem_get_tiling(struct drm_device *drm, void *data,
 		return -ENOENT;
 
 	bo = to_tegra_bo(gem);
+
+	mutex_lock(&tegra->lock);
 
 	switch (bo->tiling.mode) {
 	case TEGRA_BO_TILING_MODE_PITCH:
@@ -1355,6 +1361,8 @@ static int tegra_gem_get_tiling(struct drm_device *drm, void *data,
 		break;
 	}
 
+	mutex_unlock(&tegra->lock);
+
 	drm_gem_object_put_unlocked(gem);
 
 	return err;
@@ -1364,6 +1372,7 @@ static int tegra_gem_set_flags(struct drm_device *drm, void *data,
 			       struct drm_file *file)
 {
 	struct drm_tegra_gem_set_flags *args = data;
+	struct tegra_drm *tegra = drm->dev_private;
 	struct drm_gem_object *gem;
 	struct tegra_bo *bo;
 
@@ -1375,10 +1384,13 @@ static int tegra_gem_set_flags(struct drm_device *drm, void *data,
 		return -ENOENT;
 
 	bo = to_tegra_bo(gem);
+
+	mutex_lock(&tegra->lock);
 	bo->flags = 0;
 
 	if (args->flags & DRM_TEGRA_GEM_BOTTOM_UP)
 		bo->flags |= TEGRA_BO_BOTTOM_UP;
+	mutex_unlock(&tegra->lock);
 
 	drm_gem_object_put_unlocked(gem);
 
@@ -1389,6 +1401,7 @@ static int tegra_gem_get_flags(struct drm_device *drm, void *data,
 			       struct drm_file *file)
 {
 	struct drm_tegra_gem_get_flags *args = data;
+	struct tegra_drm *tegra = drm->dev_private;
 	struct drm_gem_object *gem;
 	struct tegra_bo *bo;
 
@@ -1397,10 +1410,13 @@ static int tegra_gem_get_flags(struct drm_device *drm, void *data,
 		return -ENOENT;
 
 	bo = to_tegra_bo(gem);
+
+	mutex_lock(&tegra->lock);
 	args->flags = 0;
 
 	if (bo->flags & TEGRA_BO_BOTTOM_UP)
 		args->flags |= DRM_TEGRA_GEM_BOTTOM_UP;
+	mutex_unlock(&tegra->lock);
 
 	drm_gem_object_put_unlocked(gem);
 
