@@ -140,6 +140,7 @@ EXPORT_SYMBOL(host1x_job_add_fence);
 
 static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 {
+	struct host1x_job_gather *g;
 	unsigned int i;
 	int err;
 
@@ -172,7 +173,6 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 		return 0;
 
 	for (i = 0; i < job->num_gathers; i++) {
-		struct host1x_job_gather *g = &job->gathers[i];
 		size_t gather_size = 0;
 		struct scatterlist *sg;
 		struct sg_table *sgt;
@@ -180,6 +180,8 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 		unsigned long shift;
 		struct iova *alloc;
 		unsigned int j;
+
+		g = &job->gathers[i];
 
 		g->bo = host1x_bo_get(g->bo);
 		if (!g->bo) {
@@ -199,7 +201,7 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 					   host->iova_end >> shift, true);
 			if (!alloc) {
 				err = -ENOMEM;
-				goto unpin;
+				goto put;
 			}
 
 			err = iommu_map_sg(host->domain,
@@ -208,7 +210,7 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 			if (err == 0) {
 				__free_iova(&host->iova, alloc);
 				err = -EINVAL;
-				goto unpin;
+				goto put;
 			}
 
 			job->addr_phys[job->num_unpins] =
@@ -229,6 +231,8 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 
 	return 0;
 
+put:
+	host1x_bo_put(g->bo);
 unpin:
 	host1x_job_unpin(job);
 	return err;
