@@ -764,6 +764,11 @@ static void xilinx_dma_free_chan_resources(struct dma_chan *dchan)
 		INIT_LIST_HEAD(&chan->free_seg_list);
 		spin_unlock_irqrestore(&chan->lock, flags);
 
+		/* Free memory that is allocated for BD */
+		dma_free_coherent(chan->dev, sizeof(*chan->seg_v) *
+				  XILINX_DMA_NUM_DESCS, chan->seg_v,
+				  chan->seg_p);
+
 		/* Free Memory that is allocated for cyclic DMA Mode */
 		dma_free_coherent(chan->dev, sizeof(*chan->cyclic_seg_v),
 				  chan->cyclic_seg_v, chan->cyclic_seg_p);
@@ -1204,6 +1209,12 @@ static void xilinx_cdma_start_transfer(struct xilinx_dma_chan *chan)
 	}
 
 	if (chan->has_sg) {
+		dma_ctrl_clr(chan, XILINX_DMA_REG_DMACR,
+			     XILINX_CDMA_CR_SGMODE);
+
+		dma_ctrl_set(chan, XILINX_DMA_REG_DMACR,
+			     XILINX_CDMA_CR_SGMODE);
+
 		xilinx_write(chan, XILINX_DMA_REG_CURDESC,
 			     head_desc->async_tx.phys);
 
@@ -1605,7 +1616,7 @@ xilinx_vdma_dma_prep_interleaved(struct dma_chan *dchan,
 {
 	struct xilinx_dma_chan *chan = to_xilinx_chan(dchan);
 	struct xilinx_dma_tx_descriptor *desc;
-	struct xilinx_vdma_tx_segment *segment, *prev = NULL;
+	struct xilinx_vdma_tx_segment *segment;
 	struct xilinx_vdma_desc_hw *hw;
 
 	if (!is_slave_direction(xt->dir))
@@ -1658,8 +1669,6 @@ xilinx_vdma_dma_prep_interleaved(struct dma_chan *dchan,
 
 	/* Insert the segment into the descriptor segments list. */
 	list_add_tail(&segment->node, &desc->segments);
-
-	prev = segment;
 
 	/* Link the last hardware descriptor with the first. */
 	segment = list_first_entry(&desc->segments,
@@ -2051,6 +2060,10 @@ static int xilinx_dma_terminate_all(struct dma_chan *dchan)
 		dma_ctrl_write(chan, XILINX_DMA_REG_DMACR, reg);
 		chan->cyclic = false;
 	}
+
+	if ((chan->xdev->dma_config->dmatype == XDMA_TYPE_CDMA) && chan->has_sg)
+		dma_ctrl_clr(chan, XILINX_DMA_REG_DMACR,
+			     XILINX_CDMA_CR_SGMODE);
 
 	return 0;
 }
