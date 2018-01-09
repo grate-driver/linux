@@ -36,7 +36,13 @@ static inline void local_flush_tlb_page(unsigned long addr)
 
 #define flush_tlb_all() local_flush_tlb_all()
 #define flush_tlb_page(vma, addr) local_flush_tlb_page(addr)
-#define flush_tlb_range(vma, start, end) local_flush_tlb_all()
+
+static inline void flush_tlb_range(struct vm_area_struct *vma,
+		unsigned long start, unsigned long end)
+{
+	local_flush_tlb_all();
+}
+
 #define flush_tlb_mm(mm) flush_tlb_all()
 
 #else /* CONFIG_SMP */
