@@ -200,6 +200,8 @@ next/drivers
 		bus: omap: add MODULE_LICENSE tags
 	drivers/tee-fixes
 		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-dynamic-shm+fixes-for-v4.16
+	xlnx/soc
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-4.16
 
 fixes
 	<no branch> (7669b122085018c1f64720d11c24ae6d2549193d)
