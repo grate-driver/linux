@@ -36,6 +36,22 @@ next/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_config_for_4.16
 	sunxi/config64
 		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-config64-for-4.16
+	qcom/defconfig64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-defconfig-for-4.16
+	qcom/defconfig
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-defconfig-for-4.16
+	patch
+		Wind down ARM/TANGO port
+	imx/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-4.16
+	davinci/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v4.16/soc-v2
+	<no branch> (8bb65fc06c08f027980a917648e1cf6e4d51c5ad)
+		Merge commit '8bb65fc06c' into next/soc
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-4.16
+	samsung/soc-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-4.16-2
 
 next/dt
 	patch
@@ -120,6 +136,33 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/abelloni/linux tags/at91-ab-4.16-dt
 	patch
 		ARM: dts: Delete bogus reference to the charlcd
+	qcom/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-for-4.16
+	qcom/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-dts-for-4.16
+	amlogic/dt64-2
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-2
+	aspeed/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-4.16-devicetree
+	imx/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-4.16
+	imx/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-4.16
+	mvebu/dt64-2
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.16-2
+	amlogic-dt64-3
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-3
+	sunxi/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.16-2
+	samsung/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.16-2
+	samsung/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-4.16-2
+	patch
+		arm64: dts: add #cooling-cells to CPU nodes
+		arm: spear600: Add missing interrupt-parent of rtc
+		arm: spear13xx: Fix dmas cells
+		arm: spear13xx: Fix spics gpio controller's warning
 
 next/drivers
 	drivers/tee
@@ -143,6 +186,28 @@ next/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_driver_soc_for_4.16
 	at91/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/abelloni/linux tags/at91-ab-4.16-drivers
+	qcom/drivers
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-drivers-for-4.16
+	drivers/reset
+		git://git.pengutronix.de/git/pza/linux tags/reset-for-4.16
+	imx/drivers
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-4.16
+	patch
+		soc: brcmstb: Only register SoC device on STB platforms
+	samsung/drivers-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-4.16-2
+	patch
+		bus: omap: add MODULE_LICENSE tags
+	drivers/tee-fixes
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-dynamic-shm+fixes-for-v4.16
 
 fixes
+	<no branch> (7669b122085018c1f64720d11c24ae6d2549193d)
+		https://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v4.16/dt
+	<no branch> (e3af9f7c6ece29fdb7fe0aeb83ac5d3077a06edb)
+		git://git.infradead.org/linux-mvebu tags/mvebu-fixes-4.15-1
+	<no branch> (bdae44705c0d5b751fbd79bc4a169905b25ed335)
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.15-2
+	patch
+		arm64: dts: socfpga: add missing interrupt-parent
 
