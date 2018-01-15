@@ -921,6 +921,7 @@ unlock:
 	mutex_unlock(&q->sysfs_lock);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(blk_register_queue);
 
 void blk_unregister_queue(struct gendisk *disk)
 {
@@ -929,12 +930,21 @@ void blk_unregister_queue(struct gendisk *disk)
 	if (WARN_ON(!q))
 		return;
 
+	/* Return early if disk->queue was never registered. */
+	if (!test_bit(QUEUE_FLAG_REGISTERED, &q->queue_flags))
+		return;
+
+	/*
+	 * Protect against the 'queue' kobj being accessed
+	 * while/after it is removed.
+	 */
 	mutex_lock(&q->sysfs_lock);
-	queue_flag_clear_unlocked(QUEUE_FLAG_REGISTERED, q);
-	mutex_unlock(&q->sysfs_lock);
+
+	spin_lock_irq(q->queue_lock);
+	queue_flag_clear(QUEUE_FLAG_REGISTERED, q);
+	spin_unlock_irq(q->queue_lock);
 
 	wbt_exit(q);
-
 
 	if (q->mq_ops)
 		blk_mq_unregister_dev(disk_to_dev(disk), q);
@@ -946,4 +956,6 @@ void blk_unregister_queue(struct gendisk *disk)
 	kobject_del(&q->kobj);
 	blk_trace_remove_sysfs(disk_to_dev(disk));
 	kobject_put(&disk_to_dev(disk)->kobj);
+
+	mutex_unlock(&q->sysfs_lock);
 }
