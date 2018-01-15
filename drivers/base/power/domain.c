@@ -1032,14 +1032,11 @@ static int genpd_prepare(struct device *dev)
 static int genpd_finish_suspend(struct device *dev, bool poweroff)
 {
 	struct generic_pm_domain *genpd;
-	int ret;
+	int ret = 0;
 
 	genpd = dev_to_genpd(dev);
 	if (IS_ERR(genpd))
 		return -EINVAL;
-
-	if (dev->power.wakeup_path && genpd_is_active_wakeup(genpd))
-		return 0;
 
 	if (poweroff)
 		ret = pm_generic_poweroff_noirq(dev);
@@ -1048,10 +1045,18 @@ static int genpd_finish_suspend(struct device *dev, bool poweroff)
 	if (ret)
 		return ret;
 
+	if (dev->power.wakeup_path && genpd_is_active_wakeup(genpd))
+		return 0;
+
 	if (genpd->dev_ops.stop && genpd->dev_ops.start) {
 		ret = pm_runtime_force_suspend(dev);
-		if (ret)
+		if (ret) {
+			if (poweroff)
+				pm_generic_restore_noirq(dev);
+			else
+				pm_generic_resume_noirq(dev);
 			return ret;
+		}
 	}
 
 	genpd_lock(genpd);
@@ -1085,7 +1090,7 @@ static int genpd_suspend_noirq(struct device *dev)
 static int genpd_resume_noirq(struct device *dev)
 {
 	struct generic_pm_domain *genpd;
-	int ret = 0;
+	int ret;
 
 	dev_dbg(dev, "%s()\n", __func__);
 
@@ -1094,21 +1099,20 @@ static int genpd_resume_noirq(struct device *dev)
 		return -EINVAL;
 
 	if (dev->power.wakeup_path && genpd_is_active_wakeup(genpd))
-		return 0;
+		return pm_generic_resume_noirq(dev);
 
 	genpd_lock(genpd);
 	genpd_sync_power_on(genpd, true, 0);
 	genpd->suspended_count--;
 	genpd_unlock(genpd);
 
-	if (genpd->dev_ops.stop && genpd->dev_ops.start)
+	if (genpd->dev_ops.stop && genpd->dev_ops.start) {
 		ret = pm_runtime_force_resume(dev);
+		if (ret)
+			return ret;
+	}
 
-	ret = pm_generic_resume_noirq(dev);
-	if (ret)
-		return ret;
-
-	return ret;
+	return pm_generic_resume_noirq(dev);
 }
 
 /**
@@ -2199,20 +2203,8 @@ int genpd_dev_pm_attach(struct device *dev)
 
 	ret = of_parse_phandle_with_args(dev->of_node, "power-domains",
 					"#power-domain-cells", 0, &pd_args);
-	if (ret < 0) {
-		if (ret != -ENOENT)
-			return ret;
-
-		/*
-		 * Try legacy Samsung-specific bindings
-		 * (for backwards compatibility of DT ABI)
-		 */
-		pd_args.args_count = 0;
-		pd_args.np = of_parse_phandle(dev->of_node,
-						"samsung,power-domain", 0);
-		if (!pd_args.np)
-			return -ENOENT;
-	}
+	if (ret < 0)
+		return ret;
 
 	mutex_lock(&gpd_list_lock);
 	pd = genpd_get_from_provider(&pd_args);
