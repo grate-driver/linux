@@ -149,7 +149,7 @@ struct sh_mobile_i2c_data {
 
 struct sh_mobile_dt_config {
 	int clks_per_count;
-	void (*setup)(struct sh_mobile_i2c_data *pd);
+	int (*setup)(struct sh_mobile_i2c_data *pd);
 };
 
 #define IIC_FLAG_HAS_ICIC67	(1 << 0)
@@ -246,36 +246,10 @@ static u32 sh_mobile_i2c_icch(unsigned long count_khz, u32 tHIGH, u32 tf)
 	return (((count_khz * (tHIGH + tf)) + 5000) / 10000);
 }
 
-static int sh_mobile_i2c_init(struct sh_mobile_i2c_data *pd)
+static int sh_mobile_i2c_check_timing(struct sh_mobile_i2c_data *pd)
 {
-	unsigned long i2c_clk_khz;
-	u32 tHIGH, tLOW, tf;
-	uint16_t max_val;
+	u16 max_val = pd->flags & IIC_FLAG_HAS_ICIC67 ? 0x1ff : 0xff;
 
-	/* Get clock rate after clock is enabled */
-	clk_prepare_enable(pd->clk);
-	i2c_clk_khz = clk_get_rate(pd->clk) / 1000;
-	clk_disable_unprepare(pd->clk);
-	i2c_clk_khz /= pd->clks_per_count;
-
-	if (pd->bus_speed == STANDARD_MODE) {
-		tLOW	= 47;	/* tLOW = 4.7 us */
-		tHIGH	= 40;	/* tHD;STA = tHIGH = 4.0 us */
-		tf	= 3;	/* tf = 0.3 us */
-	} else if (pd->bus_speed == FAST_MODE) {
-		tLOW	= 13;	/* tLOW = 1.3 us */
-		tHIGH	= 6;	/* tHD;STA = tHIGH = 0.6 us */
-		tf	= 3;	/* tf = 0.3 us */
-	} else {
-		dev_err(pd->dev, "unrecognized bus speed %lu Hz\n",
-			pd->bus_speed);
-		return -EINVAL;
-	}
-
-	pd->iccl = sh_mobile_i2c_iccl(i2c_clk_khz, tLOW, tf);
-	pd->icch = sh_mobile_i2c_icch(i2c_clk_khz, tHIGH, tf);
-
-	max_val = pd->flags & IIC_FLAG_HAS_ICIC67 ? 0x1ff : 0xff;
 	if (pd->iccl > max_val || pd->icch > max_val) {
 		dev_err(pd->dev, "timing values out of range: L/H=0x%x/0x%x\n",
 			pd->iccl, pd->icch);
@@ -296,6 +270,45 @@ static int sh_mobile_i2c_init(struct sh_mobile_i2c_data *pd)
 
 	dev_dbg(pd->dev, "timing values: L/H=0x%x/0x%x\n", pd->iccl, pd->icch);
 	return 0;
+}
+
+static int sh_mobile_i2c_init(struct sh_mobile_i2c_data *pd)
+{
+	unsigned long i2c_clk_khz;
+	u32 tHIGH, tLOW, tf;
+
+	i2c_clk_khz = clk_get_rate(pd->clk) / 1000 / pd->clks_per_count;
+
+	if (pd->bus_speed == STANDARD_MODE) {
+		tLOW	= 47;	/* tLOW = 4.7 us */
+		tHIGH	= 40;	/* tHD;STA = tHIGH = 4.0 us */
+		tf	= 3;	/* tf = 0.3 us */
+	} else if (pd->bus_speed == FAST_MODE) {
+		tLOW	= 13;	/* tLOW = 1.3 us */
+		tHIGH	= 6;	/* tHD;STA = tHIGH = 0.6 us */
+		tf	= 3;	/* tf = 0.3 us */
+	} else {
+		dev_err(pd->dev, "unrecognized bus speed %lu Hz\n",
+			pd->bus_speed);
+		return -EINVAL;
+	}
+
+	pd->iccl = sh_mobile_i2c_iccl(i2c_clk_khz, tLOW, tf);
+	pd->icch = sh_mobile_i2c_icch(i2c_clk_khz, tHIGH, tf);
+
+	return sh_mobile_i2c_check_timing(pd);
+}
+
+static int sh_mobile_i2c_v2_init(struct sh_mobile_i2c_data *pd)
+{
+	unsigned long clks_per_cycle;
+
+	/* L = 5, H = 4, L + H = 9 */
+	clks_per_cycle = clk_get_rate(pd->clk) / pd->bus_speed;
+	pd->iccl = DIV_ROUND_UP(clks_per_cycle * 5 / 9 - 1, pd->clks_per_count);
+	pd->icch = DIV_ROUND_UP(clks_per_cycle * 4 / 9 - 5, pd->clks_per_count);
+
+	return sh_mobile_i2c_check_timing(pd);
 }
 
 static unsigned char i2c_op(struct sh_mobile_i2c_data *pd,
@@ -749,7 +762,7 @@ static const struct i2c_algorithm sh_mobile_i2c_algorithm = {
  * r8a7740 chip has lasting errata on I2C I/O pad reset.
  * this is work-around for it.
  */
-static void sh_mobile_i2c_r8a7740_workaround(struct sh_mobile_i2c_data *pd)
+static int sh_mobile_i2c_r8a7740_workaround(struct sh_mobile_i2c_data *pd)
 {
 	iic_set_clr(pd, ICCR, ICCR_ICE, 0);
 	iic_rd(pd, ICCR); /* dummy read */
@@ -770,14 +783,23 @@ static void sh_mobile_i2c_r8a7740_workaround(struct sh_mobile_i2c_data *pd)
 	udelay(10);
 	iic_wr(pd, ICCR, ICCR_TRS);
 	udelay(10);
+
+	return sh_mobile_i2c_init(pd);
 }
 
 static const struct sh_mobile_dt_config default_dt_config = {
 	.clks_per_count = 1,
+	.setup = sh_mobile_i2c_init,
 };
 
 static const struct sh_mobile_dt_config fast_clock_dt_config = {
 	.clks_per_count = 2,
+	.setup = sh_mobile_i2c_init,
+};
+
+static const struct sh_mobile_dt_config v2_freq_calc_dt_config = {
+	.clks_per_count = 2,
+	.setup = sh_mobile_i2c_v2_init,
 };
 
 static const struct sh_mobile_dt_config r8a7740_dt_config = {
@@ -788,7 +810,7 @@ static const struct sh_mobile_dt_config r8a7740_dt_config = {
 static const struct of_device_id sh_mobile_i2c_dt_ids[] = {
 	{ .compatible = "renesas,iic-r8a73a4", .data = &fast_clock_dt_config },
 	{ .compatible = "renesas,iic-r8a7740", .data = &r8a7740_dt_config },
-	{ .compatible = "renesas,iic-r8a7790", .data = &fast_clock_dt_config },
+	{ .compatible = "renesas,iic-r8a7790", .data = &v2_freq_calc_dt_config },
 	{ .compatible = "renesas,iic-r8a7791", .data = &fast_clock_dt_config },
 	{ .compatible = "renesas,iic-r8a7792", .data = &fast_clock_dt_config },
 	{ .compatible = "renesas,iic-r8a7793", .data = &fast_clock_dt_config },
@@ -870,31 +892,12 @@ static int sh_mobile_i2c_probe(struct platform_device *dev)
 		return PTR_ERR(pd->reg);
 
 	ret = of_property_read_u32(dev->dev.of_node, "clock-frequency", &bus_speed);
-	pd->bus_speed = ret ? STANDARD_MODE : bus_speed;
+	pd->bus_speed = (ret || !bus_speed) ? STANDARD_MODE : bus_speed;
 	pd->clks_per_count = 1;
 
-	config = of_device_get_match_data(&dev->dev);
-	if (config) {
-		pd->clks_per_count = config->clks_per_count;
-
-		if (config->setup)
-			config->setup(pd);
-	}
-
-	/* The IIC blocks on SH-Mobile ARM processors
-	 * come with two new bits in ICIC.
-	 */
+	/* Newer variants come with two new bits in ICIC */
 	if (resource_size(res) > 0x17)
 		pd->flags |= IIC_FLAG_HAS_ICIC67;
-
-	ret = sh_mobile_i2c_init(pd);
-	if (ret)
-		return ret;
-
-	/* Init DMA */
-	sg_init_table(&pd->sg, 1);
-	pd->dma_direction = DMA_NONE;
-	pd->dma_rx = pd->dma_tx = ERR_PTR(-EPROBE_DEFER);
 
 	/* Enable Runtime PM for this device.
 	 *
@@ -908,6 +911,24 @@ static int sh_mobile_i2c_probe(struct platform_device *dev)
 	 */
 	pm_suspend_ignore_children(&dev->dev, true);
 	pm_runtime_enable(&dev->dev);
+	pm_runtime_get_sync(&dev->dev);
+
+	config = of_device_get_match_data(&dev->dev);
+	if (config) {
+		pd->clks_per_count = config->clks_per_count;
+		ret = config->setup(pd);
+	} else {
+		ret = sh_mobile_i2c_init(pd);
+	}
+
+	pm_runtime_put_sync(&dev->dev);
+	if (ret)
+		return ret;
+
+	/* Init DMA */
+	sg_init_table(&pd->sg, 1);
+	pd->dma_direction = DMA_NONE;
+	pd->dma_rx = pd->dma_tx = ERR_PTR(-EPROBE_DEFER);
 
 	/* setup the private data */
 	adap = &pd->adap;

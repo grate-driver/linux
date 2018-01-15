@@ -545,12 +545,15 @@ struct i2c_timings {
  * @recover_bus: Recover routine. Either pass driver's recover_bus() routine, or
  *	i2c_generic_scl_recovery().
  * @get_scl: This gets current value of SCL line. Mandatory for generic SCL
- *      recovery. Used internally for generic GPIO recovery.
- * @set_scl: This sets/clears SCL line. Mandatory for generic SCL recovery. Used
- *      internally for generic GPIO recovery.
+ *      recovery. Populated internally for generic GPIO recovery.
+ * @set_scl: This sets/clears the SCL line. Mandatory for generic SCL recovery.
+ *      Populated internally for generic GPIO recovery.
  * @get_sda: This gets current value of SDA line. Optional for generic SCL
- *      recovery. Used internally, if sda_gpio is a valid GPIO, for generic GPIO
- *      recovery.
+ *      recovery. Populated internally, if sda_gpio is a valid GPIO, for generic
+ *      GPIO recovery.
+ * @set_sda: This sets/clears the SDA line. Optional for generic SCL recovery.
+ *	Populated internally, if sda_gpio is a valid GPIO, for generic GPIO
+ *	recovery.
  * @prepare_recovery: This will be called before starting recovery. Platform may
  *	configure padmux here for SDA/SCL line or something else they want.
  * @unprepare_recovery: This will be called after completing recovery. Platform
@@ -559,14 +562,15 @@ struct i2c_timings {
  * @sda_gpiod: gpiod of the SDA line. Only required for GPIO recovery.
  */
 struct i2c_bus_recovery_info {
-	int (*recover_bus)(struct i2c_adapter *);
+	int (*recover_bus)(struct i2c_adapter *adap);
 
-	int (*get_scl)(struct i2c_adapter *);
-	void (*set_scl)(struct i2c_adapter *, int val);
-	int (*get_sda)(struct i2c_adapter *);
+	int (*get_scl)(struct i2c_adapter *adap);
+	void (*set_scl)(struct i2c_adapter *adap, int val);
+	int (*get_sda)(struct i2c_adapter *adap);
+	void (*set_sda)(struct i2c_adapter *adap, int val);
 
-	void (*prepare_recovery)(struct i2c_adapter *);
-	void (*unprepare_recovery)(struct i2c_adapter *);
+	void (*prepare_recovery)(struct i2c_adapter *adap);
+	void (*unprepare_recovery)(struct i2c_adapter *adap);
 
 	/* gpio recovery */
 	struct gpio_desc *scl_gpiod;
