@@ -747,13 +747,13 @@ static void blk_mq_requeue_work(struct work_struct *work)
 
 		rq->rq_flags &= ~RQF_SOFTBARRIER;
 		list_del_init(&rq->queuelist);
-		blk_mq_sched_insert_request(rq, true, false, false, true);
+		blk_mq_sched_insert_request(rq, true, false, false);
 	}
 
 	while (!list_empty(&rq_list)) {
 		rq = list_entry(rq_list.next, struct request, queuelist);
 		list_del_init(&rq->queuelist);
-		blk_mq_sched_insert_request(rq, false, false, false, true);
+		blk_mq_sched_insert_request(rq, false, false, false);
 	}
 
 	blk_mq_run_hw_queues(q, false);
@@ -1296,9 +1296,27 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
 	/*
 	 * We should be running this queue from one of the CPUs that
 	 * are mapped to it.
+	 *
+	 * There are at least two related races now between setting
+	 * hctx->next_cpu from blk_mq_hctx_next_cpu() and running
+	 * __blk_mq_run_hw_queue():
+	 *
+	 * - hctx->next_cpu is found offline in blk_mq_hctx_next_cpu(),
+	 *   but later it becomes online, then this warning is harmless
+	 *   at all
+	 *
+	 * - hctx->next_cpu is found online in blk_mq_hctx_next_cpu(),
+	 *   but later it becomes offline, then the warning can't be
+	 *   triggered, and we depend on blk-mq timeout handler to
+	 *   handle dispatched requests to this hctx
 	 */
-	WARN_ON(!cpumask_test_cpu(raw_smp_processor_id(), hctx->cpumask) &&
-		cpu_online(hctx->next_cpu));
+	if (!cpumask_test_cpu(raw_smp_processor_id(), hctx->cpumask) &&
+		cpu_online(hctx->next_cpu)) {
+		printk(KERN_WARNING "run queue from wrong CPU %d, hctx %s\n",
+			raw_smp_processor_id(),
+			cpumask_empty(hctx->cpumask) ? "inactive": "active");
+		dump_stack();
+	}
 
 	/*
 	 * We can't run the queue inline with ints disabled. Ensure that
@@ -1321,21 +1339,47 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
  */
 static int blk_mq_hctx_next_cpu(struct blk_mq_hw_ctx *hctx)
 {
+	bool tried = false;
+
 	if (hctx->queue->nr_hw_queues == 1)
 		return WORK_CPU_UNBOUND;
 
 	if (--hctx->next_cpu_batch <= 0) {
 		int next_cpu;
-
+select_cpu:
 		next_cpu = cpumask_next_and(hctx->next_cpu, hctx->cpumask,
 				cpu_online_mask);
 		if (next_cpu >= nr_cpu_ids)
 			next_cpu = cpumask_first_and(hctx->cpumask,cpu_online_mask);
 
-		hctx->next_cpu = next_cpu;
+		/*
+		 * No online CPU is found, so have to make sure hctx->next_cpu
+		 * is set correctly for not breaking workqueue.
+		 */
+		if (next_cpu >= nr_cpu_ids)
+			hctx->next_cpu = cpumask_first(hctx->cpumask);
+		else
+			hctx->next_cpu = next_cpu;
 		hctx->next_cpu_batch = BLK_MQ_CPU_WORK_BATCH;
 	}
 
+	/*
+	 * Do unbound schedule if we can't find a online CPU for this hctx,
+	 * and it should only happen in the path of handling CPU DEAD.
+	 */
+	if (!cpu_online(hctx->next_cpu)) {
+		if (!tried) {
+			tried = true;
+			goto select_cpu;
+		}
+
+		/*
+		 * Make sure to re-select CPU next time once after CPUs
+		 * in hctx->cpumask become online again.
+		 */
+		hctx->next_cpu_batch = 1;
+		return WORK_CPU_UNBOUND;
+	}
 	return hctx->next_cpu;
 }
 
@@ -1696,9 +1740,9 @@ static blk_qc_t request_to_qc_t(struct blk_mq_hw_ctx *hctx, struct request *rq)
 	return blk_tag_to_qc_t(rq->internal_tag, hctx->queue_num, true);
 }
 
-static void __blk_mq_try_issue_directly(struct blk_mq_hw_ctx *hctx,
-					struct request *rq,
-					blk_qc_t *cookie)
+static blk_status_t __blk_mq_issue_directly(struct blk_mq_hw_ctx *hctx,
+					    struct request *rq,
+					    blk_qc_t *cookie)
 {
 	struct request_queue *q = rq->q;
 	struct blk_mq_queue_data bd = {
@@ -1707,6 +1751,45 @@ static void __blk_mq_try_issue_directly(struct blk_mq_hw_ctx *hctx,
 	};
 	blk_qc_t new_cookie;
 	blk_status_t ret;
+
+	new_cookie = request_to_qc_t(hctx, rq);
+
+	/*
+	 * For OK queue, we are done. For error, caller may kill it.
+	 * Any other error (busy), just add it to our list as we
+	 * previously would have done.
+	 */
+	ret = q->mq_ops->queue_rq(hctx, &bd);
+	switch (ret) {
+	case BLK_STS_OK:
+		*cookie = new_cookie;
+		break;
+	case BLK_STS_RESOURCE:
+		__blk_mq_requeue_request(rq);
+		break;
+	default:
+		*cookie = BLK_QC_T_NONE;
+		break;
+	}
+
+	return ret;
+}
+
+static void __blk_mq_fallback_to_insert(struct request *rq,
+					bool run_queue, bool bypass_insert)
+{
+	if (!bypass_insert)
+		blk_mq_sched_insert_request(rq, false, run_queue, false);
+	else
+		blk_mq_request_bypass_insert(rq, run_queue);
+}
+
+static blk_status_t __blk_mq_try_issue_directly(struct blk_mq_hw_ctx *hctx,
+						struct request *rq,
+						blk_qc_t *cookie,
+						bool bypass_insert)
+{
+	struct request_queue *q = rq->q;
 	bool run_queue = true;
 
 	/* RCU or SRCU read lock is needed before checking quiesced flag */
@@ -1715,7 +1798,7 @@ static void __blk_mq_try_issue_directly(struct blk_mq_hw_ctx *hctx,
 		goto insert;
 	}
 
-	if (q->elevator)
+	if (q->elevator && !bypass_insert)
 		goto insert;
 
 	if (!blk_mq_get_driver_tag(rq, NULL, false))
@@ -1726,42 +1809,47 @@ static void __blk_mq_try_issue_directly(struct blk_mq_hw_ctx *hctx,
 		goto insert;
 	}
 
-	new_cookie = request_to_qc_t(hctx, rq);
-
-	/*
-	 * For OK queue, we are done. For error, kill it. Any other
-	 * error (busy), just add it to our list as we previously
-	 * would have done
-	 */
-	ret = q->mq_ops->queue_rq(hctx, &bd);
-	switch (ret) {
-	case BLK_STS_OK:
-		*cookie = new_cookie;
-		return;
-	case BLK_STS_RESOURCE:
-		__blk_mq_requeue_request(rq);
-		goto insert;
-	default:
-		*cookie = BLK_QC_T_NONE;
-		blk_mq_end_request(rq, ret);
-		return;
-	}
-
+	return __blk_mq_issue_directly(hctx, rq, cookie);
 insert:
-	blk_mq_sched_insert_request(rq, false, run_queue, false,
-					hctx->flags & BLK_MQ_F_BLOCKING);
+	__blk_mq_fallback_to_insert(rq, run_queue, bypass_insert);
+	if (bypass_insert)
+		return BLK_STS_RESOURCE;
+
+	return BLK_STS_OK;
 }
 
 static void blk_mq_try_issue_directly(struct blk_mq_hw_ctx *hctx,
 		struct request *rq, blk_qc_t *cookie)
 {
+	blk_status_t ret;
 	int srcu_idx;
 
 	might_sleep_if(hctx->flags & BLK_MQ_F_BLOCKING);
 
 	hctx_lock(hctx, &srcu_idx);
-	__blk_mq_try_issue_directly(hctx, rq, cookie);
+
+	ret = __blk_mq_try_issue_directly(hctx, rq, cookie, false);
+	if (ret == BLK_STS_RESOURCE)
+		__blk_mq_fallback_to_insert(rq, true, false);
+	else if (ret != BLK_STS_OK)
+		blk_mq_end_request(rq, ret);
+
 	hctx_unlock(hctx, srcu_idx);
+}
+
+blk_status_t blk_mq_request_direct_issue(struct request *rq)
+{
+	blk_status_t ret;
+	int srcu_idx;
+	blk_qc_t unused_cookie;
+	struct blk_mq_ctx *ctx = rq->mq_ctx;
+	struct blk_mq_hw_ctx *hctx = blk_mq_map_queue(rq->q, ctx->cpu);
+
+	hctx_lock(hctx, &srcu_idx);
+	ret = __blk_mq_try_issue_directly(hctx, rq, &unused_cookie, true);
+	hctx_unlock(hctx, srcu_idx);
+
+	return ret;
 }
 
 static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
@@ -1872,7 +1960,7 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 	} else if (q->elevator) {
 		blk_mq_put_ctx(data.ctx);
 		blk_mq_bio_to_request(rq, bio);
-		blk_mq_sched_insert_request(rq, false, true, true, true);
+		blk_mq_sched_insert_request(rq, false, true, true);
 	} else {
 		blk_mq_put_ctx(data.ctx);
 		blk_mq_bio_to_request(rq, bio);
