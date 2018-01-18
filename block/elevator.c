@@ -869,6 +869,8 @@ int elv_register_queue(struct request_queue *q)
 	struct elevator_queue *e = q->elevator;
 	int error;
 
+	lockdep_assert_held(&q->sysfs_lock);
+
 	error = kobject_add(&e->kobj, &q->kobj, "%s", "iosched");
 	if (!error) {
 		struct elv_fs_entry *attr = e->type->elevator_attrs;
@@ -886,10 +888,11 @@ int elv_register_queue(struct request_queue *q)
 	}
 	return error;
 }
-EXPORT_SYMBOL(elv_register_queue);
 
 void elv_unregister_queue(struct request_queue *q)
 {
+	lockdep_assert_held(&q->sysfs_lock);
+
 	if (q) {
 		struct elevator_queue *e = q->elevator;
 
@@ -900,7 +903,6 @@ void elv_unregister_queue(struct request_queue *q)
 		wbt_enable_default(q);
 	}
 }
-EXPORT_SYMBOL(elv_unregister_queue);
 
 int elv_register(struct elevator_type *e)
 {
@@ -967,6 +969,8 @@ static int elevator_switch_mq(struct request_queue *q,
 {
 	int ret;
 
+	lockdep_assert_held(&q->sysfs_lock);
+
 	blk_mq_freeze_queue(q);
 	blk_mq_quiesce_queue(q);
 
@@ -1011,6 +1015,8 @@ static int elevator_switch(struct request_queue *q, struct elevator_type *new_e)
 	struct elevator_queue *old = q->elevator;
 	bool old_registered = false;
 	int err;
+
+	lockdep_assert_held(&q->sysfs_lock);
 
 	if (q->mq_ops)
 		return elevator_switch_mq(q, new_e);
