@@ -2525,7 +2525,7 @@ blk_status_t blk_insert_cloned_request(struct request_queue *q, struct request *
 		 * bypass a potential scheduler on the bottom device for
 		 * insert.
 		 */
-		return blk_mq_request_direct_issue(rq);
+		return blk_mq_request_issue_directly(rq);
 	}
 
 	spin_lock_irqsave(q->queue_lock, flags);
@@ -3445,20 +3445,6 @@ int kblockd_mod_delayed_work_on(int cpu, struct delayed_work *dwork,
 	return mod_delayed_work_on(cpu, kblockd_workqueue, dwork, delay);
 }
 EXPORT_SYMBOL(kblockd_mod_delayed_work_on);
-
-int kblockd_schedule_delayed_work(struct delayed_work *dwork,
-				  unsigned long delay)
-{
-	return queue_delayed_work(kblockd_workqueue, dwork, delay);
-}
-EXPORT_SYMBOL(kblockd_schedule_delayed_work);
-
-int kblockd_schedule_delayed_work_on(int cpu, struct delayed_work *dwork,
-				     unsigned long delay)
-{
-	return queue_delayed_work_on(cpu, kblockd_workqueue, dwork, delay);
-}
-EXPORT_SYMBOL(kblockd_schedule_delayed_work_on);
 
 /**
  * blk_start_plug - initialize blk_plug and track it inside the task_struct
