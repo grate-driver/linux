@@ -52,6 +52,10 @@ next/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-4.16
 	samsung/soc-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-4.16-2
+	patch
+		arm64: defconfig: enable CONFIG_ACPI_APEI_MEMORY_FAILURE
+		arm64: defconfig: enable EDAC GHES option
+		arm64: defconfig: enable CONFIG_ACPI_APEI_EINJ
 
 next/dt
 	patch
@@ -150,7 +154,7 @@ next/dt
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-4.16
 	mvebu/dt64-2
 		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.16-2
-	amlogic-dt64-3
+	amlogic/dt64-3
 		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-3
 	sunxi/dt-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.16-2
@@ -163,6 +167,16 @@ next/dt
 		arm: spear600: Add missing interrupt-parent of rtc
 		arm: spear13xx: Fix dmas cells
 		arm: spear13xx: Fix spics gpio controller's warning
+		ARM: dts: STi: Add gpio polarity for "hdmi,hpd-gpio" property
+		ARM: lpc3250: fix uda1380 gpio numbers
+		ARM: dts: s5pv210: add interrupt-parent for ohci
+		ARM: dts: rename oxnas dts files
+	mvebu/dt-3
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.16-3
+	gemini/dt-3
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts-update-3
+	patch
+		ARM: dts: nomadik: add interrupt-parent for clcd
 
 next/drivers
 	drivers/tee
@@ -204,6 +218,9 @@ next/drivers
 		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-4.16
 	patch
 		Revert "soc: brcmstb: Only register SoC device on STB platforms"
+		soc: brcmstb: biuctrl: exit without warning on non brcmstb platforms
+		soc: bcm: brcmstb: Be multi-platform compatible
+		psci: add CPU_IDLE dependency
 
 fixes
 	<no branch> (7669b122085018c1f64720d11c24ae6d2549193d)
@@ -214,4 +231,6 @@ fixes
 		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.15-2
 	patch
 		arm64: dts: socfpga: add missing interrupt-parent
+		ARM: sunxi_defconfig: Enable CMA
+		phy: work around 'phys' references to usb-nop-xceiv devices
 
