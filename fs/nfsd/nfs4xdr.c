@@ -237,6 +237,7 @@ svcxdr_tmpalloc(struct nfsd4_compoundargs *argp, u32 len)
  * Note null-terminating in place usually isn't safe since the
  * buffer might end on a page boundary.
  */
+#ifdef CONFIG_NFSD_V4_SECURITY_LABEL
 static char *
 svcxdr_dupstr(struct nfsd4_compoundargs *argp, void *buf, u32 len)
 {
@@ -248,6 +249,7 @@ svcxdr_dupstr(struct nfsd4_compoundargs *argp, void *buf, u32 len)
 	p[len] = '\0';
 	return p;
 }
+#endif
 
 /**
  * savemem - duplicate a chunk of memory for later processing
