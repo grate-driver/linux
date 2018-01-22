@@ -717,7 +717,7 @@ static const struct of_device_id ti_clkctrl_match_table[] __initconst = {
 	{ }
 };
 
-static int _setup_clkctrl_provider(struct device_node *np)
+static int __init _setup_clkctrl_provider(struct device_node *np)
 {
 	const __be32 *addrp;
 	struct clkctrl_provider *provider;
@@ -745,7 +745,7 @@ static int _setup_clkctrl_provider(struct device_node *np)
 	return 0;
 }
 
-static int _init_clkctrl_providers(void)
+static int __init _init_clkctrl_providers(void)
 {
 	struct device_node *np;
 	int ret = 0;
