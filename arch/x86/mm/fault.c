@@ -172,14 +172,15 @@ is_prefetch(struct pt_regs *regs, unsigned long error_code, unsigned long addr)
  * 6. T1   : reaches here, sees vma_pkey(vma)=5, when we really
  *	     faulted on a pte with its pkey=4.
  */
-static void fill_sig_info_pkey(int si_code, siginfo_t *info, u32 *pkey)
+static void fill_sig_info_pkey(int si_signo, int si_code, siginfo_t *info,
+		u32 *pkey)
 {
 	/* This is effectively an #ifdef */
 	if (!boot_cpu_has(X86_FEATURE_OSPKE))
 		return;
 
 	/* Fault not from Protection Keys: nothing to do */
-	if (si_code != SEGV_PKUERR)
+	if ((si_code != SEGV_PKUERR) || (si_signo != SIGSEGV))
 		return;
 	/*
 	 * force_sig_info_fault() is called from a number of
@@ -218,7 +219,7 @@ force_sig_info_fault(int si_signo, int si_code, unsigned long address,
 		lsb = PAGE_SHIFT;
 	info.si_addr_lsb = lsb;
 
-	fill_sig_info_pkey(si_code, &info, pkey);
+	fill_sig_info_pkey(si_signo, si_code, &info, pkey);
 
 	force_sig_info(si_signo, &info, tsk);
 }
@@ -701,7 +702,7 @@ show_fault_oops(struct pt_regs *regs, unsigned long error_code,
 	else
 		printk(KERN_CONT "paging request");
 
-	printk(KERN_CONT " at %p\n", (void *) address);
+	printk(KERN_CONT " at %px\n", (void *) address);
 	printk(KERN_ALERT "IP: %pS\n", (void *)regs->ip);
 
 	dump_pagetable(address);
@@ -860,7 +861,7 @@ show_signal_msg(struct pt_regs *regs, unsigned long error_code,
 	if (!printk_ratelimit())
 		return;
 
-	printk("%s%s[%d]: segfault at %lx ip %p sp %p error %lx",
+	printk("%s%s[%d]: segfault at %lx ip %px sp %px error %lx",
 		task_pid_nr(tsk) > 1 ? KERN_INFO : KERN_EMERG,
 		tsk->comm, task_pid_nr(tsk), address,
 		(void *)regs->ip, (void *)regs->sp, error_code);
