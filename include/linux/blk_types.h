@@ -39,6 +39,23 @@ typedef u8 __bitwise blk_status_t;
 
 #define BLK_STS_AGAIN		((__force blk_status_t)12)
 
+/*
+ * BLK_STS_DEV_RESOURCE is returned from driver to block layer if device
+ * related resource is unavailable, but driver can guarantee that queue
+ * will be rerun in future once the resource is available (whereby
+ * dispatching requests).
+ *
+ * To safely return BLK_STS_DEV_RESOURCE, and allow forward progress, a
+ * driver just needs to make sure there is in-flight IO.
+ *
+ * Difference with BLK_STS_RESOURCE:
+ * If driver isn't sure if the queue will be rerun once device resource
+ * is made available, please return BLK_STS_RESOURCE.  For example: when
+ * memory allocation, DMA Mapping or other system resource allocation
+ * fails and IO can't be submitted to device.
+ */
+#define BLK_STS_DEV_RESOURCE	((__force blk_status_t)13)
+
 /**
  * blk_path_error - returns true if error may be path related
  * @error: status the request was completed with
