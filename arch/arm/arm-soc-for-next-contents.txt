@@ -56,6 +56,8 @@ next/soc
 		arm64: defconfig: enable CONFIG_ACPI_APEI_MEMORY_FAILURE
 		arm64: defconfig: enable EDAC GHES option
 		arm64: defconfig: enable CONFIG_ACPI_APEI_EINJ
+		ARM: pxa/tosa-bt: add MODULE_LICENSE tag
+		ARM: omap: hwmod: fix section mismatch warnings
 
 next/dt
 	patch
@@ -154,7 +156,7 @@ next/dt
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-4.16
 	mvebu/dt64-2
 		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.16-2
-	amlogic/dt64-3
+	amlogic/dt-3
 		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-3
 	sunxi/dt-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.16-2
@@ -177,6 +179,10 @@ next/dt
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts-update-3
 	patch
 		ARM: dts: nomadik: add interrupt-parent for clcd
+	omap/clk-dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-clk-dts-signed
+	omap/dt-pt3
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-pt3-signed
 
 next/drivers
 	drivers/tee
@@ -221,6 +227,9 @@ next/drivers
 		soc: brcmstb: biuctrl: exit without warning on non brcmstb platforms
 		soc: bcm: brcmstb: Be multi-platform compatible
 		psci: add CPU_IDLE dependency
+		of: platform: fix OF node refcount leak
+	fsl/soc-driver
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-for-4.16
 
 fixes
 	<no branch> (7669b122085018c1f64720d11c24ae6d2549193d)
@@ -233,4 +242,3 @@ fixes
 		arm64: dts: socfpga: add missing interrupt-parent
 		ARM: sunxi_defconfig: Enable CMA
 		phy: work around 'phys' references to usb-nop-xceiv devices
-
