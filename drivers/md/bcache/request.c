@@ -708,16 +708,15 @@ static void cached_dev_read_error(struct closure *cl)
 {
 	struct search *s = container_of(cl, struct search, cl);
 	struct bio *bio = &s->bio.bio;
-	struct cached_dev *dc = container_of(s->d, struct cached_dev, disk);
 
 	/*
-	 * If cache device is dirty (dc->has_dirty is non-zero), then
-	 * recovery a failed read request from cached device may get a
-	 * stale data back. So read failure recovery is only permitted
-	 * when cache device is clean.
+	 * If read request hit dirty data (s->read_dirty_data is true),
+	 * then recovery a failed read request from cached device may
+	 * get a stale data back. So read failure recovery is only
+	 * permitted when read request hit clean data in cache device,
+	 * or when cache read race happened.
 	 */
-	if (s->recoverable &&
-	    (dc && !atomic_read(&dc->has_dirty))) {
+	if (s->recoverable && !s->read_dirty_data) {
 		/* Retry from the backing device: */
 		trace_bcache_read_retry(s->orig_bio);
 
@@ -842,7 +841,7 @@ static int cached_dev_cache_miss(struct btree *b, struct search *s,
 	cache_bio->bi_private	= &s->cl;
 
 	bch_bio_map(cache_bio, NULL);
-	if (bio_alloc_pages(cache_bio, __GFP_NOWARN|GFP_NOIO))
+	if (bch_bio_alloc_pages(cache_bio, __GFP_NOWARN|GFP_NOIO))
 		goto out_put;
 
 	if (reada)

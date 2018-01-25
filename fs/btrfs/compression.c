@@ -295,7 +295,8 @@ blk_status_t btrfs_submit_compressed_write(struct inode *inode, u64 start,
 				 unsigned long len, u64 disk_start,
 				 unsigned long compressed_len,
 				 struct page **compressed_pages,
-				 unsigned long nr_pages)
+				 unsigned long nr_pages,
+				 unsigned int write_flags)
 {
 	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
 	struct bio *bio = NULL;
@@ -327,7 +328,7 @@ blk_status_t btrfs_submit_compressed_write(struct inode *inode, u64 start,
 	bdev = fs_info->fs_devices->latest_bdev;
 
 	bio = btrfs_bio_alloc(bdev, first_byte);
-	bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
+	bio->bi_opf = REQ_OP_WRITE | write_flags;
 	bio->bi_private = cb;
 	bio->bi_end_io = end_compressed_bio_write;
 	refcount_set(&cb->pending_bios, 1);
@@ -374,7 +375,7 @@ blk_status_t btrfs_submit_compressed_write(struct inode *inode, u64 start,
 			bio_put(bio);
 
 			bio = btrfs_bio_alloc(bdev, first_byte);
-			bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
+			bio->bi_opf = REQ_OP_WRITE | write_flags;
 			bio->bi_private = cb;
 			bio->bi_end_io = end_compressed_bio_write;
 			bio_add_page(bio, page, PAGE_SIZE, 0);
@@ -410,7 +411,7 @@ blk_status_t btrfs_submit_compressed_write(struct inode *inode, u64 start,
 
 static u64 bio_end_offset(struct bio *bio)
 {
-	struct bio_vec *last = &bio->bi_io_vec[bio->bi_vcnt - 1];
+	struct bio_vec *last = bio_last_bvec_all(bio);
 
 	return page_offset(last->bv_page) + last->bv_len + last->bv_offset;
 }
@@ -562,7 +563,7 @@ blk_status_t btrfs_submit_compressed_read(struct inode *inode, struct bio *bio,
 	/* we need the actual starting offset of this extent in the file */
 	read_lock(&em_tree->lock);
 	em = lookup_extent_mapping(em_tree,
-				   page_offset(bio->bi_io_vec->bv_page),
+				   page_offset(bio_first_page_all(bio)),
 				   PAGE_SIZE);
 	read_unlock(&em_tree->lock);
 	if (!em)
@@ -1528,5 +1529,5 @@ unsigned int btrfs_compress_str2level(const char *str)
 	if (str[4] == ':' && '1' <= str[5] && str[5] <= '9' && str[6] == 0)
 		return str[5] - '0';
 
-	return 0;
+	return BTRFS_ZLIB_DEFAULT_LEVEL;
 }

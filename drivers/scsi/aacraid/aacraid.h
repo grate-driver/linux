@@ -1682,6 +1682,7 @@ struct aac_dev
 	struct aac_ciss_phys_luns_resp *safw_phys_luns;
 	u8			adapter_shutdown;
 	u32			handle_pci_error;
+	bool			init_reset;
 };
 
 #define aac_adapter_interrupt(dev) \
