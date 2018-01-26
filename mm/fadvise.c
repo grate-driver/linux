@@ -128,12 +128,11 @@ SYSCALL_DEFINE4(fadvise64_64, int, fd, loff_t, offset, loff_t, len, int, advice)
 		start_index = (offset+(PAGE_SIZE-1)) >> PAGE_SHIFT;
 		end_index = (endbyte >> PAGE_SHIFT);
 		/*
-		 * page at end_index will be inclusively discarded according
-		 * to invalidate_mapping_pages() implementation, thus, minus
-		 * end_index by 1 means we would skip the last page.
-		 * Yet, if endbyte is page-aligned, or it is at the end of
-		 * file, we should not skip, discarding the last page is just
-		 * safe enough.
+		 * The page at end_index will be inclusively discarded according
+		 * by invalidate_mapping_pages(), so subtracting 1 from
+		 * end_index means we will skip the last page.  But if endbyte
+		 * is page aligned or is at the end of file, we should not skip
+		 * that page - discarding the last page is safe enough.
 		 */
 		if ((endbyte & ~PAGE_MASK) != ~PAGE_MASK &&
 				endbyte != inode->i_size - 1) {
