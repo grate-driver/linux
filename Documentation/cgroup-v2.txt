@@ -1056,6 +1056,9 @@ PAGE_SIZE multiple when read back.
 	and will never kill the unkillable task, even if memory.oom_group
 	is set.
 
+	If cgroup-aware OOM killer is not enabled, ENOTSUPP error
+	is returned on attempt to access the file.
+
   memory.events
 	A read-only flat-keyed file which exists on non-root cgroups.
 	The following entries are defined.  Unless specified
@@ -1264,6 +1267,12 @@ OOM Killer
 
 Cgroup v2 memory controller implements a cgroup-aware OOM killer.
 It means that it treats cgroups as first class OOM entities.
+
+Cgroup-aware OOM logic is turned off by default and requires
+passing the "groupoom" option on mounting cgroupfs. It can also
+by remounting cgroupfs with the following command::
+
+  # mount -o remount,groupoom $MOUNT_POINT
 
 Under OOM conditions the memory controller tries to make the best
 choice of a victim, looking for a memory cgroup with the largest
