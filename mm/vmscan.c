@@ -493,7 +493,7 @@ static unsigned long shrink_slab(gfp_t gfp_mask, int nid,
 		 * We are about to die and free our memory.
 		 * Stop shrinking which might delay signal handling.
 		 */
-		if (unlikely(fatal_signal_pending(current))
+		if (unlikely(fatal_signal_pending(current)))
 			break;
 
 		/*
