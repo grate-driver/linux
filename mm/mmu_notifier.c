@@ -240,13 +240,13 @@ EXPORT_SYMBOL_GPL(__mmu_notifier_invalidate_range);
  * Must be called while holding mm->mmap_sem for either read or write.
  * The result is guaranteed to be valid until mm->mmap_sem is dropped.
  */
-int mm_has_blockable_invalidate_notifiers(struct mm_struct *mm)
+bool mm_has_blockable_invalidate_notifiers(struct mm_struct *mm)
 {
 	struct mmu_notifier *mn;
 	int id;
-	int ret = 0;
+	bool ret = false;
 
-	WARN_ON_ONCE(down_write_trylock(&mm->mmap_sem));
+	WARN_ON_ONCE(!rwsem_is_locked(&mm->mmap_sem));
 
 	if (!mm_has_notifiers(mm))
 		return ret;
@@ -259,7 +259,7 @@ int mm_has_blockable_invalidate_notifiers(struct mm_struct *mm)
 				continue;
 
 		if (!(mn->ops->flags & MMU_INVALIDATE_DOES_NOT_BLOCK)) {
-			ret = 1;
+			ret = true;
 			break;
 		}
 	}
