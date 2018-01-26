@@ -2269,7 +2269,7 @@ static ssize_t ocfs2_file_write_iter(struct kiocb *iocb,
 	if (count == 0)
 		return 0;
 
-	if (direct_io && nowait) {
+	if (nowait) {
 		if (!inode_trylock(inode))
 			return -EAGAIN;
 	} else
@@ -2282,7 +2282,7 @@ static ssize_t ocfs2_file_write_iter(struct kiocb *iocb,
 	 */
 	rw_level = (!direct_io || full_coherency || append_write);
 
-	if (direct_io && nowait)
+	if (nowait)
 		ret = ocfs2_try_rw_lock(inode, rw_level);
 	else
 		ret = ocfs2_rw_lock(inode, rw_level);
@@ -2402,6 +2402,7 @@ static ssize_t ocfs2_file_read_iter(struct kiocb *iocb,
 	int ret = 0, rw_level = -1, lock_level = 0;
 	struct file *filp = iocb->ki_filp;
 	struct inode *inode = file_inode(filp);
+	int direct_io = iocb->ki_flags & IOCB_DIRECT ? 1 : 0;
 	int nowait = iocb->ki_flags & IOCB_NOWAIT ? 1 : 0;
 
 	trace_ocfs2_file_aio_read(inode, filp, filp->f_path.dentry,
@@ -2417,11 +2418,14 @@ static ssize_t ocfs2_file_read_iter(struct kiocb *iocb,
 		goto bail;
 	}
 
+	if (!direct_io && nowait)
+		return -EOPNOTSUPP;
+
 	/*
 	 * buffered reads protect themselves in ->readpage().  O_DIRECT reads
 	 * need locks to protect pending reads from racing with truncate.
 	 */
-	if (iocb->ki_flags & IOCB_DIRECT) {
+	if (direct_io) {
 		if (nowait)
 			ret = ocfs2_try_rw_lock(inode, 0);
 		else
