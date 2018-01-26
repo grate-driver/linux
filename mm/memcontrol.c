@@ -1836,7 +1836,7 @@ static int memcg_hotplug_cpu_dead(unsigned int cpu)
 			int nid;
 			long x;
 
-			x = __this_cpu_xchg(memcg->stat_cpu->count[i], 0);
+			x = this_cpu_xchg(memcg->stat_cpu->count[i], 0);
 			if (x)
 				atomic_long_add(x, &memcg->stat[i]);
 
@@ -1847,7 +1847,7 @@ static int memcg_hotplug_cpu_dead(unsigned int cpu)
 				struct mem_cgroup_per_node *pn;
 
 				pn = mem_cgroup_nodeinfo(memcg, nid);
-				x = __this_cpu_xchg(pn->lruvec_stat_cpu->count[i], 0);
+				x = this_cpu_xchg(pn->lruvec_stat_cpu->count[i], 0);
 				if (x)
 					atomic_long_add(x, &pn->lruvec_stat[i]);
 			}
@@ -1856,7 +1856,7 @@ static int memcg_hotplug_cpu_dead(unsigned int cpu)
 		for (i = 0; i < MEMCG_NR_EVENTS; i++) {
 			long x;
 
-			x = __this_cpu_xchg(memcg->stat_cpu->events[i], 0);
+			x = this_cpu_xchg(memcg->stat_cpu->events[i], 0);
 			if (x)
 				atomic_long_add(x, &memcg->events[i]);
 		}
