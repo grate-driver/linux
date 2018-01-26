@@ -5479,6 +5479,9 @@ static int memory_oom_group_show(struct seq_file *m, void *v)
 	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(m));
 	bool oom_group = memcg->oom_group;
 
+	if (!(cgrp_dfl_root.flags & CGRP_GROUP_OOM))
+		return -ENOTSUPP;
+
 	seq_printf(m, "%d\n", oom_group);
 
 	return 0;
@@ -5491,6 +5494,9 @@ static ssize_t memory_oom_group_write(struct kernfs_open_file *of,
 	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
 	int oom_group;
 	int err;
+
+	if (!(cgrp_dfl_root.flags & CGRP_GROUP_OOM))
+		return -ENOTSUPP;
 
 	err = kstrtoint(strstrip(buf), 0, &oom_group);
 	if (err)
