@@ -1674,8 +1674,8 @@ static unsigned int khugepaged_scan_mm_slot(unsigned int pages,
 
 	mm = mm_slot->mm;
 	/*
- 	 * Not wait for semaphore to avoid long time waiting, just move
- 	 * to the next mm on the list.
+ 	 * Don't wait for semaphore (to avoid long wait times).  Just move to
+	 * the next mm on the list.
  	 */
 	if (unlikely(!down_read_trylock(&mm->mmap_sem)))
 		goto breakouterloop_mmap_sem;
