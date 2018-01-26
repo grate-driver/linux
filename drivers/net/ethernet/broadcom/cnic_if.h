@@ -260,10 +260,10 @@ struct cnic_sockaddr {
 struct cnic_sock {
 	struct cnic_dev *dev;
 	void	*context;
-	u32	src_ip[4];
-	u32	dst_ip[4];
-	u16	src_port;
-	u16	dst_port;
+	__be32	src_ip[4];
+	__be32	dst_ip[4];
+	__be16	src_port;
+	__be16	dst_port;
 	u16	vlan_id;
 	unsigned char old_ha[ETH_ALEN];
 	unsigned char ha[ETH_ALEN];

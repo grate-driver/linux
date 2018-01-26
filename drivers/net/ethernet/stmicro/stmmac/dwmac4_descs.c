@@ -241,12 +241,13 @@ static int dwmac4_rx_check_timestamp(void *desc)
 	u32 own, ctxt;
 	int ret = 1;
 
-	own = p->des3 & RDES3_OWN;
-	ctxt = ((p->des3 & RDES3_CONTEXT_DESCRIPTOR)
+	own = le32_to_cpu(p->des3) & RDES3_OWN;
+	ctxt = ((le32_to_cpu(p->des3) & RDES3_CONTEXT_DESCRIPTOR)
 		>> RDES3_CONTEXT_DESCRIPTOR_SHIFT);
 
 	if (likely(!own && ctxt)) {
-		if ((p->des0 == 0xffffffff) && (p->des1 == 0xffffffff))
+		if ((p->des0 == cpu_to_le32(0xffffffff)) &&
+		    (p->des1 == cpu_to_le32(0xffffffff)))
 			/* Corrupted value */
 			ret = -EINVAL;
 		else
@@ -264,7 +265,7 @@ static int dwmac4_wrback_get_rx_timestamp_status(void *desc, u32 ats)
 	int ret = -EINVAL;
 
 	/* Get the status from normal w/b descriptor */
-	if (likely(p->des3 & TDES3_RS1V)) {
+	if (likely(p->des3 & cpu_to_le32(TDES3_RS1V))) {
 		if (likely(le32_to_cpu(p->des1) & RDES1_TIMESTAMP_AVAILABLE)) {
 			int i = 0;
 

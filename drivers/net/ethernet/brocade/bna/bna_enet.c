@@ -70,7 +70,7 @@ enum bna_ioceth_event {
 #define bna_stats_copy(_name, _type)					\
 do {									\
 	count = sizeof(struct bfi_enet_stats_ ## _type) / sizeof(u64);	\
-	stats_src = (u64 *)&bna->stats.hw_stats_kva->_name ## _stats;	\
+	stats_src = (__be64 *)&bna->stats.hw_stats_kva->_name ## _stats;	\
 	stats_dst = (u64 *)&bna->stats.hw_stats._name ## _stats;	\
 	for (i = 0; i < count; i++)					\
 		stats_dst[i] = be64_to_cpu(stats_src[i]);		\
@@ -187,7 +187,7 @@ static void
 bna_bfi_stats_get_rsp(struct bna *bna, struct bfi_msgq_mhdr *msghdr)
 {
 	struct bfi_enet_stats_req *stats_req = &bna->stats_mod.stats_get;
-	u64 *stats_src;
+	__be64 *stats_src;
 	u64 *stats_dst;
 	u32 tx_enet_mask = ntohl(stats_req->tx_enet_mask);
 	u32 rx_enet_mask = ntohl(stats_req->rx_enet_mask);
@@ -201,7 +201,7 @@ bna_bfi_stats_get_rsp(struct bna *bna, struct bfi_msgq_mhdr *msghdr)
 	bna_stats_copy(fc_rx, fc_rx);
 	bna_stats_copy(fc_tx, fc_tx);
 
-	stats_src = (u64 *)&(bna->stats.hw_stats_kva->rxf_stats[0]);
+	stats_src = (__be64 *)&(bna->stats.hw_stats_kva->rxf_stats[0]);
 
 	/* Copy Rxf stats to SW area, scatter them while copying */
 	for (i = 0; i < BFI_ENET_CFG_MAX; i++) {

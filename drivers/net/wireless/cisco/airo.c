@@ -1237,7 +1237,7 @@ struct airo_info {
 
 	int			wep_capable;
 	int			max_wep_idx;
-	int			last_auth;
+	__le16			last_auth;
 
 	/* WPA-related stuff */
 	unsigned int bssListFirst;
@@ -3785,7 +3785,7 @@ badrx:
 	}
 }
 
-static inline void set_auth_type(struct airo_info *local, int auth_type)
+static inline void set_auth_type(struct airo_info *local, __le16 auth_type)
 {
 	local->config.authType = auth_type;
 	/* Cache the last auth type used (of AUTH_OPEN and AUTH_ENCRYPT).

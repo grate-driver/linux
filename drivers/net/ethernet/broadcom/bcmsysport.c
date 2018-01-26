@@ -1156,7 +1156,7 @@ static struct sk_buff *bcm_sysport_insert_tsb(struct sk_buff *skb,
 	memset(tsb, 0, sizeof(*tsb));
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-		ip_ver = htons(skb->protocol);
+		ip_ver = ntohs(skb->protocol);
 		switch (ip_ver) {
 		case ETH_P_IP:
 			ip_proto = ip_hdr(skb)->protocol;

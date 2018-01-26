@@ -278,7 +278,7 @@ bna_bfi_rx_vlan_filter_set(struct bna_rxf *rxf, u8 block_idx)
 			req->bit_mask[i] =
 				htonl(rxf->vlan_filter_table[j]);
 		else
-			req->bit_mask[i] = 0xFFFFFFFF;
+			req->bit_mask[i] = htonl(0xFFFFFFFF);
 	}
 	bfa_msgq_cmd_set(&rxf->msgq_cmd, NULL, NULL,
 		sizeof(struct bfi_enet_rx_vlan_req), &req->mh);
