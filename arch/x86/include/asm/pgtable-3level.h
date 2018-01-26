@@ -208,7 +208,7 @@ static inline pmd_t pmdp_establish(struct vm_area_struct *vma,
 		return old.pmd;
 	}
 
-	{
+	do {
 		old = *pmdp;
 	} while (cmpxchg64(&pmdp->pmd, old.pmd, pmd.pmd) != old.pmd);
 
