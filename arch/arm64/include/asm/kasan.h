@@ -27,7 +27,7 @@
  * [KASAN_SHADOW_OFFSET, KASAN_SHADOW_END) cover all 64-bits of virtual
  * addresses. So KASAN_SHADOW_OFFSET should satisfy the following equation:
  *      KASAN_SHADOW_OFFSET = KASAN_SHADOW_END -
- * 				(1ULL << (64 - KASAN_SHADOW_SCALE_SHIFT))
+ *				(1ULL << (64 - KASAN_SHADOW_SCALE_SHIFT))
  */
 #define KASAN_SHADOW_OFFSET     (KASAN_SHADOW_END - (1ULL << \
 					(64 - KASAN_SHADOW_SCALE_SHIFT)))
