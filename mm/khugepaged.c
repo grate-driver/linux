@@ -1673,7 +1673,12 @@ static unsigned int khugepaged_scan_mm_slot(unsigned int pages,
 	spin_unlock(&khugepaged_mm_lock);
 
 	mm = mm_slot->mm;
-	down_read(&mm->mmap_sem);
+	/*
+ 	 * Not wait for semaphore to avoid long time waiting, just move
+ 	 * to the next mm on the list.
+ 	 */
+	if (unlikely(!down_read_trylock(&mm->mmap_sem)))
+		goto breakouterloop_mmap_sem;
 	if (unlikely(khugepaged_test_exit(mm)))
 		vma = NULL;
 	else
