@@ -670,26 +670,6 @@ void seq_puts(struct seq_file *m, const char *s)
 }
 EXPORT_SYMBOL(seq_puts);
 
-static inline void seq_put_delimeter(struct seq_file *m, const char *delimiter)
-{
-	int len;
-
-	if (!delimiter || !delimiter[0])
-		return;
-
-	if (delimiter[1] == 0)
-		return seq_putc(m, delimiter[0]);
-
-	len = strlen(delimiter);
-	if (m->count + len >= m->size) {
-		seq_set_overflow(m);
-		return;
-	}
-
-	memcpy(m->buf + m->count, delimiter, len);
-	m->count += len;
-}
-
 /*
  * A helper routine for putting decimal numbers without rich format of printf().
  * only 'unsigned long long' is supported.
@@ -705,7 +685,12 @@ void seq_put_decimal_ull(struct seq_file *m, const char *delimiter,
 	if (m->count + 2 >= m->size) /* we'll write 2 bytes at least */
 		goto overflow;
 
-	seq_put_delimeter(m, delimiter);
+	len = strlen(delimiter);
+	if (m->count + len >= m->size)
+		goto overflow;
+
+	memcpy(m->buf + m->count, delimiter, len);
+	m->count += len;
 
 	if (m->count + 1 >= m->size)
 		goto overflow;
@@ -744,27 +729,32 @@ void seq_put_hex_ll(struct seq_file *m, const char *delimiter,
 {
 	int i, len;
 
-	seq_put_delimeter(m, delimiter);
+	if (delimiter && delimiter[0]) {
+		if (delimiter[1] == 0)
+			seq_putc(m, delimiter[0]);
+		else
+			seq_puts(m, delimiter);
+	}
 
-	len = (sizeof(v) * 8 - __builtin_clzll(v) + 3) / 4;
-
-	if (unlikely(len == 0))
+	/* If x is 0, the result of __builtin_clzll is undefined */
+	if (v == 0)
 		len = 1;
+	else
+		len = (sizeof(v) * 8 - __builtin_clzll(v) + 3) / 4;
 
 	if (len < width)
 		len = width;
 
-	if (m->count + len > m->size)
-		goto overflow;
+	if (m->count + len > m->size) {
+		seq_set_overflow(m);
+		return;
+	}
 
 	for (i = len - 1; i >= 0; i--) {
 		m->buf[m->count + i] = hex_asc[0xf & v];
 		v = v >> 4;
 	}
 	m->count += len;
-	return;
-overflow:
-	seq_set_overflow(m);
 }
 
 void seq_put_decimal_ll(struct seq_file *m, const char *delimiter, long long num)
@@ -774,7 +764,12 @@ void seq_put_decimal_ll(struct seq_file *m, const char *delimiter, long long num
 	if (m->count + 3 >= m->size) /* we'll write 2 bytes at least */
 		goto overflow;
 
-	seq_put_delimeter(m, delimiter);
+	len = strlen(delimiter);
+	if (m->count + len >= m->size)
+		goto overflow;
+
+	memcpy(m->buf + m->count, delimiter, len);
+	m->count += len;
 
 	if (m->count + 2 >= m->size)
 		goto overflow;
