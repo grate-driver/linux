@@ -336,7 +336,7 @@ static int memcg_init_list_lru_node(struct list_lru_node *nlru)
 	int size = memcg_nr_cache_ids;
 
 	memcg_lrus = kvmalloc(sizeof(*memcg_lrus) +
-			     size * sizeof(void *), GFP_KERNEL);
+			      size * sizeof(void *), GFP_KERNEL);
 	if (!memcg_lrus)
 		return -ENOMEM;
 
@@ -354,11 +354,19 @@ static void memcg_destroy_list_lru_node(struct list_lru_node *nlru)
 	struct list_lru_memcg *memcg_lrus;
 	/*
 	 * This is called when shrinker has already been unregistered,
-	 * and nobody can use it. So, there is no need to use kfree_rcu().
+	 * and nobody can use it. So, there is no need to use kvfree_rcu().
 	 */
 	memcg_lrus = rcu_dereference_protected(nlru->memcg_lrus, true);
 	__memcg_destroy_list_lru_node(memcg_lrus, 0, memcg_nr_cache_ids);
 	kvfree(memcg_lrus);
+}
+
+static void kvfree_rcu(struct rcu_head *head)
+{
+	struct list_lru_memcg *mlru;
+
+	mlru = container_of(head, struct list_lru_memcg, rcu);
+	kvfree(mlru);
 }
 
 static int memcg_update_list_lru_node(struct list_lru_node *nlru,
@@ -392,7 +400,7 @@ static int memcg_update_list_lru_node(struct list_lru_node *nlru,
 	rcu_assign_pointer(nlru->memcg_lrus, new);
 	spin_unlock_irq(&nlru->lock);
 
-	kfree_rcu(old, rcu);
+	call_rcu(&old->rcu, kvfree_rcu);
 	return 0;
 }
 
