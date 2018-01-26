@@ -1098,11 +1098,9 @@ bool out_of_memory(struct oom_control *oc)
 		return true;
 	}
 
-	if (mem_cgroup_select_oom_victim(oc)) {
-		if (oom_kill_memcg_victim(oc)) {
-			delay = true;
-			goto out;
-		}
+	if (mem_cgroup_select_oom_victim(oc) && oom_kill_memcg_victim(oc)) {
+		delay = true;
+		goto out;
 	}
 
 	select_bad_process(oc);
@@ -1111,7 +1109,7 @@ bool out_of_memory(struct oom_control *oc)
 		dump_header(oc, NULL);
 		panic("Out of memory and no killable processes...\n");
 	}
-	if (oc->chosen_task && oc->chosen_task != (void *)-1UL) {
+	if (oc->chosen_task && oc->chosen_task != INFLIGHT_VICTIM) {
 		oom_kill_process(oc, !is_memcg_oom(oc) ? "Out of memory" :
 				 "Memory cgroup out of memory");
 		delay = true;
