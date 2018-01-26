@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/list_lru.h>
+#include <linux/prefetch.h>
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/memcontrol.h>
@@ -135,13 +136,11 @@ bool list_lru_del(struct list_lru *lru, struct list_head *item)
 	/*
 	 * Prefetch the neighboring list entries to reduce lock hold time.
 	 */
-	if (unlikely(list_empty(item)))
-		return false;
 	prefetchw(item->prev);
 	prefetchw(item->next);
 
 	spin_lock(&nlru->lock);
-	if (likely(!list_empty(item))) {
+	if (!list_empty(item)) {
 		l = list_lru_from_kmem(nlru, item);
 		list_del_init(item);
 		l->nr_items--;
