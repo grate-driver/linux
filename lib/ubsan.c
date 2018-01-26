@@ -141,11 +141,6 @@ static void val_to_string(char *str, size_t size, struct type_descriptor *type,
 	}
 }
 
-static bool location_is_valid(struct source_location *loc)
-{
-	return loc->file_name != NULL;
-}
-
 static DEFINE_SPINLOCK(report_lock);
 
 static void ubsan_prologue(struct source_location *location,
