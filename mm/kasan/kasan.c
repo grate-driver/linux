@@ -778,12 +778,12 @@ EXPORT_SYMBOL(__asan_allocas_unpoison);
 	}								\
 	EXPORT_SYMBOL(__asan_set_shadow_##byte)
 
-DEFINE_ASAN_SET_SHADOW(00);
-DEFINE_ASAN_SET_SHADOW(f1);
-DEFINE_ASAN_SET_SHADOW(f2);
-DEFINE_ASAN_SET_SHADOW(f3);
-DEFINE_ASAN_SET_SHADOW(f5);
-DEFINE_ASAN_SET_SHADOW(f8);
+static DEFINE_ASAN_SET_SHADOW(00);
+static DEFINE_ASAN_SET_SHADOW(f1);
+static DEFINE_ASAN_SET_SHADOW(f2);
+static DEFINE_ASAN_SET_SHADOW(f3);
+static DEFINE_ASAN_SET_SHADOW(f5);
+static DEFINE_ASAN_SET_SHADOW(f8);
 
 #ifdef CONFIG_MEMORY_HOTPLUG
 static int __meminit kasan_mem_notifier(struct notifier_block *nb,
