@@ -490,6 +490,13 @@ static unsigned long shrink_slab(gfp_t gfp_mask, int nid,
 		};
 
 		/*
+		 * We are about to die and free our memory.
+		 * Stop shrinking which might delay signal handling.
+		 */
+		if (unlikely(fatal_signal_pending(current))
+			break;
+
+		/*
 		 * If kernel memory accounting is disabled, we ignore
 		 * SHRINKER_MEMCG_AWARE flag and call all shrinkers
 		 * passing NULL for memcg.
