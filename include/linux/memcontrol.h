@@ -203,6 +203,13 @@ struct mem_cgroup {
 	/* OOM-Killer disable */
 	int		oom_kill_disable;
 
+	/*
+	 * Treat the sub-tree as an indivisible memory consumer,
+	 * kill all belonging tasks if the memory cgroup selected
+	 * as OOM victim.
+	 */
+	bool oom_group;
+
 	/* handle for "memory.events" */
 	struct cgroup_file events_file;
 
@@ -489,6 +496,11 @@ static inline bool task_in_memcg_oom(struct task_struct *p)
 bool mem_cgroup_oom_synchronize(bool wait);
 
 bool mem_cgroup_select_oom_victim(struct oom_control *oc);
+
+static inline bool mem_cgroup_oom_group(struct mem_cgroup *memcg)
+{
+	return memcg->oom_group;
+}
 
 #ifdef CONFIG_MEMCG_SWAP
 extern int do_swap_account;
@@ -987,6 +999,11 @@ void count_memcg_event_mm(struct mm_struct *mm, enum vm_event_item idx)
 }
 
 static inline bool mem_cgroup_select_oom_victim(struct oom_control *oc)
+{
+	return false;
+}
+
+static inline bool mem_cgroup_oom_group(struct mem_cgroup *memcg)
 {
 	return false;
 }

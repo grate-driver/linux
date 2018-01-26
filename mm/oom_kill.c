@@ -839,6 +839,17 @@ static void __oom_kill_process(struct task_struct *victim)
 	struct mm_struct *mm;
 	bool can_oom_reap = true;
 
+	/*
+	 * __oom_kill_process() is used to kill all tasks belonging to
+	 * the selected memory cgroup, so we should check that we're not
+	 * trying to kill an unkillable task.
+	 */
+	if (is_global_init(victim) || (victim->flags & PF_KTHREAD) ||
+	    victim->signal->oom_score_adj == OOM_SCORE_ADJ_MIN) {
+		put_task_struct(victim);
+		return;
+	}
+
 	p = find_lock_task_mm(victim);
 	if (!p) {
 		put_task_struct(victim);
@@ -975,21 +986,39 @@ static void oom_kill_process(struct oom_control *oc, const char *message)
 	__oom_kill_process(victim);
 }
 
+static int oom_kill_memcg_member(struct task_struct *task, void *unused)
+{
+	get_task_struct(task);
+	__oom_kill_process(task);
+	return 0;
+}
+
 static bool oom_kill_memcg_victim(struct oom_control *oc)
 {
-
 	if (oc->chosen_memcg == NULL || oc->chosen_memcg == INFLIGHT_VICTIM)
 		return oc->chosen_memcg;
 
-	/* Kill a task in the chosen memcg with the biggest memory footprint */
-	oc->chosen_points = 0;
-	oc->chosen_task = NULL;
-	mem_cgroup_scan_tasks(oc->chosen_memcg, oom_evaluate_task, oc);
+	/*
+	 * If memory.oom_group is set, kill all tasks belonging to the sub-tree
+	 * of the chosen memory cgroup, otherwise kill the task with the biggest
+	 * memory footprint.
+	 */
+	if (mem_cgroup_oom_group(oc->chosen_memcg)) {
+		mem_cgroup_scan_tasks(oc->chosen_memcg, oom_kill_memcg_member,
+				      NULL);
+		/* We have one or more terminating processes at this point. */
+		oc->chosen_task = INFLIGHT_VICTIM;
+	} else {
+		oc->chosen_points = 0;
+		oc->chosen_task = NULL;
+		mem_cgroup_scan_tasks(oc->chosen_memcg, oom_evaluate_task, oc);
 
-	if (oc->chosen_task == NULL || oc->chosen_task == INFLIGHT_VICTIM)
-		goto out;
+		if (oc->chosen_task == NULL ||
+		    oc->chosen_task == INFLIGHT_VICTIM)
+			goto out;
 
-	__oom_kill_process(oc->chosen_task);
+		__oom_kill_process(oc->chosen_task);
+	}
 
 out:
 	mem_cgroup_put(oc->chosen_memcg);
