@@ -138,6 +138,7 @@ struct page {
 			/* First tail page only */
 			unsigned char compound_dtor;
 			unsigned char compound_order;
+			/* two/six bytes available here */
 		};
 
 #if defined(CONFIG_TRANSPARENT_HUGEPAGE) && USE_SPLIT_PMD_PTLOCKS
