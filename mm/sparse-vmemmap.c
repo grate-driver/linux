@@ -108,8 +108,8 @@ static unsigned long __meminit vmem_altmap_nr_free(struct vmem_altmap *altmap)
 
 /**
  * vmem_altmap_alloc - allocate pages from the vmem_altmap reservation
- * @altmap - reserved page pool for the allocation
- * @nr_pfns - size (in pages) of the allocation
+ * @altmap: reserved page pool for the allocation
+ * @nr_pfns: size (in pages) of the allocation
  *
  * Allocations are aligned to the size of the request
  */
