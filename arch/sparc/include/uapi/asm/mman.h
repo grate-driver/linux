@@ -25,4 +25,5 @@
 #define MAP_STACK	0x20000		/* give out an address that is best suited for process/thread stacks */
 #define MAP_HUGETLB	0x40000		/* create a huge page mapping */
 
+
 #endif /* _UAPI__SPARC_MMAN_H__ */
