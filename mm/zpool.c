@@ -181,8 +181,7 @@ struct zpool *zpool_create_pool(const char *type, const char *name, gfp_t gfp,
 	zpool->driver = driver;
 	zpool->pool = driver->create(name, gfp, ops, zpool);
 	zpool->ops = ops;
-	zpool->evictable = zpool->driver->shrink &&
-			   zpool->ops && zpool->ops->evict;
+	zpool->evictable = driver->shrink && ops && ops->evict;
 
 	if (!zpool->pool) {
 		pr_err("couldn't create %s pool\n", type);
