@@ -183,6 +183,8 @@ next/dt
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-clk-dts-signed
 	omap/dt-pt3
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-pt3-signed
+	socfpga/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_for_v4.16
 
 next/drivers
 	drivers/tee
@@ -230,15 +232,8 @@ next/drivers
 		of: platform: fix OF node refcount leak
 	fsl/soc-driver
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-for-4.16
+	zynq/soc-fixes
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-fixes-for-4.16
+	omap/ti-sysc-fix
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/ti-sysc-fix-signed
 
-fixes
-	<no branch> (7669b122085018c1f64720d11c24ae6d2549193d)
-		https://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v4.16/dt
-	<no branch> (e3af9f7c6ece29fdb7fe0aeb83ac5d3077a06edb)
-		git://git.infradead.org/linux-mvebu tags/mvebu-fixes-4.15-1
-	<no branch> (bdae44705c0d5b751fbd79bc4a169905b25ed335)
-		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.15-2
-	patch
-		arm64: dts: socfpga: add missing interrupt-parent
-		ARM: sunxi_defconfig: Enable CMA
-		phy: work around 'phys' references to usb-nop-xceiv devices
