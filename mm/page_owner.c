@@ -539,6 +539,7 @@ static void init_pages_in_zone(pg_data_t *pgdat, struct zone *zone)
 	 */
 	for (; pfn < end_pfn; ) {
 		unsigned long block_end_pfn;
+
 		if (!pfn_valid(pfn)) {
 			pfn = ALIGN(pfn + 1, MAX_ORDER_NR_PAGES);
 			continue;
@@ -550,6 +551,7 @@ static void init_pages_in_zone(pg_data_t *pgdat, struct zone *zone)
 		for (; pfn < block_end_pfn; pfn++) {
 			struct page *page;
 			struct page_ext *page_ext;
+
 			if (!pfn_valid_within(pfn))
 				continue;
 
