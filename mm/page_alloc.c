@@ -1457,7 +1457,7 @@ static inline void __init pgdat_init_report_one_done(void)
 }
 
 /*
- * Returns true if page needs to be initialized of freed to buddy allocator.
+ * Returns true if page needs to be initialized or freed to buddy allocator.
  *
  * First we check if pfn is valid on architectures where it is possible to have
  * holes within pageblock_nr_pages. On systems where it is not possible, this
