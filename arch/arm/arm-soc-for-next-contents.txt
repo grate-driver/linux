@@ -1,0 +1,239 @@
+next/soc
+	patch
+		arm64: defconfig: enable new trigger modes for leds
+	renesas/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc-for-v4.16
+	patch
+		MAINTAINERS: Add self as extended maintainer for a slew of files
+		arm64: defconfig: enable CONFIG_UNIPHIER_EFUSE
+	ep93xx/soc
+		https://github.com/sverdlin/ep93xx tags/bk3
+	omap/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/soc-signed
+	omap/defconfig
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.15/defconfig-v2-signed
+	samsung/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-4.16
+	tegra/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-soc-2
+	mediatek/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-soc
+	patch
+		soc: Add SoC driver for Gemini
+	renesas/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig-for-v4.16
+	renesas/soc2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc2-for-v4.16
+	mvebu/arm64
+		git://git.infradead.org/linux-mvebu tags/mvebu-arm64-4.16-1
+	omap/soc-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/soc-pt2-signed
+	omap/defconfig-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/defconfig-signed
+	pxa/for-4.16
+		https://github.com/rjarzmik/linux tags/pxa-for-4.16
+	keystone/config
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_config_for_4.16
+	sunxi/config64
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-config64-for-4.16
+	qcom/defconfig64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-defconfig-for-4.16
+	qcom/defconfig
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-defconfig-for-4.16
+	patch
+		Wind down ARM/TANGO port
+	imx/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-4.16
+	davinci/soc
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v4.16/soc-v2
+	<no branch> (8bb65fc06c08f027980a917648e1cf6e4d51c5ad)
+		Merge commit '8bb65fc06c' into next/soc
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-4.16
+	samsung/soc-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-4.16-2
+	patch
+		arm64: defconfig: enable CONFIG_ACPI_APEI_MEMORY_FAILURE
+		arm64: defconfig: enable EDAC GHES option
+		arm64: defconfig: enable CONFIG_ACPI_APEI_EINJ
+		ARM: pxa/tosa-bt: add MODULE_LICENSE tag
+		ARM: omap: hwmod: fix section mismatch warnings
+
+next/dt
+	patch
+		ARM: dts: efm32: Add generic compatible string for I2C EEPROM
+		ARM: dts: lpc18xx: Add generic compatible string for I2C EEPROM
+		ARM: dts: socfpga: Add generic compatible string for I2C EEPROM
+		ARM: make ARCH_S3C24XX select USE_OF and clean-up boot/dts/Makefile
+		arm64: dts: qcom: apq8016-sbc: Allow USR4 LED to notify kernel panic
+		arm64: dts: hisilicon: hi3660-hikey960: Allow USR4 LED to notify kernel panic
+		arm64: dts: hisilicon: hi6220-hikey: Allow USR1 LED to notify kernel panic
+	renesas/dt-bindings
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt-bindings-for-v4.16
+	renesas/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt-for-v4.16
+	renesas/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm64-dt-for-v4.16
+	amlogic/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt
+	amlogic/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64
+	omap/dt-clk
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-clk-signed
+		contains omap/soc
+	omap/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-signed
+	gemini/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemni-dts-1
+	samsung/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.16
+	samsung/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-4.16
+	tegra/dt-bindings
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-dt-bindings
+	tegra/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-arm-dt
+	tegra/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-arm64-dt
+	mediatek/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-dts32
+	mediatek/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.15-next-dts64
+	rockchip/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.16-rockchip-dts32-1
+	rockchip/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.16-rockchip-dts64-1
+	patch
+		arm64: dts: add syscon for whale2 platform
+		arm64: dts: add clocks for SC9860
+	gemini/dt-2
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts-update-2
+	patch
+		arm64: dts: sprd: remove broken header inclusion
+	broadcom/devicetree
+		http://github.com/Broadcom/stblinux tags/arm-soc/for-4.16/devicetree
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-4.16-v2
+	actions/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-actions tags/actions-arm-dt-for-4.16
+	actions/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-actions tags/actions-arm64-dt-for-4.16
+	renesas/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm64-dt2-for-v4.16
+	reneases/dt2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt2-for-v4.16
+	mvebu/dt
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-4.16-1
+	mvebu/dt64
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.16-1
+	omap/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-pt2-v2-signed
+	keystone/dts
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_dts_for_4.16
+	sunxi/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.16
+	sunxi/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt64-for-4.16
+	uniphier/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt-v4.16
+	uniphier/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt64-v4.16
+	at91/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/abelloni/linux tags/at91-ab-4.16-dt
+	patch
+		ARM: dts: Delete bogus reference to the charlcd
+	qcom/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-for-4.16
+	qcom/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-dts-for-4.16
+	amlogic/dt64-2
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-2
+	aspeed/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-4.16-devicetree
+	imx/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-4.16
+	imx/dt64
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-4.16
+	mvebu/dt64-2
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.16-2
+	amlogic/dt-3
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-3
+	sunxi/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.16-2
+	samsung/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.16-2
+	samsung/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-4.16-2
+	patch
+		arm64: dts: add #cooling-cells to CPU nodes
+		arm: spear600: Add missing interrupt-parent of rtc
+		arm: spear13xx: Fix dmas cells
+		arm: spear13xx: Fix spics gpio controller's warning
+		ARM: dts: STi: Add gpio polarity for "hdmi,hpd-gpio" property
+		ARM: lpc3250: fix uda1380 gpio numbers
+		ARM: dts: s5pv210: add interrupt-parent for ohci
+		ARM: dts: rename oxnas dts files
+	mvebu/dt-3
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.16-3
+	gemini/dt-3
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts-update-3
+	patch
+		ARM: dts: nomadik: add interrupt-parent for clcd
+	omap/clk-dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-clk-dts-signed
+	omap/dt-pt3
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/dt-pt3-signed
+	socfpga/dt
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_for_v4.16
+
+next/drivers
+	drivers/tee
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-async-supplicant-for-v4.16
+	drivers/gpmc-omap
+		https://github.com/rogerq/linux tags/gpmc-omap-for-v4.16-immutable
+	drivers/tee-2
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-dynamic-shm-for-v4.16
+	tegra/memory
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.16-memory
+		contains tegra/dt-bindings
+	patch
+		tee: optee: fix header dependencies
+	broadcom/drivers
+		http://github.com/Broadcom/stblinux tags/arm-soc/for-4.16/drivers
+	actions/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-actions tags/actions-drivers-for-4.16
+	omap/ti-sysc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/ti-sysc-signed
+	keystone/driver
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_driver_soc_for_4.16
+	at91/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/abelloni/linux tags/at91-ab-4.16-drivers
+	qcom/drivers
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-drivers-for-4.16
+	drivers/reset
+		git://git.pengutronix.de/git/pza/linux tags/reset-for-4.16
+	imx/drivers
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-4.16
+	patch
+		soc: brcmstb: Only register SoC device on STB platforms
+	samsung/drivers-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-4.16-2
+	patch
+		bus: omap: add MODULE_LICENSE tags
+	drivers/tee-fixes
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-drv-dynamic-shm+fixes-for-v4.16
+	xlnx/soc
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-4.16
+	patch
+		Revert "soc: brcmstb: Only register SoC device on STB platforms"
+		soc: brcmstb: biuctrl: exit without warning on non brcmstb platforms
+		soc: bcm: brcmstb: Be multi-platform compatible
+		psci: add CPU_IDLE dependency
+		of: platform: fix OF node refcount leak
+	fsl/soc-driver
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-for-4.16
+	zynq/soc-fixes
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-fixes-for-4.16
+	omap/ti-sysc-fix
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.16/ti-sysc-fix-signed
+
