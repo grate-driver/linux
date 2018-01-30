@@ -1,20 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0
 /**
  * configfs to configure the PCI endpoint
  *
  * Copyright (C) 2017 Texas Instruments
  * Author: Kishon Vijay Abraham I <kishon@ti.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 of
- * the License as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <linux/module.h>
@@ -97,21 +86,22 @@ static int pci_epc_epf_link(struct config_item *epc_item,
 {
 	int ret;
 	u32 func_no = 0;
-	struct pci_epc *epc;
-	struct pci_epf *epf;
 	struct pci_epf_group *epf_group = to_pci_epf_group(epf_item);
 	struct pci_epc_group *epc_group = to_pci_epc_group(epc_item);
+	struct pci_epc *epc = epc_group->epc;
+	struct pci_epf *epf = epf_group->epf;
 
-	epc = epc_group->epc;
-	epf = epf_group->epf;
+	func_no = find_first_zero_bit(&epc_group->function_num_map,
+				      BITS_PER_LONG);
+	if (func_no >= BITS_PER_LONG)
+		return -EINVAL;
+
+	set_bit(func_no, &epc_group->function_num_map);
+	epf->func_no = func_no;
+
 	ret = pci_epc_add_epf(epc, epf);
 	if (ret)
 		goto err_add_epf;
-
-	func_no = find_first_zero_bit(&epc_group->function_num_map,
-				      sizeof(epc_group->function_num_map));
-	set_bit(func_no, &epc_group->function_num_map);
-	epf->func_no = func_no;
 
 	ret = pci_epf_bind(epf);
 	if (ret)
