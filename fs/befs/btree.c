@@ -6,7 +6,7 @@
  * Licensed under the GNU GPL. See the file COPYING for details.
  *
  * 2002-02-05: Sergey S. Kostyliov added binary search within
- * 		btree nodes.
+ *	btree nodes.
  *
  * Many thanks to:
  *
@@ -88,13 +88,15 @@ struct befs_btree_node {
 static const befs_off_t BEFS_BT_INVAL = 0xffffffffffffffffULL;
 
 /* local functions */
-static int befs_btree_seekleaf(struct super_block *sb, const befs_data_stream *ds,
-			       befs_btree_super * bt_super,
+static int befs_btree_seekleaf(struct super_block *sb,
+			       const befs_data_stream *ds,
+			       befs_btree_super *bt_super,
 			       struct befs_btree_node *this_node,
-			       befs_off_t * node_off);
+			       befs_off_t *node_off);
 
-static int befs_bt_read_super(struct super_block *sb, const befs_data_stream *ds,
-			      befs_btree_super * sup);
+static int befs_bt_read_super(struct super_block *sb,
+			      const befs_data_stream *ds,
+			      befs_btree_super *sup);
 
 static int befs_bt_read_node(struct super_block *sb, const befs_data_stream *ds,
 			     struct befs_btree_node *node,
@@ -110,11 +112,11 @@ static char *befs_bt_keydata(struct befs_btree_node *node);
 
 static int befs_find_key(struct super_block *sb,
 			 struct befs_btree_node *node,
-			 const char *findkey, befs_off_t * value);
+			 const char *findkey, befs_off_t *value);
 
 static char *befs_bt_get_key(struct super_block *sb,
 			     struct befs_btree_node *node,
-			     int index, u16 * keylen);
+			     int index, u16 *keylen);
 
 static int befs_compare_strings(const void *key1, int keylen1,
 				const void *key2, int keylen2);
@@ -132,7 +134,7 @@ static int befs_compare_strings(const void *key1, int keylen1,
  */
 static int
 befs_bt_read_super(struct super_block *sb, const befs_data_stream *ds,
-		   befs_btree_super * sup)
+		   befs_btree_super *sup)
 {
 	struct buffer_head *bh;
 	befs_disk_btree_super *od_sup;
@@ -163,7 +165,7 @@ befs_bt_read_super(struct super_block *sb, const befs_data_stream *ds,
 	befs_debug(sb, "<--- %s", __func__);
 	return BEFS_OK;
 
-      error:
+error:
 	befs_debug(sb, "<--- %s ERROR", __func__);
 	return BEFS_ERR;
 }
@@ -200,8 +202,8 @@ befs_bt_read_node(struct super_block *sb, const befs_data_stream *ds,
 
 	node->bh = befs_read_datastream(sb, ds, node_off, &off);
 	if (!node->bh) {
-		befs_error(sb, "%s failed to read "
-			   "node at %llu", __func__, node_off);
+		befs_error(sb, "%s failed to read node at %llu",
+			__func__, node_off);
 		befs_debug(sb, "<--- %s ERROR", __func__);
 
 		return BEFS_ERR;
@@ -243,7 +245,7 @@ befs_bt_read_node(struct super_block *sb, const befs_data_stream *ds,
  */
 int
 befs_btree_find(struct super_block *sb, const befs_data_stream *ds,
-		const char *key, befs_off_t * value)
+		const char *key, befs_off_t *value)
 {
 	struct befs_btree_node *this_node;
 	befs_btree_super bt_super;
@@ -253,16 +255,16 @@ befs_btree_find(struct super_block *sb, const befs_data_stream *ds,
 	befs_debug(sb, "---> %s Key: %s", __func__, key);
 
 	if (befs_bt_read_super(sb, ds, &bt_super) != BEFS_OK) {
-		befs_error(sb,
-			   "befs_btree_find() failed to read index superblock");
+		befs_error(sb, "%s() failed to read index superblock",
+			__func__);
 		goto error;
 	}
 
 	this_node = kmalloc(sizeof(struct befs_btree_node),
 						GFP_NOFS);
 	if (!this_node) {
-		befs_error(sb, "befs_btree_find() failed to allocate %zu "
-			   "bytes of memory", sizeof(struct befs_btree_node));
+		befs_error(sb, "%s() failed to allocate %zu bytes of memory",
+			__func__, sizeof(struct befs_btree_node));
 		goto error;
 	}
 
@@ -271,8 +273,8 @@ befs_btree_find(struct super_block *sb, const befs_data_stream *ds,
 	/* read in root node */
 	node_off = bt_super.root_node_ptr;
 	if (befs_bt_read_node(sb, ds, this_node, node_off) != BEFS_OK) {
-		befs_error(sb, "befs_btree_find() failed to read "
-			   "node at %llu", node_off);
+		befs_error(sb, "%s() failed to read node at %llu",
+			__func__, node_off);
 		goto error_alloc;
 	}
 
@@ -282,8 +284,8 @@ befs_btree_find(struct super_block *sb, const befs_data_stream *ds,
 		if (res == BEFS_BT_OVERFLOW)
 			node_off = this_node->head.overflow;
 		if (befs_bt_read_node(sb, ds, this_node, node_off) != BEFS_OK) {
-			befs_error(sb, "befs_btree_find() failed to read "
-				   "node at %llu", node_off);
+			befs_error(sb, "%s() failed to read node at %llu",
+				__func__, node_off);
 			goto error_alloc;
 		}
 	}
@@ -304,9 +306,9 @@ befs_btree_find(struct super_block *sb, const befs_data_stream *ds,
 		   key, *value);
 	return BEFS_OK;
 
-      error_alloc:
+error_alloc:
 	kfree(this_node);
-      error:
+error:
 	*value = 0;
 	befs_debug(sb, "<--- %s ERROR", __func__);
 	return BEFS_ERR;
@@ -328,7 +330,7 @@ befs_btree_find(struct super_block *sb, const befs_data_stream *ds,
  */
 static int
 befs_find_key(struct super_block *sb, struct befs_btree_node *node,
-	      const char *findkey, befs_off_t * value)
+	      const char *findkey, befs_off_t *value)
 {
 	int first, last, mid;
 	int eq;
@@ -409,8 +411,8 @@ befs_find_key(struct super_block *sb, struct befs_btree_node *node,
  */
 int
 befs_btree_read(struct super_block *sb, const befs_data_stream *ds,
-		loff_t key_no, size_t bufsize, char *keybuf, size_t * keysize,
-		befs_off_t * value)
+		loff_t key_no, size_t bufsize, char *keybuf, size_t *keysize,
+		befs_off_t *value)
 {
 	struct befs_btree_node *this_node;
 	befs_btree_super bt_super;
@@ -426,15 +428,15 @@ befs_btree_read(struct super_block *sb, const befs_data_stream *ds,
 	befs_debug(sb, "---> %s", __func__);
 
 	if (befs_bt_read_super(sb, ds, &bt_super) != BEFS_OK) {
-		befs_error(sb,
-			   "befs_btree_read() failed to read index superblock");
+		befs_error(sb, "%s() failed to read index superblock",
+			__func__);
 		goto error;
 	}
 
 	this_node = kmalloc(sizeof(struct befs_btree_node), GFP_NOFS);
 	if (this_node == NULL) {
-		befs_error(sb, "befs_btree_read() failed to allocate %zu "
-			   "bytes of memory", sizeof(struct befs_btree_node));
+		befs_error(sb, "%s() failed to allocate %zu bytes of memory",
+			__func__, sizeof(struct befs_btree_node));
 		goto error;
 	}
 
@@ -490,12 +492,12 @@ befs_btree_read(struct super_block *sb, const befs_data_stream *ds,
 	keystart = befs_bt_get_key(sb, this_node, cur_key, &keylen);
 
 	befs_debug(sb, "Read [%llu,%d]: keysize %d",
-		   (long long unsigned int)node_off, (int)cur_key,
+		   (unsigned long long int)node_off, (int)cur_key,
 		   (int)keylen);
 
 	if (bufsize < keylen + 1) {
-		befs_error(sb, "%s keybuf too small (%zu) "
-			   "for key of size %d", __func__, bufsize, keylen);
+		befs_error(sb, "%s keybuf too small (%zu) for key of size %d",
+			__func__, bufsize, keylen);
 		brelse(this_node->bh);
 		goto error_alloc;
 	}
@@ -514,10 +516,10 @@ befs_btree_read(struct super_block *sb, const befs_data_stream *ds,
 
 	return BEFS_OK;
 
-      error_alloc:
+error_alloc:
 	kfree(this_node);
 
-      error:
+error:
 	*keysize = 0;
 	*value = 0;
 	befs_debug(sb, "<--- %s ERROR", __func__);
@@ -531,7 +533,7 @@ befs_btree_read(struct super_block *sb, const befs_data_stream *ds,
  * @bt_super: Pointer to the superblock of the btree
  * @this_node: Buffer to return the leafnode in
  * @node_off: Pointer to offset of current node within datastream. Modified
- * 		by the function.
+ *	by the function.
  *
  * Helper function for btree traverse. Moves the current position to the
  * start of the first leaf node.
@@ -542,14 +544,14 @@ static int
 befs_btree_seekleaf(struct super_block *sb, const befs_data_stream *ds,
 		    befs_btree_super *bt_super,
 		    struct befs_btree_node *this_node,
-		    befs_off_t * node_off)
+		    befs_off_t *node_off)
 {
 
 	befs_debug(sb, "---> %s", __func__);
 
 	if (befs_bt_read_node(sb, ds, this_node, *node_off) != BEFS_OK) {
-		befs_error(sb, "%s failed to read "
-			   "node at %llu", __func__, *node_off);
+		befs_error(sb, "%s failed to read node at %llu",
+			   __func__, *node_off);
 		goto error;
 	}
 	befs_debug(sb, "Seekleaf to root node %llu", *node_off);
@@ -572,8 +574,8 @@ befs_btree_seekleaf(struct super_block *sb, const befs_data_stream *ds,
 			*node_off = fs64_to_cpu(sb, valarray[0]);
 		}
 		if (befs_bt_read_node(sb, ds, this_node, *node_off) != BEFS_OK) {
-			befs_error(sb, "%s failed to read "
-				   "node at %llu", __func__, *node_off);
+			befs_error(sb, "%s failed to read node at %llu",
+				__func__, *node_off);
 			goto error;
 		}
 
@@ -583,7 +585,7 @@ befs_btree_seekleaf(struct super_block *sb, const befs_data_stream *ds,
 
 	return BEFS_OK;
 
-      error:
+error:
 	befs_debug(sb, "<--- %s ERROR", __func__);
 	return BEFS_ERR;
 }
@@ -623,7 +625,7 @@ befs_bt_keylen_index(struct befs_btree_node *node)
 {
 	const int keylen_align = 8;
 	unsigned long int off =
-	    (sizeof (befs_btree_nodehead) + node->head.all_key_length);
+	    (sizeof(befs_btree_nodehead) + node->head.all_key_length);
 	ulong tmp = off % keylen_align;
 
 	if (tmp)
@@ -643,7 +645,7 @@ static fs64 *
 befs_bt_valarray(struct befs_btree_node *node)
 {
 	void *keylen_index_start = (void *) befs_bt_keylen_index(node);
-	size_t keylen_index_size = node->head.all_key_count * sizeof (fs16);
+	size_t keylen_index_size = node->head.all_key_count * sizeof(fs16);
 
 	return (fs64 *) (keylen_index_start + keylen_index_size);
 }
@@ -658,7 +660,7 @@ befs_bt_valarray(struct befs_btree_node *node)
 static char *
 befs_bt_keydata(struct befs_btree_node *node)
 {
-	return (char *) ((void *) node->od_node + sizeof (befs_btree_nodehead));
+	return (char *) ((void *) node->od_node + sizeof(befs_btree_nodehead));
 }
 
 /**
@@ -673,7 +675,7 @@ befs_bt_keydata(struct befs_btree_node *node)
  */
 static char *
 befs_bt_get_key(struct super_block *sb, struct befs_btree_node *node,
-		int index, u16 * keylen)
+		int index, u16 *keylen)
 {
 	int prev_key_end;
 	char *keystart;
@@ -714,6 +716,7 @@ befs_compare_strings(const void *key1, int keylen1,
 {
 	int len = min_t(int, keylen1, keylen2);
 	int result = strncmp(key1, key2, len);
+
 	if (result == 0)
 		result = keylen1 - keylen2;
 	return result;
@@ -765,6 +768,7 @@ static int
 btree_compare_float(cont void *key1, int keylen1, const void *key2, int keylen2)
 {
 	float result = *(float *) key1 - *(float *) key2;
+
 	if (result == 0.0f)
 		return 0;
 
@@ -776,6 +780,7 @@ btree_compare_double(cont void *key1, int keylen1,
 		     const void *key2, int keylen2)
 {
 	double result = *(double *) key1 - *(double *) key2;
+
 	if (result == 0.0)
 		return 0;
 
