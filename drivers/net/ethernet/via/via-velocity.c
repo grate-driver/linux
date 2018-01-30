@@ -92,14 +92,14 @@ enum velocity_bus_type {
 static int velocity_nics;
 static int msglevel = MSG_LEVEL_INFO;
 
-static void velocity_set_power_state(struct velocity_info *vptr, char state)
+static void velocity_set_power_state(struct velocity_info *vptr, pci_power_t state)
 {
-	void *addr = vptr->mac_regs;
+	void __iomem *addr = vptr->mac_regs;
 
 	if (vptr->pdev)
 		pci_set_power_state(vptr->pdev, state);
 	else
-		writeb(state, addr + 0x154);
+		writeb((__force u8)state, addr + 0x154);
 }
 
 /**
@@ -1733,12 +1733,13 @@ static void velocity_free_tx_buf(struct velocity_info *vptr,
 		size_t pktlen = max_t(size_t, skb->len, ETH_ZLEN);
 
 		/* For scatter-gather */
-		if (skb_shinfo(skb)->nr_frags > 0)
-			pktlen = max_t(size_t, pktlen,
-				       td->td_buf[i].size & ~TD_QUEUE);
+		if (skb_shinfo(skb)->nr_frags > 0) {
+			__le16 sz = td->td_buf[i].size & ~TD_QUEUE;
+			pktlen = max_t(size_t, pktlen, le16_to_cpu(sz));
+		}
 
 		dma_unmap_single(vptr->dev, tdinfo->skb_dma[i],
-				 le16_to_cpu(pktlen), DMA_TO_DEVICE);
+				 pktlen, DMA_TO_DEVICE);
 	}
 	dev_kfree_skb_irq(skb);
 	tdinfo->skb = NULL;

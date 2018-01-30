@@ -1321,7 +1321,7 @@ static struct sk_buff *bcmgenet_free_tx_cb(struct device *dev,
 		dma_unmap_addr_set(cb, dma_addr, 0);
 	}
 
-	return 0;
+	return NULL;
 }
 
 /* Simple helper to free a receive control block's resources */
@@ -1480,7 +1480,7 @@ static struct sk_buff *bcmgenet_put_tx_csum(struct net_device *dev,
 	status = (struct status_64 *)skb->data;
 
 	if (skb->ip_summed  == CHECKSUM_PARTIAL) {
-		ip_ver = htons(skb->protocol);
+		ip_ver = ntohs(skb->protocol);
 		switch (ip_ver) {
 		case ETH_P_IP:
 			ip_proto = ip_hdr(skb)->protocol;

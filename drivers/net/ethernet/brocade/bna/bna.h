@@ -36,7 +36,7 @@ extern const u32 bna_napi_dim_vector[][BNA_BIAS_T_MAX];
  */
 #define BNA_SET_DMA_ADDR(_addr, _bna_dma_addr)				\
 do {									\
-	u64 tmp_addr =						\
+	__be64 tmp_addr =						\
 	cpu_to_be64((u64)(_addr));				\
 	(_bna_dma_addr)->msb = ((struct bna_dma_addr *)&tmp_addr)->msb; \
 	(_bna_dma_addr)->lsb = ((struct bna_dma_addr *)&tmp_addr)->lsb; \

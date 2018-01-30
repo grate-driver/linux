@@ -93,7 +93,7 @@ static void bfa_ioc_get_adapter_optrom_ver(struct bfa_ioc *ioc,
 static void bfa_ioc_get_adapter_manufacturer(struct bfa_ioc *ioc,
 						char *manufacturer);
 static void bfa_ioc_get_adapter_model(struct bfa_ioc *ioc, char *model);
-static u64 bfa_ioc_get_pwwn(struct bfa_ioc *ioc);
+static __be64 bfa_ioc_get_pwwn(struct bfa_ioc *ioc);
 
 /* IOC state machine definitions/declarations */
 enum ioc_event {
@@ -1904,7 +1904,7 @@ bfa_nw_ioc_timeout(struct bfa_ioc *ioc)
 static void
 bfa_ioc_mbox_send(struct bfa_ioc *ioc, void *ioc_msg, int len)
 {
-	u32 *msgp = (u32 *) ioc_msg;
+	__le32 *msgp = (__le32 *) ioc_msg;
 	u32 i;
 
 	BUG_ON(!(len <= BFI_IOC_MSGLEN_MAX));
@@ -1913,7 +1913,7 @@ bfa_ioc_mbox_send(struct bfa_ioc *ioc, void *ioc_msg, int len)
 	 * first write msg to mailbox registers
 	 */
 	for (i = 0; i < len / sizeof(u32); i++)
-		writel(cpu_to_le32(msgp[i]),
+		writel(le32_to_cpu(msgp[i]),
 			      ioc->ioc_regs.hfn_mbox + i * sizeof(u32));
 
 	for (; i < BFI_IOC_MSGLEN_MAX / sizeof(u32); i++)
@@ -1936,7 +1936,7 @@ bfa_ioc_send_enable(struct bfa_ioc *ioc)
 	enable_req.clscode = htons(ioc->clscode);
 	enable_req.rsvd = htons(0);
 	/* overflow in 2106 */
-	enable_req.tv_sec = ntohl(ktime_get_real_seconds());
+	enable_req.tv_sec = htonl(ktime_get_real_seconds());
 	bfa_ioc_mbox_send(ioc, &enable_req, sizeof(struct bfi_ioc_ctrl_req));
 }
 
@@ -1950,7 +1950,7 @@ bfa_ioc_send_disable(struct bfa_ioc *ioc)
 	disable_req.clscode = htons(ioc->clscode);
 	disable_req.rsvd = htons(0);
 	/* overflow in 2106 */
-	disable_req.tv_sec = ntohl(ktime_get_real_seconds());
+	disable_req.tv_sec = htonl(ktime_get_real_seconds());
 	bfa_ioc_mbox_send(ioc, &disable_req, sizeof(struct bfi_ioc_ctrl_req));
 }
 
@@ -2417,7 +2417,7 @@ bfa_nw_ioc_auto_recover(bool auto_recover)
 static bool
 bfa_ioc_msgget(struct bfa_ioc *ioc, void *mbmsg)
 {
-	u32	*msgp = mbmsg;
+	__be32	*msgp = mbmsg;
 	u32	r32;
 	int		i;
 
@@ -2924,7 +2924,7 @@ bfa_nw_ioc_get_attr(struct bfa_ioc *ioc, struct bfa_ioc_attr *ioc_attr)
 }
 
 /* WWN public */
-static u64
+static __be64
 bfa_ioc_get_pwwn(struct bfa_ioc *ioc)
 {
 	return ioc->attr->pwwn;
@@ -3072,12 +3072,12 @@ bfa_flash_write_send(struct bfa_flash *flash)
 			(struct bfi_flash_write_req *) flash->mb.msg;
 	u32	len;
 
-	msg->type = be32_to_cpu(flash->type);
+	msg->type = cpu_to_be32(flash->type);
 	msg->instance = flash->instance;
-	msg->offset = be32_to_cpu(flash->addr_off + flash->offset);
+	msg->offset = cpu_to_be32(flash->addr_off + flash->offset);
 	len = (flash->residue < BFA_FLASH_DMA_BUF_SZ) ?
 	       flash->residue : BFA_FLASH_DMA_BUF_SZ;
-	msg->length = be32_to_cpu(len);
+	msg->length = cpu_to_be32(len);
 
 	/* indicate if it's the last msg of the whole write operation */
 	msg->last = (len == flash->residue) ? 1 : 0;
@@ -3105,12 +3105,12 @@ bfa_flash_read_send(void *cbarg)
 			(struct bfi_flash_read_req *) flash->mb.msg;
 	u32	len;
 
-	msg->type = be32_to_cpu(flash->type);
+	msg->type = cpu_to_be32(flash->type);
 	msg->instance = flash->instance;
-	msg->offset = be32_to_cpu(flash->addr_off + flash->offset);
+	msg->offset = cpu_to_be32(flash->addr_off + flash->offset);
 	len = (flash->residue < BFA_FLASH_DMA_BUF_SZ) ?
 	       flash->residue : BFA_FLASH_DMA_BUF_SZ;
-	msg->length = be32_to_cpu(len);
+	msg->length = cpu_to_be32(len);
 	bfi_h2i_set(msg->mh, BFI_MC_FLASH, BFI_FLASH_H2I_READ_REQ,
 		    bfa_ioc_portid(flash->ioc));
 	bfa_alen_set(&msg->alen, len, flash->dbuf_pa);
