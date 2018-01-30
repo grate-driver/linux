@@ -216,7 +216,7 @@
 #else
 #define smp_mb__before_llsc() smp_llsc_mb()
 #define __smp_mb__before_llsc() smp_llsc_mb()
-#define nudge_writes() mb()
+#define nudge_writes() do { } while (0)
 #endif
 
 #define __smp_mb__before_atomic()	__smp_mb__before_llsc()
