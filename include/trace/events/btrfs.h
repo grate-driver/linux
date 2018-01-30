@@ -193,7 +193,6 @@ DEFINE_EVENT(btrfs__inode, btrfs_inode_evict,
 	__print_flags(flag, "|",					\
 		{ (1 << EXTENT_FLAG_PINNED), 		"PINNED" 	},\
 		{ (1 << EXTENT_FLAG_COMPRESSED), 	"COMPRESSED" 	},\
-		{ (1 << EXTENT_FLAG_VACANCY), 		"VACANCY" 	},\
 		{ (1 << EXTENT_FLAG_PREALLOC), 		"PREALLOC" 	},\
 		{ (1 << EXTENT_FLAG_LOGGING),	 	"LOGGING" 	},\
 		{ (1 << EXTENT_FLAG_FILLING),	 	"FILLING" 	},\
@@ -247,6 +246,41 @@ TRACE_EVENT_CONDITION(btrfs_get_extent,
 		  (unsigned long long)__entry->block_len,
 		  show_map_flags(__entry->flags),
 		  __entry->refs, __entry->compress_type)
+);
+
+TRACE_EVENT(btrfs_handle_em_exist,
+
+	TP_PROTO(const struct extent_map *existing, const struct extent_map *map, u64 start, u64 len),
+
+	TP_ARGS(existing, map, start, len),
+
+	TP_STRUCT__entry(
+		__field(	u64,  e_start		)
+		__field(	u64,  e_len		)
+		__field(	u64,  map_start		)
+		__field(	u64,  map_len		)
+		__field(	u64,  start		)
+		__field(	u64,  len		)
+	),
+
+	TP_fast_assign(
+		__entry->e_start	= existing->start;
+		__entry->e_len		= existing->len;
+		__entry->map_start	= map->start;
+		__entry->map_len	= map->len;
+		__entry->start		= start;
+		__entry->len		= len;
+	),
+
+	TP_printk("start=%llu len=%llu "
+		  "existing(start=%llu len=%llu) "
+		  "em(start=%llu len=%llu)",
+		  (unsigned long long)__entry->start,
+		  (unsigned long long)__entry->len,
+		  (unsigned long long)__entry->e_start,
+		  (unsigned long long)__entry->e_len,
+		  (unsigned long long)__entry->map_start,
+		  (unsigned long long)__entry->map_len)
 );
 
 /* file extent item */
