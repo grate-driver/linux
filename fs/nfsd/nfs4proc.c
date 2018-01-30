@@ -605,6 +605,13 @@ nfsd4_create(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	switch (create->cr_type) {
 	case NF4LNK:
+		if (create->cr_datalen > NFS4_MAXPATHLEN)
+			return nfserr_nametoolong;
+		create->cr_data =
+			svc_fill_symlink_pathname(rqstp, &create->cr_first,
+						  create->cr_datalen);
+		if (IS_ERR(create->cr_data))
+			return nfserrno(PTR_ERR(create->cr_data));
 		status = nfsd_symlink(rqstp, &cstate->current_fh,
 				      create->cr_name, create->cr_namelen,
 				      create->cr_data, &resfh);
@@ -969,24 +976,6 @@ out:
 	return status;
 }
 
-static int fill_in_write_vector(struct kvec *vec, struct nfsd4_write *write)
-{
-        int i = 1;
-        int buflen = write->wr_buflen;
-
-        vec[0].iov_base = write->wr_head.iov_base;
-        vec[0].iov_len = min_t(int, buflen, write->wr_head.iov_len);
-        buflen -= vec[0].iov_len;
-
-        while (buflen) {
-                vec[i].iov_base = page_address(write->wr_pagelist[i - 1]);
-                vec[i].iov_len = min_t(int, PAGE_SIZE, buflen);
-                buflen -= vec[i].iov_len;
-                i++;
-        }
-        return i;
-}
-
 static __be32
 nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	    union nfsd4_op_u *u)
@@ -995,8 +984,8 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	stateid_t *stateid = &write->wr_stateid;
 	struct file *filp = NULL;
 	__be32 status = nfs_ok;
+	unsigned int nvecs;
 	unsigned long cnt;
-	int nvecs;
 
 	if (write->wr_offset >= OFFSET_MAX)
 		return nfserr_inval;
@@ -1012,12 +1001,12 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	write->wr_how_written = write->wr_stable_how;
 	gen_boot_verifier(&write->wr_verifier, SVC_NET(rqstp));
 
-	nvecs = fill_in_write_vector(rqstp->rq_vec, write);
-	WARN_ON_ONCE(nvecs > ARRAY_SIZE(rqstp->rq_vec));
-
+	nvecs = svc_fill_write_vector(rqstp, &write->wr_head, cnt);
+	if (!nvecs)
+		return nfserr_io;
 	status = nfsd_vfs_write(rqstp, &cstate->current_fh, filp,
-				write->wr_offset, rqstp->rq_vec, nvecs, &cnt,
-				write->wr_how_written);
+				write->wr_offset, rqstp->rq_vec, nvecs,
+				&cnt, write->wr_how_written);
 	fput(filp);
 
 	write->wr_bytes_written = cnt;
@@ -1363,14 +1352,14 @@ nfsd4_layoutget(struct svc_rqst *rqstp,
 	const struct nfsd4_layout_ops *ops;
 	struct nfs4_layout_stateid *ls;
 	__be32 nfserr;
-	int accmode;
+	int accmode = NFSD_MAY_READ_IF_EXEC;
 
 	switch (lgp->lg_seg.iomode) {
 	case IOMODE_READ:
-		accmode = NFSD_MAY_READ;
+		accmode |= NFSD_MAY_READ;
 		break;
 	case IOMODE_RW:
-		accmode = NFSD_MAY_READ | NFSD_MAY_WRITE;
+		accmode |= NFSD_MAY_READ | NFSD_MAY_WRITE;
 		break;
 	default:
 		dprintk("%s: invalid iomode %d\n",
@@ -1702,6 +1691,9 @@ nfsd4_proc_compound(struct svc_rqst *rqstp)
 	 */
 	status = nfserr_minor_vers_mismatch;
 	if (nfsd_minorversion(args->minorversion, NFSD_TEST) <= 0)
+		goto out;
+	status = nfserr_resource;
+	if (resp->opcnt > NFSD_MAX_OPS_PER_COMPOUND)
 		goto out;
 
 	status = nfs41_check_op_ordering(args);
