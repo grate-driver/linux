@@ -251,7 +251,7 @@ static inline bool inode_cgwb_enabled(struct inode *inode)
 		cgroup_subsys_on_dfl(io_cgrp_subsys) &&
 		bdi_cap_account_dirty(bdi) &&
 		(bdi->capabilities & BDI_CAP_CGROUP_WRITEBACK) &&
-		(inode->i_sb->s_iflags & SB_I_CGROUPWB);
+		IS_CGROUPWB(inode);
 }
 
 /**

@@ -1986,6 +1986,15 @@ static blk_status_t btrfs_submit_bio_hook(void *private_data, struct bio *bio,
 
 	skip_sum = BTRFS_I(inode)->flags & BTRFS_INODE_NODATASUM;
 
+#ifdef CONFIG_BLK_CGROUP
+	/*
+	 * if we're under IO controls, force a synchronous crc and
+	 * IO submission so things get accounted in the proper slots.
+	 */
+	if (!task_css_is_root(current, io_cgrp_id))
+		async = 0;
+#endif
+
 	if (btrfs_is_free_space_inode(BTRFS_I(inode)))
 		metadata = BTRFS_WQ_ENDIO_FREE_SPACE;
 
@@ -2005,10 +2014,10 @@ static blk_status_t btrfs_submit_bio_hook(void *private_data, struct bio *bio,
 				goto out;
 		}
 		goto mapit;
-	} else if (async && !skip_sum) {
+	} else if (root->root_key.objectid == BTRFS_DATA_RELOC_TREE_OBJECTID) {
 		/* csum items have already been cloned */
-		if (root->root_key.objectid == BTRFS_DATA_RELOC_TREE_OBJECTID)
-			goto mapit;
+		goto mapit;
+	} else if (async && !skip_sum) {
 		/* we're doing a write, do the async checksumming */
 		ret = btrfs_wq_submit_bio(fs_info, bio, mirror_num, bio_flags,
 					  bio_offset, inode,

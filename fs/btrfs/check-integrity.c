@@ -2741,7 +2741,7 @@ int btrfsic_submit_bh(int op, int op_flags, struct buffer_head *bh)
 	struct btrfsic_dev_state *dev_state;
 
 	if (!btrfsic_is_initialized)
-		return submit_bh(op, op_flags, bh);
+		return submit_bh_blkcg_css(op, op_flags, bh, blkcg_root_css);
 
 	mutex_lock(&btrfsic_mutex);
 	/* since btrfsic_submit_bh() might also be called before

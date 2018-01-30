@@ -1373,7 +1373,7 @@ void ext2_set_inode_flags(struct inode *inode)
 	unsigned int flags = EXT2_I(inode)->i_flags;
 
 	inode->i_flags &= ~(S_SYNC | S_APPEND | S_IMMUTABLE | S_NOATIME |
-				S_DIRSYNC | S_DAX);
+				S_DIRSYNC | S_DAX | S_CGROUPWB);
 	if (flags & EXT2_SYNC_FL)
 		inode->i_flags |= S_SYNC;
 	if (flags & EXT2_APPEND_FL)
@@ -1386,6 +1386,7 @@ void ext2_set_inode_flags(struct inode *inode)
 		inode->i_flags |= S_DIRSYNC;
 	if (test_opt(inode->i_sb, DAX) && S_ISREG(inode->i_mode))
 		inode->i_flags |= S_DAX;
+	inode->i_flags |= S_CGROUPWB;
 }
 
 struct inode *ext2_iget (struct super_block *sb, unsigned long ino)

@@ -856,6 +856,8 @@ static blk_status_t btree_submit_bio_hook(void *private_data, struct bio *bio,
 	int async = check_async_write(BTRFS_I(inode));
 	blk_status_t ret;
 
+	bio_associate_blkcg(bio, blkcg_root_css);
+
 	if (bio_op(bio) != REQ_OP_WRITE) {
 		/*
 		 * called for a read, do the setup so that checksum validation
@@ -3342,6 +3344,8 @@ static void write_dev_flush(struct btrfs_device *device)
 		return;
 
 	bio_reset(bio);
+	bio_associate_blkcg(bio, blkcg_root_css);
+
 	bio->bi_end_io = btrfs_end_empty_barrier;
 	bio_set_dev(bio, device->bdev);
 	bio->bi_opf = REQ_OP_WRITE | REQ_SYNC | REQ_PREFLUSH;
