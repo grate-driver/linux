@@ -1611,8 +1611,10 @@ static int __init init_mqueue_fs(void)
 		goto out_filesystem;
 
 	m = kern_mount_data(&mqueue_fs_type, &init_ipc_ns);
-	if (IS_ERR(m))
+	if (IS_ERR(m)) {
+		error = PTR_ERR(m);
 		goto out_filesystem;
+	}
 	init_ipc_ns.mq_mnt = m;
 	return 0;
 
