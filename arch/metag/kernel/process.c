@@ -399,7 +399,7 @@ unsigned long __metag_elf_map(struct file *filep, unsigned long addr,
 	tcm_tag = tcm_lookup_tag(addr);
 
 	if (tcm_tag != TCM_INVALID_TAG)
-		type &= ~MAP_FIXED;
+		type &= ~(MAP_FIXED | MAP_FIXED_NOREPLACE);
 
 	/*
 	* total_size is the size of the ELF (interpreter) image.
@@ -416,6 +416,10 @@ unsigned long __metag_elf_map(struct file *filep, unsigned long addr,
 			vm_munmap(map_addr+size, total_size-size);
 	} else
 		map_addr = vm_mmap(filep, addr, size, prot, type, off);
+
+	if ((type & MAP_FIXED_NOREPLACE) && BAD_ADDR(map_addr))
+		pr_info("%d (%s): Uhuuh, elf segment at %p requested but the memory is mapped already\n",
+				task_pid_nr(current), current->comm, (void *)addr);
 
 	if (!BAD_ADDR(map_addr) && tcm_tag != TCM_INVALID_TAG) {
 		struct tcm_allocation *tcm;

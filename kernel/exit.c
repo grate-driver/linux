@@ -635,6 +635,10 @@ static void reparent_leader(struct task_struct *father, struct task_struct *p,
 	if (unlikely(p->exit_state == EXIT_DEAD))
 		return;
 
+	if (p->signal->pdeath_signal_proc)
+		group_send_sig_info(p->signal->pdeath_signal_proc,
+				    SEND_SIG_NOINFO, p);
+
 	/* We don't want people slaying init. */
 	p->exit_signal = SIGCHLD;
 

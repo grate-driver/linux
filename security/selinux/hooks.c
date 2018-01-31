@@ -2564,6 +2564,7 @@ static void selinux_bprm_committing_creds(struct linux_binprm *bprm)
 
 	/* Always clear parent death signal on SID transitions. */
 	current->pdeath_signal = 0;
+	current->signal->pdeath_signal_proc = 0;
 
 	/* Check whether the new SID can inherit resource limits from the old
 	 * SID.  If not, reset all soft limits to the lower of the current
