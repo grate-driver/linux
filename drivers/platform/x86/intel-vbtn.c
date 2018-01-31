@@ -38,10 +38,16 @@ static const struct acpi_device_id intel_vbtn_ids[] = {
 static const struct key_entry intel_vbtn_keymap[] = {
 	{ KE_KEY, 0xC0, { KEY_POWER } },	/* power key press */
 	{ KE_IGNORE, 0xC1, { KEY_POWER } },	/* power key release */
+	{ KE_KEY, 0xC2, { KEY_LEFTMETA } },		/* 'Windows' key press */
+	{ KE_KEY, 0xC3, { KEY_LEFTMETA } },		/* 'Windows' key release */
 	{ KE_KEY, 0xC4, { KEY_VOLUMEUP } },		/* volume-up key press */
 	{ KE_IGNORE, 0xC5, { KEY_VOLUMEUP } },		/* volume-up key release */
 	{ KE_KEY, 0xC6, { KEY_VOLUMEDOWN } },		/* volume-down key press */
 	{ KE_IGNORE, 0xC7, { KEY_VOLUMEDOWN } },	/* volume-down key release */
+	{ KE_KEY,    0xC8, { KEY_ROTATE_LOCK_TOGGLE } },	/* rotate-lock key press */
+	{ KE_KEY,    0xC9, { KEY_ROTATE_LOCK_TOGGLE } },	/* rotate-lock key release */
+	{ KE_SW,     0xCC, { .sw = { SW_TABLET_MODE, 1 } } },	/* Tablet */
+	{ KE_SW,     0xCD, { .sw = { SW_TABLET_MODE, 0 } } },	/* Laptop */
 	{ KE_END },
 };
 
@@ -74,15 +80,29 @@ static void notify_handler(acpi_handle handle, u32 event, void *context)
 {
 	struct platform_device *device = context;
 	struct intel_vbtn_priv *priv = dev_get_drvdata(&device->dev);
+	unsigned int val = !(event & 1); /* Even=press, Odd=release */
+	const struct key_entry *ke_rel;
+	bool autorelease;
 
 	if (priv->wakeup_mode) {
 		if (sparse_keymap_entry_from_scancode(priv->input_dev, event)) {
 			pm_wakeup_hard_event(&device->dev);
 			return;
 		}
-	} else if (sparse_keymap_report_event(priv->input_dev, event, 1, true)) {
-		return;
+		goto out_unknown;
 	}
+
+	/*
+	 * Even press events are autorelease if there is no corresponding odd
+	 * release event, or if the odd event is KE_IGNORE.
+	 */
+	ke_rel = sparse_keymap_entry_from_scancode(priv->input_dev, event | 1);
+	autorelease = val && (!ke_rel || ke_rel->type == KE_IGNORE);
+
+	if (sparse_keymap_report_event(priv->input_dev, event, val, autorelease))
+		return;
+
+out_unknown:
 	dev_dbg(&device->dev, "unknown event index 0x%x\n", event);
 }
 

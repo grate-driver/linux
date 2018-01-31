@@ -21,8 +21,8 @@
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/device.h>
-#include <linux/init.h>
 #include <linux/io.h>
+#include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/uaccess.h>
 
@@ -124,6 +124,7 @@ static const struct pci_device_id pmc_pci_ids[] = {
 					(kernel_ulong_t)&spt_reg_map },
 	{ 0, },
 };
+MODULE_DEVICE_TABLE(pci, pmc_pci_ids);
 
 static inline u8 pmc_core_reg_read_byte(struct pmc_dev *pmcdev, int offset)
 {
@@ -145,37 +146,6 @@ static inline u32 pmc_core_adjust_slp_s0_step(u32 value)
 {
 	return value * SPT_PMC_SLP_S0_RES_COUNTER_STEP;
 }
-
-/**
- * intel_pmc_slp_s0_counter_read() - Read SLP_S0 residency.
- * @data: Out param that contains current SLP_S0 count.
- *
- * This API currently supports Intel Skylake SoC and Sunrise
- * Point Platform Controller Hub. Future platform support
- * should be added for platforms that support low power modes
- * beyond Package C10 state.
- *
- * SLP_S0_RESIDENCY counter counts in 100 us granularity per
- * step hence function populates the multiplied value in out
- * parameter @data.
- *
- * Return: an error code or 0 on success.
- */
-int intel_pmc_slp_s0_counter_read(u32 *data)
-{
-	struct pmc_dev *pmcdev = &pmc;
-	const struct pmc_reg_map *map = pmcdev->map;
-	u32 value;
-
-	if (!pmcdev->has_slp_s0_res)
-		return -EACCES;
-
-	value = pmc_core_reg_read(pmcdev, map->slp_s0_offset);
-	*data = pmc_core_adjust_slp_s0_step(value);
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(intel_pmc_slp_s0_counter_read);
 
 static int pmc_core_dev_state_get(void *data, u64 *val)
 {
@@ -444,31 +414,27 @@ static int pmc_core_dbgfs_register(struct pmc_dev *pmcdev)
 		return -ENOMEM;
 
 	pmcdev->dbgfs_dir = dir;
-	file = debugfs_create_file("slp_s0_residency_usec", S_IFREG | S_IRUGO,
+	file = debugfs_create_file("slp_s0_residency_usec", 0444,
 				   dir, pmcdev, &pmc_core_dev_state);
 	if (!file)
 		goto err;
 
-	file = debugfs_create_file("pch_ip_power_gating_status",
-				   S_IFREG | S_IRUGO, dir, pmcdev,
-				   &pmc_core_ppfear_ops);
+	file = debugfs_create_file("pch_ip_power_gating_status", 0444,
+				   dir, pmcdev, &pmc_core_ppfear_ops);
 	if (!file)
 		goto err;
 
-	file = debugfs_create_file("mphy_core_lanes_power_gating_status",
-				   S_IFREG | S_IRUGO, dir, pmcdev,
-				   &pmc_core_mphy_pg_ops);
+	file = debugfs_create_file("mphy_core_lanes_power_gating_status", 0444,
+				   dir, pmcdev, &pmc_core_mphy_pg_ops);
 	if (!file)
 		goto err;
 
-	file = debugfs_create_file("pll_status",
-				   S_IFREG | S_IRUGO, dir, pmcdev,
+	file = debugfs_create_file("pll_status", 0444, dir, pmcdev,
 				   &pmc_core_pll_ops);
 	if (!file)
 		goto err;
 
-	file = debugfs_create_file("ltr_ignore",
-				   S_IFREG | S_IRUGO, dir, pmcdev,
+	file = debugfs_create_file("ltr_ignore", 0644, dir, pmcdev,
 				   &pmc_core_ltr_ignore_ops);
 
 	if (!file)
@@ -548,14 +514,23 @@ static int pmc_core_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (err < 0)
 		dev_warn(&dev->dev, "PMC Core: debugfs register failed.\n");
 
-	pmc.has_slp_s0_res = true;
 	return 0;
+}
+
+static void pmc_core_remove(struct pci_dev *dev)
+{
+	pmc_core_dbgfs_unregister(&pmc);
+	mutex_destroy(&pmc.lock);
 }
 
 static struct pci_driver intel_pmc_core_driver = {
 	.name = "intel_pmc_core",
 	.id_table = pmc_pci_ids,
 	.probe = pmc_core_probe,
+	.remove = pmc_core_remove,
 };
 
-builtin_pci_driver(intel_pmc_core_driver);
+module_pci_driver(intel_pmc_core_driver);
+
+MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("Intel PMC Core Driver");

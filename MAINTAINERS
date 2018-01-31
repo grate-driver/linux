@@ -5990,6 +5990,12 @@ L:	linux-input@vger.kernel.org
 S:	Maintained
 F:	drivers/input/touchscreen/goodix.c
 
+GPD POCKET FAN DRIVER
+M:	Hans de Goede <hdegoede@redhat.com>
+L:	platform-driver-x86@vger.kernel.org
+S:	Maintained
+F:	drivers/platform/x86/gpd-pocket-fan.c
+
 GPIO ACPI SUPPORT
 M:	Mika Westerberg <mika.westerberg@linux.intel.com>
 M:	Andy Shevchenko <andriy.shevchenko@linux.intel.com>
@@ -15080,7 +15086,7 @@ X86 PLATFORM DRIVERS
 M:	Darren Hart <dvhart@infradead.org>
 M:	Andy Shevchenko <andy@infradead.org>
 L:	platform-driver-x86@vger.kernel.org
-T:	git git://git.infradead.org/users/dvhart/linux-platform-drivers-x86.git
+T:	git git://git.infradead.org/linux-platform-drivers-x86.git
 S:	Maintained
 F:	drivers/platform/x86/
 F:	drivers/platform/olpc/

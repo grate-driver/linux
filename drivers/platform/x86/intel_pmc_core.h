@@ -135,7 +135,6 @@ struct pmc_bit_map {
  * @pll_sts:		Maps name of PLL to corresponding bit status
  * @slp_s0_offset:	PWRMBASE offset to read SLP_S0 residency
  * @ltr_ignore_offset:	PWRMBASE offset to read/write LTR ignore bit
- * @base_address:	Base address of PWRMBASE defined in BIOS writer guide
  * @regmap_length:	Length of memory to map from PWRMBASE address to access
  * @ppfear0_offset:	PWRMBASE offset to to read PPFEAR*
  * @ppfear_buckets:	Number of 8 bits blocks to read all IP blocks from
@@ -152,7 +151,6 @@ struct pmc_reg_map {
 	const struct pmc_bit_map *pll_sts;
 	const u32 slp_s0_offset;
 	const u32 ltr_ignore_offset;
-	const u32 base_address;
 	const int regmap_length;
 	const u32 ppfear0_offset;
 	const int ppfear_buckets;
@@ -162,12 +160,14 @@ struct pmc_reg_map {
 
 /**
  * struct pmc_dev - pmc device structure
- * @base_addr:		comtains pmc base address
+ * @base_addr:		contains pmc base address
  * @regbase:		pointer to io-remapped memory location
- * @dbgfs_dir:		path to debug fs interface
- * @feature_available:	flag to indicate whether
- *			the feature is available
- *			on a particular platform or not.
+ * @map:		pointer to pmc_reg_map struct that contains platform
+ *			specific attributes
+ * @dbgfs_dir:		path to debugfs interface
+ * @pmc_xram_read_bit:	flag to indicate whether PMC XRAM shadow registers
+ *			used to read MPHY PG and PLL status are available
+ * @mutex_lock:		mutex to complete one transcation
  *
  * pmc_dev contains info about power management controller device.
  */
@@ -178,7 +178,6 @@ struct pmc_dev {
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 	struct dentry *dbgfs_dir;
 #endif /* CONFIG_DEBUG_FS */
-	bool has_slp_s0_res;
 	int pmc_xram_read_bit;
 	struct mutex lock; /* generic mutex lock for PMC Core */
 };
