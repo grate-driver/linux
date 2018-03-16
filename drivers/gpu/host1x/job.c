@@ -110,6 +110,7 @@ EXPORT_SYMBOL(host1x_job_add_gather);
 
 static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 {
+	struct host1x_bo *bo = NULL;
 	unsigned int i;
 	int err;
 
@@ -120,16 +121,20 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 		struct sg_table *sgt;
 		dma_addr_t phys_addr;
 
-		reloc->target.bo = host1x_bo_get(reloc->target.bo);
-		if (!reloc->target.bo) {
+		bo = host1x_bo_get(reloc->target.bo);
+		if (!bo) {
 			err = -EINVAL;
 			goto unpin;
 		}
 
-		phys_addr = host1x_bo_pin(reloc->target.bo, &sgt);
+		phys_addr = host1x_bo_pin(bo, &sgt);
+		if (!phys_addr) {
+			err = -ENOMEM;
+			goto unpin;
+		}
 
 		job->addr_phys[job->num_unpins] = phys_addr;
-		job->unpins[job->num_unpins].bo = reloc->target.bo;
+		job->unpins[job->num_unpins].bo = bo;
 		job->unpins[job->num_unpins].sgt = sgt;
 		job->num_unpins++;
 	}
@@ -144,13 +149,17 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 		struct iova *alloc;
 		unsigned int j;
 
-		g->bo = host1x_bo_get(g->bo);
-		if (!g->bo) {
+		bo = host1x_bo_get(g->bo);
+		if (!bo) {
 			err = -EINVAL;
 			goto unpin;
 		}
 
-		phys_addr = host1x_bo_pin(g->bo, &sgt);
+		phys_addr = host1x_bo_pin(bo, &sgt);
+		if (!phys_addr) {
+			err = -ENOMEM;
+			goto unpin;
+		}
 
 		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL) && host->domain) {
 			for_each_sg(sgt->sgl, sg, sgt->nents, j)
@@ -183,7 +192,7 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 
 		job->gather_addr_phys[i] = job->addr_phys[job->num_unpins];
 
-		job->unpins[job->num_unpins].bo = g->bo;
+		job->unpins[job->num_unpins].bo = bo;
 		job->unpins[job->num_unpins].sgt = sgt;
 		job->num_unpins++;
 	}
@@ -191,6 +200,8 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 	return 0;
 
 unpin:
+	if (bo)
+		host1x_bo_put(bo);
 	host1x_job_unpin(job);
 	return err;
 }
