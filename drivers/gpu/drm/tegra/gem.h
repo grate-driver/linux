@@ -45,7 +45,7 @@ struct tegra_bo {
 	unsigned long num_pages;
 	struct page **pages;
 	/* size of IOMMU mapping */
-	size_t size;
+	size_t iosize;
 	/* IOMMU mapping reference counter */
 	unsigned int iomapcnt;
 

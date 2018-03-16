@@ -34,7 +34,7 @@ static bool tegra_bo_mm_evict_bo(struct tegra_drm *tegra, struct tegra_bo *bo,
 		return false;
 
 	if (release) {
-		iommu_unmap(tegra->domain, bo->iovaddr, bo->size);
+		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
 		drm_mm_remove_node(bo->mm);
 	}
 
@@ -137,9 +137,9 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 mm_ok:
 	bo->iovaddr = bo->mm->start;
 
-	bo->size = iommu_map_sg(tegra->domain, bo->iovaddr, bo->sgt->sgl,
-				bo->sgt->nents, prot);
-	if (!bo->size) {
+	bo->iosize = iommu_map_sg(tegra->domain, bo->iovaddr, bo->sgt->sgl,
+				  bo->sgt->nents, prot);
+	if (!bo->iosize) {
 		dev_err(tegra->drm->dev, "IOMMU mapping failed\n");
 		drm_mm_remove_node(bo->mm);
 		err = -ENOMEM;
@@ -306,9 +306,9 @@ static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 
 	bo->iovaddr = bo->mm->start;
 
-	bo->size = iommu_map_sg(tegra->domain, bo->iovaddr, bo->sgt->sgl,
-				bo->sgt->nents, prot);
-	if (!bo->size) {
+	bo->iosize = iommu_map_sg(tegra->domain, bo->iovaddr, bo->sgt->sgl,
+				  bo->sgt->nents, prot);
+	if (!bo->iosize) {
 		dev_err(tegra->drm->dev, "failed to map buffer\n");
 		err = -ENOMEM;
 		goto remove;
@@ -335,7 +335,7 @@ static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 	if (tegra->dynamic_iommu_mapping) {
 		tegra_bo_mm_evict_bo(tegra, bo, true);
 	} else {
-		iommu_unmap(tegra->domain, bo->iovaddr, bo->size);
+		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
 		drm_mm_remove_node(bo->mm);
 	}
 	mutex_unlock(&tegra->mm_lock);
