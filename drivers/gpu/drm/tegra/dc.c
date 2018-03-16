@@ -741,6 +741,7 @@ static int tegra_plane_prepare_fb(struct drm_plane *plane,
 	struct drm_framebuffer *fb = new_state->fb;
 	struct tegra_bo *bo;
 	unsigned int i;
+	int err;
 
 	if (!fb)
 		return 0;
@@ -748,8 +749,8 @@ static int tegra_plane_prepare_fb(struct drm_plane *plane,
 	for (i = 0; i < fb->format->num_planes; i++) {
 		bo = tegra_fb_get_plane(fb, i);
 
-		bo->dmaaddr = host1x_bo_pin(&bo->base, &bo->sgt);
-		if (!bo->dmaaddr)
+		err = host1x_bo_pin(&bo->base, &bo->dmaaddr, &bo->sgt);
+		if (err)
 			goto err_cleanup;
 	}
 
@@ -761,7 +762,7 @@ err_cleanup:
 		host1x_bo_unpin(&bo->base, bo->sgt);
 	}
 
-	return -ENOMEM;
+	return err;
 }
 
 static void tegra_plane_cleanup_fb(struct drm_plane *plane,

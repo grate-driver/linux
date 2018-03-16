@@ -77,7 +77,8 @@ struct sg_table;
 struct host1x_bo_ops {
 	struct host1x_bo *(*get)(struct host1x_bo *bo);
 	void (*put)(struct host1x_bo *bo);
-	dma_addr_t (*pin)(struct host1x_bo *bo, struct sg_table **sgt);
+	int (*pin)(struct host1x_bo *bo, dma_addr_t *addr,
+		   struct sg_table **sgt);
 	void (*unpin)(struct host1x_bo *bo, struct sg_table *sgt);
 	void *(*mmap)(struct host1x_bo *bo);
 	void (*munmap)(struct host1x_bo *bo, void *addr);
@@ -105,10 +106,10 @@ static inline void host1x_bo_put(struct host1x_bo *bo)
 	bo->ops->put(bo);
 }
 
-static inline dma_addr_t host1x_bo_pin(struct host1x_bo *bo,
-				       struct sg_table **sgt)
+static inline int host1x_bo_pin(struct host1x_bo *bo, dma_addr_t *addr,
+				struct sg_table **sgt)
 {
-	return bo->ops->pin(bo, sgt);
+	return bo->ops->pin(bo, addr, sgt);
 }
 
 static inline void host1x_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)

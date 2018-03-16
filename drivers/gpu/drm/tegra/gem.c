@@ -90,8 +90,9 @@ static bool tegra_bo_mm_evict_something(struct tegra_drm *tegra, size_t size)
 	return found;
 }
 
-static dma_addr_t tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
-					    struct tegra_bo *bo)
+static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
+				     struct tegra_bo *bo,
+				     dma_addr_t *addr)
 {
 	int prot = IOMMU_READ | IOMMU_WRITE;
 	int err = 0;
@@ -155,7 +156,9 @@ mm_err:
 mm_unlock:
 	mutex_unlock(&tegra->mm_lock);
 
-	return bo->iovaddr;
+	*addr = bo->iovaddr;
+
+	return err;
 }
 
 static void tegra_bo_iommu_cached_unmap(struct tegra_drm *tegra,
@@ -172,18 +175,21 @@ static void tegra_bo_iommu_cached_unmap(struct tegra_drm *tegra,
 	mutex_unlock(&tegra->mm_lock);
 }
 
-static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
+static int tegra_bo_pin(struct host1x_bo *bo, dma_addr_t *addr,
+			struct sg_table **sgt)
 {
 	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
 	struct tegra_drm *tegra = obj->gem.dev->dev_private;
 
 	*sgt = obj->sgt;
 
-	if (!tegra->dynamic_iommu_mapping)
-		return obj->iovaddr;
+	if (!tegra->dynamic_iommu_mapping) {
+		*addr = obj->iovaddr;
+		return 0;
+	}
 
 	/* dynamic IOMMU mapping is relevant for Tegra20 only */
-	return tegra_bo_iommu_cached_map(tegra, obj);
+	return tegra_bo_iommu_cached_map(tegra, obj, addr);
 }
 
 static void tegra_bo_unpin(struct host1x_bo *bo, struct sg_table *sgt)
