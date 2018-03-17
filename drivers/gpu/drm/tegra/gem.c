@@ -28,25 +28,61 @@ static void tegra_bo_put(struct host1x_bo *bo)
 }
 
 static bool tegra_bo_mm_evict_bo(struct tegra_drm *tegra, struct tegra_bo *bo,
-				 bool release)
+				 bool release, bool unmap)
 {
 	if (list_empty(&bo->mm_eviction_entry))
 		return false;
 
-	if (release) {
+	if (unmap)
 		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+
+	if (release)
 		drm_mm_remove_node(bo->mm);
-	}
 
 	list_del_init(&bo->mm_eviction_entry);
 
 	return true;
 }
 
-static bool tegra_bo_mm_evict_something(struct tegra_drm *tegra, size_t size)
+static void tegra_bo_mm_release_victims(struct tegra_drm *tegra,
+					struct list_head *victims_list,
+					bool cleanup,
+					dma_addr_t start,
+					dma_addr_t end)
+{
+	dma_addr_t victim_start;
+	dma_addr_t victim_end;
+	struct tegra_bo *tmp;
+	struct tegra_bo *bo;
+
+	/*
+	 * Remove BO from MM and unmap only part of BO that is outside of
+	 * the given [star, end) range. The overlapping region will be mapped
+	 * by a new BO shortly, this reduces re-mapping overhead.
+	 */
+	list_for_each_entry_safe(bo, tmp, victims_list, mm_eviction_entry) {
+		if (!cleanup) {
+			victim_end = bo->iovaddr + bo->iosize;
+			victim_start = bo->iovaddr;
+
+			if (victim_start < start)
+				iommu_unmap(tegra->domain,
+					    victim_start, start - victim_start);
+
+			if (victim_end > end)
+				iommu_unmap(tegra->domain,
+					    end, victim_end - end);
+		}
+
+		tegra_bo_mm_evict_bo(tegra, bo, false, cleanup);
+	}
+}
+
+static bool tegra_bo_mm_evict_something(struct tegra_drm *tegra,
+					struct list_head *victims_list,
+					size_t size)
 {
 	LIST_HEAD(scan_list);
-	LIST_HEAD(victims_list);
 	struct list_head *eviction_list;
 	struct drm_mm_scan scan;
 	struct tegra_bo *tmp;
@@ -78,14 +114,17 @@ static bool tegra_bo_mm_evict_something(struct tegra_drm *tegra, size_t size)
 		 * drm_mm_scan_remove_block() in drm_mm.c
 		 */
 		if (drm_mm_scan_remove_block(&scan, bo->mm))
-			list_move(&bo->mm_eviction_entry, &victims_list);
+			list_move(&bo->mm_eviction_entry, victims_list);
 		else
 			list_move(&bo->mm_eviction_entry, eviction_list);
 	}
 
-	/* release victims from the cache */
-	list_for_each_entry_safe(bo, tmp, &victims_list, mm_eviction_entry)
-		tegra_bo_mm_evict_bo(tegra, bo, true);
+	/*
+	 * Victims would be unmapped later, only mark them as released
+	 * for now.
+	 */
+	list_for_each_entry(bo, victims_list, mm_eviction_entry)
+		drm_mm_remove_node(bo->mm);
 
 	return found;
 }
@@ -94,6 +133,7 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 				     struct tegra_bo *bo,
 				     dma_addr_t *addr)
 {
+	LIST_HEAD(victims_list);
 	int prot = IOMMU_READ | IOMMU_WRITE;
 	int err = 0;
 
@@ -104,7 +144,7 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 		goto mm_unlock;
 
 	/* if BO has been put on eviction list, remove BO from the list */
-	if (tegra_bo_mm_evict_bo(tegra, bo, false))
+	if (tegra_bo_mm_evict_bo(tegra, bo, false, false))
 		goto mm_unlock;
 
 	err = drm_mm_insert_node_generic(&tegra->mm, bo->mm, bo->gem.size,
@@ -123,7 +163,7 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 	 * Scan for a suitable hole conjointly with a cached mappings
 	 * and release mappings from cache if needed.
 	 */
-	if (!tegra_bo_mm_evict_something(tegra, bo->gem.size))
+	if (!tegra_bo_mm_evict_something(tegra, &victims_list, bo->gem.size))
 		goto mm_err;
 
 	/*
@@ -151,6 +191,17 @@ mm_err:
 			__func__, bo->gem.size, err);
 		bo->iovaddr = 0;
 		bo->iomapcnt = 0;
+
+		/* nuke all affected victims */
+		tegra_bo_mm_release_victims(tegra, &victims_list, true, 0, 0);
+	} else {
+		/*
+		 * Unmap all affected victims, excluding the newly mapped
+		 * BO range.
+		 */
+		tegra_bo_mm_release_victims(tegra, &victims_list, false,
+					    bo->iovaddr,
+					    bo->iovaddr + bo->iosize);
 	}
 
 mm_unlock:
@@ -333,7 +384,7 @@ static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 
 	mutex_lock(&tegra->mm_lock);
 	if (tegra->dynamic_iommu_mapping) {
-		tegra_bo_mm_evict_bo(tegra, bo, true);
+		tegra_bo_mm_evict_bo(tegra, bo, true, true);
 	} else {
 		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
 		drm_mm_remove_node(bo->mm);
