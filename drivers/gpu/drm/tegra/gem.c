@@ -185,6 +185,20 @@ mm_ok:
 		err = -ENOMEM;
 	}
 
+	/*
+	 * IOMMU API would try to use the best fitting size for the mapping,
+	 * but we shouldn't rely on it as that may change in the future. Hence
+	 * make sure that IOMMU mapping size is at least not larger than the
+	 * size of MM.
+	 */
+	if (bo->iosize > bo->mm->size) {
+		dev_err(tegra->drm->dev, "IOMMU mapping size (%zu) is larger than MM size (%llu)\n",
+			bo->iosize, bo->mm->size);
+		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+		drm_mm_remove_node(bo->mm);
+		err = -ENOMEM;
+	}
+
 mm_err:
 	if (WARN_ON(err < 0)) {
 		dev_err(tegra->drm->dev, "%s: Failed size %zu: %d\n",
