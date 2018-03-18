@@ -393,12 +393,12 @@ host1x_bo_lookup(struct drm_file *file, u32 handle)
 static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 				       struct drm_tegra_reloc __user *src,
 				       struct drm_device *drm,
-				       struct drm_file *file)
+				       struct drm_file *file,
+				       u32 *cmdbuf, u32 *target)
 {
-	u32 cmdbuf, target;
 	int err;
 
-	err = get_user(cmdbuf, &src->cmdbuf.handle);
+	err = get_user(*cmdbuf, &src->cmdbuf.handle);
 	if (err < 0)
 		return err;
 
@@ -406,7 +406,7 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 	if (err < 0)
 		return err;
 
-	err = get_user(target, &src->target.handle);
+	err = get_user(*target, &src->target.handle);
 	if (err < 0)
 		return err;
 
@@ -422,14 +422,6 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest, u32 *flags,
 	if (err < 0)
 		return err;
 
-	dest->cmdbuf.bo = host1x_bo_lookup(file, cmdbuf);
-	if (!dest->cmdbuf.bo)
-		return -ENOENT;
-
-	dest->target.bo = host1x_bo_lookup(file, target);
-	if (!dest->target.bo)
-		return -ENOENT;
-
 	return 0;
 }
 
@@ -438,12 +430,17 @@ static int tegra_append_bo_reservations(struct tegra_bo_reservation *resv,
 					bool write, bool skip)
 {
 	resv[index].bo = bo;
-	resv[index].skip = skip;
 
+	/* check whether this BO is already in the reservation list */
 	if (bo->resv_pending) {
+		/* duplicated reservation won't be handled */
+		resv[index].skip = true;
+
+		/* impose 'write' annotation to the original reservation */
 		resv[bo->resv_index].write |= write;
 	} else {
 		resv[index].write = write;
+		resv[index].skip = skip;
 
 		bo->resv_index = index;
 		bo->resv_pending = true;
@@ -799,16 +796,24 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	while (num_relocs--) {
 		struct host1x_reloc *reloc;
 		struct tegra_bo *obj;
+		u32 cmdbuf, target;
 		u32 reloc_flags;
 
-		err = host1x_reloc_copy_from_user(&job->relocs[num_relocs],
-						  &reloc_flags,
-						  &user_relocs[num_relocs], drm,
-						  file);
+		reloc = &job->relocs[num_relocs];
+
+		err = host1x_reloc_copy_from_user(reloc, &reloc_flags,
+						  &user_relocs[num_relocs],
+						  drm, file,
+						  &cmdbuf, &target);
 		if (err < 0)
 			goto fail;
 
-		reloc = &job->relocs[num_relocs];
+		reloc->cmdbuf.bo = host1x_bo_lookup(file, cmdbuf);
+		if (!reloc->cmdbuf.bo) {
+			err = -ENOENT;
+			goto fail;
+		}
+
 		obj = host1x_to_tegra_bo(reloc->cmdbuf.bo);
 
 		err = tegra_append_bo_reservations(reservations, obj, num_bos++,
@@ -816,6 +821,12 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 					true);
 		if (err)
 			goto fail;
+
+		reloc->target.bo = host1x_bo_lookup(file, target);
+		if (!reloc->target.bo) {
+			err = -ENOENT;
+			goto fail;
+		}
 
 		obj = host1x_to_tegra_bo(reloc->target.bo);
 
