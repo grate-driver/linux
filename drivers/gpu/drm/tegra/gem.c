@@ -30,11 +30,17 @@ static void tegra_bo_put(struct host1x_bo *bo)
 static bool tegra_bo_mm_evict_bo(struct tegra_drm *tegra, struct tegra_bo *bo,
 				 bool release, bool unmap)
 {
+	size_t unmapped;
+
 	if (list_empty(&bo->mm_eviction_entry))
 		return false;
 
-	if (unmap)
-		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+	if (unmap) {
+		unmapped = iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+		if (unmapped != bo->iosize)
+			dev_err(tegra->drm->dev, "%s: Failed to unmap BO\n",
+				__func__);
+	}
 
 	if (release)
 		drm_mm_remove_node(bo->mm);
@@ -54,6 +60,11 @@ static void tegra_bo_mm_release_victims(struct tegra_drm *tegra,
 	dma_addr_t victim_end;
 	struct tegra_bo *tmp;
 	struct tegra_bo *bo;
+	struct device *dev;
+	size_t unmapped;
+	size_t size;
+
+	dev = tegra->drm->dev;
 
 	/*
 	 * Remove BO from MM and unmap only part of BO that is outside of
@@ -65,13 +76,25 @@ static void tegra_bo_mm_release_victims(struct tegra_drm *tegra,
 			victim_end = bo->iovaddr + bo->iosize;
 			victim_start = bo->iovaddr;
 
-			if (victim_start < start)
-				iommu_unmap(tegra->domain,
-					    victim_start, start - victim_start);
+			if (victim_start < start) {
+				size = start - victim_start;
 
-			if (victim_end > end)
-				iommu_unmap(tegra->domain,
-					    end, victim_end - end);
+				unmapped = iommu_unmap(tegra->domain,
+						       victim_start, size);
+				if (unmapped != size)
+					dev_err(dev, "%s: Failed to unmap BO\n",
+						__func__);
+			}
+
+			if (victim_end > end) {
+				size = victim_end - end;
+
+				unmapped = iommu_unmap(tegra->domain,
+						       end, size);
+				if (unmapped != size)
+					dev_err(dev, "%s: Failed to unmap BO\n",
+						__func__);
+			}
 		}
 
 		tegra_bo_mm_evict_bo(tegra, bo, false, cleanup);
@@ -134,6 +157,7 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 				     dma_addr_t *addr)
 {
 	LIST_HEAD(victims_list);
+	size_t unmapped;
 	int prot = IOMMU_READ | IOMMU_WRITE;
 	int err = 0;
 
@@ -194,7 +218,12 @@ mm_ok:
 	if (bo->iosize > bo->mm->size) {
 		dev_err(tegra->drm->dev, "IOMMU mapping size (%zu) is larger than MM size (%llu)\n",
 			bo->iosize, bo->mm->size);
-		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+
+		unmapped = iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+		if (unmapped != bo->iosize)
+			dev_err(tegra->drm->dev, "%s: Failed to unmap BO\n",
+				__func__);
+
 		drm_mm_remove_node(bo->mm);
 		err = -ENOMEM;
 	}
@@ -393,6 +422,8 @@ unlock:
 
 static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 {
+	size_t unmapped;
+
 	if (!bo->mm)
 		return 0;
 
@@ -400,7 +431,11 @@ static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 	if (tegra->dynamic_iommu_mapping) {
 		tegra_bo_mm_evict_bo(tegra, bo, true, true);
 	} else {
-		iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+		unmapped = iommu_unmap(tegra->domain, bo->iovaddr, bo->iosize);
+		if (unmapped != bo->iosize)
+			dev_err(tegra->drm->dev, "%s: Failed to unmap BO\n",
+				__func__);
+
 		drm_mm_remove_node(bo->mm);
 	}
 	mutex_unlock(&tegra->mm_lock);
