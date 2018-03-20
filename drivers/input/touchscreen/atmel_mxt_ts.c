@@ -30,6 +30,8 @@
 #include <media/videobuf2-v4l2.h>
 #include <media/videobuf2-vmalloc.h>
 
+#define MXT_I2C_RETRIES 20
+
 /* Firmware files */
 #define MXT_FW_NAME		"maxtouch.fw"
 #define MXT_CFG_NAME		"maxtouch.cfg"
@@ -625,6 +627,7 @@ static int __mxt_read_reg(struct i2c_client *client,
 {
 	struct i2c_msg xfer[2];
 	u8 buf[2];
+	int retries = 0;
 	int ret;
 
 	buf[0] = reg & 0xff;
@@ -642,10 +645,27 @@ static int __mxt_read_reg(struct i2c_client *client,
 	xfer[1].len = len;
 	xfer[1].buf = val;
 
+retry_i2c:
 	ret = i2c_transfer(client->adapter, xfer, 2);
 	if (ret == 2) {
 		ret = 0;
+		if (retries > 0)
+			dev_info(&client->dev, "%s succeeded after %d retries\n",
+				__func__, retries);
 	} else {
+		if (ret < 0) {
+			retries++;
+			if (retries < MXT_I2C_RETRIES) {
+				dev_dbg(&client->dev, "%s: i2c read failed (%d), retries = %d\n",
+					__func__, ret, retries);
+
+				msleep(20);
+				goto retry_i2c;
+			}
+			dev_err(&client->dev, "Failure accessing maXTouch device\n");
+			return ret;
+		}
+
 		if (ret >= 0)
 			ret = -EIO;
 		dev_err(&client->dev, "%s: i2c transfer failed (%d)\n",
@@ -661,6 +681,7 @@ static int __mxt_write_reg(struct i2c_client *client, u16 reg, u16 len,
 	u8 *buf;
 	size_t count;
 	int ret;
+	int retries = 0;
 
 	count = len + 2;
 	buf = kmalloc(count, GFP_KERNEL);
@@ -671,10 +692,23 @@ static int __mxt_write_reg(struct i2c_client *client, u16 reg, u16 len,
 	buf[1] = (reg >> 8) & 0xff;
 	memcpy(&buf[2], val, len);
 
+retry_i2c:
 	ret = i2c_master_send(client, buf, count);
 	if (ret == count) {
 		ret = 0;
+		if (retries > 0)
+			dev_info(&client->dev, "%s succeeded after %d retries\n",
+				__func__, retries);
 	} else {
+		if (retries < MXT_I2C_RETRIES) {
+			retries++;
+			dev_dbg(&client->dev, "%s: i2c send failed (%d), retries = %d\n",
+				__func__, ret, retries);
+
+			msleep(20);
+			goto retry_i2c;
+		}
+
 		if (ret >= 0)
 			ret = -EIO;
 		dev_err(&client->dev, "%s: i2c send failed (%d)\n",
