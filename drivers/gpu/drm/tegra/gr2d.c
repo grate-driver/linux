@@ -223,7 +223,9 @@ static int gr2d_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct host1x_syncpt **syncpts;
+	struct resource *res;
 	struct gr2d *gr2d;
+	void __iomem *regs;
 	unsigned int i;
 	int err;
 
@@ -261,6 +263,14 @@ static int gr2d_probe(struct platform_device *pdev)
 		return PTR_ERR(gr2d->rst_mc);
 	}
 
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res)
+		return -ENXIO;
+
+	regs = devm_ioremap_resource(dev, res);
+	if (IS_ERR(regs))
+		return PTR_ERR(regs);
+
 	INIT_LIST_HEAD(&gr2d->client.base.list);
 	gr2d->client.base.ops = &gr2d_client_ops;
 	gr2d->client.base.dev = dev;
@@ -285,8 +295,12 @@ static int gr2d_probe(struct platform_device *pdev)
 	}
 
 	/* initialize address register map */
-	for (i = 0; i < ARRAY_SIZE(gr2d_addr_regs); i++)
+	for (i = 0; i < ARRAY_SIZE(gr2d_addr_regs); i++) {
 		set_bit(gr2d_addr_regs[i], gr2d->addr_regs);
+
+		/* reset registers value */
+		writel_relaxed(0x6DEAD000, regs + (gr2d_addr_regs[i] << 2));
+	}
 
 	platform_set_drvdata(pdev, gr2d);
 
