@@ -341,7 +341,9 @@ static int gr3d_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct host1x_syncpt **syncpts;
+	struct resource *res;
 	struct gr3d *gr3d;
+	void __iomem *regs;
 	unsigned int i;
 	int err;
 
@@ -413,6 +415,14 @@ static int gr3d_probe(struct platform_device *pdev)
 		}
 	}
 
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res)
+		return -ENXIO;
+
+	regs = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(regs))
+		return PTR_ERR(regs);
+
 	INIT_LIST_HEAD(&gr3d->client.base.list);
 	gr3d->client.base.ops = &gr3d_client_ops;
 	gr3d->client.base.dev = &pdev->dev;
@@ -433,8 +443,12 @@ static int gr3d_probe(struct platform_device *pdev)
 	}
 
 	/* initialize address register map */
-	for (i = 0; i < ARRAY_SIZE(gr3d_addr_regs); i++)
+	for (i = 0; i < ARRAY_SIZE(gr3d_addr_regs); i++) {
 		set_bit(gr3d_addr_regs[i], gr3d->addr_regs);
+
+		/* reset registers value */
+		writel_relaxed(0x6DEAD000, regs + (gr3d_addr_regs[i] << 2));
+	}
 
 	platform_set_drvdata(pdev, gr3d);
 
