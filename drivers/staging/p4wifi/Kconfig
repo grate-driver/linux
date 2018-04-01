@@ -1,0 +1,5 @@
+config P4WIFI
+	bool "Samsung Galaxy Tab 10.1 drivers"
+	default n
+	help
+	  Say Y to build Samsung Galaxy Tab 10.1 drivers.
