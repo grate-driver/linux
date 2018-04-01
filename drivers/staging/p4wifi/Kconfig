@@ -3,3 +3,19 @@ config P4WIFI
 	default n
 	help
 	  Say Y to build Samsung Galaxy Tab 10.1 drivers.
+
+if P4WIFI
+
+config SAMSUNG_JACK
+	bool "3.5MM ear jack driver for Samsung devices"
+	depends on INPUT && EXTCON
+	depends on STMPE_ADC
+	default n
+	help
+	 This is 3.5MM ear jack driver for Samsung devices.
+	 Please check configurations on board file,
+	 and you shoud check gpio_input driver is ready.
+
+	 If unsure, say N.
+
+endif # P4WIFI
