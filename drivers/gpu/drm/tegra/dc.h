@@ -17,12 +17,19 @@ struct tegra_output;
 
 #define TEGRA_DC_LEGACY_PLANES_NUM	6
 
+struct tegra_dc_color_key_state {
+	u32 min;
+	u32 max;
+};
+
 struct tegra_dc_state {
 	struct drm_crtc_state base;
 
 	struct clk *clk;
 	unsigned long pclk;
 	unsigned int div;
+
+	struct tegra_dc_color_key_state ckey;
 
 	u32 planes;
 
