@@ -167,6 +167,7 @@ static void tegra_plane_setup_blending_legacy(struct tegra_plane *plane)
 	u32 foreground = BLEND_WEIGHT1(255) | BLEND_WEIGHT0(255) |
 			 BLEND_COLOR_KEY_NONE;
 	u32 blendnokey = BLEND_WEIGHT1(255) | BLEND_WEIGHT0(255);
+	enum drm_plane_colorkey_mode mode;
 	struct tegra_plane_state *state;
 	u32 blending[2];
 	unsigned int i;
@@ -176,7 +177,15 @@ static void tegra_plane_setup_blending_legacy(struct tegra_plane *plane)
 	tegra_plane_writel(plane, foreground, DC_WIN_BLEND_1WIN);
 
 	state = to_tegra_plane_state(plane->base.state);
+	mode = plane->base.state->colorkey.mode;
 
+	/* setup color keying */
+	if (mode == DRM_PLANE_COLORKEY_MODE_TRANSPARENT) {
+		/* color key matched areas are transparent */
+		foreground = background[0] | BLEND_COLOR_KEY_0;
+	}
+
+	/* setup alpha blending */
 	if (state->opaque) {
 		/*
 		 * Since custom fix-weight blending isn't utilized and weight
@@ -982,6 +991,11 @@ static struct drm_plane *tegra_primary_plane_create(struct drm_device *drm,
 		dev_err(dc->dev, "failed to create rotation property: %d\n",
 			err);
 
+	if (dc->soc->has_legacy_blending)
+		drm_plane_create_colorkey_properties(&plane->base,
+				BIT(DRM_PLANE_COLORKEY_MODE_DISABLED) |
+				BIT(DRM_PLANE_COLORKEY_MODE_TRANSPARENT));
+
 	return &plane->base;
 }
 
@@ -1269,6 +1283,11 @@ static struct drm_plane *tegra_dc_overlay_plane_create(struct drm_device *drm,
 		dev_err(dc->dev, "failed to create rotation property: %d\n",
 			err);
 
+	if (dc->soc->has_legacy_blending)
+		drm_plane_create_colorkey_properties(&plane->base,
+				BIT(DRM_PLANE_COLORKEY_MODE_DISABLED) |
+				BIT(DRM_PLANE_COLORKEY_MODE_TRANSPARENT));
+
 	return &plane->base;
 }
 
@@ -1372,6 +1391,7 @@ tegra_crtc_atomic_duplicate_state(struct drm_crtc *crtc)
 	copy->div = state->div;
 	copy->planes = state->planes;
 	copy->memory_bandwidth = state->memory_bandwidth;
+	copy->ckey = state->ckey;
 
 	return &copy->base;
 }
@@ -2132,6 +2152,11 @@ static void tegra_crtc_atomic_flush(struct drm_crtc *crtc,
 	struct tegra_dc_state *state = to_dc_state(crtc->state);
 	struct tegra_dc *dc = to_tegra_dc(crtc);
 	u32 value;
+
+	if (dc->soc->has_legacy_blending) {
+		tegra_dc_writel(dc, state->ckey.min, DC_DISP_COLOR_KEY0_LOWER);
+		tegra_dc_writel(dc, state->ckey.max, DC_DISP_COLOR_KEY0_UPPER);
+	}
 
 	value = state->planes << 8 | GENERAL_UPDATE;
 	tegra_dc_writel(dc, value, DC_CMD_STATE_CONTROL);

@@ -569,6 +569,158 @@ static int tegra_plane_setup_transparency(struct tegra_plane *tegra,
 	return 0;
 }
 
+static u32 tegra_plane_colorkey_to_hw_format(u64 drm_ckey64)
+{
+	/* convert ARGB16161616 to ARGB8888 */
+	u8 a = drm_colorkey_extract_component(drm_ckey64, alpha, 8);
+	u8 r = drm_colorkey_extract_component(drm_ckey64, red, 8);
+	u8 g = drm_colorkey_extract_component(drm_ckey64, green, 8);
+	u8 b = drm_colorkey_extract_component(drm_ckey64, blue, 8);
+
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+static bool tegra_plane_format_valid_for_colorkey(struct drm_plane_state *state)
+{
+	struct tegra_plane_state *tegra_state = to_tegra_plane_state(state);
+
+	/*
+	 * Tegra20 does not support alpha channel matching. Newer Tegra's
+	 * support the alpha matching, but it is not implemented yet.
+	 *
+	 * Formats other than XRGB8888 haven't been tested much, hence they
+	 * are not supported for now.
+	 */
+	switch (tegra_state->format) {
+	case WIN_COLOR_DEPTH_R8G8B8X8:
+	case WIN_COLOR_DEPTH_B8G8R8X8:
+		break;
+
+	default:
+		return false;
+	};
+
+	return true;
+}
+
+static int tegra_plane_setup_colorkey(struct tegra_plane *tegra,
+				      struct tegra_plane_state *tegra_state)
+{
+	enum drm_plane_colorkey_mode mode;
+	struct drm_crtc_state *crtc_state;
+	struct tegra_dc_state *dc_state;
+	struct drm_plane_state *state;
+	struct drm_plane_state *old;
+	struct drm_plane_state *new;
+	struct drm_plane *plane;
+	unsigned int normalized_zpos;
+	u32 min_hw, max_hw, mask_hw;
+	u32 plane_mask;
+	u64 min, max;
+	u64 mask;
+
+	normalized_zpos = tegra_state->base.normalized_zpos;
+	plane_mask = tegra_state->base.colorkey.plane_mask;
+	mode = tegra_state->base.colorkey.mode;
+	mask = tegra_state->base.colorkey.mask;
+	min = tegra_state->base.colorkey.min;
+	max = tegra_state->base.colorkey.max;
+
+	/* convert color key values to HW format */
+	mask_hw = tegra_plane_colorkey_to_hw_format(mask);
+	min_hw = tegra_plane_colorkey_to_hw_format(min);
+	max_hw = tegra_plane_colorkey_to_hw_format(max);
+
+	state = &tegra_state->base;
+	old = drm_atomic_get_old_plane_state(state->state, &tegra->base);
+
+	/* no need to proceed if color keying state is unchanged */
+	if (old->colorkey.plane_mask == plane_mask &&
+	    old->colorkey.mask == mask &&
+	    old->colorkey.mode == mode &&
+	    old->colorkey.min == min &&
+	    old->colorkey.max == max &&
+	    old->crtc)
+	{
+		if (mode == DRM_PLANE_COLORKEY_MODE_DISABLED)
+			return 0;
+
+		crtc_state = drm_atomic_get_crtc_state(state->state,
+						       state->crtc);
+		if (IS_ERR(crtc_state))
+			return PTR_ERR(crtc_state);
+
+		if (!crtc_state->zpos_changed) {
+			dc_state = to_dc_state(crtc_state);
+
+			if (dc_state->ckey.min == min_hw &&
+			    dc_state->ckey.max == max_hw)
+				return 0;
+		}
+	}
+
+	/*
+	 * Currently color keying is implemented for the middle plane
+	 * only (source and destination) to simplify things, validate planes
+	 * position and mask.
+	 */
+	if (state->fb && mode != DRM_PLANE_COLORKEY_MODE_DISABLED) {
+		/*
+		 * Tegra does not support color key masking, note that alpha
+		 * channel mask is ignored because only opaque formats are
+		 * currently supported.
+		 */
+		if ((mask_hw & 0xffffff) != 0xffffff)
+			return -EINVAL;
+
+		drm_for_each_plane_mask(plane, tegra->base.dev, plane_mask) {
+			struct tegra_plane *p = to_tegra_plane(plane);
+
+			/* HW can't access planes on a different CRTC */
+			if (p->dc != tegra->dc)
+				return -EINVAL;
+
+			new = drm_atomic_get_plane_state(state->state, plane);
+			if (IS_ERR(new))
+				return PTR_ERR(new);
+
+			/* don't care about disabled plane */
+			if (!new->fb)
+				continue;
+
+			if (!tegra_plane_format_valid_for_colorkey(new))
+				return -EINVAL;
+
+			/* middle plane sourcing itself */
+			if (new->normalized_zpos == 1 &&
+			    normalized_zpos == 1)
+				continue;
+
+			return -EINVAL;
+		}
+	}
+
+	/* only middle plane affects the color key state, see comment above */
+	if (normalized_zpos != 1)
+		return 0;
+
+	/*
+	 * Tegra's HW has color key values stored within CRTC, hence adjust
+	 * planes CRTC atomic state.
+	 */
+	crtc_state = drm_atomic_get_crtc_state(state->state, state->crtc);
+	if (IS_ERR(crtc_state))
+		return PTR_ERR(crtc_state);
+
+	dc_state = to_dc_state(crtc_state);
+
+	/* update CRTC's color key state */
+	dc_state->ckey.min = min_hw;
+	dc_state->ckey.max = max_hw;
+
+	return 0;
+}
+
 int tegra_plane_setup_legacy_state(struct tegra_plane *tegra,
 				   struct tegra_plane_state *state)
 {
@@ -579,6 +731,10 @@ int tegra_plane_setup_legacy_state(struct tegra_plane *tegra,
 		return err;
 
 	err = tegra_plane_setup_transparency(tegra, state);
+	if (err < 0)
+		return err;
+
+	err = tegra_plane_setup_colorkey(tegra, state);
 	if (err < 0)
 		return err;
 
