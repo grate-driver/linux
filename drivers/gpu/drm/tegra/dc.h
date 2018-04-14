@@ -70,6 +70,7 @@ struct tegra_windowgroup_soc {
 };
 
 struct tegra_dc_soc_info {
+	bool has_win_a_csc;
 	bool supports_background_color;
 	bool supports_interlacing;
 	bool supports_cursor;
@@ -146,6 +147,16 @@ static inline u32 tegra_dc_readl(struct tegra_dc *dc, unsigned int offset)
 }
 
 struct tegra_dc_window {
+	struct {
+		unsigned int yof;
+		unsigned int kyrgb;
+		unsigned int kur;
+		unsigned int kvr;
+		unsigned int kug;
+		unsigned int kvg;
+		unsigned int kub;
+		unsigned int kvb;
+	} csc;
 	struct {
 		unsigned int x;
 		unsigned int y;

@@ -20,6 +20,12 @@ struct tegra_plane {
 
 	struct icc_path *icc_mem;
 	struct icc_path *icc_mem_vfilter;
+
+	struct {
+		struct drm_property *csc_blob;
+	} props;
+
+	struct drm_property_blob *csc_default;
 };
 
 struct tegra_cursor {
@@ -52,6 +58,8 @@ struct tegra_plane_state {
 
 	bool reflect_x;
 	bool reflect_y;
+
+	struct drm_property_blob *csc_blob;
 
 	/* used for legacy blending support only */
 	struct tegra_plane_legacy_blending_state blending[2];
