@@ -459,15 +459,15 @@ static void tegra_dc_setup_window(struct tegra_plane *plane,
 	value = WIN_ENABLE;
 
 	if (yuv) {
-		/* setup default colorspace conversion coefficients */
-		tegra_plane_writel(plane, 0x00f0, DC_WIN_CSC_YOF);
-		tegra_plane_writel(plane, 0x012a, DC_WIN_CSC_KYRGB);
-		tegra_plane_writel(plane, 0x0000, DC_WIN_CSC_KUR);
-		tegra_plane_writel(plane, 0x0198, DC_WIN_CSC_KVR);
-		tegra_plane_writel(plane, 0x039b, DC_WIN_CSC_KUG);
-		tegra_plane_writel(plane, 0x032f, DC_WIN_CSC_KVG);
-		tegra_plane_writel(plane, 0x0204, DC_WIN_CSC_KUB);
-		tegra_plane_writel(plane, 0x0000, DC_WIN_CSC_KVB);
+		/* setup colorspace conversion coefficients */
+		tegra_plane_writel(plane, window->csc.yof, DC_WIN_CSC_YOF);
+		tegra_plane_writel(plane, window->csc.kyrgb, DC_WIN_CSC_KYRGB);
+		tegra_plane_writel(plane, window->csc.kur, DC_WIN_CSC_KUR);
+		tegra_plane_writel(plane, window->csc.kvr, DC_WIN_CSC_KVR);
+		tegra_plane_writel(plane, window->csc.kug, DC_WIN_CSC_KUG);
+		tegra_plane_writel(plane, window->csc.kvg, DC_WIN_CSC_KVG);
+		tegra_plane_writel(plane, window->csc.kub, DC_WIN_CSC_KUB);
+		tegra_plane_writel(plane, window->csc.kvb, DC_WIN_CSC_KVB);
 
 		value |= CSC_ENABLE;
 	} else if (window->bits_per_pixel < 24) {
@@ -691,6 +691,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	struct drm_framebuffer *fb = plane->state->fb;
 	struct tegra_plane *p = to_tegra_plane(plane);
 	struct tegra_dc_window window;
+	const struct drm_tegra_plane_csc_blob *csc;
 	unsigned int i;
 
 	/* rien ne va plus */
@@ -730,6 +731,28 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 		 */
 		if (i < 2)
 			window.stride[i] = fb->pitches[i];
+	}
+
+	if (state->csc_blob) {
+		csc = state->csc_blob->data;
+
+		window.csc.yof = csc->yof;
+		window.csc.kyrgb = csc->kyrgb;
+		window.csc.kur = csc->kur;
+		window.csc.kvr = csc->kvr;
+		window.csc.kug = csc->kug;
+		window.csc.kvg = csc->kvg;
+		window.csc.kub = csc->kub;
+		window.csc.kvb = csc->kvb;
+	} else {
+		window.csc.yof = 0x00f0;
+		window.csc.kyrgb = 0x012a;
+		window.csc.kur = 0x0000;
+		window.csc.kvr = 0x0198;
+		window.csc.kug = 0x039b;
+		window.csc.kvg = 0x032f;
+		window.csc.kub = 0x0204;
+		window.csc.kvb = 0x0000;
 	}
 
 	tegra_dc_setup_window(p, &window);
@@ -857,6 +880,42 @@ static unsigned long tegra_plane_get_possible_crtcs(struct drm_device *drm)
 	return 1 << drm->mode_config.num_crtc;
 }
 
+static void tegra_plane_create_csc_property(struct tegra_plane *plane)
+{
+	/* set default colorspace conversion coefficients to ITU-R BT.601 */
+	struct drm_tegra_plane_csc_blob csc_bt601 = {
+		.yof   = 0x00f0,
+		.kyrgb = 0x012a,
+		.kur   = 0x0000,
+		.kvr   = 0x0198,
+		.kug   = 0x039b,
+		.kvg   = 0x032f,
+		.kub   = 0x0204,
+		.kvb   = 0x0000,
+	};
+	struct drm_property_blob *blob;
+
+	blob = drm_property_create_blob(plane->base.dev, sizeof(csc_bt601),
+					&csc_bt601);
+	if (!blob) {
+		dev_err(plane->dc->dev, "failed to create CSC BLOB\n");
+		return;
+	}
+
+	plane->props.csc_blob = drm_property_create(
+		plane->base.dev, DRM_MODE_PROP_BLOB, "YUV to RGB CSC", 0);
+
+	if (!plane->props.csc_blob) {
+		dev_err(plane->dc->dev, "failed to create CSC property\n");
+		drm_property_blob_put(blob);
+		return;
+	}
+
+	drm_object_attach_property(&plane->base.base, plane->props.csc_blob, 0);
+
+	plane->csc_default = blob;
+}
+
 static struct drm_plane *tegra_primary_plane_create(struct drm_device *drm,
 						    struct tegra_dc *dc)
 {
@@ -904,6 +963,9 @@ static struct drm_plane *tegra_primary_plane_create(struct drm_device *drm,
 		drm_plane_create_colorkey_properties(&plane->base,
 				BIT(DRM_PLANE_COLORKEY_MODE_DISABLED) |
 				BIT(DRM_PLANE_COLORKEY_MODE_TRANSPARENT));
+
+	if (dc->soc->has_win_a_csc)
+		tegra_plane_create_csc_property(plane);
 
 	return &plane->base;
 }
@@ -1183,6 +1245,7 @@ static struct drm_plane *tegra_dc_overlay_plane_create(struct drm_device *drm,
 
 	drm_plane_helper_add(&plane->base, &tegra_plane_helper_funcs);
 	drm_plane_create_zpos_property(&plane->base, plane->index, 0, 255);
+	tegra_plane_create_csc_property(plane);
 
 	err = drm_plane_create_rotation_property(&plane->base,
 						 DRM_MODE_ROTATE_0,
@@ -2265,6 +2328,7 @@ static const struct tegra_dc_soc_info tegra20_dc_soc_info = {
 	.modifiers = tegra20_modifiers,
 	.has_win_a_without_filters = true,
 	.has_win_c_without_vert_filter = true,
+	.has_win_a_csc = false,
 };
 
 static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
@@ -2284,6 +2348,7 @@ static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
 	.modifiers = tegra20_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.has_win_a_csc = false,
 };
 
 static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
@@ -2303,6 +2368,7 @@ static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
 	.modifiers = tegra20_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.has_win_a_csc = true,
 };
 
 static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
@@ -2322,6 +2388,7 @@ static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
 	.modifiers = tegra124_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.has_win_a_csc = true,
 };
 
 static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
@@ -2341,6 +2408,7 @@ static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
 	.modifiers = tegra124_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.has_win_a_csc = true,
 };
 
 static const struct tegra_windowgroup_soc tegra186_dc_wgrps[] = {

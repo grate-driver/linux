@@ -76,6 +76,7 @@ struct tegra_dc_soc_info {
 	const u64 *modifiers;
 	bool has_win_a_without_filters;
 	bool has_win_c_without_vert_filter;
+	bool has_win_a_csc;
 };
 
 struct tegra_dc {
@@ -144,6 +145,16 @@ struct tegra_dc_window {
 		unsigned int w;
 		unsigned int h;
 	} dst;
+	struct {
+		unsigned int yof;
+		unsigned int kyrgb;
+		unsigned int kur;
+		unsigned int kvr;
+		unsigned int kug;
+		unsigned int kvg;
+		unsigned int kub;
+		unsigned int kvb;
+	} csc;
 	unsigned int bits_per_pixel;
 	unsigned int stride[2];
 	unsigned long base[3];
