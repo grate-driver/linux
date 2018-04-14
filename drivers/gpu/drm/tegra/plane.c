@@ -17,6 +17,9 @@ static void tegra_plane_destroy(struct drm_plane *plane)
 {
 	struct tegra_plane *p = to_tegra_plane(plane);
 
+	if (p->csc_default)
+		drm_property_blob_put(p->csc_default);
+
 	drm_plane_cleanup(plane);
 	kfree(p);
 }
@@ -38,6 +41,9 @@ static void tegra_plane_reset(struct drm_plane *plane)
 		plane->state->plane = plane;
 		plane->state->zpos = p->index;
 		plane->state->normalized_zpos = p->index;
+
+		if (p->csc_default)
+			state->csc_blob = drm_property_blob_get(p->csc_default);
 	}
 }
 
@@ -63,14 +69,68 @@ tegra_plane_atomic_duplicate_state(struct drm_plane *plane)
 	for (i = 0; i < 2; i++)
 		copy->blending[i] = state->blending[i];
 
+	if (state->csc_blob)
+		copy->csc_blob = drm_property_blob_get(state->csc_blob);
+	else
+		copy->csc_blob = NULL;
+
 	return &copy->base;
 }
 
 static void tegra_plane_atomic_destroy_state(struct drm_plane *plane,
 					     struct drm_plane_state *state)
 {
+	struct tegra_plane_state *tegra = to_tegra_plane_state(state);
+
+	if (tegra->csc_blob)
+		drm_property_blob_put(tegra->csc_blob);
+
 	__drm_atomic_helper_plane_destroy_state(state);
 	kfree(state);
+}
+
+static int tegra_plane_set_property(struct drm_plane *plane,
+				    struct drm_plane_state *state,
+				    struct drm_property *property,
+				    uint64_t value)
+{
+	struct tegra_plane_state *tegra_state = to_tegra_plane_state(state);
+	struct tegra_plane *tegra = to_tegra_plane(plane);
+	struct drm_property_blob *blob;
+
+	if (property == tegra->props.csc_blob) {
+		blob = drm_property_lookup_blob(plane->dev, value);
+		if (!blob)
+			return -EINVAL;
+
+		if (blob->length != sizeof(struct drm_tegra_plane_csc_blob)) {
+			drm_property_blob_put(blob);
+			return -EINVAL;
+		}
+
+		drm_property_blob_put(tegra_state->csc_blob);
+		tegra_state->csc_blob = blob;
+	} else {
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int tegra_plane_get_property(struct drm_plane *plane,
+				    const struct drm_plane_state *state,
+				    struct drm_property *property,
+				    uint64_t *value)
+{
+	struct tegra_plane_state *tegra_state = to_tegra_plane_state(state);
+	struct tegra_plane *tegra = to_tegra_plane(plane);
+
+	if (property == tegra->props.csc_blob)
+		*value = tegra_state->csc_blob->base.id;
+	else
+		return -EINVAL;
+
+	return 0;
 }
 
 const struct drm_plane_funcs tegra_plane_funcs = {
@@ -80,6 +140,8 @@ const struct drm_plane_funcs tegra_plane_funcs = {
 	.reset = tegra_plane_reset,
 	.atomic_duplicate_state = tegra_plane_atomic_duplicate_state,
 	.atomic_destroy_state = tegra_plane_atomic_destroy_state,
+	.atomic_set_property = tegra_plane_set_property,
+	.atomic_get_property = tegra_plane_get_property,
 };
 
 static int tegra_dc_pin(struct tegra_dc *dc, struct tegra_plane_state *state)
@@ -724,4 +786,10 @@ void tegra_plane_copy_state(struct drm_plane *plane,
 
 	for (i = 0; i < 2; i++)
 		tegra->blending[i] = tegra_new->blending[i];
+
+	if (tegra->csc_blob != tegra_new->csc_blob) {
+		drm_property_blob_put(tegra->csc_blob);
+
+		tegra->csc_blob = drm_property_blob_get(tegra_new->csc_blob);
+	}
 }

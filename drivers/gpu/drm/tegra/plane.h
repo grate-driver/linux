@@ -16,6 +16,12 @@ struct tegra_plane {
 	struct tegra_dc *dc;
 	unsigned int offset;
 	unsigned int index;
+
+	struct {
+		struct drm_property *csc_blob;
+	} props;
+
+	struct drm_property_blob *csc_default;
 };
 
 struct tegra_cursor {
@@ -53,6 +59,8 @@ struct tegra_plane_state {
 	bool opaque;
 
 	unsigned long memory_bandwidth;
+
+	struct drm_property_blob *csc_blob;
 };
 
 static inline struct tegra_plane_state *
