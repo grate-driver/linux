@@ -29,6 +29,17 @@
 extern "C" {
 #endif
 
+struct drm_tegra_plane_csc_blob {
+	__u32 yof;
+	__u32 kyrgb;
+	__u32 kur;
+	__u32 kvr;
+	__u32 kug;
+	__u32 kvg;
+	__u32 kub;
+	__u32 kvb;
+};
+
 #define DRM_TEGRA_GEM_CREATE_TILED			(1 << 0)
 #define DRM_TEGRA_GEM_CREATE_BOTTOM_UP			(1 << 1)
 #define DRM_TEGRA_GEM_CREATE_HOST1X_GATHER		(1 << 2)
