@@ -569,6 +569,13 @@ static int tps6586x_i2c_probe(struct i2c_client *client,
 		pm_power_off = tps6586x_power_off;
 	}
 
+	/*
+	 * Disable Charger LDO mode, Dynamic Timer Function
+	 * #define TPS6586X_CHG2		0x4A
+	 */
+	if (of_machine_is_compatible("samsung,p4wifi"))
+		tps6586x_write(tps6586x->dev, 0x4A, 0x00);
+
 	return 0;
 
 err_add_devs:
