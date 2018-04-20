@@ -425,6 +425,9 @@ static int tegra_vde_setup_hw_context(struct tegra_vde *vde,
 
 	tegra_vde_writel(vde, bitstream_data_addr, vde->sxe, 0x6C);
 
+	if (vde->soc->supports_ref_pic_marking)
+		tegra_vde_writel(vde, vde->secure_bo->dmaaddr, vde->sxe, 0x7c);
+
 	value = 0x10000005;
 	value |= ctx->pic_width_in_mbs << 11;
 	value |= ctx->pic_height_in_mbs << 3;
@@ -978,6 +981,83 @@ release_mc_reset:
 	return err;
 }
 
+static struct tegra_vde_bo *tegra_vde_alloc_bo(struct tegra_vde *vde,
+					       size_t size)
+{
+	struct device *dev = vde->miscdev.parent;
+	unsigned long dma_attrs = 0;
+	struct tegra_vde_bo *bo;
+	int err;
+
+	bo = kzalloc(sizeof(*bo), GFP_KERNEL);
+	if (!bo)
+		return NULL;
+
+	dma_attrs |= DMA_ATTR_WRITE_COMBINE;
+	dma_attrs |= DMA_ATTR_NO_KERNEL_MAPPING;
+
+	if (!vde->domain)
+		dma_attrs |= DMA_ATTR_FORCE_CONTIGUOUS;
+
+	bo->vde = vde;
+	bo->size = size;
+	bo->dma_attrs = dma_attrs;
+	bo->dma_cookie = dma_alloc_attrs(dev, bo->size,
+					 &bo->paddr, GFP_KERNEL,
+					 dma_attrs | DMA_ATTR_NO_WARN);
+	if (!bo->dma_cookie)
+		goto free_bo;
+
+	bo->sgt = kmalloc(sizeof(*bo->sgt), GFP_KERNEL);
+	if (!bo->sgt)
+		goto free_attrs;
+
+	err = dma_get_sgtable(dev, bo->sgt, bo->dma_cookie, bo->paddr, bo->size);
+	if (err < 0)
+		goto free_sgt;
+
+	if (vde->domain) {
+		err = tegra_vde_iommu_map(vde, bo->sgt, &bo->iova, bo->size);
+		if (err)
+			goto free_table;
+
+		bo->dmaaddr = iova_dma_addr(&vde->iova, bo->iova);
+	} else {
+		bo->dmaaddr = sg_dma_address(bo->sgt->sgl);
+	}
+
+	return bo;
+
+free_table:
+	sg_free_table(bo->sgt);
+free_sgt:
+	kfree(bo->sgt);
+free_attrs:
+	dma_free_attrs(dev, bo->size, bo->dma_cookie, bo->paddr, bo->dma_attrs);
+free_bo:
+	kfree(bo);
+
+	dev_err(dev, "Failed to allocate DMA buffer of size: %zu\n", size);
+
+	return NULL;
+}
+
+static void tegra_vde_free_bo(struct tegra_vde_bo *bo)
+{
+	struct tegra_vde *vde = bo->vde;
+	struct device *dev = vde->miscdev.parent;
+
+	if (vde->domain)
+		tegra_vde_iommu_unmap(bo->vde, bo->iova);
+
+	sg_free_table(bo->sgt);
+	kfree(bo->sgt);
+
+	dma_free_attrs(dev, bo->size, bo->dma_cookie, bo->paddr,
+		       bo->dma_attrs);
+	kfree(bo);
+}
+
 static int tegra_vde_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -989,6 +1069,8 @@ static int tegra_vde_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	platform_set_drvdata(pdev, vde);
+
+	vde->soc = of_device_get_match_data(&pdev->dev);
 
 	vde->sxe = devm_platform_ioremap_resource_byname(pdev, "sxe");
 	if (IS_ERR(vde->sxe))
@@ -1115,6 +1197,12 @@ static int tegra_vde_probe(struct platform_device *pdev)
 
 	pm_runtime_put(dev);
 
+	vde->secure_bo = tegra_vde_alloc_bo(vde, 4096);
+	if (!vde->secure_bo) {
+		dev_err(dev, "Could not allocate secure BO\n");
+		goto err_pm_runtime;
+	}
+
 	return 0;
 
 err_pm_runtime:
@@ -1137,6 +1225,8 @@ static int tegra_vde_remove(struct platform_device *pdev)
 {
 	struct tegra_vde *vde = platform_get_drvdata(pdev);
 	struct device *dev = &pdev->dev;
+
+	tegra_vde_free_bo(vde->secure_bo);
 
 	/*
 	 * As it increments RPM usage_count even on errors, we don't need to
@@ -1210,8 +1300,27 @@ static const struct dev_pm_ops tegra_vde_pm_ops = {
 				tegra_vde_pm_resume)
 };
 
+static const struct tegra_vde_soc tegra124_vde_soc = {
+	.supports_ref_pic_marking = true,
+};
+
+static const struct tegra_vde_soc tegra114_vde_soc = {
+	.supports_ref_pic_marking = true,
+};
+
+static const struct tegra_vde_soc tegra30_vde_soc = {
+	.supports_ref_pic_marking = false,
+};
+
+static const struct tegra_vde_soc tegra20_vde_soc = {
+	.supports_ref_pic_marking = false,
+};
+
 static const struct of_device_id tegra_vde_of_match[] = {
-	{ .compatible = "nvidia,tegra20-vde", },
+	{ .compatible = "nvidia,tegra124-vde", .data = &tegra124_vde_soc },
+	{ .compatible = "nvidia,tegra114-vde", .data = &tegra114_vde_soc },
+	{ .compatible = "nvidia,tegra30-vde", .data = &tegra30_vde_soc },
+	{ .compatible = "nvidia,tegra20-vde", .data = &tegra20_vde_soc },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, tegra_vde_of_match);
