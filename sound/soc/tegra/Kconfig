@@ -151,6 +151,15 @@ config SND_SOC_TEGRA_WM8903
 	  boards using the WM8093 codec. Currently, the supported boards are
 	  Harmony, Ventana, Seaboard, Kaen, and Aebl.
 
+config SND_SOC_TEGRA_WM8994
+	tristate "SoC Audio support for Tegra boards using a WM8994 codec"
+	depends on SND_SOC_TEGRA && I2C && GPIOLIB
+	select SND_SOC_WM8994
+	help
+	  Say Y or M here if you want to add support for SoC audio on Tegra
+	  boards using the WM8994 codec. Currently, the supported boards are
+	  Samsung P3.
+
 config SND_SOC_TEGRA_WM9712
 	tristate "SoC Audio support for Tegra boards using a WM9712 codec"
 	depends on SND_SOC_TEGRA && GPIOLIB
