@@ -71,6 +71,12 @@ static int tegra_machine_event(struct snd_soc_dapm_widget *w,
 	struct snd_soc_dapm_context *dapm = w->dapm;
 	struct tegra_machine *machine = snd_soc_card_get_drvdata(dapm->card);
 
+	if (machine->asoc->dapm_event) {
+		int ret = machine->asoc->dapm_event(w, k, event);
+		if (ret <= 0)
+			return ret;
+	}
+
 	if (!strcmp(w->name, "Int Spk") || !strcmp(w->name, "Speakers"))
 		gpiod_set_value_cansleep(machine->gpiod_spkr_en,
 					 SND_SOC_DAPM_EVENT_ON(event));
@@ -412,6 +418,11 @@ int tegra_asoc_machine_probe(struct platform_device *pdev)
 
 	gpiod = devm_gpiod_get_optional(dev, "nvidia,ext-mic-en", GPIOD_OUT_LOW);
 	machine->gpiod_ext_mic_en = gpiod;
+	if (IS_ERR(gpiod))
+		return PTR_ERR(gpiod);
+
+	gpiod = devm_gpiod_get_optional(dev, "nvidia,ear-sel-en", GPIOD_OUT_LOW);
+	machine->gpiod_ear_sel = gpiod;
 	if (IS_ERR(gpiod))
 		return PTR_ERR(gpiod);
 
