@@ -5,13 +5,17 @@
 
 struct clk;
 struct gpio_desc;
+struct snd_kcontrol;
 struct snd_soc_card;
 struct snd_soc_jack;
 struct platform_device;
 struct snd_soc_jack_gpio;
 struct snd_soc_pcm_runtime;
+struct snd_soc_dapm_widget;
 
 struct tegra_asoc_data {
+	int (*dapm_event)(struct snd_soc_dapm_widget *w,
+			  struct snd_kcontrol *k, int event);
 	unsigned int (*mclk_rate)(unsigned int srate);
 	struct snd_soc_card *card;
 	unsigned int mclk_id;
