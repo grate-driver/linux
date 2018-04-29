@@ -110,15 +110,17 @@ static bool tegra_bo_mm_evict_something(struct tegra_drm *tegra,
 	struct drm_mm_scan scan;
 	struct tegra_bo *tmp;
 	struct tegra_bo *bo;
+	unsigned long order;
 	bool found = false;
 
 	eviction_list = &tegra->mm_eviction_list;
+	order = __ffs(tegra->domain->pgsize_bitmap);
 
 	if (list_empty(eviction_list))
 		return false;
 
 	drm_mm_scan_init(&scan, &tegra->mm, size,
-			 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
+			 1UL << order, 0, DRM_MM_INSERT_BEST);
 
 	list_for_each_entry_safe(bo, tmp, eviction_list, mm_eviction_entry) {
 		/* move BO from eviction to scan list */
@@ -156,6 +158,7 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 				     struct tegra_bo *bo,
 				     dma_addr_t *addr)
 {
+	unsigned long order = __ffs(tegra->domain->pgsize_bitmap);
 	LIST_HEAD(victims_list);
 	size_t unmapped;
 	int prot = IOMMU_READ | IOMMU_WRITE;
@@ -172,7 +175,7 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 		goto mm_unlock;
 
 	err = drm_mm_insert_node_generic(&tegra->mm, bo->mm, bo->gem.size,
-					 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
+					 1UL << order, 0, DRM_MM_INSERT_BEST);
 	if (!err)
 		goto mm_ok;
 
@@ -195,7 +198,7 @@ static int tegra_bo_iommu_cached_map(struct tegra_drm *tegra,
 	 * should succeed.
 	 */
 	err = drm_mm_insert_node_generic(&tegra->mm, bo->mm, bo->gem.size,
-					 PAGE_SIZE, 0, DRM_MM_INSERT_BEST);
+					 1UL << order, 0, DRM_MM_INSERT_BEST);
 	if (err < 0)
 		goto mm_err;
 mm_ok:
@@ -371,6 +374,7 @@ static const struct host1x_bo_ops tegra_bo_ops = {
 
 static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 {
+	unsigned long order = __ffs(tegra->domain->pgsize_bitmap);
 	int prot = IOMMU_READ | IOMMU_WRITE;
 	int err;
 
@@ -390,8 +394,8 @@ static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 
 	mutex_lock(&tegra->mm_lock);
 
-	err = drm_mm_insert_node_generic(&tegra->mm,
-					 bo->mm, bo->gem.size, PAGE_SIZE, 0, 0);
+	err = drm_mm_insert_node_generic(&tegra->mm, bo->mm, bo->gem.size,
+					 1UL << order, 0, 0);
 	if (err < 0) {
 		dev_err(tegra->drm->dev, "out of I/O virtual memory: %d\n",
 			err);
