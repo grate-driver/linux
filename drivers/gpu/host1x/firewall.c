@@ -150,9 +150,11 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 				 struct device *dev)
 {
 	struct host1x_firewall fw;
+	dma_addr_t dma_addr;
 	size_t offset = 0;
 	size_t size = 0;
 	unsigned int i, k;
+	int err;
 
 	fw.dev = dev;
 	fw.job = job;
@@ -164,22 +166,54 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 	for (i = 0; i < job->num_gathers; i++)
 		size += job->gathers[i].words * sizeof(u32);
 
+	if (host->domain)
+		size = iova_align(&host->iova, size);
+
 	/*
 	 * Try a non-blocking allocation from a higher priority pools first,
 	 * as awaiting for the allocation here is a major performance hit.
 	 */
-	job->gather_copy_mapped = dma_alloc_wc(dev, size, &job->gather_copy,
+	job->gather_copy_mapped = dma_alloc_wc(dev, size,
+					       &job->gather_copy_phys,
 					       GFP_NOWAIT);
 
 	/* the higher priority allocation failed, try the generic-blocking */
 	if (!job->gather_copy_mapped)
 		job->gather_copy_mapped = dma_alloc_wc(dev, size,
-						       &job->gather_copy,
+						       &job->gather_copy_phys,
 						       GFP_KERNEL);
 	if (!job->gather_copy_mapped)
 		return -ENOMEM;
 
 	job->gather_copy_size = size;
+
+	if (host->domain) {
+		unsigned long shift;
+
+		shift = iova_shift(&host->iova);
+		job->gather_copy_iova_alloc = alloc_iova(
+					&host->iova, size >> shift,
+					host->iova_end >> shift, true);
+		if (!job->gather_copy_iova_alloc)
+			return -ENOMEM;
+
+		job->gather_copy_iova = iova_dma_addr(
+				&host->iova, job->gather_copy_iova_alloc);
+
+		err = iommu_map(host->domain,
+				job->gather_copy_iova,
+				job->gather_copy_phys,
+				size, IOMMU_READ);
+		if (err) {
+			__free_iova(&host->iova, job->gather_copy_iova_alloc);
+			job->gather_copy_iova_alloc = NULL;
+			return err;
+		}
+
+		dma_addr = job->gather_copy_iova;
+	} else {
+		dma_addr = job->gather_copy_phys;
+	}
 
 	host1x_debug_output_lock();
 
@@ -194,7 +228,7 @@ int host1x_firewall_copy_gathers(struct host1x *host, struct host1x_job *job,
 		host1x_bo_munmap(g->bo, gather);
 
 		/* Store the location in the buffer */
-		g->base = job->gather_copy;
+		g->base = dma_addr;
 		g->offset = offset;
 
 		/* Validate jobs gather */

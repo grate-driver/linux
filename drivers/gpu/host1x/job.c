@@ -363,9 +363,20 @@ void host1x_job_unpin(struct host1x_job *job)
 		host1x_bo_put(unpin->bo);
 	}
 
-	if (job->gather_copy_size)
+	if (job->gather_copy_size) {
 		dma_free_wc(job->channel->dev, job->gather_copy_size,
-			    job->gather_copy_mapped, job->gather_copy);
+			    job->gather_copy_mapped, job->gather_copy_phys);
+
+		if (job->gather_copy_iova_alloc) {
+			iommu_unmap(host->domain,
+				    job->gather_copy_iova,
+				    job->gather_copy_size);
+
+			__free_iova(&host->iova, job->gather_copy_iova_alloc);
+
+			job->gather_copy_iova_alloc = NULL;
+		}
+	}
 
 	if (job->syncpt)
 		host1x_syncpt_put(job->syncpt);
