@@ -762,6 +762,8 @@ static int tegra_plane_prepare_fb(struct drm_plane *plane,
 				  struct drm_plane_state *new_state)
 {
 	struct drm_framebuffer *fb = new_state->fb;
+	struct tegra_plane *p = to_tegra_plane(plane);
+	struct tegra_dc *dc = p->dc;
 	struct tegra_bo *bo;
 	unsigned int i;
 	int err;
@@ -772,9 +774,19 @@ static int tegra_plane_prepare_fb(struct drm_plane *plane,
 	for (i = 0; i < fb->format->num_planes; i++) {
 		bo = tegra_fb_get_plane(fb, i);
 
-		err = host1x_bo_pin(&bo->base, &bo->dmaaddr, &bo->sgt);
-		if (err)
-			goto err_cleanup;
+		/*
+		 * Tegra20 uses GART for IOMMU mappings, it doesn't prevent
+		 * HW from accessing phys memory and GART in the same time.
+		 * Hence DC can bypass pinning of contiguous BO's, saving
+		 * GART's aperture space.
+		 */
+		if (dc->soc->has_gart && !bo->pages) {
+			bo->dmaaddr = bo->paddr;
+		} else {
+			err = host1x_bo_pin(&bo->base, &bo->dmaaddr, &bo->sgt);
+			if (err)
+				goto err_cleanup;
+		}
 	}
 
 	return 0;
@@ -782,7 +794,9 @@ static int tegra_plane_prepare_fb(struct drm_plane *plane,
 err_cleanup:
 	while (i--) {
 		bo = tegra_fb_get_plane(fb, i);
-		host1x_bo_unpin(&bo->base, bo->sgt);
+
+		if (!dc->soc->has_gart || bo->pages)
+			host1x_bo_unpin(&bo->base, bo->sgt);
 	}
 
 	return err;
@@ -792,6 +806,8 @@ static void tegra_plane_cleanup_fb(struct drm_plane *plane,
 				   struct drm_plane_state *old_state)
 {
 	struct drm_framebuffer *fb = old_state->fb;
+	struct tegra_plane *p = to_tegra_plane(plane);
+	struct tegra_dc *dc = p->dc;
 	struct tegra_bo *bo;
 	unsigned int i;
 
@@ -800,7 +816,9 @@ static void tegra_plane_cleanup_fb(struct drm_plane *plane,
 
 	for (i = 0; i < fb->format->num_planes; i++) {
 		bo = tegra_fb_get_plane(fb, i);
-		host1x_bo_unpin(&bo->base, bo->sgt);
+
+		if (!dc->soc->has_gart || bo->pages)
+			host1x_bo_unpin(&bo->base, bo->sgt);
 	}
 }
 
@@ -2329,6 +2347,7 @@ static const struct tegra_dc_soc_info tegra20_dc_soc_info = {
 	.has_win_a_without_filters = true,
 	.has_win_c_without_vert_filter = true,
 	.has_win_a_csc = false,
+	.has_gart = true,
 };
 
 static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
@@ -2349,6 +2368,7 @@ static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
 	.has_win_a_csc = false,
+	.has_gart = false,
 };
 
 static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
@@ -2369,6 +2389,7 @@ static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
 	.has_win_a_csc = true,
+	.has_gart = false,
 };
 
 static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
@@ -2389,6 +2410,7 @@ static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
 	.has_win_a_csc = true,
+	.has_gart = false,
 };
 
 static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
@@ -2409,6 +2431,7 @@ static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
 	.has_win_a_csc = true,
+	.has_gart = false,
 };
 
 static const struct tegra_windowgroup_soc tegra186_dc_wgrps[] = {

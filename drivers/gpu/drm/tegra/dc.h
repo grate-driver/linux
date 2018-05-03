@@ -77,6 +77,7 @@ struct tegra_dc_soc_info {
 	bool has_win_a_without_filters;
 	bool has_win_c_without_vert_filter;
 	bool has_win_a_csc;
+	bool has_gart;
 };
 
 struct tegra_dc {
