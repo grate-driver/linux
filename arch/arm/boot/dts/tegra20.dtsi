@@ -101,6 +101,8 @@
 			resets = <&tegra_car 21>, <&mc TEGRA20_MC_RESET_2D>;
 			reset-names = "2d", "mc";
 			power-domains = <&pd_core>;
+
+			iommus = <&mc>;
 		};
 
 		gr3d@54180000 {
@@ -110,6 +112,8 @@
 			resets = <&tegra_car 24>, <&mc TEGRA20_MC_RESET_3D>;
 			reset-names = "3d", "mc";
 			power-domains = <&pd_3d>;
+
+			iommus = <&mc>;
 		};
 
 		dc@54200000 {
@@ -135,6 +139,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
@@ -164,6 +170,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
