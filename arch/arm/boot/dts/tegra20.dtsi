@@ -93,6 +93,8 @@
 			resets = <&tegra_car 21>;
 			reset-names = "2d";
 			operating-points-v2 = <&gr2d_dvfs_opp_table>;
+
+			iommus = <&mc>;
 		};
 
 		gr3d@54180000 {
@@ -102,6 +104,8 @@
 			resets = <&tegra_car 24>;
 			reset-names = "3d";
 			operating-points-v2 = <&gr3d_dvfs_opp_table>;
+
+			iommus = <&mc>;
 		};
 
 		dc@54200000 {
@@ -127,6 +131,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
@@ -156,6 +162,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
