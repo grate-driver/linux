@@ -89,6 +89,8 @@
 			clocks = <&tegra_car TEGRA20_CLK_GR2D>;
 			resets = <&tegra_car 21>;
 			reset-names = "2d";
+
+			iommus = <&mc>;
 		};
 
 		gr3d@54180000 {
@@ -97,6 +99,8 @@
 			clocks = <&tegra_car TEGRA20_CLK_GR3D>;
 			resets = <&tegra_car 24>;
 			reset-names = "3d";
+
+			iommus = <&mc>;
 		};
 
 		dc@54200000 {
@@ -121,6 +125,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
@@ -149,6 +155,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
