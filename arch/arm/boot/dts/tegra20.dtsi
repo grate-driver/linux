@@ -99,6 +99,8 @@
 			reset-names = "mc", "2d";
 			operating-points-v2 = <&gr2d_dvfs_opp_table>;
 			power-domains = <&pd_core>;
+
+			iommus = <&mc>;
 		};
 
 		gr3d@54180000 {
@@ -109,6 +111,8 @@
 			reset-names = "mc", "3d";
 			operating-points-v2 = <&gr3d_dvfs_opp_table>;
 			power-domains = <&pd_3d>;
+
+			iommus = <&mc>;
 		};
 
 		dc@54200000 {
@@ -135,6 +139,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
@@ -165,6 +171,8 @@
 					     "winb-vfilter",
 					     "winc",
 					     "cursor";
+
+			iommus = <&mc>;
 
 			rgb {
 				status = "disabled";
