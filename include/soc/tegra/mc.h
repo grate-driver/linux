@@ -35,10 +35,13 @@ struct tegra_mc_la {
 	unsigned int def;
 };
 
+#define TEGRA_MC_CLIENT_NO_RESET	UINT_MAX
+
 struct tegra_mc_client {
 	unsigned int id;
 	const char *name;
 	unsigned int swgroup;
+	unsigned int reset_id;
 
 	unsigned int fifo_size;
 
