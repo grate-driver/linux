@@ -12,6 +12,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 		.id = 0x00,
 		.name = "ptcr",
 		.swgroup = TEGRA_SWGROUP_PTC,
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x01,
 		.name = "display0a",
@@ -28,6 +29,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x02,
 		.name = "display0ab",
@@ -44,6 +46,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x03,
 		.name = "display0b",
@@ -60,6 +63,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x04,
 		.name = "display0bb",
@@ -76,6 +80,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x05,
 		.name = "display0c",
@@ -92,6 +97,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x06,
 		.name = "display0cb",
@@ -108,6 +114,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x0e,
 		.name = "afir",
@@ -124,6 +131,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x2e,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_AFI,
 	}, {
 		.id = 0x0f,
 		.name = "avpcarm7r",
@@ -140,6 +148,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x04,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x10,
 		.name = "displayhc",
@@ -156,6 +165,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x11,
 		.name = "displayhcb",
@@ -172,6 +182,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x15,
 		.name = "hdar",
@@ -188,6 +199,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x24,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x16,
 		.name = "host1xdmar",
@@ -204,6 +216,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_HC,
 	}, {
 		.id = 0x17,
 		.name = "host1xr",
@@ -220,6 +233,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x50,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_HC,
 	}, {
 		.id = 0x1c,
 		.name = "nvencsrd",
@@ -236,6 +250,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x23,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_NVENC,
 	}, {
 		.id = 0x1d,
 		.name = "ppcsahbdmar",
@@ -252,6 +267,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x49,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x1e,
 		.name = "ppcsahbslvr",
@@ -268,6 +284,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1a,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x1f,
 		.name = "satar",
@@ -284,6 +301,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x65,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SATA,
 	}, {
 		.id = 0x27,
 		.name = "mpcorer",
@@ -296,6 +314,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x04,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x2b,
 		.name = "nvencswr",
@@ -312,6 +331,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_NVENC,
 	}, {
 		.id = 0x31,
 		.name = "afiw",
@@ -328,6 +348,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_AFI,
 	}, {
 		.id = 0x32,
 		.name = "avpcarm7w",
@@ -344,6 +365,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x35,
 		.name = "hdaw",
@@ -360,6 +382,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x36,
 		.name = "host1xw",
@@ -376,6 +399,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_HC,
 	}, {
 		.id = 0x39,
 		.name = "mpcorew",
@@ -388,6 +412,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x3b,
 		.name = "ppcsahbdmaw",
@@ -404,6 +429,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x3c,
 		.name = "ppcsahbslvw",
@@ -420,6 +446,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x3d,
 		.name = "sataw",
@@ -436,6 +463,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SATA,
 	}, {
 		.id = 0x44,
 		.name = "ispra",
@@ -452,6 +480,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x18,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_ISP2,
 	}, {
 		.id = 0x46,
 		.name = "ispwa",
@@ -468,6 +497,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_ISP2,
 	}, {
 		.id = 0x47,
 		.name = "ispwb",
@@ -484,6 +514,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_ISP2,
 	}, {
 		.id = 0x4a,
 		.name = "xusb_hostr",
@@ -500,6 +531,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x7a,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_XUSB_HOST,
 	}, {
 		.id = 0x4b,
 		.name = "xusb_hostw",
@@ -516,6 +548,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_XUSB_HOST,
 	}, {
 		.id = 0x4c,
 		.name = "xusb_devr",
@@ -532,6 +565,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x39,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_XUSB_DEV,
 	}, {
 		.id = 0x4d,
 		.name = "xusb_devw",
@@ -548,6 +582,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_XUSB_DEV,
 	}, {
 		.id = 0x4e,
 		.name = "isprab",
@@ -564,6 +599,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x18,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_ISP2B,
 	}, {
 		.id = 0x50,
 		.name = "ispwab",
@@ -580,6 +616,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_ISP2B,
 	}, {
 		.id = 0x51,
 		.name = "ispwbb",
@@ -596,6 +633,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_ISP2B,
 	}, {
 		.id = 0x54,
 		.name = "tsecsrd",
@@ -612,6 +650,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x9b,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x55,
 		.name = "tsecswr",
@@ -628,6 +667,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x56,
 		.name = "a9avpscr",
@@ -644,6 +684,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x04,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x57,
 		.name = "a9avpscw",
@@ -660,6 +701,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x58,
 		.name = "gpusrd",
@@ -677,6 +719,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1a,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x59,
 		.name = "gpuswr",
@@ -694,6 +737,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x5a,
 		.name = "displayt",
@@ -710,6 +754,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x60,
 		.name = "sdmmcra",
@@ -726,6 +771,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x49,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC1,
 	}, {
 		.id = 0x61,
 		.name = "sdmmcraa",
@@ -742,6 +788,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x5a,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC2,
 	}, {
 		.id = 0x62,
 		.name = "sdmmcr",
@@ -758,6 +805,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x49,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC3,
 	}, {
 		.id = 0x63,
 		.swgroup = TEGRA_SWGROUP_SDMMC4A,
@@ -774,6 +822,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x5a,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC4,
 	}, {
 		.id = 0x64,
 		.name = "sdmmcwa",
@@ -790,6 +839,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC1,
 	}, {
 		.id = 0x65,
 		.name = "sdmmcwaa",
@@ -806,6 +856,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC2,
 	}, {
 		.id = 0x66,
 		.name = "sdmmcw",
@@ -822,6 +873,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC3,
 	}, {
 		.id = 0x67,
 		.name = "sdmmcwab",
@@ -838,6 +890,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_SDMMC4,
 	}, {
 		.id = 0x6c,
 		.name = "vicsrd",
@@ -854,6 +907,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1a,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_VIC,
 	}, {
 		.id = 0x6d,
 		.name = "vicswr",
@@ -870,6 +924,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_VIC,
 	}, {
 		.id = 0x72,
 		.name = "viw",
@@ -886,6 +941,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_VI,
 	}, {
 		.id = 0x73,
 		.name = "displayd",
@@ -902,6 +958,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x50,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_DC,
 	}, {
 		.id = 0x78,
 		.name = "nvdecsrd",
@@ -918,6 +975,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x23,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_NVDEC,
 	}, {
 		.id = 0x79,
 		.name = "nvdecswr",
@@ -934,6 +992,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_NVDEC,
 	}, {
 		.id = 0x7a,
 		.name = "aper",
@@ -950,6 +1009,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0xff,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_APE,
 	}, {
 		.id = 0x7b,
 		.name = "apew",
@@ -966,6 +1026,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_APE,
 	}, {
 		.id = 0x7e,
 		.name = "nvjpgsrd",
@@ -982,6 +1043,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x23,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_NVJPG,
 	}, {
 		.id = 0x7f,
 		.name = "nvjpgswr",
@@ -998,6 +1060,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA210_MC_RESET_NVJPG,
 	}, {
 		.id = 0x80,
 		.name = "sesrd",
@@ -1014,6 +1077,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x2e,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x81,
 		.name = "seswr",
@@ -1030,6 +1094,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x82,
 		.name = "axiapr",
@@ -1046,6 +1111,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0xff,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x83,
 		.name = "axiapw",
@@ -1062,6 +1128,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x84,
 		.name = "etrr",
@@ -1078,6 +1145,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0xff,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x85,
 		.name = "etrw",
@@ -1094,6 +1162,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x86,
 		.name = "tsecsrdb",
@@ -1110,6 +1179,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x9b,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x87,
 		.name = "tsecswrb",
@@ -1126,6 +1196,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x88,
 		.name = "gpusrd2",
@@ -1143,6 +1214,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x1a,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	}, {
 		.id = 0x89,
 		.name = "gpuswr2",
@@ -1160,6 +1232,7 @@ static const struct tegra_mc_client tegra210_mc_clients[] = {
 				.def = 0x80,
 			},
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 	},
 };
 
