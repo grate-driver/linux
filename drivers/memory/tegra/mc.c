@@ -351,6 +351,45 @@ unsigned int tegra_mc_get_emem_device_count(struct tegra_mc *mc)
 }
 EXPORT_SYMBOL_GPL(tegra_mc_get_emem_device_count);
 
+int tegra_mc_error_block_client_dma(struct tegra_mc *mc,
+				    unsigned int client_idx)
+{
+	const struct tegra_mc_reset_ops *rst_ops;
+	const struct tegra_mc_reset *rst;
+	const char *client;
+	unsigned int id;
+	int err;
+
+	id = mc->soc->clients[client_idx].reset_id;
+	if (id == TEGRA_MC_CLIENT_NO_RESET)
+		return 0;
+
+	client = mc->soc->clients[client_idx].name;
+
+	rst_ops = mc->soc->reset_ops;
+	if (!rst_ops)
+		return -ENODEV;
+
+	if (!rst_ops->block_dma)
+		return 0;
+
+	rst = tegra_mc_reset_find(mc, id);
+	if (!rst)
+		return -ENODEV;
+
+	err = rst_ops->block_dma(mc, rst);
+	if (err) {
+		dev_err_ratelimited(mc->dev, "%s: failed to block DMA: %d\n",
+				    client, err);
+		return err;
+	}
+
+	dev_warn_ratelimited(mc->dev, "%s: DMA blocked\n", client);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(tegra_mc_error_block_client_dma);
+
 #if defined(CONFIG_ARCH_TEGRA_3x_SOC) || \
     defined(CONFIG_ARCH_TEGRA_114_SOC) || \
     defined(CONFIG_ARCH_TEGRA_124_SOC) || \
@@ -524,6 +563,7 @@ static irqreturn_t tegra30_mc_handle_irq(int irq, void *data)
 		const char *direction, *secure;
 		phys_addr_t addr = 0;
 		unsigned int i;
+		bool block_dma;
 		char perm[7];
 		u8 id, type;
 		u32 value;
@@ -537,6 +577,10 @@ static irqreturn_t tegra30_mc_handle_irq(int irq, void *data)
 			addr <<= 32;
 		}
 #endif
+		if (value & MC_ERR_STATUS_RW)
+			block_dma = true;
+		else
+			block_dma = false;
 
 		if (value & MC_ERR_STATUS_RW)
 			direction = "write";
@@ -592,6 +636,12 @@ static irqreturn_t tegra30_mc_handle_irq(int irq, void *data)
 
 		value = mc_readl(mc, MC_ERR_ADR);
 		addr |= value;
+
+		/* Read errors are quite common, hence lets skip them since
+		 * not all drivers support recovering from a blocked DMA.
+		 */
+		if (block_dma)
+			tegra_mc_error_block_client_dma(mc, i);
 
 		dev_err_ratelimited(mc->dev, "%s: %s%s @%pa: %s (%s%s)\n",
 				    client, secure, direction, &addr, error,
