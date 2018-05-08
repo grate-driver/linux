@@ -25,11 +25,14 @@ struct tegra_mc_timing {
 	u32 *emem_data;
 };
 
+#define TEGRA_MC_CLIENT_NO_RESET	UINT_MAX
+
 struct tegra_mc_client {
 	unsigned int id;
 	unsigned int bpmp_id;
 	enum tegra_icc_client_type type;
 	const char *name;
+	unsigned int reset_id;
 	/*
 	 * For Tegra210 and earlier, this is the SWGROUP ID used for IOVA translations in the
 	 * Tegra SMMU, whereas on Tegra186 and later this is the ID used to override the ARM SMMU
@@ -250,6 +253,9 @@ struct tegra_mc {
 
 int tegra_mc_write_emem_configuration(struct tegra_mc *mc, unsigned long rate);
 unsigned int tegra_mc_get_emem_device_count(struct tegra_mc *mc);
+
+int tegra_mc_error_block_client_dma(struct tegra_mc *mc,
+				    unsigned int client_idx);
 
 #ifdef CONFIG_TEGRA_MC
 struct tegra_mc *devm_tegra_memory_controller_get(struct device *dev);
