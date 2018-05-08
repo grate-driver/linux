@@ -42,6 +42,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x01,
@@ -57,6 +58,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 128,
 	}, {
 		.id = 0x02,
@@ -72,6 +74,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 128,
 	}, {
 		.id = 0x03,
@@ -87,6 +90,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x04,
@@ -102,6 +106,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x05,
@@ -117,6 +122,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 128,
 	}, {
 		.id = 0x06,
@@ -132,6 +138,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 128,
 	}, {
 		.id = 0x07,
@@ -147,6 +154,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x08,
@@ -162,6 +170,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x4e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x09,
@@ -177,6 +186,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x17,
 		},
+		.reset_id = TEGRA30_MC_RESET_EPP,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x0a,
@@ -192,6 +202,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x09,
 		},
+		.reset_id = TEGRA30_MC_RESET_2D,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x0b,
@@ -207,6 +218,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x09,
 		},
+		.reset_id = TEGRA30_MC_RESET_2D,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x0c,
@@ -222,6 +234,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x50,
 		},
+		.reset_id = TEGRA30_MC_RESET_MPE,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x0d,
@@ -237,6 +250,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x2c,
 		},
+		.reset_id = TEGRA30_MC_RESET_VI,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x0e,
@@ -252,6 +266,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x10,
 		},
+		.reset_id = TEGRA30_MC_RESET_AFI,
 		.fifo_size = 16 * 32,
 	}, {
 		.id = 0x0f,
@@ -267,6 +282,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x04,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x10,
@@ -282,6 +298,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x11,
@@ -297,6 +314,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x12,
@@ -312,6 +330,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0a,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D,
 		.fifo_size = 16 * 96,
 	}, {
 		.id = 0x13,
@@ -327,6 +346,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0a,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D2,
 		.fifo_size = 16 * 96,
 	}, {
 		.id = 0x14,
@@ -342,6 +362,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0a,
 		},
+		.reset_id = TEGRA30_MC_RESET_2D,
 		.fifo_size = 16 * 48,
 	}, {
 		.id = 0x15,
@@ -357,6 +378,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 16,
 	}, {
 		.id = 0x16,
@@ -372,6 +394,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x05,
 		},
+		.reset_id = TEGRA30_MC_RESET_HC,
 		.fifo_size = 16 * 16,
 	}, {
 		.id = 0x17,
@@ -387,6 +410,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x50,
 		},
+		.reset_id = TEGRA30_MC_RESET_HC,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x18,
@@ -402,6 +426,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x13,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x19,
@@ -417,6 +442,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x13,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D2,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x1a,
@@ -432,6 +458,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x80,
 		},
+		.reset_id = TEGRA30_MC_RESET_MPE,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x1b,
@@ -447,6 +474,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x42,
 		},
+		.reset_id = TEGRA30_MC_RESET_MPE,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x1c,
@@ -462,6 +490,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA30_MC_RESET_MPE,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x1d,
@@ -477,6 +506,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x10,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x1e,
@@ -492,6 +522,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x12,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x1f,
@@ -507,6 +538,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x33,
 		},
+		.reset_id = TEGRA30_MC_RESET_SATA,
 		.fifo_size = 16 * 32,
 	}, {
 		.id = 0x20,
@@ -522,6 +554,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x13,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x21,
@@ -537,6 +570,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x13,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D2,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x22,
@@ -552,6 +586,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x23,
@@ -567,6 +602,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xd0,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 4,
 	}, {
 		.id = 0x24,
@@ -582,6 +618,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x2a,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 16,
 	}, {
 		.id = 0x25,
@@ -597,6 +634,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x74,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 16,
 	}, {
 		.id = 0x26,
@@ -608,6 +646,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x04,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 14,
 	}, {
 		.id = 0x27,
@@ -619,6 +658,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x04,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 14,
 	}, {
 		.id = 0x28,
@@ -634,6 +674,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x6c,
 		},
+		.reset_id = TEGRA30_MC_RESET_EPP,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x29,
@@ -649,6 +690,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x6c,
 		},
+		.reset_id = TEGRA30_MC_RESET_EPP,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x2a,
@@ -664,6 +706,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x6c,
 		},
+		.reset_id = TEGRA30_MC_RESET_EPP,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x2b,
@@ -679,6 +722,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x13,
 		},
+		.reset_id = TEGRA30_MC_RESET_MPE,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x2c,
@@ -694,6 +738,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x12,
 		},
+		.reset_id = TEGRA30_MC_RESET_VI,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x2d,
@@ -709,6 +754,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xb2,
 		},
+		.reset_id = TEGRA30_MC_RESET_VI,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x2e,
@@ -724,6 +770,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xb2,
 		},
+		.reset_id = TEGRA30_MC_RESET_VI,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x2f,
@@ -739,6 +786,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x12,
 		},
+		.reset_id = TEGRA30_MC_RESET_VI,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x30,
@@ -754,6 +802,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x9,
 		},
+		.reset_id = TEGRA30_MC_RESET_2D,
 		.fifo_size = 16 * 128,
 	}, {
 		.id = 0x31,
@@ -769,6 +818,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0c,
 		},
+		.reset_id = TEGRA30_MC_RESET_AFI,
 		.fifo_size = 16 * 32,
 	}, {
 		.id = 0x32,
@@ -784,6 +834,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x33,
@@ -799,6 +850,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0a,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D,
 		.fifo_size = 16 * 96,
 	}, {
 		.id = 0x34,
@@ -814,6 +866,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0a,
 		},
+		.reset_id = TEGRA30_MC_RESET_3D2,
 		.fifo_size = 16 * 96,
 	}, {
 		.id = 0x35,
@@ -829,6 +882,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 16,
 	}, {
 		.id = 0x36,
@@ -844,6 +898,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x10,
 		},
+		.reset_id = TEGRA30_MC_RESET_HC,
 		.fifo_size = 16 * 32,
 	}, {
 		.id = 0x37,
@@ -859,6 +914,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA30_MC_RESET_ISP,
 		.fifo_size = 16 * 64,
 	}, {
 		.id = 0x38,
@@ -870,6 +926,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 24,
 	}, {
 		.id = 0x39,
@@ -881,6 +938,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x0e,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 24,
 	}, {
 		.id = 0x3a,
@@ -896,6 +954,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA30_MC_RESET_MPE,
 		.fifo_size = 16 * 8,
 	}, {
 		.id = 0x3b,
@@ -911,6 +970,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x10,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x3c,
@@ -926,6 +986,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x06,
 		},
+		.reset_id = TEGRA_MC_CLIENT_NO_RESET,
 		.fifo_size = 16 * 4,
 	}, {
 		.id = 0x3d,
@@ -941,6 +1002,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x33,
 		},
+		.reset_id = TEGRA30_MC_RESET_SATA,
 		.fifo_size = 16 * 32,
 	}, {
 		.id = 0x3e,
@@ -956,6 +1018,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 4,
 	}, {
 		.id = 0x3f,
@@ -971,6 +1034,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0xff,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 16,
 	}, {
 		.id = 0x40,
@@ -986,6 +1050,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x42,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 2,
 	}, {
 		.id = 0x41,
@@ -1001,6 +1066,7 @@ static const struct tegra_mc_client tegra30_mc_clients[] = {
 			.mask = 0xff,
 			.def = 0x2a,
 		},
+		.reset_id = TEGRA30_MC_RESET_VDE,
 		.fifo_size = 16 * 16,
 	},
 };
