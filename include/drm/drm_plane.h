@@ -41,6 +41,52 @@ enum drm_scaling_filter {
 };
 
 /**
+ * enum drm_plane_colorkey_mode - uapi plane colorkey mode enumeration
+ */
+enum drm_plane_colorkey_mode {
+	/**
+	 * @DRM_PLANE_COLORKEY_MODE_DISABLED:
+	 *
+	 * No color keying performed in this mode.
+	 */
+	DRM_PLANE_COLORKEY_MODE_DISABLED,
+
+	/**
+	 * @DRM_PLANE_COLORKEY_MODE_TRANSPARENT:
+	 *
+	 * Destination plane pixels are completely transparent in areas
+	 * where pixels of a source plane are matching a given color key
+	 * range, in other cases pixels of a destination plane are unaffected.
+	 * In areas where two or more source planes overlap, the topmost
+	 * plane takes precedence.
+	 */
+	DRM_PLANE_COLORKEY_MODE_TRANSPARENT,
+
+	/**
+	 * @DRM_PLANE_COLORKEY_MODES_NUM:
+	 *
+	 * Total number of color keying modes.
+	 */
+	DRM_PLANE_COLORKEY_MODES_NUM,
+};
+
+/**
+ * struct drm_plane_colorkey_state - plane color keying state
+ * @mode: color keying mode
+ * @plane_mask: source planes that participate in color key matching
+ * @mask: color key mask (in ARGB16161616 format)
+ * @min: color key range minimum (in ARGB16161616 format)
+ * @max: color key range maximum (in ARGB16161616 format)
+ */
+struct drm_plane_colorkey_state {
+	enum drm_plane_colorkey_mode mode;
+	u32 plane_mask;
+	u64 mask;
+	u64 min;
+	u64 max;
+};
+
+/**
  * struct drm_plane_state - mutable plane state
  *
  * Please not that the destination coordinates @crtc_x, @crtc_y, @crtc_h and
@@ -164,6 +210,13 @@ struct drm_plane_state {
 	 * update this before it can be trusted.
 	 */
 	unsigned int normalized_zpos;
+
+	/**
+	 * @colorkey:
+	 * Color keying of the plane. See drm_plane_create_colorkey_properties()
+	 * for more details.
+	 */
+	struct drm_plane_colorkey_state colorkey;
 
 	/**
 	 * @color_encoding:
@@ -721,6 +774,19 @@ struct drm_plane {
 	struct drm_property *blend_mode_property;
 
 	/**
+	 * @colorkey:
+	 * Optional color keying properties for this plane. See
+	 * drm_plane_create_colorkey_properties().
+	 */
+	struct {
+		struct drm_property *plane_mask_property;
+		struct drm_property *mode_property;
+		struct drm_property *mask_property;
+		struct drm_property *min_property;
+		struct drm_property *max_property;
+	} colorkey;
+
+	/**
 	 * @color_encoding_property:
 	 *
 	 * Optional "COLOR_ENCODING" enum property for specifying
@@ -924,5 +990,31 @@ drm_plane_get_damage_clips(const struct drm_plane_state *state)
 
 int drm_plane_create_scaling_filter_property(struct drm_plane *plane,
 					     unsigned int supported_filters);
+
+/**
+ * drm_colorkey_extract_component - get color key component value
+ * @ckey64: 64bit color key value
+ * @comp_name: name of 16bit color component to extract
+ * @nbits: size in bits of extracted component value
+ *
+ * Extract 16bit color component of @ckey64 given by @comp_name (alpha, red,
+ * green or blue) and convert it to unsigned integer that has bit-width of
+ * @nbits (result is rounded-up).
+ */
+#define drm_colorkey_extract_component(ckey64, comp_name, nbits) \
+	__drm_ckey_extract(ckey64, __drm_ckey_ ## comp_name ## _shift, nbits)
+
+#define __drm_ckey_alpha_shift	48
+#define __drm_ckey_red_shift	32
+#define __drm_ckey_green_shift	16
+#define __drm_ckey_blue_shift	0
+
+static inline u16 __drm_ckey_extract(u64 ckey64, u8 ckey_shift, u8 nbits)
+{
+	u16 mask = (1 << (16 - nbits)) - 1;
+	u32 ret = ((u16)(ckey64 >> ckey_shift) + mask) >> (16 - nbits);
+
+	return min_t(u16, ret, (1 << nbits) - 1);
+}
 
 #endif
