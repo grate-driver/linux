@@ -8,6 +8,8 @@
 #include <fdt.h>
 #include <libfdt.h>
 
+#undef memset
+
 #include "libfdt_internal.h"
 
 static int fdt_blocks_misordered_(const void *fdt,
