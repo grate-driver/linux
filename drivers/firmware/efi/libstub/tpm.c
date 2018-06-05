@@ -11,6 +11,8 @@
 #include <linux/tpm_eventlog.h>
 #include <asm/efi.h>
 
+#undef memset
+
 #include "efistub.h"
 
 #ifdef CONFIG_RESET_ATTACK_MITIGATION
