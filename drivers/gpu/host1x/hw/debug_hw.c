@@ -234,6 +234,16 @@ static void show_channel_gathers(struct output *o, struct host1x_cdma *cdma)
 			if (!job->gather_copy_mapped)
 				host1x_bo_munmap(g->bo, mapped);
 		}
+
+		host1x_debug_output(o, "BO's:\n");
+
+		for (i = 0; i < job->num_relocs; i++) {
+			struct host1x_job_unpin_data *unpin = &job->unpins[i];
+
+			host1x_debug_output(o, "    DMA at %pad size 0x%x\n",
+					    &job->reloc_addr_phys[i],
+					    host1x_bo_size(unpin->bo));
+		}
 	}
 }
 
