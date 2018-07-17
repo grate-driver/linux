@@ -253,10 +253,8 @@ struct host1x_job {
 	unsigned int num_slots;
 
 	/* Copy of gathers */
-	struct iova *gather_copy_iova_alloc;
 	size_t gather_copy_size;
-	dma_addr_t gather_copy_iova;
-	dma_addr_t gather_copy_phys;
+	dma_addr_t gather_copy;
 	u8 *gather_copy_mapped;
 
 	/* Check if register is marked as an address reg */
