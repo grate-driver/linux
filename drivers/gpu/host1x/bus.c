@@ -199,19 +199,23 @@ static void host1x_subdev_unregister(struct host1x_device *device,
  */
 int host1x_device_init(struct host1x_device *device)
 {
-	struct host1x_client *client;
+	struct host1x_client *client, *cl;
 	int err;
 
 	mutex_lock(&device->clients_lock);
 
-	list_for_each_entry(client, &device->clients, list) {
+	list_for_each_entry_safe(client, cl, &device->clients, list) {
 		if (client->ops && client->ops->init) {
 			err = client->ops->init(client);
-			if (err < 0) {
+			if (WARN_ON(err < 0)) {
 				dev_err(&device->dev,
 					"failed to initialize %s: %d\n",
 					dev_name(client->dev), err);
-				goto teardown;
+
+				/* move client to the list of idle clients */
+				mutex_lock(&clients_lock);
+				list_move_tail(&client->list, &clients);
+				mutex_unlock(&clients_lock);
 			}
 		}
 	}
@@ -219,14 +223,6 @@ int host1x_device_init(struct host1x_device *device)
 	mutex_unlock(&device->clients_lock);
 
 	return 0;
-
-teardown:
-	list_for_each_entry_continue_reverse(client, &device->clients, list)
-		if (client->ops->exit)
-			client->ops->exit(client);
-
-	mutex_unlock(&device->clients_lock);
-	return err;
 }
 EXPORT_SYMBOL(host1x_device_init);
 
