@@ -76,13 +76,17 @@ static bool tegra_plane_format_mod_supported(struct drm_plane *plane,
 					     uint32_t format,
 					     uint64_t modifier)
 {
-	const struct drm_format_info *info = drm_format_info(format);
-
-	if (modifier == DRM_FORMAT_MOD_LINEAR)
+	switch (modifier) {
+	case DRM_FORMAT_MOD_LINEAR:
+	case DRM_FORMAT_MOD_NVIDIA_TEGRA_TILED:
+	case DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK(0):
+	case DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK(1):
+	case DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK(2):
+	case DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK(3):
+	case DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK(4):
+	case DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK(5):
 		return true;
-
-	if (info->num_planes == 1)
-		return true;
+	}
 
 	return false;
 }
