@@ -123,7 +123,7 @@ static bool tegra_plane_format_mod_supported(struct drm_plane *plane,
 	if (info->num_planes == 1)
 		return true;
 
-	return false;
+	return true;
 }
 
 const struct drm_plane_funcs tegra_plane_funcs = {
