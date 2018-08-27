@@ -770,6 +770,14 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	if (args->num_waitchks != 0)
 		return -EINVAL;
 
+	/* Sanitize num_cmdbufs */
+	if (args->num_cmdbufs > 1024)
+		return -EINVAL;
+
+	/* Sanitize num_relocs */
+	if (args->num_relocs > 1024)
+		return -EINVAL;
+
 	job = host1x_job_alloc(context->channel, args->num_cmdbufs,
 			       args->num_relocs);
 	if (!job)
