@@ -18,4 +18,16 @@ config SAMSUNG_JACK
 
 	 If unsure, say N.
 
+config P4WIFI_INIT_MISC
+	bool "Miscellaneous boot time initialization for Samsung p4wifi"
+	default n
+	help
+	  Initialize various board oddities that don't belong anywhere else.
+
+config P4WIFI_REBOOT_MODE
+	tristate "Reboot mode for Samsung Galaxy Tab 10.1."
+	default n
+	help
+	  Reboot mode for Samsung Galaxy Tab 10.1.
+
 endif # P4WIFI
