@@ -27,8 +27,8 @@ static const char *xfeature_names[] =
 	"x87 floating point registers"	,
 	"SSE registers"			,
 	"AVX registers"			,
-	"MPX bounds registers"		,
-	"MPX CSR"			,
+	"MPX bounds registers (unused)"	,
+	"MPX CSR (unused)"		,
 	"AVX-512 opmask"		,
 	"AVX-512 Hi256"			,
 	"AVX-512 ZMM_Hi256"		,
@@ -306,8 +306,6 @@ static void __init print_xstate_features(void)
 	print_xstate_feature(XFEATURE_MASK_FP);
 	print_xstate_feature(XFEATURE_MASK_SSE);
 	print_xstate_feature(XFEATURE_MASK_YMM);
-	print_xstate_feature(XFEATURE_MASK_BNDREGS);
-	print_xstate_feature(XFEATURE_MASK_BNDCSR);
 	print_xstate_feature(XFEATURE_MASK_OPMASK);
 	print_xstate_feature(XFEATURE_MASK_ZMM_Hi256);
 	print_xstate_feature(XFEATURE_MASK_Hi16_ZMM);
