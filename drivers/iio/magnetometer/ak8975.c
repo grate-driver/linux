@@ -34,6 +34,7 @@
  */
 #define AK8975_REG_WIA			0x00
 #define AK8975_DEVICE_ID		0x48
+#define AK8975C_DEVICE_ID		0x7F
 
 #define AK8975_REG_INFO			0x01
 
@@ -437,7 +438,7 @@ static int ak8975_who_i_am(struct i2c_client *client,
 		return ret;
 	}
 
-	if (wia_val[0] != AK8975_DEVICE_ID)
+	if (wia_val[0] != AK8975_DEVICE_ID && wia_val[0] != AK8975C_DEVICE_ID)
 		return -ENODEV;
 
 	switch (type) {
