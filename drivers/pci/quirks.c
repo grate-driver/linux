@@ -2954,12 +2954,15 @@ static void nv_msi_ht_cap_quirk_all(struct pci_dev *dev)
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_AL, PCI_ANY_ID, nv_msi_ht_cap_quirk_all);
 DECLARE_PCI_FIXUP_RESUME_EARLY(PCI_VENDOR_ID_AL, PCI_ANY_ID, nv_msi_ht_cap_quirk_all);
 
-static void nv_msi_ht_cap_quirk_leaf(struct pci_dev *dev)
+static void __maybe_unused nv_msi_ht_cap_quirk_leaf(struct pci_dev *dev)
 {
 	return __nv_msi_ht_cap_quirk(dev, 0);
 }
+/* HyperTransport is not relevant on theses arches */
+#if !IS_ENABLED(CONFIG_ARM) && !IS_ENABLED(CONFIG_ARM64)
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_NVIDIA, PCI_ANY_ID, nv_msi_ht_cap_quirk_leaf);
 DECLARE_PCI_FIXUP_RESUME_EARLY(PCI_VENDOR_ID_NVIDIA, PCI_ANY_ID, nv_msi_ht_cap_quirk_leaf);
+#endif
 
 static void quirk_msi_intx_disable_bug(struct pci_dev *dev)
 {
