@@ -584,9 +584,8 @@ static int _calc_rate(struct clk_hw *hw, struct tegra_clk_pll_freq_table *cfg,
 	}
 
 	/* Raise VCO to guarantee 0.5% accuracy */
-	for (cfg->output_rate = rate; cfg->output_rate < 200 * cfreq;
-	     cfg->output_rate <<= 1)
-		p_div++;
+	p_div = rate ? fls((200 * cfreq) / rate) : 0;
+	cfg->output_rate = rate << p_div;
 
 	cfg->m = parent_rate / cfreq;
 	cfg->n = cfg->output_rate / cfreq;
