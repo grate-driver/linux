@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
+menu "Android"
+
+source "drivers/staging/android/ramconsole/Kconfig"
