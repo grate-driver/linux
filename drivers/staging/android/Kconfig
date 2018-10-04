@@ -17,3 +17,5 @@ config ASHMEM
 endif # if ANDROID
 
 endmenu
+
+source "drivers/staging/android/ramconsole/Kconfig"
