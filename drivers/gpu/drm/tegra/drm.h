@@ -37,7 +37,7 @@ struct tegra_drm {
 	struct drm_device *drm;
 
 	struct iommu_domain *domain;
-	bool use_explicit_iommu;
+	struct iommu_group *group;
 	struct mutex mm_lock;
 	struct drm_mm mm;
 
@@ -46,9 +46,6 @@ struct tegra_drm {
 		unsigned long shift;
 		unsigned long limit;
 	} carveout;
-
-	struct mutex clients_lock;
-	struct list_head clients;
 
 #ifdef CONFIG_DRM_FBDEV_EMULATION
 	struct tegra_fbdev *fbdev;
@@ -59,50 +56,11 @@ struct tegra_drm {
 	struct tegra_display_hub *hub;
 };
 
-struct tegra_drm_client;
-
-struct tegra_drm_context {
-	struct tegra_drm_client *client;
-	struct host1x_channel *channel;
-	unsigned int id;
-};
-
-struct tegra_drm_client_ops {
-	int (*open_channel)(struct tegra_drm_client *client,
-			    struct tegra_drm_context *context);
-	void (*close_channel)(struct tegra_drm_context *context);
-	int (*is_addr_reg)(struct device *dev, u32 class, u32 offset);
-	int (*is_valid_class)(u32 class);
-	int (*submit)(struct tegra_drm_context *context,
-		      struct drm_tegra_submit *args, struct drm_device *drm,
-		      struct drm_file *file);
-};
-
-int tegra_drm_submit(struct tegra_drm_context *context,
-		     struct drm_tegra_submit *args, struct drm_device *drm,
-		     struct drm_file *file);
-
-struct tegra_drm_client {
-	struct host1x_client base;
-	struct list_head list;
-	struct tegra_drm *drm;
-
-	unsigned int version;
-	const struct tegra_drm_client_ops *ops;
-};
-
-static inline struct tegra_drm_client *
-host1x_to_drm_client(struct host1x_client *client)
-{
-	return container_of(client, struct tegra_drm_client, base);
-}
-
-int tegra_drm_register_client(struct tegra_drm *tegra,
-			      struct tegra_drm_client *client);
-int tegra_drm_unregister_client(struct tegra_drm *tegra,
-				struct tegra_drm_client *client);
-int host1x_client_iommu_attach(struct host1x_client *client);
-void host1x_client_iommu_detach(struct host1x_client *client);
+struct iommu_group *host1x_client_iommu_attach(struct host1x_client *client,
+					       bool shared);
+void host1x_client_iommu_detach(struct host1x_client *client,
+				struct iommu_group *group,
+				bool shared);
 
 int tegra_drm_init(struct tegra_drm *tegra, struct drm_device *drm);
 int tegra_drm_exit(struct tegra_drm *tegra);
