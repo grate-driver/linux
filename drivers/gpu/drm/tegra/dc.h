@@ -108,6 +108,8 @@ struct tegra_dc {
 	const struct tegra_dc_soc_info *soc;
 
 	struct icc_path *icc_bandwidth;
+
+	struct iommu_group *group;
 };
 
 static inline struct tegra_dc *
