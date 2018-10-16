@@ -99,6 +99,8 @@ struct tegra_dc {
 	struct host1x_syncpt *syncpt;
 	struct device *dev;
 
+	struct iommu_group *group;
+
 	struct drm_crtc base;
 	unsigned int powergate;
 	int pipe;
