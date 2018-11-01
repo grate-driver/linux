@@ -17,7 +17,6 @@ struct linux_binprm;
 struct path;
 struct mount;
 struct shrink_control;
-struct fs_context;
 
 /*
  * block_dev.c
@@ -56,8 +55,7 @@ extern void __init chrdev_init(void);
  * fs_context.c
  */
 extern int legacy_init_fs_context(struct fs_context *fc, struct dentry *dentry);
-extern int legacy_get_tree(struct fs_context *fc);
-extern int legacy_reconfigure(struct fs_context *fc);
+extern const struct fs_context_operations legacy_fs_context_ops;
 extern int parse_monolithic_mount_data(struct fs_context *, void *);
 
 /*
