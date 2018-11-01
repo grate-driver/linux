@@ -801,18 +801,42 @@ EXPORT_SYMBOL_GPL(fsverity_full_i_size);
 
 static int __init fsverity_module_init(void)
 {
+	int err;
+
+	/*
+	 * Use an unbound workqueue to allow bios to be verified in parallel
+	 * even when they happen to complete on the same CPU.  This sacrifices
+	 * locality, but it's worthwhile since hashing is CPU-intensive.
+	 *
+	 * Also use a high-priority workqueue to prioritize verification work,
+	 * which blocks reads from completing, over regular application tasks.
+	 */
+	err = -ENOMEM;
+	fsverity_read_workqueue = alloc_workqueue("fsverity_read_queue",
+						  WQ_UNBOUND | WQ_HIGHPRI,
+						  num_online_cpus());
+	if (!fsverity_read_workqueue)
+		goto error;
+
+	err = -ENOMEM;
 	fsverity_info_cachep = KMEM_CACHE(fsverity_info, SLAB_RECLAIM_ACCOUNT);
 	if (!fsverity_info_cachep)
-		return -ENOMEM;
+		goto error_free_workqueue;
 
 	fsverity_check_hash_algs();
 
 	pr_debug("Initialized fs-verity\n");
 	return 0;
+
+error_free_workqueue:
+	destroy_workqueue(fsverity_read_workqueue);
+error:
+	return err;
 }
 
 static void __exit fsverity_module_exit(void)
 {
+	destroy_workqueue(fsverity_read_workqueue);
 	kmem_cache_destroy(fsverity_info_cachep);
 	fsverity_exit_hash_algs();
 }

@@ -28,6 +28,16 @@ extern int fsverity_prepare_getattr(struct inode *inode);
 extern void fsverity_cleanup_inode(struct inode *inode);
 extern loff_t fsverity_full_i_size(const struct inode *inode);
 
+/* verify.c */
+extern bool fsverity_verify_page(struct page *page);
+extern void fsverity_verify_bio(struct bio *bio);
+extern void fsverity_enqueue_verify_work(struct work_struct *work);
+
+static inline bool fsverity_check_hole(struct inode *inode, struct page *page)
+{
+	return inode->i_verity_info == NULL || fsverity_verify_page(page);
+}
+
 #else /* !__FS_HAS_VERITY */
 
 /* setup.c */
@@ -55,6 +65,29 @@ static inline void fsverity_cleanup_inode(struct inode *inode)
 static inline loff_t fsverity_full_i_size(const struct inode *inode)
 {
 	return i_size_read(inode);
+}
+
+/* verify.c */
+
+static inline bool fsverity_verify_page(struct page *page)
+{
+	WARN_ON(1);
+	return false;
+}
+
+static inline void fsverity_verify_bio(struct bio *bio)
+{
+	WARN_ON(1);
+}
+
+static inline void fsverity_enqueue_verify_work(struct work_struct *work)
+{
+	WARN_ON(1);
+}
+
+static inline bool fsverity_check_hole(struct inode *inode, struct page *page)
+{
+	return true;
 }
 
 #endif	/* !__FS_HAS_VERITY */

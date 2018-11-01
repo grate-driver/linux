@@ -95,4 +95,7 @@ static inline bool set_fsverity_info(struct inode *inode,
 	return cmpxchg_release(&inode->i_verity_info, NULL, vi) == NULL;
 }
 
+/* verify.c */
+extern struct workqueue_struct *fsverity_read_workqueue;
+
 #endif /* _FSVERITY_PRIVATE_H */
