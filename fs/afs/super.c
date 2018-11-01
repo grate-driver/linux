@@ -66,30 +66,21 @@ static atomic_t afs_count_active_inodes;
 
 enum afs_param {
 	Opt_autocell,
-	Opt_cell,
 	Opt_dyn,
-	Opt_rwpath,
 	Opt_source,
-	Opt_vol,
 	nr__afs_params
 };
 
 static const struct fs_parameter_spec afs_param_specs[nr__afs_params] = {
 	[Opt_autocell]	= { fs_param_is_flag },
-	[Opt_cell]	= { fs_param_is_string },
 	[Opt_dyn]	= { fs_param_is_flag },
-	[Opt_rwpath]	= { fs_param_is_flag },
 	[Opt_source]	= { fs_param_is_string },
-	[Opt_vol]	= { fs_param_is_string },
 };
 
 static const char *const afs_param_keys[nr__afs_params] = {
 	[Opt_autocell]	= "autocell",
-	[Opt_cell]	= "cell",
 	[Opt_dyn]	= "dyn",
-	[Opt_rwpath]	= "rwpath",
 	[Opt_source]	= "source",
-	[Opt_vol]	= "vol",
 };
 
 static const struct fs_parameter_description afs_fs_parameters = {
@@ -214,8 +205,8 @@ static int afs_show_options(struct seq_file *m, struct dentry *root)
  *
  * This can be one of the following:
  *	"%[cell:]volume[.]"		R/W volume
- *	"#[cell:]volume[.]"		R/O or R/W volume (rwpath=0),
- *					 or R/W (rwpath=1) volume
+ *	"#[cell:]volume[.]"		R/O or R/W volume (R/O parent),
+ *					 or R/W (R/W parent) volume
  *	"%[cell:]volume.readonly"	R/O volume
  *	"#[cell:]volume.readonly"	R/O volume
  *	"%[cell:]volume.backup"		Backup volume
@@ -246,9 +237,7 @@ static int afs_parse_source(struct fs_context *fc, struct fs_parameter *param)
 	}
 
 	/* determine the type of volume we're looking for */
-	ctx->type = AFSVL_ROVOL;
-	ctx->force = false;
-	if (ctx->rwpath || name[0] == '%') {
+	if (name[0] == '%') {
 		ctx->type = AFSVL_RWVOL;
 		ctx->force = true;
 	}
@@ -317,7 +306,6 @@ static int afs_parse_param(struct fs_context *fc, struct fs_parameter *param)
 {
 	struct fs_parse_result result;
 	struct afs_fs_context *ctx = fc->fs_private;
-	struct afs_cell *cell;
 	int opt;
 
 	opt = fs_parse(fc, &afs_fs_parameters, param, &result);
@@ -325,21 +313,6 @@ static int afs_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		return opt;
 
 	switch (opt) {
-	case Opt_cell:
-		if (param->size <= 0)
-			return -EINVAL;
-		if (param->size > AFS_MAXCELLNAME)
-			return -ENAMETOOLONG;
-
-		rcu_read_lock();
-		cell = afs_lookup_cell_rcu(ctx->net, param->string, param->size);
-		rcu_read_unlock();
-		if (IS_ERR(cell))
-			return PTR_ERR(cell);
-		afs_put_cell(ctx->net, ctx->cell);
-		ctx->cell = cell;
-		break;
-
 	case Opt_source:
 		return afs_parse_source(fc, param);
 
@@ -350,13 +323,6 @@ static int afs_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	case Opt_dyn:
 		ctx->dyn_root = true;
 		break;
-
-	case Opt_rwpath:
-		ctx->rwpath = true;
-		break;
-
-	case Opt_vol:
-		return invalf(fc, "'vol' param is obsolete");
 
 	default:
 		return -EINVAL;
@@ -625,9 +591,6 @@ static int afs_init_fs_context(struct fs_context *fc, struct dentry *reference)
 	struct afs_fs_context *ctx;
 	struct afs_super_info *src_as;
 	struct afs_cell *cell;
-
-	if (current->nsproxy->net_ns != &init_net)
-		return -EINVAL;
 
 	ctx = kzalloc(sizeof(struct afs_fs_context), GFP_KERNEL);
 	if (!ctx)
