@@ -2197,6 +2197,33 @@ static const struct fscrypt_operations f2fs_cryptops = {
 };
 #endif
 
+#ifdef CONFIG_F2FS_FS_VERITY
+static int f2fs_set_verity(struct inode *inode, loff_t data_i_size)
+{
+	int err;
+
+	err = f2fs_convert_inline_inode(inode);
+	if (err)
+		return err;
+
+	file_set_verity(inode);
+	f2fs_mark_inode_dirty_sync(inode, true);
+	return 0;
+}
+
+static int f2fs_get_metadata_end(struct inode *inode, loff_t *metadata_end_ret)
+{
+	/* f2fs on-disk size is the full file size including verity metadata */
+	*metadata_end_ret = i_size_read(inode);
+	return 0;
+}
+
+static const struct fsverity_operations f2fs_verityops = {
+	.set_verity		= f2fs_set_verity,
+	.get_metadata_end	= f2fs_get_metadata_end,
+};
+#endif /* CONFIG_F2FS_FS_VERITY */
+
 static struct inode *f2fs_nfs_get_inode(struct super_block *sb,
 		u64 ino, u32 generation)
 {
@@ -3115,6 +3142,9 @@ try_onemore:
 	sb->s_op = &f2fs_sops;
 #ifdef CONFIG_F2FS_FS_ENCRYPTION
 	sb->s_cop = &f2fs_cryptops;
+#endif
+#ifdef CONFIG_F2FS_FS_VERITY
+	sb->s_vop = &f2fs_verityops;
 #endif
 	sb->s_xattr = f2fs_xattr_handlers;
 	sb->s_export_op = &f2fs_export_ops;

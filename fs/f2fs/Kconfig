@@ -81,6 +81,26 @@ config F2FS_FS_ENCRYPTION
 	  efficient since it avoids caching the encrypted and
 	  decrypted pages in the page cache.
 
+config F2FS_FS_VERITY
+	bool "F2FS Verity"
+	depends on F2FS_FS
+	select FS_VERITY
+	help
+	  This option enables fs-verity for f2fs.  fs-verity is the
+	  dm-verity mechanism implemented at the file level.  Userspace
+	  can append a Merkle tree (hash tree) to a file, then enable
+	  fs-verity on the file.  f2fs will then transparently verify
+	  any data read from the file against the Merkle tree.  The file
+	  is also made read-only.
+
+	  This serves as an integrity check, but the availability of the
+	  Merkle tree root hash also allows efficiently supporting
+	  various use cases where normally the whole file would need to
+	  be hashed at once, such as auditing and authenticity
+	  verification (appraisal).
+
+	  If unsure, say N.
+
 config F2FS_IO_TRACE
 	bool "F2FS IO tracer"
 	depends on F2FS_FS
