@@ -132,6 +132,10 @@ static const struct extension_type {
 	[FS_VERITY_EXT_SALT] = {
 		.parse = parse_salt_extension,
 	},
+	[FS_VERITY_EXT_PKCS7_SIGNATURE] = {
+		.parse = fsverity_parse_pkcs7_signature_extension,
+		.unauthenticated = true,
+	},
 };
 
 static int do_parse_extensions(struct fsverity_info *vi,
@@ -429,6 +433,54 @@ static int compute_measurement(const struct fsverity_info *vi,
 	return err;
 }
 
+/*
+ * Compute the file's measurement; then, if a signature was present, verify that
+ * the signed measurement matches the actual one.
+ */
+static int
+verify_file_measurement(struct fsverity_info *vi,
+			const struct fsverity_descriptor *desc,
+			int desc_auth_len,
+			struct page *desc_pages[MAX_DESCRIPTOR_PAGES],
+			int nr_desc_pages)
+{
+	u8 measurement[FS_VERITY_MAX_DIGEST_SIZE];
+	int err;
+
+	err = compute_measurement(vi, desc, desc_auth_len, desc_pages,
+				  nr_desc_pages, measurement);
+	if (err) {
+		pr_warn("Error computing fs-verity measurement: %d\n", err);
+		return err;
+	}
+
+	if (!vi->have_signed_measurement) {
+		pr_debug("Computed measurement: %s:%*phN (used desc_auth_len %d)\n",
+			 vi->hash_alg->name, vi->hash_alg->digest_size,
+			 measurement, desc_auth_len);
+		if (fsverity_require_signatures) {
+			pr_warn("require_signatures=1, rejecting unsigned file!\n");
+			return -EBADMSG;
+		}
+		memcpy(vi->measurement, measurement, vi->hash_alg->digest_size);
+		return 0;
+	}
+
+	if (!memcmp(measurement, vi->measurement, vi->hash_alg->digest_size)) {
+		pr_debug("Verified measurement: %s:%*phN (used desc_auth_len %d)\n",
+			 vi->hash_alg->name, vi->hash_alg->digest_size,
+			 measurement, desc_auth_len);
+		return 0;
+	}
+
+	pr_warn("FILE CORRUPTED (actual measurement mismatches signed measurement): "
+		"want %s:%*phN, real %s:%*phN (used desc_auth_len %d)\n",
+		vi->hash_alg->name, vi->hash_alg->digest_size, vi->measurement,
+		vi->hash_alg->name, vi->hash_alg->digest_size, measurement,
+		desc_auth_len);
+	return -EBADMSG;
+}
+
 static struct fsverity_info *alloc_fsverity_info(void)
 {
 	return kmem_cache_zalloc(fsverity_info_cachep, GFP_NOFS);
@@ -674,8 +726,8 @@ struct fsverity_info *create_fsverity_info(struct inode *inode, bool enabling)
 	err = compute_tree_depth_and_offsets(vi);
 	if (err)
 		goto out;
-	err = compute_measurement(vi, desc, desc_auth_len, desc_pages,
-				  nr_desc_pages, vi->measurement);
+	err = verify_file_measurement(vi, desc, desc_auth_len,
+				      desc_pages, nr_desc_pages);
 out:
 	if (desc)
 		unmap_fsverity_descriptor(desc, desc_pages, nr_desc_pages);
@@ -825,11 +877,17 @@ static int __init fsverity_module_init(void)
 	if (!fsverity_info_cachep)
 		goto error_free_workqueue;
 
+	err = fsverity_signature_init();
+	if (err)
+		goto error_free_info_cache;
+
 	fsverity_check_hash_algs();
 
 	pr_debug("Initialized fs-verity\n");
 	return 0;
 
+error_free_info_cache:
+	kmem_cache_destroy(fsverity_info_cachep);
 error_free_workqueue:
 	destroy_workqueue(fsverity_read_workqueue);
 error:
@@ -840,6 +898,7 @@ static void __exit fsverity_module_exit(void)
 {
 	destroy_workqueue(fsverity_read_workqueue);
 	kmem_cache_destroy(fsverity_info_cachep);
+	fsverity_signature_exit();
 	fsverity_exit_hash_algs();
 }
 

@@ -56,6 +56,7 @@ struct fsverity_descriptor {
 /* Extension types */
 #define FS_VERITY_EXT_ROOT_HASH		1
 #define FS_VERITY_EXT_SALT		2
+#define FS_VERITY_EXT_PKCS7_SIGNATURE	3
 
 /* Header of each extension (variable-length metadata item) */
 struct fsverity_extension {
@@ -78,6 +79,15 @@ struct fsverity_extension {
 
 /* FS_VERITY_EXT_SALT payload is just a byte array, any size */
 
+/*
+ * FS_VERITY_EXT_PKCS7_SIGNATURE payload is a DER-encoded PKCS#7 message
+ * containing the signed file measurement in the following format:
+ */
+struct fsverity_digest_disk {
+	__le16 digest_algorithm;
+	__le16 digest_size;
+	__u8 digest[];
+};
 
 /* Fields stored at the very end of the file */
 struct fsverity_footer {

@@ -63,6 +63,7 @@ struct fsverity_info {
 	u8 root_hash[FS_VERITY_MAX_DIGEST_SIZE];   /* Merkle tree root hash */
 	u8 measurement[FS_VERITY_MAX_DIGEST_SIZE]; /* file measurement */
 	bool have_root_hash;		/* have root hash from disk? */
+	bool have_signed_measurement;	/* have measurement from signature? */
 
 	/* Starting blocks for each tree level. 'depth-1' is the root level. */
 	u64 hash_lvl_region_idx[FS_VERITY_MAX_LEVELS];
@@ -94,6 +95,39 @@ static inline bool set_fsverity_info(struct inode *inode,
 	/* pairs with smp_load_acquire() in get_fsverity_info() */
 	return cmpxchg_release(&inode->i_verity_info, NULL, vi) == NULL;
 }
+
+/* signature.c */
+#ifdef CONFIG_FS_VERITY_BUILTIN_SIGNATURES
+extern int fsverity_require_signatures;
+
+int fsverity_parse_pkcs7_signature_extension(struct fsverity_info *vi,
+					     const void *raw_pkcs7,
+					     size_t size);
+
+int __init fsverity_signature_init(void);
+
+void __exit fsverity_signature_exit(void);
+#else /* CONFIG_FS_VERITY_BUILTIN_SIGNATURES */
+
+#define fsverity_require_signatures 0
+
+static inline int
+fsverity_parse_pkcs7_signature_extension(struct fsverity_info *vi,
+					 const void *raw_pkcs7, size_t size)
+{
+	pr_warn("PKCS#7 signatures not supported in this kernel build!\n");
+	return -EINVAL;
+}
+
+static inline int fsverity_signature_init(void)
+{
+	return 0;
+}
+
+static inline void fsverity_signature_exit(void)
+{
+}
+#endif /* !CONFIG_FS_VERITY_BUILTIN_SIGNATURES */
 
 /* verify.c */
 extern struct workqueue_struct *fsverity_read_workqueue;
