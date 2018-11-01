@@ -912,6 +912,8 @@ asmlinkage long sys_move_mount(int from_dfd, const char __user *from_path,
 			       int to_dfd, const char __user *to_path,
 			       unsigned int ms_flags);
 asmlinkage long sys_fsopen(const char __user *fs_name, unsigned int flags);
+asmlinkage long sys_fsconfig(int fs_fd, unsigned int cmd, const char __user *key,
+			     const void __user *value, int aux);
 
 /*
  * Architecture-specific system calls

@@ -346,6 +346,7 @@
 335	common	open_tree		__x64_sys_open_tree
 336	common	move_mount		__x64_sys_move_mount
 337	common	fsopen			__x64_sys_fsopen
+338	common	fsconfig		__x64_sys_fsconfig
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact

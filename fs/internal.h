@@ -59,6 +59,11 @@ extern const struct fs_context_operations legacy_fs_context_ops;
 extern int parse_monolithic_mount_data(struct fs_context *, void *);
 
 /*
+ * fs_open.c
+ */
+extern void vfs_clean_context(struct fs_context *fc);
+
+/*
  * namei.c
  */
 extern int filename_lookup(int dfd, struct filename *name, unsigned flags,
