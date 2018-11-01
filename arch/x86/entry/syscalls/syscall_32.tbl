@@ -402,3 +402,4 @@
 388	i386	move_mount		sys_move_mount			__ia32_sys_move_mount
 389	i386	fsopen			sys_fsopen			__ia32_sys_fsopen
 390	i386	fsconfig		sys_fsconfig			__ia32_sys_fsconfig
+391	i386	fsmount			sys_fsmount			__ia32_sys_fsmount
