@@ -1144,6 +1144,7 @@ void ext4_clear_inode(struct inode *inode)
 		EXT4_I(inode)->jinode = NULL;
 	}
 	fscrypt_put_encryption_info(inode);
+	fsverity_cleanup_inode(inode);
 }
 
 static struct inode *ext4_nfs_get_inode(struct super_block *sb,
@@ -1314,6 +1315,93 @@ static const struct fscrypt_operations ext4_cryptops = {
 	.max_namelen		= EXT4_NAME_LEN,
 };
 #endif
+
+#ifdef CONFIG_EXT4_FS_VERITY
+static int ext4_set_verity(struct inode *inode, loff_t data_i_size)
+{
+	int err;
+	handle_t *handle;
+	struct ext4_iloc iloc;
+
+	err = ext4_convert_inline_data(inode);
+	if (err)
+		return err;
+
+	if (!ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS)) {
+		ext4_warning_inode(inode,
+				   "fs-verity is only allowed on extent-based files");
+		return -EINVAL;
+	}
+
+	/* Remove extents past EOF; see ext4_get_verity_full_size() */
+	err = ext4_truncate(inode);
+	if (err)
+		return err;
+
+	handle = ext4_journal_start(inode, EXT4_HT_INODE, 1);
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
+	err = ext4_reserve_inode_write(handle, inode, &iloc);
+	if (err == 0) {
+		ext4_set_inode_flag(inode, EXT4_INODE_VERITY);
+		EXT4_I(inode)->i_disksize = data_i_size;
+		err = ext4_mark_iloc_dirty(handle, inode, &iloc);
+	}
+	ext4_journal_stop(handle);
+
+	return err;
+}
+
+/*
+ * Retrieve the offset, in bytes, to the end of the verity metadata.  Ext4
+ * stores the verity metadata beyond EOF, but sets the on-disk i_size to the
+ * original data size in order to make verity an RO_COMPAT filesystem feature.
+ * Therefore, it has to compute the end offset implicitly via the end of the
+ * last extent.  Trailing zeroes after the footer are tolerated.
+ */
+static int ext4_get_metadata_end(struct inode *inode, loff_t *metadata_end_ret)
+{
+	struct ext4_ext_path *path;
+	struct ext4_extent *last_extent;
+	u32 end_lblk;
+	int err;
+
+	if (ext4_has_inline_data(inode)) {
+		EXT4_ERROR_INODE(inode, "verity file has inline data");
+		return -EFSCORRUPTED;
+	}
+
+	if (!ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS)) {
+		EXT4_ERROR_INODE(inode, "verity file doesn't use extents");
+		return -EFSCORRUPTED;
+	}
+
+	path = ext4_find_extent(inode, EXT_MAX_BLOCKS - 1, NULL, 0);
+	if (IS_ERR(path))
+		return PTR_ERR(path);
+
+	last_extent = path[path->p_depth].p_ext;
+	if (!last_extent) {
+		EXT4_ERROR_INODE(inode, "verity file has no extents");
+		err = -EFSCORRUPTED;
+		goto out_drop_path;
+	}
+
+	end_lblk = le32_to_cpu(last_extent->ee_block) +
+		   ext4_ext_get_actual_len(last_extent);
+	*metadata_end_ret = (loff_t)end_lblk << inode->i_blkbits;
+	err = 0;
+out_drop_path:
+	ext4_ext_drop_refs(path);
+	kfree(path);
+	return err;
+}
+
+static const struct fsverity_operations ext4_verityops = {
+	.set_verity		= ext4_set_verity,
+	.get_metadata_end	= ext4_get_metadata_end,
+};
+#endif /* CONFIG_EXT4_FS_VERITY */
 
 #ifdef CONFIG_QUOTA
 static const char * const quotatypes[] = INITQFNAMES;
@@ -4145,6 +4233,9 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_xattr = ext4_xattr_handlers;
 #ifdef CONFIG_EXT4_FS_ENCRYPTION
 	sb->s_cop = &ext4_cryptops;
+#endif
+#ifdef CONFIG_EXT4_FS_VERITY
+	sb->s_vop = &ext4_verityops;
 #endif
 #ifdef CONFIG_QUOTA
 	sb->dq_op = &ext4_quota_operations;
