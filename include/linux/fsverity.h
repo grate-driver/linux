@@ -23,6 +23,7 @@ struct fsverity_operations {
 
 /* ioctl.c */
 extern int fsverity_ioctl_enable(struct file *filp, const void __user *arg);
+extern int fsverity_ioctl_measure(struct file *filp, void __user *arg);
 
 /* setup.c */
 extern int fsverity_file_open(struct inode *inode, struct file *filp);
@@ -47,6 +48,11 @@ static inline bool fsverity_check_hole(struct inode *inode, struct page *page)
 
 static inline int fsverity_ioctl_enable(struct file *filp,
 					const void __user *arg)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int fsverity_ioctl_measure(struct file *filp, void __user *arg)
 {
 	return -EOPNOTSUPP;
 }
