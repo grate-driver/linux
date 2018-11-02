@@ -98,12 +98,6 @@ int host1x_firewall_check_job(struct host1x *host, struct host1x_job *job,
 	for (i = 0; i < job->num_relocs; i++) {
 		struct host1x_reloc *reloc = &job->relocs[i];
 
-		if (reloc->target.offset & 3) {
-			FW_ERR("Relocation #%u has unaligned target offset %lu\n",
-			       i, reloc->target.offset);
-			goto fail;
-		}
-
 		if (reloc->target.offset >= host1x_bo_size(reloc->target.bo)) {
 			FW_ERR("Relocation #%u has invalid target offset %lu, max %zu\n",
 			       i, reloc->target.offset,
