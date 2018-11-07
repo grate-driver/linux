@@ -2,7 +2,8 @@
  *  Linux MegaRAID driver for SAS based RAID controllers
  *
  *  Copyright (c) 2003-2013  LSI Corporation
- *  Copyright (c) 2013-2014  Avago Technologies
+ *  Copyright (c) 2013-2016  Avago Technologies
+ *  Copyright (c) 2016-2018  Broadcom Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -17,18 +18,15 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- *  Authors: Avago Technologies
+ *  Authors: Broadcom Inc.
  *           Sreenivas Bagalkote
  *           Sumant Patro
  *           Bo Yang
  *           Adam Radford
- *           Kashyap Desai <kashyap.desai@avagotech.com>
- *           Sumit Saxena <sumit.saxena@avagotech.com>
+ *           Kashyap Desai <kashyap.desai@broadcom.com>
+ *           Sumit Saxena <sumit.saxena@broadcom.com>
  *
- *  Send feedback to: megaraidlinux.pdl@avagotech.com
- *
- *  Mail to: Avago Technologies, 350 West Trimble Road, Building 90,
- *  San Jose, California 95131
+ *  Send feedback to: megaraidlinux.pdl@broadcom.com
  */
 
 #include <linux/kernel.h>
@@ -87,8 +85,7 @@ MODULE_PARM_DESC(throttlequeuedepth,
 
 unsigned int resetwaittime = MEGASAS_RESET_WAIT_TIME;
 module_param(resetwaittime, int, S_IRUGO);
-MODULE_PARM_DESC(resetwaittime, "Wait time in seconds after I/O timeout "
-		 "before resetting adapter. Default: 180");
+MODULE_PARM_DESC(resetwaittime, "Wait time in (1-180s) after I/O timeout before resetting adapter. Default: 180s");
 
 int smp_affinity_enable = 1;
 module_param(smp_affinity_enable, int, S_IRUGO);
@@ -96,7 +93,7 @@ MODULE_PARM_DESC(smp_affinity_enable, "SMP affinity feature enable/disable Defau
 
 int rdpq_enable = 1;
 module_param(rdpq_enable, int, S_IRUGO);
-MODULE_PARM_DESC(rdpq_enable, " Allocate reply queue in chunks for large queue depth enable/disable Default: disable(0)");
+MODULE_PARM_DESC(rdpq_enable, "Allocate reply queue in chunks for large queue depth enable/disable Default: enable(1)");
 
 unsigned int dual_qdepth_disable;
 module_param(dual_qdepth_disable, int, S_IRUGO);
@@ -108,8 +105,8 @@ MODULE_PARM_DESC(scmd_timeout, "scsi command timeout (10-90s), default 90s. See 
 
 MODULE_LICENSE("GPL");
 MODULE_VERSION(MEGASAS_VERSION);
-MODULE_AUTHOR("megaraidlinux.pdl@avagotech.com");
-MODULE_DESCRIPTION("Avago MegaRAID SAS Driver");
+MODULE_AUTHOR("megaraidlinux.pdl@broadcom.com");
+MODULE_DESCRIPTION("Broadcom MegaRAID SAS Driver");
 
 int megasas_transition_to_ready(struct megasas_instance *instance, int ocr);
 static int megasas_get_pd_list(struct megasas_instance *instance);
@@ -598,7 +595,7 @@ megasas_disable_intr_ppc(struct megasas_instance *instance)
 static u32
 megasas_read_fw_status_reg_ppc(struct megasas_register_set __iomem * regs)
 {
-	return readl(&(regs)->outbound_scratch_pad);
+	return readl(&(regs)->outbound_scratch_pad_0);
 }
 
 /**
@@ -723,7 +720,7 @@ megasas_disable_intr_skinny(struct megasas_instance *instance)
 static u32
 megasas_read_fw_status_reg_skinny(struct megasas_register_set __iomem *regs)
 {
-	return readl(&(regs)->outbound_scratch_pad);
+	return readl(&(regs)->outbound_scratch_pad_0);
 }
 
 /**
@@ -868,7 +865,7 @@ megasas_disable_intr_gen2(struct megasas_instance *instance)
 static u32
 megasas_read_fw_status_reg_gen2(struct megasas_register_set __iomem *regs)
 {
-	return readl(&(regs)->outbound_scratch_pad);
+	return readl(&(regs)->outbound_scratch_pad_0);
 }
 
 /**
@@ -2079,9 +2076,11 @@ void megaraid_sas_kill_hba(struct megasas_instance *instance)
 	if ((instance->pdev->device == PCI_DEVICE_ID_LSI_SAS0073SKINNY) ||
 		(instance->pdev->device == PCI_DEVICE_ID_LSI_SAS0071SKINNY) ||
 		(instance->adapter_type != MFI_SERIES)) {
-		writel(MFI_STOP_ADP, &instance->reg_set->doorbell);
-		/* Flush */
-		readl(&instance->reg_set->doorbell);
+		if (!instance->requestorId) {
+			writel(MFI_STOP_ADP, &instance->reg_set->doorbell);
+			/* Flush */
+			readl(&instance->reg_set->doorbell);
+		}
 		if (instance->requestorId && instance->peerIsPresent)
 			memset(instance->ld_ids, 0xff, MEGASAS_MAX_LD_IDS);
 	} else {
@@ -3891,12 +3890,12 @@ megasas_transition_to_ready(struct megasas_instance *instance, int ocr)
 		/*
 		 * The cur_state should not last for more than max_wait secs
 		 */
-		for (i = 0; i < (max_wait * 1000); i++) {
+		for (i = 0; i < max_wait; i++) {
 			curr_abs_state = instance->instancet->
 				read_fw_status_reg(instance->reg_set);
 
 			if (abs_state == curr_abs_state) {
-				msleep(1);
+				msleep(1000);
 			} else
 				break;
 		}
@@ -4634,9 +4633,9 @@ static void megasas_update_ext_vd_details(struct megasas_instance *instance)
 	}
 
 	dev_info(&instance->pdev->dev,
-		"firmware type\t: %s\n",
-		instance->supportmax256vd ? "Extended VD(240 VD)firmware" :
-		"Legacy(64 VD) firmware");
+		"FW provided supportMaxExtLDs: %d\tmax_lds: %d\n",
+		instance->ctrl_info_buf->adapterOperations3.supportMaxExtLDs ? 1 : 0,
+		instance->ctrl_info_buf->max_lds);
 
 	if (instance->max_raid_mapsize) {
 		ventura_map_sz = instance->max_raid_mapsize *
@@ -4659,6 +4658,87 @@ static void megasas_update_ext_vd_details(struct megasas_instance *instance)
 	}
 	/* irrespective of FW raid maps, driver raid map is constant */
 	fusion->drv_map_sz = sizeof(struct MR_DRV_RAID_MAP_ALL);
+}
+
+/*
+ * dcmd.opcode                - MR_DCMD_CTRL_SNAPDUMP_GET_PROPERTIES
+ * dcmd.hdr.length            - number of bytes to read
+ * dcmd.sge                   - Ptr to MR_SNAPDUMP_PROPERTIES
+ * Desc:			 Fill in snapdump properties
+ * Status:			 MFI_STAT_OK- Command successful
+ */
+void megasas_get_snapdump_properties(struct megasas_instance *instance)
+{
+	int ret = 0;
+	struct megasas_cmd *cmd;
+	struct megasas_dcmd_frame *dcmd;
+	struct MR_SNAPDUMP_PROPERTIES *ci;
+	dma_addr_t ci_h = 0;
+
+	ci = instance->snapdump_prop;
+	ci_h = instance->snapdump_prop_h;
+
+	if (!ci)
+		return;
+
+	cmd = megasas_get_cmd(instance);
+
+	if (!cmd) {
+		dev_dbg(&instance->pdev->dev, "Failed to get a free cmd\n");
+		return;
+	}
+
+	dcmd = &cmd->frame->dcmd;
+
+	memset(ci, 0, sizeof(*ci));
+	memset(dcmd->mbox.b, 0, MFI_MBOX_SIZE);
+
+	dcmd->cmd = MFI_CMD_DCMD;
+	dcmd->cmd_status = MFI_STAT_INVALID_STATUS;
+	dcmd->sge_count = 1;
+	dcmd->flags = MFI_FRAME_DIR_READ;
+	dcmd->timeout = 0;
+	dcmd->pad_0 = 0;
+	dcmd->data_xfer_len = cpu_to_le32(sizeof(struct MR_SNAPDUMP_PROPERTIES));
+	dcmd->opcode = cpu_to_le32(MR_DCMD_CTRL_SNAPDUMP_GET_PROPERTIES);
+
+	megasas_set_dma_settings(instance, dcmd, ci_h,
+				 sizeof(struct MR_SNAPDUMP_PROPERTIES));
+
+	if (!instance->mask_interrupts) {
+		ret = megasas_issue_blocked_cmd(instance, cmd,
+						MFI_IO_TIMEOUT_SECS);
+	} else {
+		ret = megasas_issue_polled(instance, cmd);
+		cmd->flags |= DRV_DCMD_SKIP_REFIRE;
+	}
+
+	switch (ret) {
+	case DCMD_SUCCESS:
+		instance->snapdump_wait_time =
+			min_t(u8, ci->trigger_min_num_sec_before_ocr,
+				MEGASAS_MAX_SNAP_DUMP_WAIT_TIME);
+		break;
+
+	case DCMD_TIMEOUT:
+		switch (dcmd_timeout_ocr_possible(instance)) {
+		case INITIATE_OCR:
+			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
+			megasas_reset_fusion(instance->host,
+				MFI_IO_TIMEOUT_OCR);
+			break;
+		case KILL_ADAPTER:
+			megaraid_sas_kill_hba(instance);
+			break;
+		case IGNORE_TIMEOUT:
+			dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d\n",
+				__func__, __LINE__);
+			break;
+		}
+	}
+
+	if (ret != DCMD_TIMEOUT)
+		megasas_return_cmd(instance, cmd);
 }
 
 /**
@@ -4720,6 +4800,7 @@ megasas_get_ctrl_info(struct megasas_instance *instance)
 		 * CPU endianness format.
 		 */
 		le32_to_cpus((u32 *)&ci->properties.OnOffProperties);
+		le16_to_cpus((u16 *)&ci->properties.on_off_properties2);
 		le32_to_cpus((u32 *)&ci->adapterOperations2);
 		le32_to_cpus((u32 *)&ci->adapterOperations3);
 		le16_to_cpus((u16 *)&ci->adapter_operations4);
@@ -4741,6 +4822,11 @@ megasas_get_ctrl_info(struct megasas_instance *instance)
 
 		/*Check whether controller is iMR or MR */
 		instance->is_imr = (ci->memory_size ? 0 : 1);
+
+		instance->snapdump_wait_time =
+			(ci->properties.on_off_properties2.enable_snap_dump ?
+			 MEGASAS_DEFAULT_SNAP_DUMP_WAIT_TIME : 0);
+
 		dev_info(&instance->pdev->dev,
 			"controller type\t: %s(%dMB)\n",
 			instance->is_imr ? "iMR" : "MR",
@@ -5213,7 +5299,7 @@ static int megasas_init_fw(struct megasas_instance *instance)
 {
 	u32 max_sectors_1;
 	u32 max_sectors_2, tmp_sectors, msix_enable;
-	u32 scratch_pad_2, scratch_pad_3, scratch_pad_4;
+	u32 scratch_pad_1, scratch_pad_2, scratch_pad_3, status_reg;
 	resource_size_t base_addr;
 	struct megasas_register_set __iomem *reg_set;
 	struct megasas_ctrl_info *ctrl_info = NULL;
@@ -5221,6 +5307,7 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	int i, j, loop, fw_msix_count = 0;
 	struct IOV_111 *iovPtr;
 	struct fusion_context *fusion;
+	bool do_adp_reset = true;
 
 	fusion = instance->ctrl_context;
 
@@ -5269,19 +5356,29 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	}
 
 	if (megasas_transition_to_ready(instance, 0)) {
-		atomic_set(&instance->fw_reset_no_pci_access, 1);
-		instance->instancet->adp_reset
-			(instance, instance->reg_set);
-		atomic_set(&instance->fw_reset_no_pci_access, 0);
-		dev_info(&instance->pdev->dev,
-			"FW restarted successfully from %s!\n",
-			__func__);
+		if (instance->adapter_type >= INVADER_SERIES) {
+			status_reg = instance->instancet->read_fw_status_reg(
+					instance->reg_set);
+			do_adp_reset = status_reg & MFI_RESET_ADAPTER;
+		}
 
-		/*waitting for about 30 second before retry*/
-		ssleep(30);
+		if (do_adp_reset) {
+			atomic_set(&instance->fw_reset_no_pci_access, 1);
+			instance->instancet->adp_reset
+				(instance, instance->reg_set);
+			atomic_set(&instance->fw_reset_no_pci_access, 0);
+			dev_info(&instance->pdev->dev,
+				 "FW restarted successfully from %s!\n",
+				 __func__);
 
-		if (megasas_transition_to_ready(instance, 0))
+			/*waiting for about 30 second before retry*/
+			ssleep(30);
+
+			if (megasas_transition_to_ready(instance, 0))
+				goto fail_ready_state;
+		} else {
 			goto fail_ready_state;
+		}
 	}
 
 	megasas_init_ctrl_params(instance);
@@ -5298,9 +5395,9 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	fusion = instance->ctrl_context;
 
 	if (instance->adapter_type == VENTURA_SERIES) {
-		scratch_pad_3 =
-			readl(&instance->reg_set->outbound_scratch_pad_3);
-		instance->max_raid_mapsize = ((scratch_pad_3 >>
+		scratch_pad_2 =
+			readl(&instance->reg_set->outbound_scratch_pad_2);
+		instance->max_raid_mapsize = ((scratch_pad_2 >>
 			MR_MAX_RAID_MAP_SIZE_OFFSET_SHIFT) &
 			MR_MAX_RAID_MAP_SIZE_MASK);
 	}
@@ -5311,24 +5408,41 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	if (msix_enable && !msix_disable) {
 		int irq_flags = PCI_IRQ_MSIX;
 
-		scratch_pad_2 = readl
-			(&instance->reg_set->outbound_scratch_pad_2);
+		scratch_pad_1 = readl
+			(&instance->reg_set->outbound_scratch_pad_1);
 		/* Check max MSI-X vectors */
 		if (fusion) {
 			if (instance->adapter_type == THUNDERBOLT_SERIES) {
 				/* Thunderbolt Series*/
-				instance->msix_vectors = (scratch_pad_2
+				instance->msix_vectors = (scratch_pad_1
 					& MR_MAX_REPLY_QUEUES_OFFSET) + 1;
 				fw_msix_count = instance->msix_vectors;
-			} else { /* Invader series supports more than 8 MSI-x vectors*/
-				instance->msix_vectors = ((scratch_pad_2
+			} else {
+				instance->msix_vectors = ((scratch_pad_1
 					& MR_MAX_REPLY_QUEUES_EXT_OFFSET)
 					>> MR_MAX_REPLY_QUEUES_EXT_OFFSET_SHIFT) + 1;
-				if (instance->msix_vectors > 16)
-					instance->msix_combined = true;
+
+				/*
+				 * For Invader series, > 8 MSI-x vectors
+				 * supported by FW/HW implies combined
+				 * reply queue mode is enabled.
+				 * For Ventura series, > 16 MSI-x vectors
+				 * supported by FW/HW implies combined
+				 * reply queue mode is enabled.
+				 */
+				switch (instance->adapter_type) {
+				case INVADER_SERIES:
+					if (instance->msix_vectors > 8)
+						instance->msix_combined = true;
+					break;
+				case VENTURA_SERIES:
+					if (instance->msix_vectors > 16)
+						instance->msix_combined = true;
+					break;
+				}
 
 				if (rdpq_enable)
-					instance->is_rdpq = (scratch_pad_2 & MR_RDPQ_MODE_OFFSET) ?
+					instance->is_rdpq = (scratch_pad_1 & MR_RDPQ_MODE_OFFSET) ?
 								1 : 0;
 				fw_msix_count = instance->msix_vectors;
 				/* Save 1-15 reply post index address to local memory
@@ -5377,7 +5491,7 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	if (!instance->msix_vectors) {
 		i = pci_alloc_irq_vectors(instance->pdev, 1, 1, PCI_IRQ_LEGACY);
 		if (i < 0)
-			goto fail_setup_irqs;
+			goto fail_init_adapter;
 	}
 
 	megasas_setup_reply_map(instance);
@@ -5404,12 +5518,12 @@ static int megasas_init_fw(struct megasas_instance *instance)
 		goto fail_init_adapter;
 
 	if (instance->adapter_type == VENTURA_SERIES) {
-		scratch_pad_4 =
-			readl(&instance->reg_set->outbound_scratch_pad_4);
-		if ((scratch_pad_4 & MR_NVME_PAGE_SIZE_MASK) >=
+		scratch_pad_3 =
+			readl(&instance->reg_set->outbound_scratch_pad_3);
+		if ((scratch_pad_3 & MR_NVME_PAGE_SIZE_MASK) >=
 			MR_DEFAULT_NVME_PAGE_SHIFT)
 			instance->nvme_page_size =
-				(1 << (scratch_pad_4 & MR_NVME_PAGE_SIZE_MASK));
+				(1 << (scratch_pad_3 & MR_NVME_PAGE_SIZE_MASK));
 
 		dev_info(&instance->pdev->dev,
 			 "NVME page size\t: (%d)\n", instance->nvme_page_size);
@@ -5539,6 +5653,11 @@ static int megasas_init_fw(struct megasas_instance *instance)
 		instance->crash_dump_buf = NULL;
 	}
 
+	if (instance->snapdump_wait_time) {
+		megasas_get_snapdump_properties(instance);
+		dev_info(&instance->pdev->dev, "Snap dump wait time\t: %d\n",
+			 instance->snapdump_wait_time);
+	}
 
 	dev_info(&instance->pdev->dev,
 		"pci id\t\t: (0x%04x)/(0x%04x)/(0x%04x)/(0x%04x)\n",
@@ -5552,7 +5671,6 @@ static int megasas_init_fw(struct megasas_instance *instance)
 		instance->crash_dump_drv_support ? "yes" : "no");
 	dev_info(&instance->pdev->dev, "jbod sync map		: %s\n",
 		instance->use_seqnum_jbod_fp ? "yes" : "no");
-
 
 	instance->max_sectors_per_req = instance->max_num_sge *
 						SGE_BUFFER_SIZE / 512;
@@ -5576,19 +5694,32 @@ static int megasas_init_fw(struct megasas_instance *instance)
 
 	/* Launch SR-IOV heartbeat timer */
 	if (instance->requestorId) {
-		if (!megasas_sriov_start_heartbeat(instance, 1))
+		if (!megasas_sriov_start_heartbeat(instance, 1)) {
 			megasas_start_timer(instance);
-		else
+		} else {
 			instance->skip_heartbeat_timer_del = 1;
+			goto fail_get_ld_pd_list;
+		}
 	}
+
+	/*
+	 * Create and start watchdog thread which will monitor
+	 * controller state every 1 sec and trigger OCR when
+	 * it enters fault state
+	 */
+	if (instance->adapter_type != MFI_SERIES)
+		if (megasas_fusion_start_watchdog(instance) != SUCCESS)
+			goto fail_start_watchdog;
 
 	return 0;
 
+fail_start_watchdog:
+	if (instance->requestorId && !instance->skip_heartbeat_timer_del)
+		del_timer_sync(&instance->sriov_heartbeat_timer);
 fail_get_ld_pd_list:
 	instance->instancet->disable_intr(instance);
-fail_init_adapter:
 	megasas_destroy_irqs(instance);
-fail_setup_irqs:
+fail_init_adapter:
 	if (instance->msix_vectors)
 		pci_free_irq_vectors(instance->pdev);
 	instance->msix_vectors = 0;
@@ -6038,7 +6169,7 @@ megasas_set_dma_mask(struct megasas_instance *instance)
 {
 	u64 consistent_mask;
 	struct pci_dev *pdev;
-	u32 scratch_pad_2;
+	u32 scratch_pad_1;
 
 	pdev = instance->pdev;
 	consistent_mask = (instance->adapter_type == VENTURA_SERIES) ?
@@ -6056,10 +6187,10 @@ megasas_set_dma_mask(struct megasas_instance *instance)
 			 * If 32 bit DMA mask fails, then try for 64 bit mask
 			 * for FW capable of handling 64 bit DMA.
 			 */
-			scratch_pad_2 = readl
-				(&instance->reg_set->outbound_scratch_pad_2);
+			scratch_pad_1 = readl
+				(&instance->reg_set->outbound_scratch_pad_1);
 
-			if (!(scratch_pad_2 & MR_CAN_HANDLE_64_BIT_DMA_OFFSET))
+			if (!(scratch_pad_1 & MR_CAN_HANDLE_64_BIT_DMA_OFFSET))
 				goto fail_set_dma_mask;
 			else if (dma_set_mask_and_coherent(&pdev->dev,
 							   DMA_BIT_MASK(64)))
@@ -6245,6 +6376,14 @@ int megasas_alloc_ctrl_dma_buffers(struct megasas_instance *instance)
 				"Failed to allocate PD list buffer\n");
 			return -ENOMEM;
 		}
+
+		instance->snapdump_prop = dma_alloc_coherent(&pdev->dev,
+				sizeof(struct MR_SNAPDUMP_PROPERTIES),
+				&instance->snapdump_prop_h, GFP_KERNEL);
+
+		if (!instance->snapdump_prop)
+			dev_err(&pdev->dev,
+				"Failed to allocate snapdump properties buffer\n");
 	}
 
 	instance->pd_list_buf =
@@ -6388,6 +6527,12 @@ void megasas_free_ctrl_dma_buffers(struct megasas_instance *instance)
 		dma_free_coherent(&pdev->dev, CRASH_DMA_BUF_SIZE,
 				    instance->crash_dump_buf,
 				    instance->crash_dump_h);
+
+	if (instance->snapdump_prop)
+		dma_free_coherent(&pdev->dev,
+				  sizeof(struct MR_SNAPDUMP_PROPERTIES),
+				  instance->snapdump_prop,
+				  instance->snapdump_prop_h);
 }
 
 /*
@@ -6434,12 +6579,10 @@ static inline void megasas_init_ctrl_params(struct megasas_instance *instance)
 	instance->disableOnlineCtrlReset = 1;
 	instance->UnevenSpanSupport = 0;
 
-	if (instance->adapter_type != MFI_SERIES) {
+	if (instance->adapter_type != MFI_SERIES)
 		INIT_WORK(&instance->work_init, megasas_fusion_ocr_wq);
-		INIT_WORK(&instance->crash_init, megasas_fusion_crash_dump_wq);
-	} else {
+	else
 		INIT_WORK(&instance->work_init, process_fw_state_change_wq);
-	}
 }
 
 /**
@@ -6708,6 +6851,10 @@ megasas_suspend(struct pci_dev *pdev, pm_message_t state)
 	if (instance->requestorId && !instance->skip_heartbeat_timer_del)
 		del_timer_sync(&instance->sriov_heartbeat_timer);
 
+	/* Stop the FW fault detection watchdog */
+	if (instance->adapter_type != MFI_SERIES)
+		megasas_fusion_stop_watchdog(instance);
+
 	megasas_flush_cache(instance);
 	megasas_shutdown_controller(instance, MR_DCMD_HIBERNATE_SHUTDOWN);
 
@@ -6843,8 +6990,16 @@ megasas_resume(struct pci_dev *pdev)
 	if (megasas_start_aen(instance))
 		dev_err(&instance->pdev->dev, "Start AEN failed\n");
 
+	/* Re-launch FW fault watchdog */
+	if (instance->adapter_type != MFI_SERIES)
+		if (megasas_fusion_start_watchdog(instance) != SUCCESS)
+			goto fail_start_watchdog;
+
 	return 0;
 
+fail_start_watchdog:
+	if (instance->requestorId && !instance->skip_heartbeat_timer_del)
+		del_timer_sync(&instance->sriov_heartbeat_timer);
 fail_init_mfi:
 	megasas_free_ctrl_dma_buffers(instance);
 	megasas_free_ctrl_mem(instance);
@@ -6911,6 +7066,10 @@ static void megasas_detach_one(struct pci_dev *pdev)
 	/* Shutdown SR-IOV heartbeat timer */
 	if (instance->requestorId && !instance->skip_heartbeat_timer_del)
 		del_timer_sync(&instance->sriov_heartbeat_timer);
+
+	/* Stop the FW fault detection watchdog */
+	if (instance->adapter_type != MFI_SERIES)
+		megasas_fusion_stop_watchdog(instance);
 
 	if (instance->fw_crash_state != UNAVAILABLE)
 		megasas_free_host_crash_buffer(instance);
@@ -7737,8 +7896,15 @@ megasas_aen_polling(struct work_struct *work)
 			break;
 
 		case MR_EVT_CTRL_PROP_CHANGED:
-				dcmd_ret = megasas_get_ctrl_info(instance);
-				break;
+			dcmd_ret = megasas_get_ctrl_info(instance);
+			if (dcmd_ret == DCMD_SUCCESS &&
+			    instance->snapdump_wait_time) {
+				megasas_get_snapdump_properties(instance);
+				dev_info(&instance->pdev->dev,
+					 "Snap dump wait time\t: %d\n",
+					 instance->snapdump_wait_time);
+			}
+			break;
 		default:
 			doscan = 0;
 			break;
