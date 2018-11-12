@@ -1,0 +1,17 @@
+next/soc
+	patch
+		ARM: stm32: debug: add low-level debug support
+
+next/dt
+
+next/drivers
+
+next/defconfig
+
+next/late
+
+fixes
+	<no branch> (9134586715e389fe90d9d28cb37a668f374d686a)
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-fixes-for-4.20-rc1
+	<no branch> (8588eac3ff66e77fb681591714fd76da3a4da80d)
+		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/am654-fixes-for-v4.20
