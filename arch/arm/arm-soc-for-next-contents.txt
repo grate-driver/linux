@@ -3,6 +3,8 @@ next/soc
 		ARM: stm32: debug: add low-level debug support
 
 next/dt
+	sprd/dt
+		https://github.com/lyrazhang/linux next-for-4.21
 
 next/drivers
 
@@ -15,3 +17,6 @@ fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-fixes-for-4.20-rc1
 	<no branch> (8588eac3ff66e77fb681591714fd76da3a4da80d)
 		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/am654-fixes-for-v4.20
+	<no branch> (7900f06c3feedbe74d79f28a0d062dbf11fd10bf)
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.20/maintainers-part2
+
