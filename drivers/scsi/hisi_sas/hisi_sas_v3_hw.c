@@ -42,6 +42,7 @@
 #define MAX_CON_TIME_LIMIT_TIME		0xa4
 #define BUS_INACTIVE_LIMIT_TIME		0xa8
 #define REJECT_TO_OPEN_LIMIT_TIME	0xac
+#define CQ_INT_CONVERGE_EN		0xb0
 #define CFG_AGING_TIME			0xbc
 #define HGC_DFX_CFG2			0xc0
 #define CFG_ABT_SET_QUERY_IPTT	0xd4
@@ -371,6 +372,9 @@ struct hisi_sas_err_record_v3 {
 	((fis.command == ATA_CMD_DEV_RESET) && \
 	((fis.control & ATA_SRST) != 0)))
 
+static bool hisi_sas_intr_conv;
+MODULE_PARM_DESC(intr_conv, "interrupt converge enable (0-1)");
+
 static u32 hisi_sas_read32(struct hisi_hba *hisi_hba, u32 off)
 {
 	void __iomem *regs = hisi_hba->regs + off;
@@ -436,6 +440,8 @@ static void init_reg_v3_hw(struct hisi_hba *hisi_hba)
 	hisi_sas_write32(hisi_hba, INT_COAL_EN, 0x1);
 	hisi_sas_write32(hisi_hba, OQ_INT_COAL_TIME, 0x1);
 	hisi_sas_write32(hisi_hba, OQ_INT_COAL_CNT, 0x1);
+	hisi_sas_write32(hisi_hba, CQ_INT_CONVERGE_EN,
+			 hisi_sas_intr_conv);
 	hisi_sas_write32(hisi_hba, OQ_INT_SRC, 0xffff);
 	hisi_sas_write32(hisi_hba, ENT_INT_SRC1, 0xffffffff);
 	hisi_sas_write32(hisi_hba, ENT_INT_SRC2, 0xffffffff);
@@ -494,7 +500,7 @@ static void init_reg_v3_hw(struct hisi_hba *hisi_hba)
 		hisi_sas_phy_write32(hisi_hba, i, PHYCTRL_OOB_RESTART_MSK, 0x1);
 		hisi_sas_phy_write32(hisi_hba, i, STP_LINK_TIMER, 0x7f7a120);
 		hisi_sas_phy_write32(hisi_hba, i, CON_CFG_DRIVER, 0x2a0a01);
-
+		hisi_sas_phy_write32(hisi_hba, i, SAS_SSP_CON_TIMER_CFG, 0x32);
 		/* used for 12G negotiate */
 		hisi_sas_phy_write32(hisi_hba, i, COARSETUNE_TIME, 0x1e);
 		hisi_sas_phy_write32(hisi_hba, i, AIP_LIMIT, 0x2ffff);
@@ -1878,10 +1884,12 @@ static int interrupt_init_v3_hw(struct hisi_hba *hisi_hba)
 	for (i = 0; i < hisi_hba->queue_count; i++) {
 		struct hisi_sas_cq *cq = &hisi_hba->cq[i];
 		struct tasklet_struct *t = &cq->tasklet;
+		int nr = hisi_sas_intr_conv ? 16 : 16 + i;
+		unsigned long irqflags = hisi_sas_intr_conv ? IRQF_SHARED : 0;
 
-		rc = devm_request_irq(dev, pci_irq_vector(pdev, i+16),
-					  cq_interrupt_v3_hw, 0,
-					  DRV_NAME " cq", cq);
+		rc = devm_request_irq(dev, pci_irq_vector(pdev, nr),
+				      cq_interrupt_v3_hw, irqflags,
+				      DRV_NAME " cq", cq);
 		if (rc) {
 			dev_err(dev,
 				"could not request cq%d interrupt, rc=%d\n",
@@ -1898,8 +1906,9 @@ static int interrupt_init_v3_hw(struct hisi_hba *hisi_hba)
 free_cq_irqs:
 	for (k = 0; k < i; k++) {
 		struct hisi_sas_cq *cq = &hisi_hba->cq[k];
+		int nr = hisi_sas_intr_conv ? 16 : 16 + k;
 
-		free_irq(pci_irq_vector(pdev, k+16), cq);
+		free_irq(pci_irq_vector(pdev, nr), cq);
 	}
 	free_irq(pci_irq_vector(pdev, 11), hisi_hba);
 free_chnl_interrupt:
@@ -2089,6 +2098,119 @@ static void wait_cmds_complete_timeout_v3_hw(struct hisi_hba *hisi_hba,
 	dev_dbg(dev, "wait commands complete %dms\n", time);
 }
 
+static ssize_t intr_conv_v3_hw_show(struct device *dev,
+				    struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", hisi_sas_intr_conv);
+}
+static DEVICE_ATTR_RO(intr_conv_v3_hw);
+
+static void config_intr_coal_v3_hw(struct hisi_hba *hisi_hba)
+{
+	/* config those registers between enable and disable PHYs */
+	hisi_sas_stop_phys(hisi_hba);
+
+	if (hisi_hba->intr_coal_ticks == 0 ||
+	    hisi_hba->intr_coal_count == 0) {
+		hisi_sas_write32(hisi_hba, INT_COAL_EN, 0x1);
+		hisi_sas_write32(hisi_hba, OQ_INT_COAL_TIME, 0x1);
+		hisi_sas_write32(hisi_hba, OQ_INT_COAL_CNT, 0x1);
+	} else {
+		hisi_sas_write32(hisi_hba, INT_COAL_EN, 0x3);
+		hisi_sas_write32(hisi_hba, OQ_INT_COAL_TIME,
+				 hisi_hba->intr_coal_ticks);
+		hisi_sas_write32(hisi_hba, OQ_INT_COAL_CNT,
+				 hisi_hba->intr_coal_count);
+	}
+	phys_init_v3_hw(hisi_hba);
+}
+
+static ssize_t intr_coal_ticks_v3_hw_show(struct device *dev,
+					  struct device_attribute *attr,
+					  char *buf)
+{
+	struct Scsi_Host *shost = class_to_shost(dev);
+	struct hisi_hba *hisi_hba = shost_priv(shost);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 hisi_hba->intr_coal_ticks);
+}
+
+static ssize_t intr_coal_ticks_v3_hw_store(struct device *dev,
+					   struct device_attribute *attr,
+					   const char *buf, size_t count)
+{
+	struct Scsi_Host *shost = class_to_shost(dev);
+	struct hisi_hba *hisi_hba = shost_priv(shost);
+	u32 intr_coal_ticks;
+	int ret;
+
+	ret = kstrtou32(buf, 10, &intr_coal_ticks);
+	if (ret) {
+		dev_err(dev, "Input data of interrupt coalesce unmatch\n");
+		return -EINVAL;
+	}
+
+	if (intr_coal_ticks >= BIT(24)) {
+		dev_err(dev, "intr_coal_ticks must be less than 2^24!\n");
+		return -EINVAL;
+	}
+
+	hisi_hba->intr_coal_ticks = intr_coal_ticks;
+
+	config_intr_coal_v3_hw(hisi_hba);
+
+	return count;
+}
+static DEVICE_ATTR_RW(intr_coal_ticks_v3_hw);
+
+static ssize_t intr_coal_count_v3_hw_show(struct device *dev,
+					  struct device_attribute
+					  *attr, char *buf)
+{
+	struct Scsi_Host *shost = class_to_shost(dev);
+	struct hisi_hba *hisi_hba = shost_priv(shost);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 hisi_hba->intr_coal_count);
+}
+
+static ssize_t intr_coal_count_v3_hw_store(struct device *dev,
+		struct device_attribute
+		*attr, const char *buf, size_t count)
+{
+	struct Scsi_Host *shost = class_to_shost(dev);
+	struct hisi_hba *hisi_hba = shost_priv(shost);
+	u32 intr_coal_count;
+	int ret;
+
+	ret = kstrtou32(buf, 10, &intr_coal_count);
+	if (ret) {
+		dev_err(dev, "Input data of interrupt coalesce unmatch\n");
+		return -EINVAL;
+	}
+
+	if (intr_coal_count >= BIT(8)) {
+		dev_err(dev, "intr_coal_count must be less than 2^8!\n");
+		return -EINVAL;
+	}
+
+	hisi_hba->intr_coal_count = intr_coal_count;
+
+	config_intr_coal_v3_hw(hisi_hba);
+
+	return count;
+}
+static DEVICE_ATTR_RW(intr_coal_count_v3_hw);
+
+struct device_attribute *host_attrs_v3_hw[] = {
+	&dev_attr_phy_event_threshold,
+	&dev_attr_intr_conv_v3_hw,
+	&dev_attr_intr_coal_ticks_v3_hw,
+	&dev_attr_intr_coal_count_v3_hw,
+	NULL
+};
+
 static struct scsi_host_template sht_v3_hw = {
 	.name			= DRV_NAME,
 	.module			= THIS_MODULE,
@@ -2107,7 +2229,7 @@ static struct scsi_host_template sht_v3_hw = {
 	.eh_target_reset_handler = sas_eh_target_reset_handler,
 	.target_destroy		= sas_target_destroy,
 	.ioctl			= sas_ioctl,
-	.shost_attrs		= host_attrs,
+	.shost_attrs		= host_attrs_v3_hw,
 	.tag_alloc_policy	= BLK_TAG_ALLOC_RR,
 };
 
@@ -2199,14 +2321,11 @@ hisi_sas_v3_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (rc)
 		goto err_out_disable_device;
 
-	if ((pci_set_dma_mask(pdev, DMA_BIT_MASK(64)) != 0) ||
-	    (pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64)) != 0)) {
-		if ((pci_set_dma_mask(pdev, DMA_BIT_MASK(32)) != 0) ||
-		   (pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32)) != 0)) {
-			dev_err(dev, "No usable DMA addressing method\n");
-			rc = -EIO;
-			goto err_out_regions;
-		}
+	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64)) ||
+	    dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32))) {
+		dev_err(dev, "No usable DMA addressing method\n");
+		rc = -EIO;
+		goto err_out_regions;
 	}
 
 	shost = hisi_sas_shost_alloc_pci(pdev);
@@ -2301,8 +2420,9 @@ hisi_sas_v3_destroy_irqs(struct pci_dev *pdev, struct hisi_hba *hisi_hba)
 	free_irq(pci_irq_vector(pdev, 11), hisi_hba);
 	for (i = 0; i < hisi_hba->queue_count; i++) {
 		struct hisi_sas_cq *cq = &hisi_hba->cq[i];
+		int nr = hisi_sas_intr_conv ? 16 : 16 + i;
 
-		free_irq(pci_irq_vector(pdev, i+16), cq);
+		free_irq(pci_irq_vector(pdev, nr), cq);
 	}
 	pci_free_irq_vectors(pdev);
 }
@@ -2624,6 +2744,7 @@ static struct pci_driver sas_v3_pci_driver = {
 };
 
 module_pci_driver(sas_v3_pci_driver);
+module_param_named(intr_conv, hisi_sas_intr_conv, bool, 0444);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("John Garry <john.garry@huawei.com>");
