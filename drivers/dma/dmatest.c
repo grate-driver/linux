@@ -507,6 +507,19 @@ static int dmatest_func(void *data)
 	} else
 		goto err_thread_type;
 
+	/* Check if buffer count fits into map count variable (u8) */
+	if ((src_cnt + dst_cnt) >= 255) {
+		pr_err("too many buffers (%d of 255 supported)\n",
+		       src_cnt + dst_cnt);
+		goto err_thread_type;
+	}
+
+	if (1 << align > params->buf_size) {
+		pr_err("%u-byte buffer too small for %d-byte alignment\n",
+		       params->buf_size, 1 << align);
+		goto err_thread_type;
+	}
+
 	thread->srcs = kcalloc(src_cnt + 1, sizeof(u8 *), GFP_KERNEL);
 	if (!thread->srcs)
 		goto err_srcs;
@@ -575,19 +588,6 @@ static int dmatest_func(void *data)
 		unsigned int src_off, dst_off, len;
 
 		total_tests++;
-
-		/* Check if buffer count fits into map count variable (u8) */
-		if ((src_cnt + dst_cnt) >= 255) {
-			pr_err("too many buffers (%d of 255 supported)\n",
-			       src_cnt + dst_cnt);
-			break;
-		}
-
-		if (1 << align > params->buf_size) {
-			pr_err("%u-byte buffer too small for %d-byte alignment\n",
-			       params->buf_size, 1 << align);
-			break;
-		}
 
 		if (params->norandom)
 			len = params->buf_size;
@@ -721,14 +721,14 @@ static int dmatest_func(void *data)
 
 		status = dma_async_is_tx_complete(chan, cookie, NULL, NULL);
 
+		dmaengine_unmap_put(um);
+
 		if (!done->done) {
-			dmaengine_unmap_put(um);
 			result("test timed out", total_tests, src_off, dst_off,
 			       len, 0);
 			failed_tests++;
 			continue;
 		} else if (status != DMA_COMPLETE) {
-			dmaengine_unmap_put(um);
 			result(status == DMA_ERROR ?
 			       "completion error status" :
 			       "completion busy status", total_tests, src_off,
@@ -736,8 +736,6 @@ static int dmatest_func(void *data)
 			failed_tests++;
 			continue;
 		}
-
-		dmaengine_unmap_put(um);
 
 		if (params->noverify) {
 			verbose_result("test passed", total_tests, src_off,
@@ -812,7 +810,7 @@ err_thread_type:
 
 	/* terminate all transfers on specified channels */
 	if (ret || failed_tests)
-		dmaengine_terminate_all(chan);
+		dmaengine_terminate_sync(chan);
 
 	thread->done = true;
 	wake_up(&thread_wait);
@@ -836,7 +834,7 @@ static void dmatest_cleanup_channel(struct dmatest_chan *dtc)
 	}
 
 	/* terminate all transfers on specified channels */
-	dmaengine_terminate_all(dtc->chan);
+	dmaengine_terminate_sync(dtc->chan);
 
 	kfree(dtc);
 }
