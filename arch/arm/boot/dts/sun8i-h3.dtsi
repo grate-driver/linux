@@ -47,19 +47,19 @@
 		compatible = "operating-points-v2";
 		opp-shared;
 
-		opp@648000000 {
+		opp-648000000 {
 			opp-hz = /bits/ 64 <648000000>;
 			opp-microvolt = <1040000 1040000 1300000>;
 			clock-latency-ns = <244144>; /* 8 32k periods */
 		};
 
-		opp@816000000 {
+		opp-816000000 {
 			opp-hz = /bits/ 64 <816000000>;
 			opp-microvolt = <1100000 1100000 1300000>;
 			clock-latency-ns = <244144>; /* 8 32k periods */
 		};
 
-		opp@1008000000 {
+		opp-1008000000 {
 			opp-hz = /bits/ 64 <1008000000>;
 			opp-microvolt = <1200000 1200000 1300000>;
 			clock-latency-ns = <244144>; /* 8 32k periods */
@@ -124,7 +124,7 @@
 		#size-cells = <1>;
 		ranges;
 
-		cma_pool: cma@4a000000 {
+		default-pool {
 			compatible = "shared-dma-pool";
 			size = <0x6000000>;
 			alloc-ranges = <0x4a000000 0x6000000>;
@@ -156,7 +156,7 @@
 			};
 		};
 
-		video-codec@01c0e000 {
+		video-codec@1c0e000 {
 			compatible = "allwinner,sun8i-h3-video-engine";
 			reg = <0x01c0e000 0x1000>;
 			clocks = <&ccu CLK_BUS_VE>, <&ccu CLK_VE>,

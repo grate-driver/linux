@@ -186,17 +186,13 @@
 		};
 	};
 
-	memory {
-		reg = <0x40000000 0x80000000>;
-	};
-
 	reserved-memory {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges;
 
 		/* Address must be kept in the lower 256 MiBs of DRAM for VE. */
-		cma_pool: cma@4a000000 {
+		default-pool {
 			compatible = "shared-dma-pool";
 			size = <0x6000000>;
 			alloc-ranges = <0x4a000000 0x6000000>;
@@ -227,7 +223,7 @@
 		};
 	};
 
-	soc@1c00000 {
+	soc {
 		tcon0: lcd-controller@1c0c000 {
 			compatible = "allwinner,sun8i-a33-tcon";
 			reg = <0x01c0c000 0x1000>;
@@ -269,7 +265,7 @@
 			};
 		};
 
-		video-codec@01c0e000 {
+		video-codec@1c0e000 {
 			compatible = "allwinner,sun8i-a33-video-engine";
 			reg = <0x01c0e000 0x1000>;
 			clocks = <&ccu CLK_BUS_VE>, <&ccu CLK_VE>,
@@ -556,7 +552,7 @@
 	interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>,
 		     <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>;
 
-	uart0_pins_b: uart0@1 {
+	uart0_pb_pins: uart0-pb-pins {
 		pins = "PB0", "PB1";
 		function = "uart0";
 	};
