@@ -1,6 +1,15 @@
 next/soc
 	patch
 		ARM: stm32: debug: add low-level debug support
+	socfpga/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_updates_for_v5.0
+	patch
+		ARM: mmp2: initialize clocks before the timer
+		ARM: mmp/mmp2: dt: enable the clock
+		ARM: mmp: add a pxa-usb-phy device
+		ARM: mmp: add an instance of pxa-usb-phy to ttc_dkb and aspenite
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/soc-signed
 
 next/dt
 	sprd/dt
@@ -39,10 +48,22 @@ next/dt
 	patch
 		ARM: dts: realview-pbx: Fix duplicate regulator nodes
 		ARM: dts: aspeed: add missing memory unit-address
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-4.21
 
 next/drivers
+	rockchip/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-drivers-1
+	amlogic/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-drivers
+	omap/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/driver-signed
 
 next/defconfig
+	vexpress/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/vexpress-defconfig-arm-soc
+	omap/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/defconfig-signed
 
 next/late
 
@@ -67,3 +88,4 @@ fixes
 		MAINTAINERS: Remove unused Qualcomm SoC mailing list
 	<no branch> (512cab3e7e0be11234f965d9898936dce2325382)
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-4.20-2
+
