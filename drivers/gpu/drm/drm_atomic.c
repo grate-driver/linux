@@ -174,6 +174,11 @@ void drm_atomic_state_default_clear(struct drm_atomic_state *state)
 		state->crtcs[i].state = NULL;
 		state->crtcs[i].old_state = NULL;
 		state->crtcs[i].new_state = NULL;
+
+		if (state->crtcs[i].commit) {
+			drm_crtc_commit_put(state->crtcs[i].commit);
+			state->crtcs[i].commit = NULL;
+		}
 	}
 
 	for (i = 0; i < config->num_total_plane; i++) {
@@ -2067,7 +2072,7 @@ static void __drm_state_dump(struct drm_device *dev, struct drm_printer *p,
 	struct drm_connector *connector;
 	struct drm_connector_list_iter conn_iter;
 
-	if (!drm_core_check_feature(dev, DRIVER_ATOMIC))
+	if (!drm_drv_uses_atomic_modeset(dev))
 		return;
 
 	list_for_each_entry(plane, &config->plane_list, head) {
