@@ -10,6 +10,8 @@ next/soc
 		ARM: mmp: add an instance of pxa-usb-phy to ttc_dkb and aspenite
 	omap/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/soc-signed
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.21/soc
 
 next/dt
 	sprd/dt
@@ -50,6 +52,14 @@ next/dt
 		ARM: dts: aspeed: add missing memory unit-address
 	hisi/dt64
 		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-4.21
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.21/devicetree
+	patch
+		ARM: mmp2: DT: be compatible with mrvl,mmp2
+	qcom/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-for-4.21
+	qcom/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-dts-for-4.21
 
 next/drivers
 	rockchip/drivers
@@ -58,12 +68,20 @@ next/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-drivers
 	omap/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/driver-signed
+	broadcom/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.21/drivers
+	qcom/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-drivers-for-4.21
 
 next/defconfig
 	vexpress/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/vexpress-defconfig-arm-soc
 	omap/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/defconfig-signed
+	patch
+		ARM: multi_v7_defconfig: enable STM32 analog & timer drivers
+	qcom/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-defconfig-for-4.21
 
 next/late
 
@@ -76,4 +94,6 @@ fixes
 		ARM: mmp/mmp2: fix cpu_is_mmp2() on mmp2-dt
 		MAINTAINERS: update entry for MMP platform
 		ARM: dts: realview: Fix some more duplicate regulator nodes
+	<no branch> (e25b6783c7b1bb79103d4617336879423f86b05e)
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.20/devicetree-fixes
 
