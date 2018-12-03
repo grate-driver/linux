@@ -68,24 +68,12 @@ next/defconfig
 next/late
 
 fixes
-	<no branch> (9134586715e389fe90d9d28cb37a668f374d686a)
-		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-fixes-for-4.20-rc1
-	<no branch> (8588eac3ff66e77fb681591714fd76da3a4da80d)
-		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/am654-fixes-for-v4.20
-	<no branch> (7900f06c3feedbe74d79f28a0d062dbf11fd10bf)
-		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.20/maintainers-part2
-	<no branch> (4ab7ca092c3c7ac8b16aa28eba723a8868f82f14)
-		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-4.20-fixes
-	<no branch> (672e60b72bbe7aace88721db55b380b6a51fb8f9)
-		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.20-rockchip-dts32fixes-1
-	<no branch> (c1d91f86a1b4c9c05854d59c6a0abd5d0f75b849)
-		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.20-rockchip-dts64fixes-1
-	<no branch> (27df7977099c2b8d32399cd1752f527c5a343dfa)
-		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-fixes-for-v4.20
-	<no branch> (91e43395820baad80248987608216c35da9df65b)
-		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.20/fixes-rc4
 	patch
-		MAINTAINERS: Remove unused Qualcomm SoC mailing list
-	<no branch> (512cab3e7e0be11234f965d9898936dce2325382)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-4.20-2
+		MAINTAINERS: mediatek: Update SoC entry
+	<no branch> (ce68cc6fad893eb33b69ef7ec186233a51696236)
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.19-next-fixes
+	patch
+		ARM: mmp/mmp2: fix cpu_is_mmp2() on mmp2-dt
+		MAINTAINERS: update entry for MMP platform
+		ARM: dts: realview: Fix some more duplicate regulator nodes
 
