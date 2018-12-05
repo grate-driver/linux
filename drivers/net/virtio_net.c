@@ -1343,7 +1343,7 @@ static void free_old_xmit_skbs(struct send_queue *sq, struct netdev_queue *txq,
 		bytes += skb->len;
 		packets++;
 
-		dev_consume_skb_any(skb);
+		napi_consume_skb(skb, use_napi);
 	}
 
 	/* Avoid overhead when no packets have been processed
