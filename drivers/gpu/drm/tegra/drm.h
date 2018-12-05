@@ -7,22 +7,34 @@
 #ifndef HOST1X_DRM_H
 #define HOST1X_DRM_H 1
 
+#include <linux/atomic.h>
+#include <linux/completion.h>
 #include <linux/host1x.h>
+#include <linux/iommu.h>
 #include <linux/iova.h>
 #include <linux/gpio/consumer.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_bridge.h>
+#include <drm/drm_drv.h>
 #include <drm/drm_edid.h>
 #include <drm/drm_encoder.h>
 #include <drm/drm_fb_helper.h>
+#include <drm/drm_file.h>
 #include <drm/drm_fixed.h>
 #include <drm/drm_probe_helper.h>
+#include <drm/drm_syncobj.h>
+#include <drm/gpu_scheduler.h>
+
 #include <uapi/drm/tegra_drm.h>
 
 #include "gem.h"
+#include "channel.h"
+#include "client.h"
 #include "hub.h"
 #include "trace.h"
+
+#define GRATE_KERNEL_DRM_VERSION	(99991 + 6)
 
 struct reset_control;
 
@@ -40,12 +52,20 @@ struct tegra_drm {
 	struct iommu_group *group;
 	struct mutex mm_lock;
 	struct drm_mm mm;
+	struct list_head mm_eviction_list;
 
 	struct {
 		struct iova_domain domain;
 		unsigned long shift;
 		unsigned long limit;
+		bool inited : 1;
 	} carveout;
+
+	struct list_head clients;
+	struct list_head channels;
+
+	spinlock_t context_lock;
+	struct idr drm_contexts;
 
 #ifdef CONFIG_DRM_FBDEV_EMULATION
 	struct tegra_fbdev *fbdev;
@@ -54,13 +74,18 @@ struct tegra_drm {
 	unsigned int pitch_align;
 
 	struct tegra_display_hub *hub;
+
+	struct completion gart_free_up;
+
+	bool has_gart;
 };
 
-struct iommu_group *host1x_client_iommu_attach(struct host1x_client *client,
-					       bool shared);
-void host1x_client_iommu_detach(struct host1x_client *client,
-				struct iommu_group *group,
-				bool shared);
+struct tegra_drm_file {
+	struct drm_sched_entity *sched_entities;
+	struct idr uapi_v1_contexts;
+	atomic_t num_active_jobs;
+	u64 drm_context;
+};
 
 int tegra_drm_init(struct tegra_drm *tegra, struct drm_device *drm);
 int tegra_drm_exit(struct tegra_drm *tegra);

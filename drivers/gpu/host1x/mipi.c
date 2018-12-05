@@ -28,8 +28,6 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
-#include "dev.h"
-
 #define MIPI_CAL_CTRL			0x00
 #define MIPI_CAL_CTRL_NOISE_FILTER(x)	(((x) & 0xf) << 26)
 #define MIPI_CAL_CTRL_PRESCALE(x)	(((x) & 0x3) << 24)
