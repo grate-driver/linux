@@ -491,7 +491,6 @@ static noinline int btrfs_ioctl_fitrim(struct file *file, void __user *arg)
 	struct fstrim_range range;
 	u64 minlen = ULLONG_MAX;
 	u64 num_devices = 0;
-	u64 total_bytes = btrfs_super_total_bytes(fs_info->super_copy);
 	int ret;
 
 	if (!capable(CAP_SYS_ADMIN))
@@ -515,11 +514,15 @@ static noinline int btrfs_ioctl_fitrim(struct file *file, void __user *arg)
 		return -EOPNOTSUPP;
 	if (copy_from_user(&range, arg, sizeof(range)))
 		return -EFAULT;
-	if (range.start > total_bytes ||
-	    range.len < fs_info->sb->s_blocksize)
+
+	/*
+	 * NOTE: Don't truncate the range using super->total_bytes.  Bytenr of
+	 * block group is in the logical address space, which can be any
+	 * sectorsize aligned bytenr in  the range [0, U64_MAX].
+	 */
+	if (range.len < fs_info->sb->s_blocksize)
 		return -EINVAL;
 
-	range.len = min(range.len, total_bytes - range.start);
 	range.minlen = max(range.minlen, minlen);
 	ret = btrfs_trim_fs(fs_info, &range);
 	if (ret < 0)
@@ -686,8 +689,7 @@ static noinline int create_subvol(struct inode *dir,
 		goto fail;
 	}
 
-	ret = btrfs_insert_dir_item(trans, root,
-				    name, namelen, BTRFS_I(dir), &key,
+	ret = btrfs_insert_dir_item(trans, name, namelen, BTRFS_I(dir), &key,
 				    BTRFS_FT_DIR, index);
 	if (ret) {
 		btrfs_abort_transaction(trans, ret);
@@ -1324,7 +1326,7 @@ again:
 
 	if (i_done != page_cnt) {
 		spin_lock(&BTRFS_I(inode)->lock);
-		BTRFS_I(inode)->outstanding_extents++;
+		btrfs_mod_outstanding_extents(BTRFS_I(inode), 1);
 		spin_unlock(&BTRFS_I(inode)->lock);
 		btrfs_delalloc_release_space(inode, data_reserved,
 				start_index << PAGE_SHIFT,
@@ -3486,6 +3488,8 @@ static int btrfs_extent_same_range(struct inode *src, u64 loff, u64 olen,
 			const u64 sz = BTRFS_I(src)->root->fs_info->sectorsize;
 
 			len = round_down(i_size_read(src), sz) - loff;
+			if (len == 0)
+				return 0;
 			olen = len;
 		}
 	}
@@ -4275,9 +4279,17 @@ static noinline int btrfs_clone_files(struct file *file, struct file *file_src,
 		goto out_unlock;
 	if (len == 0)
 		olen = len = src->i_size - off;
-	/* if we extend to eof, continue to block boundary */
-	if (off + len == src->i_size)
+	/*
+	 * If we extend to eof, continue to block boundary if and only if the
+	 * destination end offset matches the destination file's size, otherwise
+	 * we would be corrupting data by placing the eof block into the middle
+	 * of a file.
+	 */
+	if (off + len == src->i_size) {
+		if (!IS_ALIGNED(len, bs) && destoff + len < inode->i_size)
+			goto out_unlock;
 		len = ALIGN(src->i_size, bs) - off;
+	}
 
 	if (len == 0) {
 		ret = 0;
@@ -4393,7 +4405,7 @@ static long btrfs_ioctl_default_subvol(struct file *file, void __user *argp)
 		ret = PTR_ERR(new_root);
 		goto out;
 	}
-	if (!is_fstree(new_root->objectid)) {
+	if (!is_fstree(new_root->root_key.objectid)) {
 		ret = -ENOENT;
 		goto out;
 	}
