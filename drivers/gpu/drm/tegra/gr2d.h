@@ -6,6 +6,9 @@
 #ifndef TEGRA_GR2D_H
 #define TEGRA_GR2D_H
 
+#define GR2D_G2TRIGGER0			0x09
+#define GR2D_G2TRIGGER1			0x0a
+#define GR2D_G2TRIGGER2			0x0b
 #define GR2D_UA_BASE_ADDR		0x1a
 #define GR2D_VA_BASE_ADDR		0x1b
 #define GR2D_PAT_BASE_ADDR		0x26

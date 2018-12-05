@@ -29,8 +29,12 @@
 extern "C" {
 #endif
 
-#define DRM_TEGRA_GEM_CREATE_TILED     (1 << 0)
-#define DRM_TEGRA_GEM_CREATE_BOTTOM_UP (1 << 1)
+#define DRM_TEGRA_GEM_CREATE_TILED			(1 << 0)
+#define DRM_TEGRA_GEM_CREATE_BOTTOM_UP			(1 << 1)
+#define DRM_TEGRA_GEM_CREATE_HOST1X_GATHER		(1 << 2)
+#define DRM_TEGRA_GEM_CREATE_CONTIGUOUS			(1 << 3)
+#define DRM_TEGRA_GEM_CREATE_SPARSE			(1 << 4)
+#define DRM_TEGRA_GEM_CREATE_DONT_KMAP			(1 << 5)
 
 /**
  * struct drm_tegra_gem_create - parameters for the GEM object creation IOCTL
@@ -53,6 +57,26 @@ struct drm_tegra_gem_create {
 	 *
 	 * DRM_TEGRA_GEM_CREATE_BOTTOM_UP
 	 *   The buffer has a bottom-up layout.
+	 *
+	 * DRM_TEGRA_GEM_CREATE_HOST1X_GATHER
+	 *   The buffer is host1x gather, it can't be used as framebuffer.
+	 *
+	 * DRM_TEGRA_GEM_CREATE_CONTIGUOUS
+	 *   The buffer is to be backed by physically contiguous memory.
+	 *
+	 *   On Tegra20 contiguous allocation is the default, unless "sparse"
+	 *   flag is set.
+	 *
+	 * DRM_TEGRA_GEM_CREATE_SPARSE
+	 *   The buffer is to be backed by physically sparse memory.
+	 *
+	 *   On Tegra30+ sparse allocation is the default, unless "contiguous"
+	 *   flag is set or IOMMU is disabled. The "contiguous" flag takes
+	 *   precedence when both flags are set.
+	 *
+	 * DRM_TEGRA_GEM_CREATE_DONT_KMAP
+	 *   Hint to the driver that there is no need to map GEM into kernel
+	 *   space.
 	 */
 	__u32 flags;
 
@@ -603,6 +627,7 @@ struct drm_tegra_gem_get_tiling {
 };
 
 #define DRM_TEGRA_GEM_BOTTOM_UP		(1 << 0)
+#define DRM_TEGRA_GEM_SPARSE		(1 << 1)
 #define DRM_TEGRA_GEM_FLAGS		(DRM_TEGRA_GEM_BOTTOM_UP)
 
 /**
@@ -644,6 +669,375 @@ struct drm_tegra_gem_get_flags {
 	__u32 flags;
 };
 
+#define DRM_TEGRA_CPU_PREP_WRITE		(1 << 0)
+#define DRM_TEGRA_CPU_PREP_WRITE_SYNC		(1 << 1)
+#define DRM_TEGRA_CPU_PREP_READ_SYNC		(1 << 2)
+#define DRM_TEGRA_CPU_PREP_FLAGS		(DRM_TEGRA_CPU_PREP_WRITE |\
+						 DRM_TEGRA_CPU_PREP_WRITE_SYNC |\
+						 DRM_TEGRA_CPU_PREP_READ_SYNC)
+
+/**
+ * struct drm_tegra_gem_cpu_prep - prepare to access GEM's memory
+ */
+struct drm_tegra_gem_cpu_prep {
+	/**
+	 * @handle:
+	 *
+	 * Handle of the GEM object to prepare.
+	 */
+	__u32 handle;
+
+	/**
+	 * @flags:
+	 *
+	 * A bitmask of flags that specifies how CPU access shall be prepared.
+	 *
+	 * DRM_TEGRA_CPU_PREP_WRITE
+	 *   Wait for all in-flight writes to the GEM's memory to be completed.
+	 *
+	 * DRM_TEGRA_CPU_PREP_WRITE_SYNC
+	 *   Flush out GEM's data out of CPU caches to DRAM.
+	 *
+	 * DRM_TEGRA_CPU_PREP_READ_SYNC
+	 *   Invalidate GEM's data in CPU caches.
+	 */
+	__u32 flags;
+
+	/**
+	 * @timeout:
+	 *
+	 * Timeout value in microseconds after which waiting operation
+	 * is canceled.
+	 */
+	__u32 timeout;
+};
+
+/**
+ * enum drm_tegra_client_pipe_id - possible pipe ids
+ *
+ * Enumeration of hardware pipes.
+ */
+enum drm_tegra_client_pipe_id {
+	/**
+	 * @DRM_TEGRA_PIPE_ID_2D:
+	 *
+	 * Pipe to GR2D hardware unit.
+	 */
+	DRM_TEGRA_PIPE_ID_2D,
+	/**
+	 * @DRM_TEGRA_PIPE_ID_3D:
+	 *
+	 * Pipe to GR3D hardware unit.
+	 */
+	DRM_TEGRA_PIPE_ID_3D,
+	/**
+	 * @DRM_TEGRA_PIPE_ID_VIC:
+	 *
+	 * Pipe to VIC hardware unit.
+	 */
+	DRM_TEGRA_PIPE_ID_VIC,
+};
+
+/**
+ * enum drm_tegra_cmdstream_class - command stream classes
+ *
+ * Enumeration host1x classes to be used by @drm_tegra_submit_v2 within
+ * @cmdstream_ptr.
+ */
+enum drm_tegra_cmdstream_class {
+	/**
+	 * @DRM_TEGRA_CMDSTREAM_CLASS_HOST1X
+	 *
+	 * Host1x class ID.
+	 */
+	DRM_TEGRA_CMDSTREAM_CLASS_HOST1X = 0x01,
+	/**
+	 * @DRM_TEGRA_CMDSTREAM_CLASS_GR2D_G2
+	 *
+	 * GR2D G2 (generic) class ID.
+	 */
+	DRM_TEGRA_CMDSTREAM_CLASS_GR2D_G2 = 0x51,
+	/**
+	 * @DRM_TEGRA_CMDSTREAM_CLASS_GR2D_SB
+	 *
+	 * GR2D SB (surface-blitter) class ID.
+	 */
+	DRM_TEGRA_CMDSTREAM_CLASS_GR2D_SB = 0x52,
+	/**
+	 * @DRM_TEGRA_CMDSTREAM_CLASS_GR3D
+	 *
+	 * GR3D class ID.
+	 */
+	DRM_TEGRA_CMDSTREAM_CLASS_GR3D = 0x60,
+	/**
+	 * @DRM_TEGRA_CMDSTREAM_CLASS_VIC
+	 *
+	 * VIC class ID.
+	 */
+	DRM_TEGRA_CMDSTREAM_CLASS_VIC = 0x5D,
+};
+
+/**
+ * struct drm_tegra_cmdstream_reloc - buffer object relocation descriptor
+ *
+ * Used by @drm_tegra_submit_v2 within @cmdstream_ptr in place of memory
+ * addresses.
+ */
+struct drm_tegra_cmdstream_reloc {
+	union {
+		struct {
+			/**
+			 * @bo_index:
+			 *
+			 * Buffer object index within @bo_table_ptr.
+			 */
+			__u32 bo_index : 6;
+
+			/**
+			 * @bo_offset:
+			 *
+			 * Offset in bytes that is added to buffer object's
+			 * memory address for generic relocations.
+			 *
+			 * Offset in words that is added to buffer object's
+			 * memory address for gather relocations.
+			 */
+			__u32 bo_offset : 26;
+		};
+
+		/**
+		 * @u_data:
+		 *
+		 * U32 word that contains @bo_index and @bo_offset to be used
+		 * within @cmdstream_ptr.
+		 */
+		__u32 u_data;
+	};
+};
+
+/**
+ * struct drm_tegra_cmdstream_wait_syncpt - sync point wait descriptor
+ *
+ * Used by @drm_tegra_submit_v2 within @cmdstream_ptr in place of WAIT_SYNCPT
+ * register (method) data.
+ */
+struct drm_tegra_cmdstream_wait_syncpt {
+	union {
+		struct {
+			/**
+			 * @threshold:
+			 *
+			 * Threshold value to wait for. Could be 0, which
+			 * is a special Tegra DRM UAPI case that means to
+			 * wait for the latest sync point increment.
+			 */
+			__u32 threshold : 24;
+		};
+
+		/**
+		 * @u_data:
+		 *
+		 * U32 word that contains @threshold to be used within
+		 * @cmdstream_ptr.
+		 */
+		__u32 u_data;
+	};
+};
+
+/**
+ * struct drm_tegra_cmdstream_extend_op - extended host1x command descriptor
+ *
+ * Used by @drm_tegra_submit_v2 within @cmdstream_ptr in place of "EXTEND"
+ * opcode.
+ */
+struct drm_tegra_cmdstream_extend_op {
+	union {
+		struct {
+			/**
+			 * @value:
+			 *
+			 * EXTEND value. For ACQUIRE_MLOCK / RELEASE_MLOCK
+			 * subops it is one of @drm_tegra_client_pipe_id.
+			 */
+			__u32 value : 24;
+
+			/**
+			 * @subop:
+			 *
+			 * EXTEND subop.
+			 */
+			__u32 subop : 4;
+
+			/**
+			 * @opcode:
+			 *
+			 * Host1x opcode.
+			 */
+			__u32 opcode : 4;
+		};
+
+		/**
+		 * @u_data:
+		 *
+		 * U32 word that contains @drm_tegra_cmdstream_extend_op data.
+		 */
+		__u32 u_data;
+	};
+};
+
+#define DRM_TEGRA_BO_TABLE_MAX_ENTRIES_NUM	64
+
+#define DRM_TEGRA_BO_TABLE_WRITE		(1 << 0)
+#define DRM_TEGRA_BO_TABLE_EXPLICIT_FENCE	(1 << 1)
+
+/**
+ * struct drm_tegra_bo_table_entry - buffer object table entry
+ *
+ * Contain job's buffer object description, it is referenced by
+ * @drm_tegra_cmdstream_reloc. Must not contain more entries than
+ * @DRM_TEGRA_BO_TABLE_MAX_ENTRIES_NUM.
+ */
+struct drm_tegra_bo_table_entry {
+	/**
+	 * @handle:
+	 *
+	 * Buffer object handle ID.
+	 */
+	__u32 handle;
+
+	/**
+	 * @flags:
+	 *
+	 * Bitmask of table entry flags.
+	 *
+	 * DRM_TEGRA_BO_TABLE_WRITE
+	 *   Job writes data to BO.
+	 *
+	 * DRM_TEGRA_BO_TABLE_EXPLICIT_FENCE
+	 *   Job execution won't be stalled by awaiting for the implicit BO
+	 *   fences.
+	 */
+	__u32 flags;
+};
+
+/**
+ * struct drm_tegra_submit_v2 - job submission version 2
+ *
+ * Each job consists of channel DMA commands stream data, consult Technical
+ * Reference Manual for the opcodes and encoding.
+ *
+ * The sensitive data-writes, like memory addresses and sync point ID's, are
+ * specified using Tegra DRM UAPI encoding. Their values are substituted
+ * with actual HW values during of the job-patching process.
+ */
+struct drm_tegra_submit_v2 {
+	/**
+	 * @pipes:
+	 *
+	 * The bitmask of @drm_tegra_client_pipe_id that is used to annotate
+	 * what HW units are utilized by the job.
+	 */
+	__u64 pipes;
+
+	/**
+	 * @cmdstream_ptr:
+	 *
+	 * Userspace memory address that points to the beginning of buffer
+	 * that contains commands stream data.
+	 */
+	__u64 cmdstream_ptr;
+
+	/**
+	 * @bo_table_ptr:
+	 *
+	 * Userspace memory address that points to the beginning of buffer
+	 * that contains array of @drm_tegra_bo_table_entry. Entries must
+	 * be unique.
+	 */
+	__u64 bo_table_ptr;
+
+	/**
+	 * @num_cmdstream_words:
+	 *
+	 * Number of u32 words contained in @cmdstream_ptr.
+	 */
+	__u32 num_cmdstream_words;
+
+	/**
+	 * @num_bos:
+	 *
+	 * Number of entries contained in @bo_table_ptr.
+	 */
+	__u32 num_bos;
+
+	/**
+	 * @flags:
+	 *
+	 * A bitmask of the following flags:
+	 */
+	__u32 flags;
+
+	/**
+	 * @in_fence:
+	 *
+	 * Handle ID of sync object containing dma_fence that shall be
+	 * signalled before job could be executed. Could be 0, which
+	 * tells to skip the in-fence.
+	 */
+	__u32 in_fence;
+
+	/**
+	 * @out_fence:
+	 *
+	 * Handle ID of sync object to be used for attaching of job's
+	 * completion dma_fence. Could be 0, which tells to skip attaching
+	 * of the out-fence.
+	 */
+	__u32 out_fence;
+
+	/**
+	 * @uapi_ver:
+	 *
+	 * UAPI version of job's data that is copied from userspace:
+	 * @cmdstream_ptr, @drm_tegra_bo_table_entry.
+	 */
+	__u32 uapi_ver;
+};
+
+/**
+ * enum drm_tegra_version - enumeration of SoC versions
+ */
+enum drm_tegra_soc_version {
+	DRM_TEGRA_SOC_T20,
+	DRM_TEGRA_SOC_T30,
+	DRM_TEGRA_SOC_T114,
+	DRM_TEGRA_SOC_T124,
+	DRM_TEGRA_SOC_T132,
+	DRM_TEGRA_SOC_T148,
+	DRM_TEGRA_SOC_T210,
+	DRM_TEGRA_SOC_T186,
+	DRM_TEGRA_SOC_T194,
+};
+
+/**
+ * struct drm_tegra_version - hardware and UAPI versions
+ */
+struct drm_tegra_version {
+	/**
+	 * @soc_ver:
+	 *
+	 * Value containing @drm_tegra_soc_version
+	 */
+	__u32 soc_ver;
+
+	/**
+	 * @uapi_ver:
+	 *
+	 * Value containing maximum version of supported UAPI.
+	 */
+	__u32 uapi_ver;
+};
+
 #define DRM_TEGRA_GEM_CREATE		0x00
 #define DRM_TEGRA_GEM_MMAP		0x01
 #define DRM_TEGRA_SYNCPT_READ		0x02
@@ -658,6 +1052,9 @@ struct drm_tegra_gem_get_flags {
 #define DRM_TEGRA_GEM_GET_TILING	0x0b
 #define DRM_TEGRA_GEM_SET_FLAGS		0x0c
 #define DRM_TEGRA_GEM_GET_FLAGS		0x0d
+#define DRM_TEGRA_GEM_CPU_PREP		0x0e
+#define DRM_TEGRA_SUBMIT_V2		0x0f
+#define DRM_TEGRA_VERSION		0x10
 
 #define DRM_IOCTL_TEGRA_GEM_CREATE DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_CREATE, struct drm_tegra_gem_create)
 #define DRM_IOCTL_TEGRA_GEM_MMAP DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_MMAP, struct drm_tegra_gem_mmap)
@@ -673,6 +1070,9 @@ struct drm_tegra_gem_get_flags {
 #define DRM_IOCTL_TEGRA_GEM_GET_TILING DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_GET_TILING, struct drm_tegra_gem_get_tiling)
 #define DRM_IOCTL_TEGRA_GEM_SET_FLAGS DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_SET_FLAGS, struct drm_tegra_gem_set_flags)
 #define DRM_IOCTL_TEGRA_GEM_GET_FLAGS DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_GET_FLAGS, struct drm_tegra_gem_get_flags)
+#define DRM_IOCTL_TEGRA_GEM_CPU_PREP DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_GEM_CPU_PREP, struct drm_tegra_gem_cpu_prep)
+#define DRM_IOCTL_TEGRA_SUBMIT_V2 DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_SUBMIT_V2, struct drm_tegra_submit_v2)
+#define DRM_IOCTL_TEGRA_VERSION DRM_IOWR(DRM_COMMAND_BASE + DRM_TEGRA_VERSION, struct drm_tegra_version)
 
 #if defined(__cplusplus)
 }

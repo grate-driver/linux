@@ -6,9 +6,11 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_plane_helper.h>
 
 #include "dc.h"
+#include "gart.h"
 #include "plane.h"
 
 static void tegra_plane_destroy(struct drm_plane *plane)
@@ -79,6 +81,75 @@ const struct drm_plane_funcs tegra_plane_funcs = {
 	.atomic_duplicate_state = tegra_plane_atomic_duplicate_state,
 	.atomic_destroy_state = tegra_plane_atomic_destroy_state,
 };
+
+static int tegra_dc_pin(struct tegra_dc *dc, struct tegra_plane_state *state)
+{
+	struct drm_device *drm = dev_get_drvdata(dc->client.host);
+	struct tegra_drm *tegra = drm->dev_private;
+	unsigned int i;
+	int err;
+
+	for (i = 0; i < state->base.fb->format->num_planes; i++) {
+		struct tegra_bo *bo = tegra_fb_get_plane(state->base.fb, i);
+
+		err = tegra_drm_gart_map_optional(tegra, bo);
+		if (err < 0)
+			goto unpin;
+
+		if (err > 0)
+			state->iova[i] = bo->gartaddr;
+		else
+			state->iova[i] = bo->dmaaddr;
+	}
+
+	return 0;
+
+unpin:
+	dev_err(dc->dev, "failed to map plane %u: %d\n", i, err);
+
+	while (i--) {
+		struct tegra_bo *bo = tegra_fb_get_plane(state->base.fb, i);
+
+		tegra_drm_gart_unmap_optional(tegra, bo);
+	}
+
+	return err;
+}
+
+static void tegra_dc_unpin(struct tegra_dc *dc, struct tegra_plane_state *state)
+{
+	struct drm_device *drm = dev_get_drvdata(dc->client.host);
+	struct tegra_drm *tegra = drm->dev_private;
+	unsigned int i;
+
+	for (i = 0; i < state->base.fb->format->num_planes; i++) {
+		struct tegra_bo *bo = tegra_fb_get_plane(state->base.fb, i);
+
+		tegra_drm_gart_unmap_optional(tegra, bo);
+	}
+}
+
+int tegra_plane_prepare_fb(struct drm_plane *plane,
+			   struct drm_plane_state *state)
+{
+	struct tegra_dc *dc = to_tegra_dc(state->crtc);
+
+	if (!state->fb)
+		return 0;
+
+	drm_gem_fb_prepare_fb(plane, state);
+
+	return tegra_dc_pin(dc, to_tegra_plane_state(state));
+}
+
+void tegra_plane_cleanup_fb(struct drm_plane *plane,
+			    struct drm_plane_state *state)
+{
+	struct tegra_dc *dc = to_tegra_dc(state->crtc);
+
+	if (dc)
+		tegra_dc_unpin(dc, to_tegra_plane_state(state));
+}
 
 int tegra_plane_state_add(struct tegra_plane *plane,
 			  struct drm_plane_state *state)
