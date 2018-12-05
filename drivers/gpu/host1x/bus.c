@@ -13,7 +13,6 @@
 #include <linux/of_device.h>
 
 #include "bus.h"
-#include "dev.h"
 
 #if IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)
 #include <asm/dma-iommu.h>
@@ -570,6 +569,10 @@ DEFINE_SHOW_ATTRIBUTE(host1x_devices);
 int host1x_register(struct host1x *host1x)
 {
 	struct host1x_driver *driver;
+
+	mutex_init(&host1x->devices_lock);
+	INIT_LIST_HEAD(&host1x->devices);
+	INIT_LIST_HEAD(&host1x->list);
 
 	mutex_lock(&devices_lock);
 	list_add_tail(&host1x->list, &devices);
