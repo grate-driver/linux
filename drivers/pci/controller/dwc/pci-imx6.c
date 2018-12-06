@@ -569,6 +569,9 @@ static int imx6_setup_phy_mpll(struct imx6_pcie *imx6_pcie)
 	int mult, div;
 	u32 val;
 
+	if (imx6_pcie->variant == IMX7D)
+		return 0;
+
 	switch (phy_rate) {
 	case 125000000:
 		/*
