@@ -66,7 +66,7 @@ static inline int fsverity_file_open(struct inode *inode, struct file *filp)
 static inline int fsverity_prepare_setattr(struct dentry *dentry,
 					   struct iattr *attr)
 {
-	return -EOPNOTSUPP;
+	return IS_VERITY(d_inode(dentry)) ? -EOPNOTSUPP : 0;
 }
 
 static inline int fsverity_prepare_getattr(struct inode *inode)
