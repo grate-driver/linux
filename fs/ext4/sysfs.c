@@ -227,7 +227,7 @@ EXT4_ATTR_FEATURE(meta_bg_resize);
 #ifdef CONFIG_FS_ENCRYPTION
 EXT4_ATTR_FEATURE(encryption);
 #endif
-#ifdef CONFIG_EXT4_FS_VERITY
+#ifdef CONFIG_FS_VERITY
 EXT4_ATTR_FEATURE(verity);
 #endif
 EXT4_ATTR_FEATURE(metadata_csum_seed);
@@ -239,7 +239,7 @@ static struct attribute *ext4_feat_attrs[] = {
 #ifdef CONFIG_FS_ENCRYPTION
 	ATTR_LIST(encryption),
 #endif
-#ifdef CONFIG_EXT4_FS_VERITY
+#ifdef CONFIG_FS_VERITY
 	ATTR_LIST(verity),
 #endif
 	ATTR_LIST(metadata_csum_seed),

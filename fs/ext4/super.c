@@ -1316,7 +1316,7 @@ static const struct fscrypt_operations ext4_cryptops = {
 };
 #endif
 
-#ifdef CONFIG_EXT4_FS_VERITY
+#ifdef CONFIG_FS_VERITY
 static int ext4_set_verity(struct inode *inode, loff_t data_i_size)
 {
 	int err;
@@ -1402,7 +1402,7 @@ static const struct fsverity_operations ext4_verityops = {
 	.set_verity		= ext4_set_verity,
 	.get_metadata_end	= ext4_get_metadata_end,
 };
-#endif /* CONFIG_EXT4_FS_VERITY */
+#endif /* CONFIG_FS_VERITY */
 
 #ifdef CONFIG_QUOTA
 static const char * const quotatypes[] = INITQFNAMES;
@@ -4235,7 +4235,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 #ifdef CONFIG_FS_ENCRYPTION
 	sb->s_cop = &ext4_cryptops;
 #endif
-#ifdef CONFIG_EXT4_FS_VERITY
+#ifdef CONFIG_FS_VERITY
 	sb->s_vop = &ext4_verityops;
 #endif
 #ifdef CONFIG_QUOTA

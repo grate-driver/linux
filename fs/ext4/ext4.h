@@ -41,8 +41,6 @@
 #endif
 
 #include <linux/fscrypt.h>
-
-#define __FS_HAS_VERITY IS_ENABLED(CONFIG_EXT4_FS_VERITY)
 #include <linux/fsverity.h>
 
 #include <linux/compiler.h>

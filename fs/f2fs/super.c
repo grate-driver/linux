@@ -2197,7 +2197,7 @@ static const struct fscrypt_operations f2fs_cryptops = {
 };
 #endif
 
-#ifdef CONFIG_F2FS_FS_VERITY
+#ifdef CONFIG_FS_VERITY
 static int f2fs_set_verity(struct inode *inode, loff_t data_i_size)
 {
 	int err;
@@ -2223,7 +2223,7 @@ static const struct fsverity_operations f2fs_verityops = {
 	.set_verity		= f2fs_set_verity,
 	.get_metadata_end	= f2fs_get_metadata_end,
 };
-#endif /* CONFIG_F2FS_FS_VERITY */
+#endif /* CONFIG_FS_VERITY */
 
 static struct inode *f2fs_nfs_get_inode(struct super_block *sb,
 		u64 ino, u32 generation)
@@ -3144,7 +3144,7 @@ try_onemore:
 #ifdef CONFIG_FS_ENCRYPTION
 	sb->s_cop = &f2fs_cryptops;
 #endif
-#ifdef CONFIG_F2FS_FS_VERITY
+#ifdef CONFIG_FS_VERITY
 	sb->s_vop = &f2fs_verityops;
 #endif
 	sb->s_xattr = f2fs_xattr_handlers;

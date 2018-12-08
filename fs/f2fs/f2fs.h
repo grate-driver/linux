@@ -25,8 +25,6 @@
 #include <crypto/hash.h>
 
 #include <linux/fscrypt.h>
-
-#define __FS_HAS_VERITY IS_ENABLED(CONFIG_F2FS_FS_VERITY)
 #include <linux/fsverity.h>
 
 #ifdef CONFIG_F2FS_CHECK_FS

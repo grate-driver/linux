@@ -19,8 +19,7 @@ struct fsverity_operations {
 	int (*get_metadata_end)(struct inode *inode, loff_t *metadata_end_ret);
 };
 
-#if __FS_HAS_VERITY
-
+#ifdef CONFIG_FS_VERITY
 /* ioctl.c */
 extern int fsverity_ioctl_enable(struct file *filp, const void __user *arg);
 extern int fsverity_ioctl_measure(struct file *filp, void __user *arg);
@@ -42,7 +41,7 @@ static inline bool fsverity_check_hole(struct inode *inode, struct page *page)
 	return inode->i_verity_info == NULL || fsverity_verify_page(page);
 }
 
-#else /* !__FS_HAS_VERITY */
+#else  /* ! CONFIG_FS_VERITY */
 
 /* ioctl.c */
 
@@ -107,6 +106,6 @@ static inline bool fsverity_check_hole(struct inode *inode, struct page *page)
 	return true;
 }
 
-#endif	/* !__FS_HAS_VERITY */
+#endif	/* ! CONFIG_FS_VERITY */
 
 #endif	/* _LINUX_FSVERITY_H */

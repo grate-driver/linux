@@ -1,5 +1,5 @@
 config FS_VERITY
-	tristate "FS Verity (read-only file-based authenticity protection)"
+	bool "FS Verity (read-only file-based authenticity protection)"
 	select CRYPTO
 	# SHA-256 is selected as it's intended to be the default hash algorithm.
 	# To avoid bloat, other wanted algorithms must be selected explicitly.
@@ -23,6 +23,7 @@ config FS_VERITY
 	  the contents may actually be needed.  Also, fs-verity verifies
 	  data each time it is paged back in, which provides better
 	  protection against malicious disks vs. an ahead-of-time hash.
+	  Currently Ext4 and F2FS make use of this feature.
 
 	  If unsure, say N.
 

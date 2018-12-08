@@ -704,7 +704,7 @@ struct inode {
 	struct fscrypt_info	*i_crypt_info;
 #endif
 
-#if IS_ENABLED(CONFIG_FS_VERITY)
+#ifdef CONFIG_FS_VERITY
 	struct fsverity_info	*i_verity_info;
 #endif
 
@@ -1407,7 +1407,7 @@ struct super_block {
 #ifdef CONFIG_FS_ENCRYPTION
 	const struct fscrypt_operations	*s_cop;
 #endif
-#if IS_ENABLED(CONFIG_FS_VERITY)
+#ifdef CONFIG_FS_VERITY
 	const struct fsverity_operations *s_vop;
 #endif
 	struct hlist_bl_head	s_roots;	/* alternate root dentries for NFS */

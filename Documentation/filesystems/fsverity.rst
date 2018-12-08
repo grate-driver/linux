@@ -279,7 +279,7 @@ ext4
 
 ext4 supports fs-verity since kernel version TODO.
 
-CONFIG_EXT4_FS_VERITY must be enabled in the kernel config.  Also, the
+CONFIG_FS_VERITY must be enabled in the kernel config.  Also, the
 filesystem must have been formatted with ``-O verity``, or had
 ``tune2fs -O verity`` run on it.  These require e2fsprogs v1.44.4-2 or
 later.  This e2fsprogs version is also required for e2fsck to
@@ -306,7 +306,7 @@ f2fs
 
 f2fs supports fs-verity since kernel version TODO.
 
-CONFIG_F2FS_FS_VERITY must be enabled in the kernel config.  Also, the
+CONFIG_FS_VERITY must be enabled in the kernel config.  Also, the
 filesystem must have been formatted with ``-O verity``.  This requires
 f2fs-tools v1.11.0 or later.
 

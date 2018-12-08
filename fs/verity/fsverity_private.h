@@ -15,7 +15,6 @@
 #define pr_fmt(fmt) "fs-verity: " fmt
 
 #include <crypto/sha.h>
-#define __FS_HAS_VERITY 1
 #include <linux/fsverity.h>
 
 /*
