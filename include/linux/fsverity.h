@@ -60,7 +60,7 @@ static inline int fsverity_ioctl_measure(struct file *filp, void __user *arg)
 
 static inline int fsverity_file_open(struct inode *inode, struct file *filp)
 {
-	return -EOPNOTSUPP;
+	return IS_VERITY(inode) ? -EOPNOTSUPP : 0;
 }
 
 static inline int fsverity_prepare_setattr(struct dentry *dentry,

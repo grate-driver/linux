@@ -771,6 +771,9 @@ static int setup_fsverity_info(struct inode *inode)
  */
 int fsverity_file_open(struct inode *inode, struct file *filp)
 {
+	if (!IS_VERITY(inode))
+		return 0;
+
 	if (filp->f_mode & FMODE_WRITE) {
 		pr_debug("Denying opening verity file (ino %lu) for write\n",
 			 inode->i_ino);
