@@ -74,7 +74,6 @@ void lpfc_mbx_cmpl_read_topology(struct lpfc_hba *, LPFC_MBOXQ_t *);
 void lpfc_init_vpi_cmpl(struct lpfc_hba *, LPFC_MBOXQ_t *);
 void lpfc_cancel_all_vport_retry_delay_timer(struct lpfc_hba *);
 void lpfc_retry_pport_discovery(struct lpfc_hba *);
-void lpfc_release_rpi(struct lpfc_hba *, struct lpfc_vport *, uint16_t);
 int lpfc_init_iocb_list(struct lpfc_hba *phba, int cnt);
 void lpfc_free_iocb_list(struct lpfc_hba *phba);
 int lpfc_post_rq_buffer(struct lpfc_hba *phba, struct lpfc_queue *hrq,
@@ -552,6 +551,7 @@ void lpfc_sli4_ras_init(struct lpfc_hba *phba);
 void lpfc_sli4_ras_setup(struct lpfc_hba *phba);
 int  lpfc_sli4_ras_fwlog_init(struct lpfc_hba *phba, uint32_t fwlog_level,
 			 uint32_t fwlog_enable);
+void lpfc_ras_stop_fwlog(struct lpfc_hba *phba);
 int lpfc_check_fwlog_support(struct lpfc_hba *phba);
 
 /* NVME interfaces. */

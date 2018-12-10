@@ -111,6 +111,13 @@ struct target_core_fabric_ops {
 	struct configfs_attribute **tfc_tpg_nacl_attrib_attrs;
 	struct configfs_attribute **tfc_tpg_nacl_auth_attrs;
 	struct configfs_attribute **tfc_tpg_nacl_param_attrs;
+
+	/*
+	 * Set this member variable to true if the SCSI transport protocol
+	 * (e.g. iSCSI) requires that the Data-Out buffer is transferred in
+	 * its entirety before a command is aborted.
+	 */
+	bool write_pending_must_be_called;
 };
 
 int target_register_template(const struct target_core_fabric_ops *fo);
@@ -126,7 +133,7 @@ struct se_session *target_setup_session(struct se_portal_group *,
 				struct se_session *, void *));
 void target_remove_session(struct se_session *);
 
-void transport_init_session(struct se_session *);
+int transport_init_session(struct se_session *se_sess);
 struct se_session *transport_alloc_session(enum target_prot_op);
 int transport_alloc_session_tags(struct se_session *, unsigned int,
 		unsigned int);
@@ -159,12 +166,12 @@ int	target_submit_tmr(struct se_cmd *se_cmd, struct se_session *se_sess,
 int	transport_handle_cdb_direct(struct se_cmd *);
 sense_reason_t	transport_generic_new_cmd(struct se_cmd *);
 
+void	target_put_cmd_and_wait(struct se_cmd *cmd);
 void	target_execute_cmd(struct se_cmd *cmd);
 
 int	transport_generic_free_cmd(struct se_cmd *, int);
 
 bool	transport_wait_for_tasks(struct se_cmd *);
-int	transport_check_aborted_status(struct se_cmd *, int);
 int	transport_send_check_condition_and_sense(struct se_cmd *,
 		sense_reason_t, int);
 int	target_get_sess_cmd(struct se_cmd *, bool);

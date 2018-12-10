@@ -124,6 +124,9 @@ static int __init zfcp_module_init(void)
 {
 	int retval = -ENOMEM;
 
+	if (zfcp_experimental_dix)
+		pr_warn("DIX is enabled. It is experimental and might cause problems\n");
+
 	zfcp_fsf_qtcb_cache = zfcp_cache_hw_align("zfcp_fsf_qtcb",
 						  sizeof(struct fsf_qtcb));
 	if (!zfcp_fsf_qtcb_cache)
@@ -261,23 +264,23 @@ static void zfcp_free_low_mem_buffers(struct zfcp_adapter *adapter)
  * zfcp_status_read_refill - refill the long running status_read_requests
  * @adapter: ptr to struct zfcp_adapter for which the buffers should be refilled
  *
- * Returns: 0 on success, 1 otherwise
- *
- * if there are 16 or more status_read requests missing an adapter_reopen
- * is triggered
+ * Return:
+ * * 0 on success meaning at least one status read is pending
+ * * 1 if posting failed and not a single status read buffer is pending,
+ *     also triggers adapter reopen recovery
  */
 int zfcp_status_read_refill(struct zfcp_adapter *adapter)
 {
-	while (atomic_read(&adapter->stat_miss) > 0)
+	while (atomic_add_unless(&adapter->stat_miss, -1, 0))
 		if (zfcp_fsf_status_read(adapter->qdio)) {
+			atomic_inc(&adapter->stat_miss); /* undo add -1 */
 			if (atomic_read(&adapter->stat_miss) >=
 			    adapter->stat_read_buf_num) {
 				zfcp_erp_adapter_reopen(adapter, 0, "axsref1");
 				return 1;
 			}
 			break;
-		} else
-			atomic_dec(&adapter->stat_miss);
+		}
 	return 0;
 }
 

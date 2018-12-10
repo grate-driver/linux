@@ -2456,7 +2456,7 @@ lpfc_sli_def_mbox_cmpl(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 	uint16_t rpi, vpi;
 	int rc;
 
-	mp = (struct lpfc_dmabuf *) (pmb->context1);
+	mp = (struct lpfc_dmabuf *)(pmb->ctx_buf);
 
 	if (mp) {
 		lpfc_mbuf_free(phba, mp->virt, mp->phys);
@@ -2491,9 +2491,33 @@ lpfc_sli_def_mbox_cmpl(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 	}
 
 	if (pmb->u.mb.mbxCommand == MBX_REG_LOGIN64) {
-		ndlp = (struct lpfc_nodelist *)pmb->context2;
+		ndlp = (struct lpfc_nodelist *)pmb->ctx_ndlp;
 		lpfc_nlp_put(ndlp);
-		pmb->context2 = NULL;
+		pmb->ctx_buf = NULL;
+		pmb->ctx_ndlp = NULL;
+	}
+
+	if (pmb->u.mb.mbxCommand == MBX_UNREG_LOGIN) {
+		ndlp = (struct lpfc_nodelist *)pmb->ctx_ndlp;
+
+		/* Check to see if there are any deferred events to process */
+		if (ndlp) {
+			lpfc_printf_vlog(
+				vport,
+				KERN_INFO, LOG_MBOX | LOG_DISCOVERY,
+				"1438 UNREG cmpl deferred mbox x%x "
+				"on NPort x%x Data: x%x x%x %p\n",
+				ndlp->nlp_rpi, ndlp->nlp_DID,
+				ndlp->nlp_flag, ndlp->nlp_defer_did, ndlp);
+
+			if ((ndlp->nlp_flag & NLP_UNREG_INP) &&
+			    (ndlp->nlp_defer_did != NLP_EVT_NOTHING_PENDING)) {
+				ndlp->nlp_defer_did = NLP_EVT_NOTHING_PENDING;
+				lpfc_issue_els_plogi(vport, ndlp->nlp_DID, 0);
+			}
+			ndlp->nlp_flag &= ~NLP_UNREG_INP;
+		}
+		pmb->ctx_ndlp = NULL;
 	}
 
 	/* Check security permission status on INIT_LINK mailbox command */
@@ -2527,21 +2551,44 @@ lpfc_sli4_unreg_rpi_cmpl_clr(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 	struct lpfc_vport  *vport = pmb->vport;
 	struct lpfc_nodelist *ndlp;
 
-	ndlp = pmb->context1;
+	ndlp = pmb->ctx_ndlp;
 	if (pmb->u.mb.mbxCommand == MBX_UNREG_LOGIN) {
 		if (phba->sli_rev == LPFC_SLI_REV4 &&
 		    (bf_get(lpfc_sli_intf_if_type,
 		     &phba->sli4_hba.sli_intf) >=
 		     LPFC_SLI_INTF_IF_TYPE_2)) {
 			if (ndlp) {
-				lpfc_printf_vlog(vport, KERN_INFO, LOG_SLI,
-						 "0010 UNREG_LOGIN vpi:%x "
-						 "rpi:%x DID:%x map:%x %p\n",
-						 vport->vpi, ndlp->nlp_rpi,
-						 ndlp->nlp_DID,
-						 ndlp->nlp_usg_map, ndlp);
+				lpfc_printf_vlog(
+					vport, KERN_INFO, LOG_MBOX | LOG_SLI,
+					 "0010 UNREG_LOGIN vpi:%x "
+					 "rpi:%x DID:%x defer x%x flg x%x "
+					 "map:%x %p\n",
+					 vport->vpi, ndlp->nlp_rpi,
+					 ndlp->nlp_DID, ndlp->nlp_defer_did,
+					 ndlp->nlp_flag,
+					 ndlp->nlp_usg_map, ndlp);
 				ndlp->nlp_flag &= ~NLP_LOGO_ACC;
 				lpfc_nlp_put(ndlp);
+
+				/* Check to see if there are any deferred
+				 * events to process
+				 */
+				if ((ndlp->nlp_flag & NLP_UNREG_INP) &&
+				    (ndlp->nlp_defer_did !=
+				    NLP_EVT_NOTHING_PENDING)) {
+					lpfc_printf_vlog(
+						vport, KERN_INFO, LOG_DISCOVERY,
+						"4111 UNREG cmpl deferred "
+						"clr x%x on "
+						"NPort x%x Data: x%x %p\n",
+						ndlp->nlp_rpi, ndlp->nlp_DID,
+						ndlp->nlp_defer_did, ndlp);
+					ndlp->nlp_defer_did =
+						NLP_EVT_NOTHING_PENDING;
+					lpfc_issue_els_plogi(
+						vport, ndlp->nlp_DID, 0);
+				}
+				ndlp->nlp_flag &= ~NLP_UNREG_INP;
 			}
 		}
 	}
@@ -4640,6 +4687,8 @@ lpfc_sli_brdrestart_s4(struct lpfc_hba *phba)
 	hba_aer_enabled = phba->hba_flag & HBA_AER_ENABLED;
 
 	rc = lpfc_sli4_brdreset(phba);
+	if (rc)
+		return rc;
 
 	spin_lock_irq(&phba->hbalock);
 	phba->pport->stopped = 0;
@@ -5228,7 +5277,7 @@ lpfc_sli4_read_fcoe_params(struct lpfc_hba *phba)
 		goto out_free_mboxq;
 	}
 
-	mp = (struct lpfc_dmabuf *) mboxq->context1;
+	mp = (struct lpfc_dmabuf *)mboxq->ctx_buf;
 	rc = lpfc_sli_issue_mbox(phba, mboxq, MBX_POLL);
 
 	lpfc_printf_log(phba, KERN_INFO, LOG_MBOX | LOG_SLI,
@@ -6148,6 +6197,25 @@ lpfc_set_features(struct lpfc_hba *phba, LPFC_MBOXQ_t *mbox,
 }
 
 /**
+ * lpfc_ras_stop_fwlog: Disable FW logging by the adapter
+ * @phba: Pointer to HBA context object.
+ *
+ * Disable FW logging into host memory on the adapter. To
+ * be done before reading logs from the host memory.
+ **/
+void
+lpfc_ras_stop_fwlog(struct lpfc_hba *phba)
+{
+	struct lpfc_ras_fwlog *ras_fwlog = &phba->ras_fwlog;
+
+	ras_fwlog->ras_active = false;
+
+	/* Disable FW logging to host memory */
+	writel(LPFC_CTL_PDEV_CTL_DDL_RAS,
+	       phba->sli4_hba.conf_regs_memmap_p + LPFC_CTL_PDEV_CTL_OFFSET);
+}
+
+/**
  * lpfc_sli4_ras_dma_free - Free memory allocated for FW logging.
  * @phba: Pointer to HBA context object.
  *
@@ -6211,7 +6279,7 @@ lpfc_sli4_ras_dma_alloc(struct lpfc_hba *phba,
 					    &ras_fwlog->lwpd.phys,
 					    GFP_KERNEL);
 	if (!ras_fwlog->lwpd.virt) {
-		lpfc_printf_log(phba, KERN_WARNING, LOG_INIT,
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
 				"6185 LWPD Memory Alloc Failed\n");
 
 		return -ENOMEM;
@@ -6273,11 +6341,13 @@ lpfc_sli4_ras_mbox_cmpl(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 	shdr_add_status = bf_get(lpfc_mbox_hdr_add_status, &shdr->response);
 
 	if (mb->mbxStatus != MBX_SUCCESS || shdr_status) {
-		lpfc_printf_log(phba, KERN_WARNING, LOG_MBOX,
+		lpfc_printf_log(phba, KERN_ERR, LOG_MBOX,
 				"6188 FW LOG mailbox "
 				"completed with status x%x add_status x%x,"
 				" mbx status x%x\n",
 				shdr_status, shdr_add_status, mb->mbxStatus);
+
+		ras_fwlog->ras_hwsupport = false;
 		goto disable_ras;
 	}
 
@@ -6325,7 +6395,7 @@ lpfc_sli4_ras_fwlog_init(struct lpfc_hba *phba,
 		rc = lpfc_sli4_ras_dma_alloc(phba, fwlog_entry_count);
 		if (rc) {
 			lpfc_printf_log(phba, KERN_WARNING, LOG_INIT,
-					"6189 RAS FW Log Support Not Enabled");
+					"6189 FW Log Memory Allocation Failed");
 			return rc;
 		}
 	}
@@ -6333,7 +6403,7 @@ lpfc_sli4_ras_fwlog_init(struct lpfc_hba *phba,
 	/* Setup Mailbox command */
 	mbox = mempool_alloc(phba->mbox_mem_pool, GFP_KERNEL);
 	if (!mbox) {
-		lpfc_printf_log(phba, KERN_WARNING, LOG_INIT,
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
 				"6190 RAS MBX Alloc Failed");
 		rc = -ENOMEM;
 		goto mem_free;
@@ -6378,8 +6448,8 @@ lpfc_sli4_ras_fwlog_init(struct lpfc_hba *phba,
 	rc = lpfc_sli_issue_mbox(phba, mbox, MBX_NOWAIT);
 
 	if (rc == MBX_NOT_FINISHED) {
-		lpfc_printf_log(phba, KERN_WARNING, LOG_INIT,
-				"6191 RAS Mailbox failed. "
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
+				"6191 FW-Log Mailbox failed. "
 				"status %d mbxStatus : x%x", rc,
 				bf_get(lpfc_mqe_status, &mbox->u.mqe));
 		mempool_free(mbox, phba->mbox_mem_pool);
@@ -7347,7 +7417,7 @@ lpfc_sli4_hba_setup(struct lpfc_hba *phba)
 
 	mboxq->vport = vport;
 	rc = lpfc_sli_issue_mbox(phba, mboxq, MBX_POLL);
-	mp = (struct lpfc_dmabuf *) mboxq->context1;
+	mp = (struct lpfc_dmabuf *)mboxq->ctx_buf;
 	if (rc == MBX_SUCCESS) {
 		memcpy(&vport->fc_sparam, mp->virt, sizeof(struct serv_parm));
 		rc = 0;
@@ -7359,7 +7429,7 @@ lpfc_sli4_hba_setup(struct lpfc_hba *phba)
 	 */
 	lpfc_mbuf_free(phba, mp->virt, mp->phys);
 	kfree(mp);
-	mboxq->context1 = NULL;
+	mboxq->ctx_buf = NULL;
 	if (unlikely(rc)) {
 		lpfc_printf_log(phba, KERN_ERR, LOG_MBOX | LOG_SLI,
 				"0382 READ_SPARAM command failed "
@@ -8129,10 +8199,10 @@ lpfc_sli_issue_mbox_s3(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmbox,
 		}
 
 		/* Copy the mailbox extension data */
-		if (pmbox->in_ext_byte_len && pmbox->context2) {
-			lpfc_sli_pcimem_bcopy(pmbox->context2,
-				(uint8_t *)phba->mbox_ext,
-				pmbox->in_ext_byte_len);
+		if (pmbox->in_ext_byte_len && pmbox->ctx_buf) {
+			lpfc_sli_pcimem_bcopy(pmbox->ctx_buf,
+					      (uint8_t *)phba->mbox_ext,
+					      pmbox->in_ext_byte_len);
 		}
 		/* Copy command data to host SLIM area */
 		lpfc_sli_pcimem_bcopy(mbx, phba->mbox, MAILBOX_CMD_SIZE);
@@ -8143,10 +8213,10 @@ lpfc_sli_issue_mbox_s3(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmbox,
 				= MAILBOX_HBA_EXT_OFFSET;
 
 		/* Copy the mailbox extension data */
-		if (pmbox->in_ext_byte_len && pmbox->context2)
+		if (pmbox->in_ext_byte_len && pmbox->ctx_buf)
 			lpfc_memcpy_to_slim(phba->MBslimaddr +
 				MAILBOX_HBA_EXT_OFFSET,
-				pmbox->context2, pmbox->in_ext_byte_len);
+				pmbox->ctx_buf, pmbox->in_ext_byte_len);
 
 		if (mbx->mbxCommand == MBX_CONFIG_PORT)
 			/* copy command data into host mbox for cmpl */
@@ -8269,9 +8339,9 @@ lpfc_sli_issue_mbox_s3(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmbox,
 			lpfc_sli_pcimem_bcopy(phba->mbox, mbx,
 						MAILBOX_CMD_SIZE);
 			/* Copy the mailbox extension data */
-			if (pmbox->out_ext_byte_len && pmbox->context2) {
+			if (pmbox->out_ext_byte_len && pmbox->ctx_buf) {
 				lpfc_sli_pcimem_bcopy(phba->mbox_ext,
-						      pmbox->context2,
+						      pmbox->ctx_buf,
 						      pmbox->out_ext_byte_len);
 			}
 		} else {
@@ -8279,8 +8349,9 @@ lpfc_sli_issue_mbox_s3(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmbox,
 			lpfc_memcpy_from_slim(mbx, phba->MBslimaddr,
 						MAILBOX_CMD_SIZE);
 			/* Copy the mailbox extension data */
-			if (pmbox->out_ext_byte_len && pmbox->context2) {
-				lpfc_memcpy_from_slim(pmbox->context2,
+			if (pmbox->out_ext_byte_len && pmbox->ctx_buf) {
+				lpfc_memcpy_from_slim(
+					pmbox->ctx_buf,
 					phba->MBslimaddr +
 					MAILBOX_HBA_EXT_OFFSET,
 					pmbox->out_ext_byte_len);
@@ -11275,19 +11346,12 @@ lpfc_sli4_abort_nvme_io(struct lpfc_hba *phba, struct lpfc_sli_ring *pring,
 
 	/* Complete prepping the abort wqe and issue to the FW. */
 	abts_wqe = &abtsiocbp->wqe;
-	bf_set(abort_cmd_ia, &abts_wqe->abort_cmd, 0);
+
+	/* Clear any stale WQE contents */
+	memset(abts_wqe, 0, sizeof(union lpfc_wqe));
 	bf_set(abort_cmd_criteria, &abts_wqe->abort_cmd, T_XRI_TAG);
 
-	/* Explicitly set reserved fields to zero.*/
-	abts_wqe->abort_cmd.rsrvd4 = 0;
-	abts_wqe->abort_cmd.rsrvd5 = 0;
-
-	/* WQE Common - word 6.  Context is XRI tag.  Set 0. */
-	bf_set(wqe_xri_tag, &abts_wqe->abort_cmd.wqe_com, 0);
-	bf_set(wqe_ctxt_tag, &abts_wqe->abort_cmd.wqe_com, 0);
-
 	/* word 7 */
-	bf_set(wqe_ct, &abts_wqe->abort_cmd.wqe_com, 0);
 	bf_set(wqe_cmnd, &abts_wqe->abort_cmd.wqe_com, CMD_ABORT_XRI_CX);
 	bf_set(wqe_class, &abts_wqe->abort_cmd.wqe_com,
 	       cmdiocb->iocb.ulpClass);
@@ -11302,7 +11366,6 @@ lpfc_sli4_abort_nvme_io(struct lpfc_hba *phba, struct lpfc_sli_ring *pring,
 	       abtsiocbp->iotag);
 
 	/* word 10 */
-	bf_set(wqe_wqid, &abts_wqe->abort_cmd.wqe_com, cmdiocb->hba_wqidx);
 	bf_set(wqe_qosd, &abts_wqe->abort_cmd.wqe_com, 1);
 	bf_set(wqe_lenloc, &abts_wqe->abort_cmd.wqe_com, LPFC_WQE_LENLOC_NONE);
 
@@ -12555,10 +12618,10 @@ lpfc_sli_sp_intr_handler(int irq, void *dev_id)
 					lpfc_sli_pcimem_bcopy(mbox, pmbox,
 							MAILBOX_CMD_SIZE);
 					if (pmb->out_ext_byte_len &&
-						pmb->context2)
+						pmb->ctx_buf)
 						lpfc_sli_pcimem_bcopy(
 						phba->mbox_ext,
-						pmb->context2,
+						pmb->ctx_buf,
 						pmb->out_ext_byte_len);
 				}
 				if (pmb->mbox_flag & LPFC_MBX_IMED_UNREG) {
@@ -12573,9 +12636,9 @@ lpfc_sli_sp_intr_handler(int irq, void *dev_id)
 
 					if (!pmbox->mbxStatus) {
 						mp = (struct lpfc_dmabuf *)
-							(pmb->context1);
+							(pmb->ctx_buf);
 						ndlp = (struct lpfc_nodelist *)
-							pmb->context2;
+							pmb->ctx_ndlp;
 
 						/* Reg_LOGIN of dflt RPI was
 						 * successful. new lets get
@@ -12588,8 +12651,8 @@ lpfc_sli_sp_intr_handler(int irq, void *dev_id)
 							pmb);
 						pmb->mbox_cmpl =
 							lpfc_mbx_cmpl_dflt_rpi;
-						pmb->context1 = mp;
-						pmb->context2 = ndlp;
+						pmb->ctx_buf = mp;
+						pmb->ctx_ndlp = ndlp;
 						pmb->vport = vport;
 						rc = lpfc_sli_issue_mbox(phba,
 								pmb,
@@ -13195,16 +13258,16 @@ lpfc_sli4_sp_handle_mbox_event(struct lpfc_hba *phba, struct lpfc_mcqe *mcqe)
 				      mcqe_status,
 				      pmbox->un.varWords[0], 0);
 		if (mcqe_status == MB_CQE_STATUS_SUCCESS) {
-			mp = (struct lpfc_dmabuf *)(pmb->context1);
-			ndlp = (struct lpfc_nodelist *)pmb->context2;
+			mp = (struct lpfc_dmabuf *)(pmb->ctx_buf);
+			ndlp = (struct lpfc_nodelist *)pmb->ctx_ndlp;
 			/* Reg_LOGIN of dflt RPI was successful. Now lets get
 			 * RID of the PPI using the same mbox buffer.
 			 */
 			lpfc_unreg_login(phba, vport->vpi,
 					 pmbox->un.varWords[0], pmb);
 			pmb->mbox_cmpl = lpfc_mbx_cmpl_dflt_rpi;
-			pmb->context1 = mp;
-			pmb->context2 = ndlp;
+			pmb->ctx_buf = mp;
+			pmb->ctx_ndlp = ndlp;
 			pmb->vport = vport;
 			rc = lpfc_sli_issue_mbox(phba, pmb, MBX_NOWAIT);
 			if (rc != MBX_BUSY)
@@ -14679,7 +14742,8 @@ lpfc_modify_hba_eq_delay(struct lpfc_hba *phba, uint32_t startq,
 
 	mbox->vport = phba->pport;
 	mbox->mbox_cmpl = lpfc_sli_def_mbox_cmpl;
-	mbox->context1 = NULL;
+	mbox->ctx_buf = NULL;
+	mbox->ctx_ndlp = NULL;
 	rc = lpfc_sli_issue_mbox(phba, mbox, MBX_POLL);
 	shdr = (union lpfc_sli4_cfg_shdr *) &eq_delay->header.cfg_shdr;
 	shdr_status = bf_get(lpfc_mbox_hdr_status, &shdr->response);
@@ -14799,7 +14863,8 @@ lpfc_eq_create(struct lpfc_hba *phba, struct lpfc_queue *eq, uint32_t imax)
 	}
 	mbox->vport = phba->pport;
 	mbox->mbox_cmpl = lpfc_sli_def_mbox_cmpl;
-	mbox->context1 = NULL;
+	mbox->ctx_buf = NULL;
+	mbox->ctx_ndlp = NULL;
 	rc = lpfc_sli_issue_mbox(phba, mbox, MBX_POLL);
 	shdr_status = bf_get(lpfc_mbox_hdr_status, &shdr->response);
 	shdr_add_status = bf_get(lpfc_mbox_hdr_add_status, &shdr->response);
@@ -18217,8 +18282,8 @@ lpfc_sli4_resume_rpi(struct lpfc_nodelist *ndlp,
 	lpfc_resume_rpi(mboxq, ndlp);
 	if (cmpl) {
 		mboxq->mbox_cmpl = cmpl;
-		mboxq->context1 = arg;
-		mboxq->context2 = ndlp;
+		mboxq->ctx_buf = arg;
+		mboxq->ctx_ndlp = ndlp;
 	} else
 		mboxq->mbox_cmpl = lpfc_sli_def_mbox_cmpl;
 	mboxq->vport = ndlp->vport;
@@ -19029,7 +19094,7 @@ lpfc_sli4_get_config_region23(struct lpfc_hba *phba, char *rgn23_data)
 	if (lpfc_sli4_dump_cfg_rg23(phba, mboxq))
 		goto out;
 	mqe = &mboxq->u.mqe;
-	mp = (struct lpfc_dmabuf *) mboxq->context1;
+	mp = (struct lpfc_dmabuf *)mboxq->ctx_buf;
 	rc = lpfc_sli_issue_mbox(phba, mboxq, MBX_POLL);
 	if (rc)
 		goto out;
@@ -19280,7 +19345,7 @@ lpfc_cleanup_pending_mbox(struct lpfc_vport *vport)
 			(mb->u.mb.mbxCommand == MBX_REG_VPI))
 			mb->mbox_cmpl = lpfc_sli_def_mbox_cmpl;
 		if (mb->u.mb.mbxCommand == MBX_REG_LOGIN64) {
-			act_mbx_ndlp = (struct lpfc_nodelist *)mb->context2;
+			act_mbx_ndlp = (struct lpfc_nodelist *)mb->ctx_ndlp;
 			/* Put reference count for delayed processing */
 			act_mbx_ndlp = lpfc_nlp_get(act_mbx_ndlp);
 			/* Unregister the RPI when mailbox complete */
@@ -19305,7 +19370,7 @@ lpfc_cleanup_pending_mbox(struct lpfc_vport *vport)
 
 			mb->mbox_cmpl = lpfc_sli_def_mbox_cmpl;
 			if (mb->u.mb.mbxCommand == MBX_REG_LOGIN64) {
-				ndlp = (struct lpfc_nodelist *)mb->context2;
+				ndlp = (struct lpfc_nodelist *)mb->ctx_ndlp;
 				/* Unregister the RPI when mailbox complete */
 				mb->mbox_flag |= LPFC_MBX_IMED_UNREG;
 				restart_loop = 1;
@@ -19325,13 +19390,14 @@ lpfc_cleanup_pending_mbox(struct lpfc_vport *vport)
 	while (!list_empty(&mbox_cmd_list)) {
 		list_remove_head(&mbox_cmd_list, mb, LPFC_MBOXQ_t, list);
 		if (mb->u.mb.mbxCommand == MBX_REG_LOGIN64) {
-			mp = (struct lpfc_dmabuf *) (mb->context1);
+			mp = (struct lpfc_dmabuf *)(mb->ctx_buf);
 			if (mp) {
 				__lpfc_mbuf_free(phba, mp->virt, mp->phys);
 				kfree(mp);
 			}
-			ndlp = (struct lpfc_nodelist *) mb->context2;
-			mb->context2 = NULL;
+			mb->ctx_buf = NULL;
+			ndlp = (struct lpfc_nodelist *)mb->ctx_ndlp;
+			mb->ctx_ndlp = NULL;
 			if (ndlp) {
 				spin_lock(shost->host_lock);
 				ndlp->nlp_flag &= ~NLP_IGNR_REG_CMPL;

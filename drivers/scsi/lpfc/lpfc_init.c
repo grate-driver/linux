@@ -447,19 +447,19 @@ lpfc_config_port_post(struct lpfc_hba *phba)
 				"READ_SPARM mbxStatus x%x\n",
 				mb->mbxCommand, mb->mbxStatus);
 		phba->link_state = LPFC_HBA_ERROR;
-		mp = (struct lpfc_dmabuf *) pmb->context1;
+		mp = (struct lpfc_dmabuf *)pmb->ctx_buf;
 		mempool_free(pmb, phba->mbox_mem_pool);
 		lpfc_mbuf_free(phba, mp->virt, mp->phys);
 		kfree(mp);
 		return -EIO;
 	}
 
-	mp = (struct lpfc_dmabuf *) pmb->context1;
+	mp = (struct lpfc_dmabuf *)pmb->ctx_buf;
 
 	memcpy(&vport->fc_sparam, mp->virt, sizeof (struct serv_parm));
 	lpfc_mbuf_free(phba, mp->virt, mp->phys);
 	kfree(mp);
-	pmb->context1 = NULL;
+	pmb->ctx_buf = NULL;
 	lpfc_update_vport_wwn(vport);
 
 	/* Update the fc_host data structures with new wwn. */
@@ -1801,7 +1801,12 @@ lpfc_sli4_port_sta_fn_reset(struct lpfc_hba *phba, int mbx_action,
 	lpfc_offline(phba);
 	/* release interrupt for possible resource change */
 	lpfc_sli4_disable_intr(phba);
-	lpfc_sli_brdrestart(phba);
+	rc = lpfc_sli_brdrestart(phba);
+	if (rc) {
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
+				"6309 Failed to restart board\n");
+		return rc;
+	}
 	/* request and enable interrupt */
 	intr_mode = lpfc_sli4_enable_intr(phba, phba->intr_mode);
 	if (intr_mode == LPFC_INTR_ERROR) {
@@ -7957,6 +7962,9 @@ lpfc_sli4_read_config(struct lpfc_hba *phba)
 			bf_get(lpfc_mbx_rd_conf_xri_base, rd_config);
 		phba->sli4_hba.max_cfg_param.max_vpi =
 			bf_get(lpfc_mbx_rd_conf_vpi_count, rd_config);
+		/* Limit the max we support */
+		if (phba->sli4_hba.max_cfg_param.max_vpi > LPFC_MAX_VPORTS)
+			phba->sli4_hba.max_cfg_param.max_vpi = LPFC_MAX_VPORTS;
 		phba->sli4_hba.max_cfg_param.vpi_base =
 			bf_get(lpfc_mbx_rd_conf_vpi_base, rd_config);
 		phba->sli4_hba.max_cfg_param.max_rpi =
@@ -10686,12 +10694,7 @@ lpfc_sli4_hba_unset(struct lpfc_hba *phba)
 	kthread_stop(phba->worker_thread);
 
 	/* Disable FW logging to host memory */
-	writel(LPFC_CTL_PDEV_CTL_DDL_RAS,
-	       phba->sli4_hba.conf_regs_memmap_p + LPFC_CTL_PDEV_CTL_OFFSET);
-
-	/* Free RAS DMA memory */
-	if (phba->ras_fwlog.ras_enabled == true)
-		lpfc_sli4_ras_dma_free(phba);
+	lpfc_ras_stop_fwlog(phba);
 
 	/* Unset the queues shared with the hardware then release all
 	 * allocated resources.
@@ -10701,6 +10704,10 @@ lpfc_sli4_hba_unset(struct lpfc_hba *phba)
 
 	/* Reset SLI4 HBA FCoE function */
 	lpfc_pci_function_reset(phba);
+
+	/* Free RAS DMA memory */
+	if (phba->ras_fwlog.ras_enabled)
+		lpfc_sli4_ras_dma_free(phba);
 
 	/* Stop the SLI4 device port */
 	phba->pport->work_port_events = 0;
@@ -12639,7 +12646,8 @@ lpfc_sli4_ras_init(struct lpfc_hba *phba)
 	case PCI_DEVICE_ID_LANCER_G6_FC:
 	case PCI_DEVICE_ID_LANCER_G7_FC:
 		phba->ras_fwlog.ras_hwsupport = true;
-		if (phba->cfg_ras_fwlog_func == PCI_FUNC(phba->pcidev->devfn))
+		if (phba->cfg_ras_fwlog_func == PCI_FUNC(phba->pcidev->devfn) &&
+		    phba->cfg_ras_fwlog_buffsize)
 			phba->ras_fwlog.ras_enabled = true;
 		else
 			phba->ras_fwlog.ras_enabled = false;
