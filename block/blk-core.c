@@ -584,63 +584,6 @@ struct request *blk_get_request(struct request_queue *q, unsigned int op,
 }
 EXPORT_SYMBOL(blk_get_request);
 
-static void part_round_stats_single(struct request_queue *q, int cpu,
-				    struct hd_struct *part, unsigned long now,
-				    unsigned int inflight)
-{
-	if (inflight) {
-		__part_stat_add(cpu, part, time_in_queue,
-				inflight * (now - part->stamp));
-		__part_stat_add(cpu, part, io_ticks, (now - part->stamp));
-	}
-	part->stamp = now;
-}
-
-/**
- * part_round_stats() - Round off the performance stats on a struct disk_stats.
- * @q: target block queue
- * @cpu: cpu number for stats access
- * @part: target partition
- *
- * The average IO queue length and utilisation statistics are maintained
- * by observing the current state of the queue length and the amount of
- * time it has been in this state for.
- *
- * Normally, that accounting is done on IO completion, but that can result
- * in more than a second's worth of IO being accounted for within any one
- * second, leading to >100% utilisation.  To deal with that, we call this
- * function to do a round-off before returning the results when reading
- * /proc/diskstats.  This accounts immediately for all queue usage up to
- * the current jiffies and restarts the counters again.
- */
-void part_round_stats(struct request_queue *q, int cpu, struct hd_struct *part)
-{
-	struct hd_struct *part2 = NULL;
-	unsigned long now = jiffies;
-	unsigned int inflight[2];
-	int stats = 0;
-
-	if (part->stamp != now)
-		stats |= 1;
-
-	if (part->partno) {
-		part2 = &part_to_disk(part)->part0;
-		if (part2->stamp != now)
-			stats |= 2;
-	}
-
-	if (!stats)
-		return;
-
-	part_in_flight(q, part, inflight);
-
-	if (stats & 2)
-		part_round_stats_single(q, cpu, part2, now, inflight[1]);
-	if (stats & 1)
-		part_round_stats_single(q, cpu, part, now, inflight[0]);
-}
-EXPORT_SYMBOL_GPL(part_round_stats);
-
 void blk_put_request(struct request *req)
 {
 	blk_mq_free_request(req);
@@ -1362,11 +1305,10 @@ void blk_account_io_completion(struct request *req, unsigned int bytes)
 	if (blk_do_io_stat(req)) {
 		const int sgrp = op_stat_group(req_op(req));
 		struct hd_struct *part;
-		int cpu;
 
-		cpu = part_stat_lock();
+		part_stat_lock();
 		part = req->part;
-		part_stat_add(cpu, part, sectors[sgrp], bytes >> 9);
+		part_stat_add(part, sectors[sgrp], bytes >> 9);
 		part_stat_unlock();
 	}
 }
@@ -1381,14 +1323,14 @@ void blk_account_io_done(struct request *req, u64 now)
 	if (blk_do_io_stat(req) && !(req->rq_flags & RQF_FLUSH_SEQ)) {
 		const int sgrp = op_stat_group(req_op(req));
 		struct hd_struct *part;
-		int cpu;
 
-		cpu = part_stat_lock();
+		part_stat_lock();
 		part = req->part;
 
-		part_stat_inc(cpu, part, ios[sgrp]);
-		part_stat_add(cpu, part, nsecs[sgrp], now - req->start_time_ns);
-		part_round_stats(req->q, cpu, part);
+		update_io_ticks(part, jiffies);
+		part_stat_inc(part, ios[sgrp]);
+		part_stat_add(part, nsecs[sgrp], now - req->start_time_ns);
+		part_stat_add(part, time_in_queue, nsecs_to_jiffies64(now - req->start_time_ns));
 		part_dec_in_flight(req->q, part, rq_data_dir(req));
 
 		hd_struct_put(part);
@@ -1400,16 +1342,15 @@ void blk_account_io_start(struct request *rq, bool new_io)
 {
 	struct hd_struct *part;
 	int rw = rq_data_dir(rq);
-	int cpu;
 
 	if (!blk_do_io_stat(rq))
 		return;
 
-	cpu = part_stat_lock();
+	part_stat_lock();
 
 	if (!new_io) {
 		part = rq->part;
-		part_stat_inc(cpu, part, merges[rw]);
+		part_stat_inc(part, merges[rw]);
 	} else {
 		part = disk_map_sector_rcu(rq->rq_disk, blk_rq_pos(rq));
 		if (!hd_struct_try_get(part)) {
@@ -1424,10 +1365,11 @@ void blk_account_io_start(struct request *rq, bool new_io)
 			part = &rq->rq_disk->part0;
 			hd_struct_get(part);
 		}
-		part_round_stats(rq->q, cpu, part);
 		part_inc_in_flight(rq->q, part, rw);
 		rq->part = part;
 	}
+
+	update_io_ticks(part, jiffies);
 
 	part_stat_unlock();
 }
