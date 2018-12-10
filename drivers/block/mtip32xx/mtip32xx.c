@@ -2680,7 +2680,7 @@ static void mtip_softirq_done_fn(struct request *rq)
 							cmd->direction);
 
 	if (unlikely(cmd->unaligned))
-		up(&dd->port->cmd_slot_unal);
+		atomic_inc(&dd->port->cmd_slot_unal);
 
 	blk_mq_end_request(rq, cmd->status);
 }
@@ -2990,7 +2990,7 @@ static int mtip_hw_init(struct driver_data *dd)
 	else
 		dd->unal_qdepth = 0;
 
-	sema_init(&dd->port->cmd_slot_unal, dd->unal_qdepth);
+	atomic_set(&dd->port->cmd_slot_unal, dd->unal_qdepth);
 
 	/* Spinlock to prevent concurrent issue */
 	for (i = 0; i < MTIP_MAX_SLOT_GROUPS; i++)
@@ -3533,7 +3533,7 @@ static bool mtip_check_unal_depth(struct blk_mq_hw_ctx *hctx,
 			cmd->unaligned = 1;
 	}
 
-	if (cmd->unaligned && down_trylock(&dd->port->cmd_slot_unal))
+	if (cmd->unaligned && atomic_dec_if_positive(&dd->port->cmd_slot_unal) >= 0)
 		return true;
 
 	return false;
@@ -3550,7 +3550,7 @@ static blk_status_t mtip_issue_reserved_cmd(struct blk_mq_hw_ctx *hctx,
 	struct mtip_cmd_sg *command_sg;
 
 	if (mtip_commands_active(dd->port))
-		return BLK_STS_RESOURCE;
+		return BLK_STS_DEV_RESOURCE;
 
 	hdr->ctba = cpu_to_le32(cmd->command_dma & 0xFFFFFFFF);
 	if (test_bit(MTIP_PF_HOST_CAP_64, &dd->port->flags))
@@ -3587,7 +3587,7 @@ static blk_status_t mtip_queue_rq(struct blk_mq_hw_ctx *hctx,
 		return mtip_issue_reserved_cmd(hctx, rq);
 
 	if (unlikely(mtip_check_unal_depth(hctx, rq)))
-		return BLK_STS_RESOURCE;
+		return BLK_STS_DEV_RESOURCE;
 
 	if (is_se_active(dd) || is_stopped(dd, rq))
 		return BLK_STS_IOERR;
