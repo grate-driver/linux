@@ -60,6 +60,22 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-for-4.21
 	qcom/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-dts-for-4.21
+	pxa/dt
+		https://github.com/rjarzmik/linux tags/pxa-dt-4.21
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-4.21-devicetree
+	renesas/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm64-dt2-for-v4.21
+	renesas/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm-dt2-for-v4.21
+	renesas/dt-bindings
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt-bindings-for-v4.21
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-dt-bindings
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-arm-dt
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-arm64-dt
 
 next/drivers
 	rockchip/drivers
@@ -96,4 +112,10 @@ fixes
 		ARM: dts: realview: Fix some more duplicate regulator nodes
 	<no branch> (e25b6783c7b1bb79103d4617336879423f86b05e)
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.20/devicetree-fixes
+	<no branch> (f15096f12a4e9340168df5fdd9201aa8ed60d59e)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-4.20-3
+	<no branch> (5f8208f557065163f9a8089ea2ea7888f9d96922)
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.20
+	<no branch> (dae522045094ebfa9a10cf7951a8f79b02da8e15)
+		git://git.infradead.org/linux-mvebu tags/mvebu-fixes-4.20-1
 
