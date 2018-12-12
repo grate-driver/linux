@@ -76,6 +76,40 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-arm-dt
 	tegra/dt64
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-arm64-dt
+	sunxi/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.21
+	sunxi/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt64-for-4.21
+	qcom/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-for-4.21-2
+	mvebu/dt64
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.21-1
+	samsung/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.21
+	samsung/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-4.21
+	mediatek/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.20-next-dts64
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-4.21
+	imx/dt-imx7d-pico
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx7d-pico-4.21
+	imx/dt-imx7ulp
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx7ulp-dt-4.21
+		contains depends/clk-imx7ulp
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-4.21
+	uniphier/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt-v4.21
+	amlogic/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt-2
+		contains depends/meson-clk
+	at91/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-4.21-dt
+	rockchip/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-dts32-2
+	rockchip/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-dts64-2
 
 next/drivers
 	rockchip/drivers
