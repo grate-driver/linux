@@ -170,6 +170,8 @@ next/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-4.21-soc
 	tegra/memory
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-memory
+	omap/drivers-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/driver-part2-signed
 
 next/defconfig
 	vexpress/defconfig
@@ -208,4 +210,8 @@ fixes
 		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.20
 	<no branch> (dae522045094ebfa9a10cf7951a8f79b02da8e15)
 		git://git.infradead.org/linux-mvebu tags/mvebu-fixes-4.20-1
+	<no branch> (84fb6c7feb1494ebb7d1ec8b95cfb7ada0264465)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.20/fixes-rc6
+	<no branch> (690e16bada6029694740d5501025faf483d14339)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.20-rockchip-dts64fixes-2
 
