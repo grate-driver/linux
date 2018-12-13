@@ -138,6 +138,8 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts
 	patch
 		dt-bindings: arm: Convert Rockchip board/soc bindings to json-schema
+	amlogic/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-2-redo
 
 next/drivers
 	rockchip/drivers
@@ -190,26 +192,14 @@ next/defconfig
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-4.21
 	imx/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-4.21
+	patch
+		arm64: defconfig: Regenerate for v4.20
+		arm64: defconfig: Replace PINCTRL_MT7622 with PINCTRL_MTK_MOORE
+		arm64: defconfig: Enable FSL_MC_BUS and FSL_MC_DPIO
 
 next/late
 
 fixes
-	patch
-		MAINTAINERS: mediatek: Update SoC entry
-	<no branch> (ce68cc6fad893eb33b69ef7ec186233a51696236)
-		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.19-next-fixes
-	patch
-		ARM: mmp/mmp2: fix cpu_is_mmp2() on mmp2-dt
-		MAINTAINERS: update entry for MMP platform
-		ARM: dts: realview: Fix some more duplicate regulator nodes
-	<no branch> (e25b6783c7b1bb79103d4617336879423f86b05e)
-		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.20/devicetree-fixes
-	<no branch> (f15096f12a4e9340168df5fdd9201aa8ed60d59e)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-4.20-3
-	<no branch> (5f8208f557065163f9a8089ea2ea7888f9d96922)
-		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-4.20
-	<no branch> (dae522045094ebfa9a10cf7951a8f79b02da8e15)
-		git://git.infradead.org/linux-mvebu tags/mvebu-fixes-4.20-1
 	<no branch> (84fb6c7feb1494ebb7d1ec8b95cfb7ada0264465)
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.20/fixes-rc6
 	<no branch> (690e16bada6029694740d5501025faf483d14339)
