@@ -372,7 +372,6 @@ continue_unlock:
 
 			f2fs_wait_on_page_writeback(page, META, true);
 
-			BUG_ON(PageWriteback(page));
 			if (!clear_page_dirty_for_io(page))
 				goto continue_unlock;
 
@@ -1291,7 +1290,6 @@ static void commit_checkpoint(struct f2fs_sb_info *sbi,
 	int err;
 
 	f2fs_wait_on_page_writeback(page, META, true);
-	f2fs_bug_on(sbi, PageWriteback(page));
 
 	memcpy(page_address(page), src, PAGE_SIZE);
 

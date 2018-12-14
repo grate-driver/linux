@@ -1599,7 +1599,6 @@ int f2fs_move_node_page(struct page *node_page, int gc_type)
 		};
 
 		f2fs_wait_on_page_writeback(node_page, NODE, true);
-		f2fs_bug_on(F2FS_P_SB(node_page), PageWriteback(node_page));
 
 		set_page_dirty(node_page);
 
@@ -1691,7 +1690,6 @@ continue_unlock:
 			}
 
 			f2fs_wait_on_page_writeback(page, NODE, true);
-			BUG_ON(PageWriteback(page));
 
 			set_fsync_mark(page, 0);
 			set_dentry_mark(page, 0);
@@ -1825,7 +1823,6 @@ continue_unlock:
 
 			f2fs_wait_on_page_writeback(page, NODE, true);
 
-			BUG_ON(PageWriteback(page));
 			if (!clear_page_dirty_for_io(page))
 				goto continue_unlock;
 
