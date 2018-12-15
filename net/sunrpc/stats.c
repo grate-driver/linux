@@ -62,19 +62,7 @@ static int rpc_proc_show(struct seq_file *seq, void *v) {
 	}
 	return 0;
 }
-
-static int rpc_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, rpc_proc_show, PDE_DATA(inode));
-}
-
-static const struct file_operations rpc_proc_fops = {
-	.owner = THIS_MODULE,
-	.open = rpc_proc_open,
-	.read  = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
+DEFINE_SHOW_ATTRIBUTE(rpc_proc);
 
 /*
  * Get RPC server stats
