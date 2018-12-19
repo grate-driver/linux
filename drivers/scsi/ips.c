@@ -365,7 +365,6 @@ static struct scsi_host_template ips_driver_template = {
 	.this_id		= -1,
 	.sg_tablesize		= IPS_MAX_SG,
 	.cmd_per_lun		= 3,
-	.use_clustering		= ENABLE_CLUSTERING,
 	.no_write_same		= 1,
 };
 
@@ -6678,7 +6677,6 @@ ips_register_scsi(int index)
 	sh->sg_tablesize = sh->hostt->sg_tablesize;
 	sh->can_queue = sh->hostt->can_queue;
 	sh->cmd_per_lun = sh->hostt->cmd_per_lun;
-	sh->use_clustering = sh->hostt->use_clustering;
 	sh->max_sectors = 128;
 
 	sh->max_id = ha->ntargets;
