@@ -140,6 +140,24 @@ next/dt
 		dt-bindings: arm: Convert Rockchip board/soc bindings to json-schema
 	amlogic/dt64-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-2-redo
+	xilinx/dt64
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.0
+	xilinx/dt
+		https://github.com/Xilinx/linux-xlnx tags/zynq-dt-for-v5.0
+	omap/ti-sysc-dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/dt-ti-sysc-signed
+	ti-k3/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/am654-for-v4.21
+	patch
+		ARM: dts: suniv: Fix improper bindings include patch
+	imx/qspi-dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-qspi-dt-clean
+	sunxi/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.21-2
+	sunxi/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt64-for-4.21-2
+	samsung/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.21-2
 
 next/drivers
 	rockchip/drivers
@@ -174,6 +192,10 @@ next/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-memory
 	omap/drivers-2
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/driver-part2-signed
+	drivers/pl353
+		https://github.com/Xilinx/linux-xlnx tags/zynq-soc-for-v5.0
+	qcom/drivers-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-drivers-for-4.21-2
 
 next/defconfig
 	vexpress/defconfig
@@ -196,6 +218,7 @@ next/defconfig
 		arm64: defconfig: Regenerate for v4.20
 		arm64: defconfig: Replace PINCTRL_MT7622 with PINCTRL_MTK_MOORE
 		arm64: defconfig: Enable FSL_MC_BUS and FSL_MC_DPIO
+		Revert "arm64: defconfig: Enable FSL_MC_BUS and FSL_MC_DPIO"
 
 next/late
 
