@@ -33,8 +33,8 @@
 /*
  * MegaRAID SAS Driver meta data
  */
-#define MEGASAS_VERSION				"07.707.03.00-rc1"
-#define MEGASAS_RELDATE				"August 30, 2018"
+#define MEGASAS_VERSION				"07.707.50.00-rc1"
+#define MEGASAS_RELDATE				"December 18, 2018"
 
 /*
  * Device IDs
@@ -1570,6 +1570,7 @@ enum MR_ADAPTER_TYPE {
 	THUNDERBOLT_SERIES = 2,
 	INVADER_SERIES = 3,
 	VENTURA_SERIES = 4,
+	AERO_SERIES = 5,
 };
 
 /*
@@ -2412,9 +2413,9 @@ struct megasas_instance_template {
 	void (*enable_intr)(struct megasas_instance *);
 	void (*disable_intr)(struct megasas_instance *);
 
-	int (*clear_intr)(struct megasas_register_set __iomem *);
+	int (*clear_intr)(struct megasas_instance *);
 
-	u32 (*read_fw_status_reg)(struct megasas_register_set __iomem *);
+	u32 (*read_fw_status_reg)(struct megasas_instance *);
 	int (*adp_reset)(struct megasas_instance *, \
 		struct megasas_register_set __iomem *);
 	int (*check_reset)(struct megasas_instance *, \

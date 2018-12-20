@@ -2512,10 +2512,12 @@ lpfc_sli_def_mbox_cmpl(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 
 			if ((ndlp->nlp_flag & NLP_UNREG_INP) &&
 			    (ndlp->nlp_defer_did != NLP_EVT_NOTHING_PENDING)) {
+				ndlp->nlp_flag &= ~NLP_UNREG_INP;
 				ndlp->nlp_defer_did = NLP_EVT_NOTHING_PENDING;
 				lpfc_issue_els_plogi(vport, ndlp->nlp_DID, 0);
+			} else {
+				ndlp->nlp_flag &= ~NLP_UNREG_INP;
 			}
-			ndlp->nlp_flag &= ~NLP_UNREG_INP;
 		}
 		pmb->ctx_ndlp = NULL;
 	}
@@ -2583,12 +2585,14 @@ lpfc_sli4_unreg_rpi_cmpl_clr(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 						"NPort x%x Data: x%x %p\n",
 						ndlp->nlp_rpi, ndlp->nlp_DID,
 						ndlp->nlp_defer_did, ndlp);
+					ndlp->nlp_flag &= ~NLP_UNREG_INP;
 					ndlp->nlp_defer_did =
 						NLP_EVT_NOTHING_PENDING;
 					lpfc_issue_els_plogi(
 						vport, ndlp->nlp_DID, 0);
+				} else {
+					ndlp->nlp_flag &= ~NLP_UNREG_INP;
 				}
-				ndlp->nlp_flag &= ~NLP_UNREG_INP;
 			}
 		}
 	}
@@ -13486,6 +13490,8 @@ lpfc_sli4_sp_handle_abort_xri_wcqe(struct lpfc_hba *phba,
 	return workposted;
 }
 
+#define FC_RCTL_MDS_DIAGS	0xF4
+
 /**
  * lpfc_sli4_sp_handle_rcqe - Process a receive-queue completion queue entry
  * @phba: Pointer to HBA context object.
@@ -13499,6 +13505,7 @@ static bool
 lpfc_sli4_sp_handle_rcqe(struct lpfc_hba *phba, struct lpfc_rcqe *rcqe)
 {
 	bool workposted = false;
+	struct fc_frame_header *fc_hdr;
 	struct lpfc_queue *hrq = phba->sli4_hba.hdr_rq;
 	struct lpfc_queue *drq = phba->sli4_hba.dat_rq;
 	struct lpfc_nvmet_tgtport *tgtp;
@@ -13535,7 +13542,17 @@ lpfc_sli4_sp_handle_rcqe(struct lpfc_hba *phba, struct lpfc_rcqe *rcqe)
 		hrq->RQ_buf_posted--;
 		memcpy(&dma_buf->cq_event.cqe.rcqe_cmpl, rcqe, sizeof(*rcqe));
 
-		/* save off the frame for the word thread to process */
+		fc_hdr = (struct fc_frame_header *)dma_buf->hbuf.virt;
+
+		if (fc_hdr->fh_r_ctl == FC_RCTL_MDS_DIAGS ||
+		    fc_hdr->fh_r_ctl == FC_RCTL_DD_UNSOL_DATA) {
+			spin_unlock_irqrestore(&phba->hbalock, iflags);
+			/* Handle MDS Loopback frames */
+			lpfc_sli4_handle_mds_loopback(phba->pport, dma_buf);
+			break;
+		}
+
+		/* save off the frame for the work thread to process */
 		list_add_tail(&dma_buf->cq_event.list,
 			      &phba->sli4_hba.sp_queue_event);
 		/* Frame received */
@@ -16939,8 +16956,6 @@ lpfc_fc_frame_check(struct lpfc_hba *phba, struct fc_frame_header *fc_hdr)
 	struct fc_vft_header *fc_vft_hdr;
 	uint32_t *header = (uint32_t *) fc_hdr;
 
-#define FC_RCTL_MDS_DIAGS	0xF4
-
 	switch (fc_hdr->fh_r_ctl) {
 	case FC_RCTL_DD_UNCAT:		/* uncategorized information */
 	case FC_RCTL_DD_SOL_DATA:	/* solicited data */
@@ -16979,15 +16994,12 @@ lpfc_fc_frame_check(struct lpfc_hba *phba, struct fc_frame_header *fc_hdr)
 		goto drop;
 	}
 
-#define FC_TYPE_VENDOR_UNIQUE	0xFF
-
 	switch (fc_hdr->fh_type) {
 	case FC_TYPE_BLS:
 	case FC_TYPE_ELS:
 	case FC_TYPE_FCP:
 	case FC_TYPE_CT:
 	case FC_TYPE_NVME:
-	case FC_TYPE_VENDOR_UNIQUE:
 		break;
 	case FC_TYPE_IP:
 	case FC_TYPE_ILS:
@@ -17817,6 +17829,7 @@ lpfc_sli4_mds_loopback_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *cmdiocb,
 		dma_pool_free(phba->lpfc_drb_pool, pcmd->virt, pcmd->phys);
 	kfree(pcmd);
 	lpfc_sli_release_iocbq(phba, cmdiocb);
+	lpfc_drain_txq(phba);
 }
 
 static void
@@ -17830,14 +17843,23 @@ lpfc_sli4_handle_mds_loopback(struct lpfc_vport *vport,
 	struct lpfc_dmabuf *pcmd = NULL;
 	uint32_t frame_len;
 	int rc;
+	unsigned long iflags;
 
 	fc_hdr = (struct fc_frame_header *)dmabuf->hbuf.virt;
 	frame_len = bf_get(lpfc_rcqe_length, &dmabuf->cq_event.cqe.rcqe_cmpl);
 
 	/* Send the received frame back */
 	iocbq = lpfc_sli_get_iocbq(phba);
-	if (!iocbq)
-		goto exit;
+	if (!iocbq) {
+		/* Queue cq event and wakeup worker thread to process it */
+		spin_lock_irqsave(&phba->hbalock, iflags);
+		list_add_tail(&dmabuf->cq_event.list,
+			      &phba->sli4_hba.sp_queue_event);
+		phba->hba_flag |= HBA_SP_QUEUE_EVT;
+		spin_unlock_irqrestore(&phba->hbalock, iflags);
+		lpfc_worker_wake_up(phba);
+		return;
+	}
 
 	/* Allocate buffer for command payload */
 	pcmd = kmalloc(sizeof(struct lpfc_dmabuf), GFP_KERNEL);
@@ -17922,6 +17944,14 @@ lpfc_sli4_handle_received_buffer(struct lpfc_hba *phba,
 	/* Process each received buffer */
 	fc_hdr = (struct fc_frame_header *)dmabuf->hbuf.virt;
 
+	if (fc_hdr->fh_r_ctl == FC_RCTL_MDS_DIAGS ||
+	    fc_hdr->fh_r_ctl == FC_RCTL_DD_UNSOL_DATA) {
+		vport = phba->pport;
+		/* Handle MDS Loopback frames */
+		lpfc_sli4_handle_mds_loopback(vport, dmabuf);
+		return;
+	}
+
 	/* check to see if this a valid type of frame */
 	if (lpfc_fc_frame_check(phba, fc_hdr)) {
 		lpfc_in_buf_free(phba, &dmabuf->dbuf);
@@ -17935,13 +17965,6 @@ lpfc_sli4_handle_received_buffer(struct lpfc_hba *phba,
 	else
 		fcfi = bf_get(lpfc_rcqe_fcf_id,
 			      &dmabuf->cq_event.cqe.rcqe_cmpl);
-
-	if (fc_hdr->fh_r_ctl == 0xF4 && fc_hdr->fh_type == 0xFF) {
-		vport = phba->pport;
-		/* Handle MDS Loopback frames */
-		lpfc_sli4_handle_mds_loopback(vport, dmabuf);
-		return;
-	}
 
 	/* d_id this frame is directed to */
 	did = sli4_did_from_fc_hdr(fc_hdr);
@@ -19240,11 +19263,11 @@ lpfc_wr_object(struct lpfc_hba *phba, struct list_head *dmabuf_list,
 	struct lpfc_mbx_wr_object *wr_object;
 	LPFC_MBOXQ_t *mbox;
 	int rc = 0, i = 0;
-	uint32_t shdr_status, shdr_add_status;
+	uint32_t shdr_status, shdr_add_status, shdr_change_status;
 	uint32_t mbox_tmo;
-	union lpfc_sli4_cfg_shdr *shdr;
 	struct lpfc_dmabuf *dmabuf;
 	uint32_t written = 0;
+	bool check_change_status = false;
 
 	mbox = mempool_alloc(phba->mbox_mem_pool, GFP_KERNEL);
 	if (!mbox)
@@ -19272,6 +19295,8 @@ lpfc_wr_object(struct lpfc_hba *phba, struct list_head *dmabuf_list,
 				(size - written);
 			written += (size - written);
 			bf_set(lpfc_wr_object_eof, &wr_object->u.request, 1);
+			bf_set(lpfc_wr_object_eas, &wr_object->u.request, 1);
+			check_change_status = true;
 		} else {
 			wr_object->u.request.bde[i].tus.f.bdeSize =
 				SLI4_PAGE_SIZE;
@@ -19288,9 +19313,39 @@ lpfc_wr_object(struct lpfc_hba *phba, struct list_head *dmabuf_list,
 		rc = lpfc_sli_issue_mbox_wait(phba, mbox, mbox_tmo);
 	}
 	/* The IOCTL status is embedded in the mailbox subheader. */
-	shdr = (union lpfc_sli4_cfg_shdr *) &wr_object->header.cfg_shdr;
-	shdr_status = bf_get(lpfc_mbox_hdr_status, &shdr->response);
-	shdr_add_status = bf_get(lpfc_mbox_hdr_add_status, &shdr->response);
+	shdr_status = bf_get(lpfc_mbox_hdr_status,
+			     &wr_object->header.cfg_shdr.response);
+	shdr_add_status = bf_get(lpfc_mbox_hdr_add_status,
+				 &wr_object->header.cfg_shdr.response);
+	if (check_change_status) {
+		shdr_change_status = bf_get(lpfc_wr_object_change_status,
+					    &wr_object->u.response);
+		switch (shdr_change_status) {
+		case (LPFC_CHANGE_STATUS_PHYS_DEV_RESET):
+			lpfc_printf_log(phba, KERN_INFO, LOG_INIT,
+					"3198 Firmware write complete: System "
+					"reboot required to instantiate\n");
+			break;
+		case (LPFC_CHANGE_STATUS_FW_RESET):
+			lpfc_printf_log(phba, KERN_INFO, LOG_INIT,
+					"3199 Firmware write complete: Firmware"
+					" reset required to instantiate\n");
+			break;
+		case (LPFC_CHANGE_STATUS_PORT_MIGRATION):
+			lpfc_printf_log(phba, KERN_INFO, LOG_INIT,
+					"3200 Firmware write complete: Port "
+					"Migration or PCI Reset required to "
+					"instantiate\n");
+			break;
+		case (LPFC_CHANGE_STATUS_PCI_RESET):
+			lpfc_printf_log(phba, KERN_INFO, LOG_INIT,
+					"3201 Firmware write complete: PCI "
+					"Reset required to instantiate\n");
+			break;
+		default:
+			break;
+		}
+	}
 	if (rc != MBX_TIMEOUT)
 		mempool_free(mbox, phba->mbox_mem_pool);
 	if (shdr_status || shdr_add_status || rc) {

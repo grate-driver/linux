@@ -190,7 +190,7 @@ void
 megasas_complete_cmd(struct megasas_instance *instance, struct megasas_cmd *cmd,
 		     u8 alt_status);
 static u32
-megasas_read_fw_status_reg_gen2(struct megasas_register_set __iomem *regs);
+megasas_read_fw_status_reg_gen2(struct megasas_instance *instance);
 static int
 megasas_adp_reset_gen2(struct megasas_instance *instance,
 		       struct megasas_register_set __iomem *reg_set);
@@ -219,6 +219,28 @@ static inline void
 megasas_free_ctrl_dma_buffers(struct megasas_instance *instance);
 static inline void
 megasas_init_ctrl_params(struct megasas_instance *instance);
+
+u32 megasas_readl(struct megasas_instance *instance,
+		  const volatile void __iomem *addr)
+{
+	u32 i = 0, ret_val;
+	/*
+	 * Due to a HW errata in Aero controllers, reads to certain
+	 * Fusion registers could intermittently return all zeroes.
+	 * This behavior is transient in nature and subsequent reads will
+	 * return valid value. As a workaround in driver, retry readl for
+	 * upto three times until a non-zero value is read.
+	 */
+	if (instance->adapter_type == AERO_SERIES) {
+		do {
+			ret_val = readl(addr);
+			i++;
+		} while (ret_val == 0 && i < 3);
+		return ret_val;
+	} else {
+		return readl(addr);
+	}
+}
 
 /**
  * megasas_set_dma_settings -	Populate DMA address, length and flags for DCMDs
@@ -420,19 +442,21 @@ megasas_disable_intr_xscale(struct megasas_instance *instance)
  * @regs:			MFI register set
  */
 static u32
-megasas_read_fw_status_reg_xscale(struct megasas_register_set __iomem * regs)
+megasas_read_fw_status_reg_xscale(struct megasas_instance *instance)
 {
-	return readl(&(regs)->outbound_msg_0);
+	return readl(&instance->reg_set->outbound_msg_0);
 }
 /**
  * megasas_clear_interrupt_xscale -	Check & clear interrupt
  * @regs:				MFI register set
  */
 static int
-megasas_clear_intr_xscale(struct megasas_register_set __iomem * regs)
+megasas_clear_intr_xscale(struct megasas_instance *instance)
 {
 	u32 status;
 	u32 mfiStatus = 0;
+	struct megasas_register_set __iomem *regs;
+	regs = instance->reg_set;
 
 	/*
 	 * Check if it is our interrupt
@@ -597,9 +621,9 @@ megasas_disable_intr_ppc(struct megasas_instance *instance)
  * @regs:			MFI register set
  */
 static u32
-megasas_read_fw_status_reg_ppc(struct megasas_register_set __iomem * regs)
+megasas_read_fw_status_reg_ppc(struct megasas_instance *instance)
 {
-	return readl(&(regs)->outbound_scratch_pad_0);
+	return readl(&instance->reg_set->outbound_scratch_pad_0);
 }
 
 /**
@@ -607,9 +631,11 @@ megasas_read_fw_status_reg_ppc(struct megasas_register_set __iomem * regs)
  * @regs:				MFI register set
  */
 static int
-megasas_clear_intr_ppc(struct megasas_register_set __iomem * regs)
+megasas_clear_intr_ppc(struct megasas_instance *instance)
 {
 	u32 status, mfiStatus = 0;
+	struct megasas_register_set __iomem *regs;
+	regs = instance->reg_set;
 
 	/*
 	 * Check if it is our interrupt
@@ -722,9 +748,9 @@ megasas_disable_intr_skinny(struct megasas_instance *instance)
  * @regs:			MFI register set
  */
 static u32
-megasas_read_fw_status_reg_skinny(struct megasas_register_set __iomem *regs)
+megasas_read_fw_status_reg_skinny(struct megasas_instance *instance)
 {
-	return readl(&(regs)->outbound_scratch_pad_0);
+	return readl(&instance->reg_set->outbound_scratch_pad_0);
 }
 
 /**
@@ -732,10 +758,12 @@ megasas_read_fw_status_reg_skinny(struct megasas_register_set __iomem *regs)
  * @regs:				MFI register set
  */
 static int
-megasas_clear_intr_skinny(struct megasas_register_set __iomem *regs)
+megasas_clear_intr_skinny(struct megasas_instance *instance)
 {
 	u32 status;
 	u32 mfiStatus = 0;
+	struct megasas_register_set __iomem *regs;
+	regs = instance->reg_set;
 
 	/*
 	 * Check if it is our interrupt
@@ -749,7 +777,7 @@ megasas_clear_intr_skinny(struct megasas_register_set __iomem *regs)
 	/*
 	 * Check if it is our interrupt
 	 */
-	if ((megasas_read_fw_status_reg_skinny(regs) & MFI_STATE_MASK) ==
+	if ((megasas_read_fw_status_reg_skinny(instance) & MFI_STATE_MASK) ==
 	    MFI_STATE_FAULT) {
 		mfiStatus = MFI_INTR_FLAG_FIRMWARE_STATE_CHANGE;
 	} else
@@ -867,9 +895,9 @@ megasas_disable_intr_gen2(struct megasas_instance *instance)
  * @regs:                      MFI register set
  */
 static u32
-megasas_read_fw_status_reg_gen2(struct megasas_register_set __iomem *regs)
+megasas_read_fw_status_reg_gen2(struct megasas_instance *instance)
 {
-	return readl(&(regs)->outbound_scratch_pad_0);
+	return readl(&instance->reg_set->outbound_scratch_pad_0);
 }
 
 /**
@@ -877,10 +905,12 @@ megasas_read_fw_status_reg_gen2(struct megasas_register_set __iomem *regs)
  * @regs:                              MFI register set
  */
 static int
-megasas_clear_intr_gen2(struct megasas_register_set __iomem *regs)
+megasas_clear_intr_gen2(struct megasas_instance *instance)
 {
 	u32 status;
 	u32 mfiStatus = 0;
+	struct megasas_register_set __iomem *regs;
+	regs = instance->reg_set;
 
 	/*
 	 * Check if it is our interrupt
@@ -2685,7 +2715,7 @@ static int megasas_wait_for_outstanding(struct megasas_instance *instance)
 
 	i = 0;
 	outstanding = atomic_read(&instance->fw_outstanding);
-	fw_state = instance->instancet->read_fw_status_reg(instance->reg_set) & MFI_STATE_MASK;
+	fw_state = instance->instancet->read_fw_status_reg(instance) & MFI_STATE_MASK;
 
 	if ((!outstanding && (fw_state == MFI_STATE_OPERATIONAL)))
 		goto no_outstanding;
@@ -2714,7 +2744,7 @@ static int megasas_wait_for_outstanding(struct megasas_instance *instance)
 
 			outstanding = atomic_read(&instance->fw_outstanding);
 
-			fw_state = instance->instancet->read_fw_status_reg(instance->reg_set) & MFI_STATE_MASK;
+			fw_state = instance->instancet->read_fw_status_reg(instance) & MFI_STATE_MASK;
 			if ((!outstanding && (fw_state == MFI_STATE_OPERATIONAL)))
 				goto no_outstanding;
 		}
@@ -3668,9 +3698,8 @@ megasas_deplete_reply_queue(struct megasas_instance *instance,
 		return IRQ_HANDLED;
 	}
 
-	if ((mfiStatus = instance->instancet->clear_intr(
-						instance->reg_set)
-						) == 0) {
+	mfiStatus = instance->instancet->clear_intr(instance);
+	if (mfiStatus == 0) {
 		/* Hardware may not set outbound_intr_status in MSI-X mode */
 		if (!instance->msix_vectors)
 			return IRQ_NONE;
@@ -3680,7 +3709,7 @@ megasas_deplete_reply_queue(struct megasas_instance *instance,
 
 	if ((mfiStatus & MFI_INTR_FLAG_FIRMWARE_STATE_CHANGE)) {
 		fw_state = instance->instancet->read_fw_status_reg(
-				instance->reg_set) & MFI_STATE_MASK;
+				instance) & MFI_STATE_MASK;
 
 		if (fw_state != MFI_STATE_FAULT) {
 			dev_notice(&instance->pdev->dev, "fw state:%x\n",
@@ -3763,7 +3792,7 @@ megasas_transition_to_ready(struct megasas_instance *instance, int ocr)
 	u32 cur_state;
 	u32 abs_state, curr_abs_state;
 
-	abs_state = instance->instancet->read_fw_status_reg(instance->reg_set);
+	abs_state = instance->instancet->read_fw_status_reg(instance);
 	fw_state = abs_state & MFI_STATE_MASK;
 
 	if (fw_state != MFI_STATE_READY)
@@ -3835,7 +3864,8 @@ megasas_transition_to_ready(struct megasas_instance *instance, int ocr)
 
 				if (instance->adapter_type != MFI_SERIES) {
 					for (i = 0; i < (10 * 1000); i += 20) {
-						if (readl(
+						if (megasas_readl(
+							    instance,
 							    &instance->
 							    reg_set->
 							    doorbell) & 1)
@@ -3896,7 +3926,7 @@ megasas_transition_to_ready(struct megasas_instance *instance, int ocr)
 		 */
 		for (i = 0; i < max_wait; i++) {
 			curr_abs_state = instance->instancet->
-				read_fw_status_reg(instance->reg_set);
+				read_fw_status_reg(instance);
 
 			if (abs_state == curr_abs_state) {
 				msleep(1000);
@@ -5032,16 +5062,13 @@ fail_fw_init:
 static u32
 megasas_init_adapter_mfi(struct megasas_instance *instance)
 {
-	struct megasas_register_set __iomem *reg_set;
 	u32 context_sz;
 	u32 reply_q_sz;
-
-	reg_set = instance->reg_set;
 
 	/*
 	 * Get various operational parameters from status register
 	 */
-	instance->max_fw_cmds = instance->instancet->read_fw_status_reg(reg_set) & 0x00FFFF;
+	instance->max_fw_cmds = instance->instancet->read_fw_status_reg(instance) & 0x00FFFF;
 	/*
 	 * Reduce the max supported cmds by 1. This is to ensure that the
 	 * reply_q_sz (1 more than the max cmd that driver may send)
@@ -5049,7 +5076,7 @@ megasas_init_adapter_mfi(struct megasas_instance *instance)
 	 */
 	instance->max_fw_cmds = instance->max_fw_cmds-1;
 	instance->max_mfi_cmds = instance->max_fw_cmds;
-	instance->max_num_sge = (instance->instancet->read_fw_status_reg(reg_set) & 0xFF0000) >>
+	instance->max_num_sge = (instance->instancet->read_fw_status_reg(instance) & 0xFF0000) >>
 					0x10;
 	/*
 	 * For MFI skinny adapters, MEGASAS_SKINNY_INT_CMDS commands
@@ -5105,7 +5132,7 @@ megasas_init_adapter_mfi(struct megasas_instance *instance)
 
 	instance->fw_support_ieee = 0;
 	instance->fw_support_ieee =
-		(instance->instancet->read_fw_status_reg(reg_set) &
+		(instance->instancet->read_fw_status_reg(instance) &
 		0x04000000);
 
 	dev_notice(&instance->pdev->dev, "megasas_init_mfi: fw_support_ieee=%d",
@@ -5305,7 +5332,6 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	u32 max_sectors_2, tmp_sectors, msix_enable;
 	u32 scratch_pad_1, scratch_pad_2, scratch_pad_3, status_reg;
 	resource_size_t base_addr;
-	struct megasas_register_set __iomem *reg_set;
 	struct megasas_ctrl_info *ctrl_info = NULL;
 	unsigned long bar_list;
 	int i, j, loop, fw_msix_count = 0;
@@ -5331,8 +5357,6 @@ static int megasas_init_fw(struct megasas_instance *instance)
 		dev_printk(KERN_DEBUG, &instance->pdev->dev, "Failed to map IO mem\n");
 		goto fail_ioremap;
 	}
-
-	reg_set = instance->reg_set;
 
 	if (instance->adapter_type != MFI_SERIES)
 		instance->instancet = &megasas_instance_template_fusion;
@@ -5362,7 +5386,7 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	if (megasas_transition_to_ready(instance, 0)) {
 		if (instance->adapter_type >= INVADER_SERIES) {
 			status_reg = instance->instancet->read_fw_status_reg(
-					instance->reg_set);
+					instance);
 			do_adp_reset = status_reg & MFI_RESET_ADAPTER;
 		}
 
@@ -5398,22 +5422,23 @@ static int megasas_init_fw(struct megasas_instance *instance)
 
 	fusion = instance->ctrl_context;
 
-	if (instance->adapter_type == VENTURA_SERIES) {
+	if (instance->adapter_type >= VENTURA_SERIES) {
 		scratch_pad_2 =
-			readl(&instance->reg_set->outbound_scratch_pad_2);
+			megasas_readl(instance,
+				      &instance->reg_set->outbound_scratch_pad_2);
 		instance->max_raid_mapsize = ((scratch_pad_2 >>
 			MR_MAX_RAID_MAP_SIZE_OFFSET_SHIFT) &
 			MR_MAX_RAID_MAP_SIZE_MASK);
 	}
 
 	/* Check if MSI-X is supported while in ready state */
-	msix_enable = (instance->instancet->read_fw_status_reg(reg_set) &
+	msix_enable = (instance->instancet->read_fw_status_reg(instance) &
 		       0x4000000) >> 0x1a;
 	if (msix_enable && !msix_disable) {
 		int irq_flags = PCI_IRQ_MSIX;
 
-		scratch_pad_1 = readl
-			(&instance->reg_set->outbound_scratch_pad_1);
+		scratch_pad_1 = megasas_readl
+			(instance, &instance->reg_set->outbound_scratch_pad_1);
 		/* Check max MSI-X vectors */
 		if (fusion) {
 			if (instance->adapter_type == THUNDERBOLT_SERIES) {
@@ -5439,6 +5464,7 @@ static int megasas_init_fw(struct megasas_instance *instance)
 					if (instance->msix_vectors > 8)
 						instance->msix_combined = true;
 					break;
+				case AERO_SERIES:
 				case VENTURA_SERIES:
 					if (instance->msix_vectors > 16)
 						instance->msix_combined = true;
@@ -5521,9 +5547,10 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	if (instance->instancet->init_adapter(instance))
 		goto fail_init_adapter;
 
-	if (instance->adapter_type == VENTURA_SERIES) {
+	if (instance->adapter_type >= VENTURA_SERIES) {
 		scratch_pad_3 =
-			readl(&instance->reg_set->outbound_scratch_pad_3);
+			megasas_readl(instance,
+				      &instance->reg_set->outbound_scratch_pad_3);
 		if ((scratch_pad_3 & MR_NVME_PAGE_SIZE_MASK) >=
 			MR_DEFAULT_NVME_PAGE_SHIFT)
 			instance->nvme_page_size =
@@ -5557,7 +5584,7 @@ static int megasas_init_fw(struct megasas_instance *instance)
 	memset(instance->ld_ids, 0xff, MEGASAS_MAX_LD_IDS);
 
 	/* stream detection initialization */
-	if (instance->adapter_type == VENTURA_SERIES) {
+	if (instance->adapter_type >= VENTURA_SERIES) {
 		fusion->stream_detect_by_ld =
 			kcalloc(MAX_LOGICAL_DRIVES_EXT,
 				sizeof(struct LD_STREAM_DETECT *),
@@ -6157,13 +6184,13 @@ static int megasas_io_attach(struct megasas_instance *instance)
  * @instance:		Adapter soft state
  * Description:
  *
- * For Ventura, driver/FW will operate in 64bit DMA addresses.
+ * For Ventura, driver/FW will operate in 63bit DMA addresses.
  *
  * For invader-
  *	By default, driver/FW will operate in 32bit DMA addresses
  *	for consistent DMA mapping but if 32 bit consistent
- *	DMA mask fails, driver will try with 64 bit consistent
- *	mask provided FW is true 64bit DMA capable
+ *	DMA mask fails, driver will try with 63 bit consistent
+ *	mask provided FW is true 63bit DMA capable
  *
  * For older controllers(Thunderbolt and MFI based adapters)-
  *	driver/FW will operate in 32 bit consistent DMA addresses.
@@ -6176,28 +6203,28 @@ megasas_set_dma_mask(struct megasas_instance *instance)
 	u32 scratch_pad_1;
 
 	pdev = instance->pdev;
-	consistent_mask = (instance->adapter_type == VENTURA_SERIES) ?
-				DMA_BIT_MASK(64) : DMA_BIT_MASK(32);
+	consistent_mask = (instance->adapter_type >= VENTURA_SERIES) ?
+				DMA_BIT_MASK(63) : DMA_BIT_MASK(32);
 
 	if (IS_DMA64) {
-		if (dma_set_mask(&pdev->dev, DMA_BIT_MASK(64)) &&
+		if (dma_set_mask(&pdev->dev, DMA_BIT_MASK(63)) &&
 		    dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)))
 			goto fail_set_dma_mask;
 
-		if ((*pdev->dev.dma_mask == DMA_BIT_MASK(64)) &&
+		if ((*pdev->dev.dma_mask == DMA_BIT_MASK(63)) &&
 		    (dma_set_coherent_mask(&pdev->dev, consistent_mask) &&
 		     dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)))) {
 			/*
 			 * If 32 bit DMA mask fails, then try for 64 bit mask
 			 * for FW capable of handling 64 bit DMA.
 			 */
-			scratch_pad_1 = readl
-				(&instance->reg_set->outbound_scratch_pad_1);
+			scratch_pad_1 = megasas_readl
+				(instance, &instance->reg_set->outbound_scratch_pad_1);
 
 			if (!(scratch_pad_1 & MR_CAN_HANDLE_64_BIT_DMA_OFFSET))
 				goto fail_set_dma_mask;
 			else if (dma_set_mask_and_coherent(&pdev->dev,
-							   DMA_BIT_MASK(64)))
+							   DMA_BIT_MASK(63)))
 				goto fail_set_dma_mask;
 		}
 	} else if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)))
@@ -6209,8 +6236,8 @@ megasas_set_dma_mask(struct megasas_instance *instance)
 		instance->consistent_mask_64bit = true;
 
 	dev_info(&pdev->dev, "%s bit DMA mask and %s bit consistent mask\n",
-		 ((*pdev->dev.dma_mask == DMA_BIT_MASK(64)) ? "64" : "32"),
-		 (instance->consistent_mask_64bit ? "64" : "32"));
+		 ((*pdev->dev.dma_mask == DMA_BIT_MASK(64)) ? "63" : "32"),
+		 (instance->consistent_mask_64bit ? "63" : "32"));
 
 	return 0;
 
@@ -6223,12 +6250,14 @@ fail_set_dma_mask:
 /*
  * megasas_set_adapter_type -	Set adapter type.
  *				Supported controllers can be divided in
- *				4 categories-  enum MR_ADAPTER_TYPE {
- *							MFI_SERIES = 1,
- *							THUNDERBOLT_SERIES = 2,
- *							INVADER_SERIES = 3,
- *							VENTURA_SERIES = 4,
- *						};
+ *				different categories-
+ *					enum MR_ADAPTER_TYPE {
+ *						MFI_SERIES = 1,
+ *						THUNDERBOLT_SERIES = 2,
+ *						INVADER_SERIES = 3,
+ *						VENTURA_SERIES = 4,
+ *						AERO_SERIES = 5,
+ *					};
  * @instance:			Adapter soft state
  * return:			void
  */
@@ -6243,6 +6272,8 @@ static inline void megasas_set_adapter_type(struct megasas_instance *instance)
 		case PCI_DEVICE_ID_LSI_AERO_10E2:
 		case PCI_DEVICE_ID_LSI_AERO_10E5:
 		case PCI_DEVICE_ID_LSI_AERO_10E6:
+			instance->adapter_type = AERO_SERIES;
+			break;
 		case PCI_DEVICE_ID_LSI_VENTURA:
 		case PCI_DEVICE_ID_LSI_CRUSADER:
 		case PCI_DEVICE_ID_LSI_HARPOON:
@@ -6310,6 +6341,7 @@ static int megasas_alloc_ctrl_mem(struct megasas_instance *instance)
 		if (megasas_alloc_mfi_ctrl_mem(instance))
 			goto fail;
 		break;
+	case AERO_SERIES:
 	case VENTURA_SERIES:
 	case THUNDERBOLT_SERIES:
 	case INVADER_SERIES:
@@ -7130,7 +7162,7 @@ skip_firing_dcmds:
 	if (instance->msix_vectors)
 		pci_free_irq_vectors(instance->pdev);
 
-	if (instance->adapter_type == VENTURA_SERIES) {
+	if (instance->adapter_type >= VENTURA_SERIES) {
 		for (i = 0; i < MAX_LOGICAL_DRIVES_EXT; ++i)
 			kfree(fusion->stream_detect_by_ld[i]);
 		kfree(fusion->stream_detect_by_ld);
