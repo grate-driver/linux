@@ -16,6 +16,7 @@
 
 #include <linux/fs.h>
 #include <linux/path.h>
+#include <linux/fs_context.h>
 
 #include "domain.h"
 #include "policy.h"
@@ -27,7 +28,13 @@
 #define AA_AUDIT_DATA		0x40
 #define AA_MNT_CONT_MATCH	0x40
 
-#define AA_MS_IGNORE_MASK (MS_KERNMOUNT | MS_NOSEC | MS_ACTIVE | MS_BORN)
+#define AA_SB_IGNORE_MASK (SB_KERNMOUNT | SB_NOSEC | SB_ACTIVE | SB_BORN)
+
+struct apparmor_fs_context {
+	struct fs_context	fc;
+	char			*saved_options;
+	size_t			saved_size;
+};
 
 int aa_remount(struct aa_label *label, const struct path *path,
 	       unsigned long flags, void *data);
@@ -45,6 +52,8 @@ int aa_move_mount(struct aa_label *label, const struct path *path,
 int aa_new_mount(struct aa_label *label, const char *dev_name,
 		 const struct path *path, const char *type, unsigned long flags,
 		 void *data);
+int aa_new_mount_fc(struct aa_label *label, struct fs_context *fc,
+		    const struct path *mountpoint);
 
 int aa_umount(struct aa_label *label, struct vfsmount *mnt, int flags);
 

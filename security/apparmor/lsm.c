@@ -26,6 +26,7 @@
 #include <linux/netfilter_ipv4.h>
 #include <linux/netfilter_ipv6.h>
 #include <net/sock.h>
+#include <uapi/linux/mount.h>
 
 #include "include/apparmor.h"
 #include "include/apparmorfs.h"
@@ -521,6 +522,106 @@ static int apparmor_file_mprotect(struct vm_area_struct *vma,
 			   !(vma->vm_flags & VM_SHARED) ? MAP_PRIVATE : 0);
 }
 
+static int apparmor_fs_context_dup(struct fs_context *fc, struct fs_context *src_fc)
+{
+	fc->security = NULL;
+	return 0;
+}
+
+static int apparmor_set_mnt_opts(struct super_block *sb,
+				void *mnt_opts,
+				unsigned long kern_flags,
+				unsigned long *set_kern_flags)
+{
+	return 0;
+}
+
+static void apparmor_free_mnt_opts(void *mnt_opts)
+{
+	struct apparmor_fs_context *afc = mnt_opts;
+
+	kfree(afc->saved_options);
+	kfree(afc);
+}
+
+/*
+ * As a temporary hack, we buffer all the options.  The problem is that we need
+ * to pass them to the DFA evaluator *after* mount point parameters, which
+ * means deferring the entire check to the sb_mountpoint hook.
+ */
+static int apparmor_fs_context_parse_param(struct fs_context *fc,
+					   struct fs_parameter *param)
+{
+	struct apparmor_fs_context *afc = fc->security;
+	const char *value;
+	size_t space = 0, k_len = strlen(param->key), len = k_len, v_len;
+	char *p, *q;
+
+	if (!afc) {
+		afc = kzalloc(sizeof(*afc), GFP_KERNEL);
+		fc->security = afc;
+	}
+	if (!afc)
+		return -ENOMEM;
+
+	if (afc->saved_size > 0)
+		space = 1;
+
+	switch (param->type) {
+	case fs_value_is_string:
+		value = param->string;
+		v_len = param->size;
+		len += 1 + v_len;
+		break;
+	case fs_value_is_filename:
+	case fs_value_is_filename_empty: {
+		value = param->name->name;
+		v_len = param->size;
+		len += 1 + v_len;
+		break;
+	}
+	default:
+		value = NULL;
+		v_len = 0;
+		break;
+	}
+
+	p = krealloc(afc->saved_options, afc->saved_size + space + len + 1,
+		     GFP_KERNEL);
+	if (!p)
+		return -ENOMEM;
+
+	q = p + afc->saved_size;
+	if (q != p)
+		*q++ = ' ';
+	memcpy(q, param->key, k_len);
+	q += k_len;
+	if (value) {
+		*q++ = '=';
+		memcpy(q, value, v_len);
+		q += v_len;
+	}
+	*q = 0;
+
+	afc->saved_options = p;
+	afc->saved_size += 1 + len;
+	return -ENOPARAM;
+}
+
+static int apparmor_sb_mountpoint(struct fs_context *fc, struct path *mountpoint,
+				  unsigned int mnt_flags)
+{
+	struct aa_label *label;
+	int error = 0;
+
+	label = __begin_current_label_crit_section();
+	if (!unconfined(label))
+		error = aa_new_mount_fc(label, fc, mountpoint);
+	__end_current_label_crit_section(label);
+
+	return error;
+}
+
 static int apparmor_sb_mount(const char *dev_name, const struct path *path,
 			     const char *type, unsigned long flags, void *data)
 {
@@ -531,7 +632,7 @@ static int apparmor_sb_mount(const char *dev_name, const struct path *path,
 	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
 		flags &= ~MS_MGC_MSK;
 
-	flags &= ~AA_MS_IGNORE_MASK;
+	flags &= ~AA_SB_IGNORE_MASK;
 
 	label = __begin_current_label_crit_section();
 	if (!unconfined(label)) {
@@ -1155,6 +1256,12 @@ static struct security_hook_list apparmor_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(ptrace_traceme, apparmor_ptrace_traceme),
 	LSM_HOOK_INIT(capget, apparmor_capget),
 	LSM_HOOK_INIT(capable, apparmor_capable),
+
+	LSM_HOOK_INIT(fs_context_dup, apparmor_fs_context_dup),
+	LSM_HOOK_INIT(sb_set_mnt_opts, apparmor_set_mnt_opts),
+	LSM_HOOK_INIT(sb_free_mnt_opts, apparmor_free_mnt_opts),
+	LSM_HOOK_INIT(fs_context_parse_param, apparmor_fs_context_parse_param),
+	LSM_HOOK_INIT(sb_mountpoint, apparmor_sb_mountpoint),
 
 	LSM_HOOK_INIT(sb_mount, apparmor_sb_mount),
 	LSM_HOOK_INIT(sb_umount, apparmor_sb_umount),
