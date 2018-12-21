@@ -13,7 +13,7 @@ gen-atomic-long.sh              asm-generic/atomic-long.h
 gen-atomic-fallback.sh          linux/atomic-fallback.h
 EOF
 while read script header; do
-	if ! (${ATOMICDIR}/${script} ${ATOMICTBL} | diff - ${LINUXDIR}/include/${header} > /dev/null); then
+	if ! (/bin/sh ${ATOMICDIR}/${script} ${ATOMICTBL} | diff - ${LINUXDIR}/include/${header} > /dev/null); then
 		printf "warning: include/${header} is out-of-date.\n"
 	fi
 done
