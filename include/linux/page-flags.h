@@ -706,7 +706,7 @@ static __always_inline void __ClearPage##uname(struct page *page)	\
 PAGE_TYPE_OPS(Buddy, buddy)
 
 /*
- * PageOffline() indicates that the pages is logically offline although the
+ * PageOffline() indicates that the page is logically offline although the
  * containing section is online. (e.g. inflated in a balloon driver or
  * not onlined when onlining the section).
  * The content of these pages is effectively stale. Such pages should not
