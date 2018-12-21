@@ -14,8 +14,6 @@
 
 #include "autofs_i.h"
 
-extern struct file_system_type autofs_fs_type;
-
 /*
  * This module implements an interface for routing autofs ioctl control
  * commands via a miscellaneous device file.
