@@ -1439,7 +1439,7 @@ void __init memblock_free_pages(struct page *page, unsigned long pfn,
 {
 	if (early_page_uninitialised(pfn))
 		return;
-	return __free_pages_core(page, order);
+	__free_pages_core(page, order);
 }
 
 /*
