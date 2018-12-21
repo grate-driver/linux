@@ -1836,6 +1836,7 @@ static int unuse_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 		swap_map = &si->swap_map[offset];
 		vmf.vma = vma;
 		vmf.address = addr;
+		vmf.pmd = pmd;
 		page = swapin_readahead(entry, GFP_HIGHUSER_MOVABLE, &vmf);
 		if (!page) {
 			if (*swap_map == 0 || *swap_map == SWAP_MAP_BAD)
