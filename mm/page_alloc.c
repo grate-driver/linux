@@ -3268,7 +3268,6 @@ static bool zone_allows_reclaim(struct zone *local_zone, struct zone *zone)
 }
 #endif	/* CONFIG_NUMA */
 
-#ifdef CONFIG_ZONE_DMA32
 /*
  * The restriction on ZONE_DMA32 as being a suitable zone to use to avoid
  * fragmentation is subtle. If the preferred zone was HIGHMEM then
@@ -3285,6 +3284,7 @@ alloc_flags_nofragment(struct zone *zone, gfp_t gfp_mask)
 	if (gfp_mask & __GFP_KSWAPD_RECLAIM)
 		alloc_flags |= ALLOC_KSWAPD;
 
+#ifdef CONFIG_ZONE_DMA32
 	if (zone_idx(zone) != ZONE_NORMAL)
 		goto out;
 
@@ -3298,15 +3298,9 @@ alloc_flags_nofragment(struct zone *zone, gfp_t gfp_mask)
 		goto out;
 
 out:
+#endif /* CONFIG_ZONE_DMA32 */
 	return alloc_flags;
 }
-#else
-static inline unsigned int
-alloc_flags_nofragment(struct zone *zone, gfp_t gfp_mask)
-{
-	return 0;
-}
-#endif
 
 /*
  * get_page_from_freelist goes through the zonelist trying to allocate
