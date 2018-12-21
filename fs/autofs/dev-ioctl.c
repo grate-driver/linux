@@ -14,6 +14,8 @@
 
 #include "autofs_i.h"
 
+extern struct file_system_type autofs_fs_type;
+
 /*
  * This module implements an interface for routing autofs ioctl control
  * commands via a miscellaneous device file.
@@ -149,22 +151,6 @@ static int validate_dev_ioctl(int cmd, struct autofs_dev_ioctl *param)
 	err = 0;
 out:
 	return err;
-}
-
-/*
- * Get the autofs super block info struct from the file opened on
- * the autofs mount point.
- */
-static struct autofs_sb_info *autofs_dev_ioctl_sbi(struct file *f)
-{
-	struct autofs_sb_info *sbi = NULL;
-	struct inode *inode;
-
-	if (f) {
-		inode = file_inode(f);
-		sbi = autofs_sbi(inode->i_sb);
-	}
-	return sbi;
 }
 
 /* Return autofs dev ioctl version */
@@ -658,6 +644,8 @@ static int _autofs_dev_ioctl(unsigned int command,
 	if (cmd != AUTOFS_DEV_IOCTL_VERSION_CMD &&
 	    cmd != AUTOFS_DEV_IOCTL_OPENMOUNT_CMD &&
 	    cmd != AUTOFS_DEV_IOCTL_CLOSEMOUNT_CMD) {
+		struct super_block *sb;
+
 		fp = fget(param->ioctlfd);
 		if (!fp) {
 			if (cmd == AUTOFS_DEV_IOCTL_ISMOUNTPOINT_CMD)
@@ -666,12 +654,13 @@ static int _autofs_dev_ioctl(unsigned int command,
 			goto out;
 		}
 
-		sbi = autofs_dev_ioctl_sbi(fp);
-		if (!sbi || sbi->magic != AUTOFS_SBI_MAGIC) {
+		sb = file_inode(fp)->i_sb;
+		if (sb->s_type != &autofs_fs_type) {
 			err = -EINVAL;
 			fput(fp);
 			goto out;
 		}
+		sbi = autofs_sbi(sb);
 
 		/*
 		 * Admin needs to be able to set the mount catatonic in
