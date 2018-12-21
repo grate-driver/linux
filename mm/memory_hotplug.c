@@ -1576,8 +1576,8 @@ static int __ref __offline_pages(unsigned long start_pfn,
 				       MIGRATE_MOVABLE, true);
 	if (ret) {
 		mem_hotplug_done();
-		reason = "failed to isolate range";
-		goto failed_removal
+		reason = "failure to isolate range";
+		goto failed_removal;
 	}
 
 	arg.start_pfn = start_pfn;
@@ -1587,7 +1587,7 @@ static int __ref __offline_pages(unsigned long start_pfn,
 	ret = memory_notify(MEM_GOING_OFFLINE, &arg);
 	ret = notifier_to_errno(ret);
 	if (ret) {
-		reason = "notifiers failure";
+		reason = "notifier failure";
 		goto failed_removal_isolated;
 	}
 
@@ -1616,7 +1616,7 @@ repeat:
 	 */
 	ret = dissolve_free_huge_pages(start_pfn, end_pfn);
 	if (ret) {
-		reason = "fails to disolve hugetlb pages";
+		reason = "failure to dissolve huge pages";
 		goto failed_removal_isolated;
 	}
 	/* check again */
