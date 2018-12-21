@@ -1175,6 +1175,16 @@ int wait_on_page_bit_killable(struct page *page, int bit_nr)
 }
 EXPORT_SYMBOL(wait_on_page_bit_killable);
 
+/**
+ * put_and_wait_on_page_locked - Drop a reference and wait for it to be unlocked
+ * @page: The page to wait for.
+ *
+ * The caller should hold a reference on @page.  They expect the page to
+ * become unlocked relatively soon, but do not wish to hold up migration
+ * (for example) by holding the reference while waiting for the page to
+ * come unlocked.  After this function returns, the caller should not
+ * dereference @page.
+ */
 void put_and_wait_on_page_locked(struct page *page)
 {
 	wait_queue_head_t *q;
