@@ -113,7 +113,6 @@
 #include <linux/kmemleak.h>
 #include <linux/memory_hotplug.h>
 
-
 /*
  * Kmemleak configuration and common defines.
  */
