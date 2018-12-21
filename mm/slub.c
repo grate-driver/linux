@@ -2131,7 +2131,6 @@ redo:
 	}
 
 	if (l != m) {
-
 		if (l == M_PARTIAL)
 			remove_partial(n, page);
 		else if (l == M_FULL)
