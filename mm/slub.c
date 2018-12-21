@@ -1877,7 +1877,7 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
  * Get a page from somewhere. Search in increasing NUMA distances.
  */
 static void *get_any_partial(struct kmem_cache *s, gfp_t flags,
-		struct kmem_cache_cpu *c)
+		struct kmem_cache_cpu *c, int exclude_nid)
 {
 #ifdef CONFIG_NUMA
 	struct zonelist *zonelist;
@@ -1915,6 +1915,9 @@ static void *get_any_partial(struct kmem_cache *s, gfp_t flags,
 		for_each_zone_zonelist(zone, z, zonelist, high_zoneidx) {
 			struct kmem_cache_node *n;
 
+			if (exclude_nid == zone_to_nid(zone))
+				continue;
+
 			n = get_node(s, zone_to_nid(zone));
 
 			if (n && cpuset_zone_allowed(zone, flags) &&
@@ -1931,6 +1934,14 @@ static void *get_any_partial(struct kmem_cache *s, gfp_t flags,
 					return object;
 				}
 			}
+			/*
+			 * Failed to get an object from this node, either
+			 * because
+			 *   1. Failure in the above if check
+			 *   2. NULL return from get_partial_node()
+			 * So skip this node next time.
+			 */
+			exclude_nid = zone_to_nid(zone);
 		}
 	} while (read_mems_allowed_retry(cpuset_mems_cookie));
 #endif
@@ -1955,7 +1966,7 @@ static void *get_partial(struct kmem_cache *s, gfp_t flags, int node,
 	if (object || node != NUMA_NO_NODE)
 		return object;
 
-	return get_any_partial(s, flags, c);
+	return get_any_partial(s, flags, c, searchnode);
 }
 
 #ifdef CONFIG_PREEMPT
