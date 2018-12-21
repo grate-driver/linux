@@ -39,7 +39,7 @@ extern int ipc_mni_shift;
 
 #else /* CONFIG_SYSVIPC_SYSCTL */
 
-#define ipc_mni 		IPCMNI
+#define ipc_mni			IPCMNI
 #define IPCMNI_SEQ_SHIFT	IPCMNI_SHIFT
 #define IPCMNI_IDX_MASK		((1 << IPCMNI_SHIFT) - 1)
 #endif /* CONFIG_SYSVIPC_SYSCTL */
