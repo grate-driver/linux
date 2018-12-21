@@ -3004,7 +3004,7 @@ static vm_fault_t __do_fault(struct vm_fault *vmf)
 	 * deadlocks for memcg reclaim which waits for pages under writeback.
 	 */
 	if (pmd_none(*vmf->pmd) && !vmf->prealloc_pte) {
-		vmf->prealloc_pte = pte_alloc_one(vmf->vma->vm_mm, vmf->address);
+		vmf->prealloc_pte = pte_alloc_one(vmf->vma->vm_mm);
 		if (!vmf->prealloc_pte)
 			return VM_FAULT_OOM;
 		smp_wmb(); /* See comment in __pte_alloc() */
