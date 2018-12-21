@@ -669,19 +669,18 @@ PAGEFLAG_FALSE(DoubleMap)
 
 #define PAGE_TYPE_BASE	0xf0000000
 /* Reserve		0x0000007f to catch underflows of page_mapcount */
+#define PAGE_MAPCOUNT_RESERVE	-128
 #define PG_buddy	0x00000080
 #define PG_balloon	0x00000100
 #define PG_kmemcg	0x00000200
 #define PG_table	0x00000400
-#define PAGE_TYPE_ALL	(PG_buddy | PG_balloon | PG_kmemcg | PG_table)
 
 #define PageType(page, flag)						\
 	((page->page_type & (PAGE_TYPE_BASE | flag)) == PAGE_TYPE_BASE)
 
 static inline int page_has_type(struct page *page)
 {
-	return (PageType(page, 0) &&
-	       ((page->page_type & PAGE_TYPE_ALL) != PAGE_TYPE_ALL));
+	return (int)page->page_type < PAGE_MAPCOUNT_RESERVE;
 }
 
 #define PAGE_TYPE_OPS(uname, lname)					\
