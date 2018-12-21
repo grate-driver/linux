@@ -87,6 +87,7 @@ static void devm_memremap_pages_release(void *data)
 	struct resource *res = &pgmap->res;
 	resource_size_t align_start, align_size;
 	unsigned long pfn;
+	unsigned long nr_pages;
 	int nid;
 
 	pgmap->kill(pgmap->ref);
@@ -101,10 +102,14 @@ static void devm_memremap_pages_release(void *data)
 	nid = page_to_nid(pfn_to_page(align_start >> PAGE_SHIFT));
 
 	mem_hotplug_begin();
+
+	pfn = align_start >> PAGE_SHIFT;
+	nr_pages = align_size >> PAGE_SHIFT;
+	offline_mem_sections(pfn, pfn + nr_pages);
+	shrink_zone(page_zone(pfn_to_page(pfn)), pfn, pfn + nr_pages, nr_pages);
+
 	if (pgmap->type == MEMORY_DEVICE_PRIVATE) {
-		pfn = align_start >> PAGE_SHIFT;
-		__remove_pages(page_zone(pfn_to_page(pfn)), pfn,
-				align_size >> PAGE_SHIFT, NULL);
+		remove_sections(nid, pfn, nr_pages, NULL);
 	} else {
 		arch_remove_memory(nid, align_start, align_size,
 				pgmap->altmap_valid ? &pgmap->altmap : NULL);
@@ -224,7 +229,10 @@ void *devm_memremap_pages(struct device *dev, struct dev_pagemap *pgmap)
 
 	if (!error) {
 		struct zone *zone;
+		unsigned long pfn = align_start >> PAGE_SHIFT;
+		unsigned long nr_pages = align_size >> PAGE_SHIFT;
 
+		online_mem_sections(pfn, pfn + nr_pages);
 		zone = &NODE_DATA(nid)->node_zones[ZONE_DEVICE];
 		move_pfn_range_to_zone(zone, align_start >> PAGE_SHIFT,
 				align_size >> PAGE_SHIFT, altmap);

@@ -314,6 +314,17 @@ out:
 }
 
 #ifdef CONFIG_MEMORY_HOTREMOVE
+static bool is_section_ok(struct mem_section *ms, bool zone)
+{
+	/*
+	 * We cannot shrink pgdat's spanned because we use them
+	 * in try_offline_node to check if all sections were removed.
+	 */
+	if (zone)
+		return online_section(ms);
+	else
+		return valid_section(ms);
+}
 /* find the smallest valid pfn in the range [start_pfn, end_pfn) */
 static unsigned long find_smallest_section_pfn(int nid, struct zone *zone,
 				     unsigned long start_pfn,
@@ -324,7 +335,7 @@ static unsigned long find_smallest_section_pfn(int nid, struct zone *zone,
 	for (; start_pfn < end_pfn; start_pfn += PAGES_PER_SECTION) {
 		ms = __pfn_to_section(start_pfn);
 
-		if (unlikely(!valid_section(ms)))
+		if (!is_section_ok(ms, !!zone))
 			continue;
 
 		if (unlikely(pfn_to_nid(start_pfn) != nid))
@@ -352,7 +363,7 @@ static unsigned long find_biggest_section_pfn(int nid, struct zone *zone,
 	for (; pfn >= start_pfn; pfn -= PAGES_PER_SECTION) {
 		ms = __pfn_to_section(pfn);
 
-		if (unlikely(!valid_section(ms)))
+		if (!is_section_ok(ms, !!zone))
 			continue;
 
 		if (unlikely(pfn_to_nid(pfn) != nid))
@@ -414,7 +425,7 @@ static void shrink_zone_span(struct zone *zone, unsigned long start_pfn,
 	for (; pfn < zone_end_pfn; pfn += PAGES_PER_SECTION) {
 		ms = __pfn_to_section(pfn);
 
-		if (unlikely(!valid_section(ms)))
+		if (unlikely(!online_section(ms)))
 			continue;
 
 		if (page_zone(pfn_to_page(pfn)) != zone)
@@ -501,23 +512,33 @@ static void shrink_pgdat_span(struct pglist_data *pgdat,
 	pgdat->node_spanned_pages = 0;
 }
 
-static void __remove_zone(struct zone *zone, unsigned long start_pfn)
+void shrink_zone(struct zone *zone, unsigned long start_pfn,
+		unsigned long end_pfn, unsigned long offlined_pages)
 {
-	struct pglist_data *pgdat = zone->zone_pgdat;
 	int nr_pages = PAGES_PER_SECTION;
-	unsigned long flags;
+	unsigned long pfn;
 
-	pgdat_resize_lock(zone->zone_pgdat, &flags);
-	shrink_zone_span(zone, start_pfn, start_pfn + nr_pages);
-	shrink_pgdat_span(pgdat, start_pfn, start_pfn + nr_pages);
-	pgdat_resize_unlock(zone->zone_pgdat, &flags);
+	clear_zone_contiguous(zone);
+	for (pfn = start_pfn; pfn < end_pfn; pfn += nr_pages)
+		shrink_zone_span(zone, pfn, pfn + nr_pages);
+	set_zone_contiguous(zone);
 }
 
-static int __remove_section(struct zone *zone, struct mem_section *ms,
+static void shrink_pgdat(int nid, unsigned long sect_nr)
+{
+	struct pglist_data *pgdat = NODE_DATA(nid);
+	int nr_pages = PAGES_PER_SECTION;
+	unsigned long pfn = section_nr_to_pfn((unsigned long)sect_nr);
+	unsigned long flags;
+
+	pgdat_resize_lock(pgdat, &flags);
+	shrink_pgdat_span(pgdat, pfn, pfn + nr_pages);
+	pgdat_resize_unlock(pgdat, &flags);
+}
+
+static int __remove_section(int nid, struct mem_section *ms,
 		unsigned long map_offset, struct vmem_altmap *altmap)
 {
-	unsigned long start_pfn;
-	int scn_nr;
 	int ret = -EINVAL;
 
 	if (!valid_section(ms))
@@ -527,17 +548,15 @@ static int __remove_section(struct zone *zone, struct mem_section *ms,
 	if (ret)
 		return ret;
 
-	scn_nr = __section_nr(ms);
-	start_pfn = section_nr_to_pfn((unsigned long)scn_nr);
-	__remove_zone(zone, start_pfn);
+	shrink_pgdat(nid, __section_nr(ms));
 
-	sparse_remove_one_section(zone, ms, map_offset, altmap);
+	sparse_remove_one_section(nid, ms, map_offset, altmap);
 	return 0;
 }
 
 /**
- * __remove_pages() - remove sections of pages from a zone
- * @zone: zone from which pages need to be removed
+ * __remove_pages() - remove sections of pages from a nid
+ * @nid: nid from which pages belong to
  * @phys_start_pfn: starting pageframe (must be aligned to start of a section)
  * @nr_pages: number of pages to remove (must be multiple of section size)
  * @altmap: alternative device page map or %NULL if default memmap is used
@@ -547,34 +566,27 @@ static int __remove_section(struct zone *zone, struct mem_section *ms,
  * sure that pages are marked reserved and zones are adjust properly by
  * calling offline_pages().
  */
-int __remove_pages(struct zone *zone, unsigned long phys_start_pfn,
+int remove_sections(int nid, unsigned long phys_start_pfn,
 		 unsigned long nr_pages, struct vmem_altmap *altmap)
 {
 	unsigned long i;
 	unsigned long map_offset = 0;
 	int sections_to_remove, ret = 0;
+	resource_size_t start, size;
 
-	/* In the ZONE_DEVICE case device driver owns the memory region */
-	if (is_dev_zone(zone)) {
-		if (altmap)
-			map_offset = vmem_altmap_offset(altmap);
-	} else {
-		resource_size_t start, size;
+	start = phys_start_pfn << PAGE_SHIFT;
+	size = nr_pages * PAGE_SIZE;
 
-		start = phys_start_pfn << PAGE_SHIFT;
-		size = nr_pages * PAGE_SIZE;
+	if (altmap)
+		map_offset = vmem_altmap_offset(altmap);
 
-		ret = release_mem_region_adjustable(&iomem_resource, start,
-					size);
-		if (ret) {
-			resource_size_t endres = start + size - 1;
-
-			pr_warn("Unable to release resource <%pa-%pa> (%d)\n",
-					&start, &endres, ret);
-		}
+	ret = release_mem_region_adjustable(&iomem_resource, start,
+								size);
+	if (ret) {
+		resource_size_t endres = start + size - 1;
+		pr_warn("Unable to release resource <%pa-%pa> (%d)\n",
+						&start, &endres, ret);
 	}
-
-	clear_zone_contiguous(zone);
 
 	/*
 	 * We can only remove entire sections
@@ -587,14 +599,12 @@ int __remove_pages(struct zone *zone, unsigned long phys_start_pfn,
 		unsigned long pfn = phys_start_pfn + i*PAGES_PER_SECTION;
 
 		cond_resched();
-		ret = __remove_section(zone, __pfn_to_section(pfn), map_offset,
-				altmap);
+		ret = __remove_section(nid, __pfn_to_section(pfn), map_offset,
+									altmap);
 		map_offset = 0;
 		if (ret)
 			break;
 	}
-
-	set_zone_contiguous(zone);
 
 	return ret;
 }
@@ -1635,11 +1645,14 @@ repeat:
 	/* reset pagetype flags and makes migrate type to be MOVABLE */
 	undo_isolate_page_range(start_pfn, end_pfn, MIGRATE_MOVABLE);
 	/* removal success */
+
+	/* Shrink zone's managed,spanned and zone/pgdat's present pages */
 	adjust_managed_page_count(pfn_to_page(start_pfn), -offlined_pages);
 	zone->present_pages -= offlined_pages;
 
 	pgdat_resize_lock(zone->zone_pgdat, &flags);
 	zone->zone_pgdat->node_present_pages -= offlined_pages;
+	shrink_zone(zone, valid_start, valid_end, offlined_pages);
 	pgdat_resize_unlock(zone->zone_pgdat, &flags);
 
 	init_per_zone_wmark_min();
