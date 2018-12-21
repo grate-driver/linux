@@ -1596,14 +1596,18 @@ static int __ref __offline_pages(unsigned long start_pfn,
 
 			pfn = scan_movable_pages(pfn, end_pfn);
 			if (pfn) {
-				/* TODO fatal migration failures should bail out */
+				/*
+				 * TODO: fatal migration failures should bail
+				 * out
+				 */
 				do_migrate_range(pfn, end_pfn);
 			}
 		}
 
 		/*
-		 * dissolve free hugepages in the memory block before doing offlining
-		 * actually in order to make hugetlbfs's object counting consistent.
+		 * Dissolve free hugepages in the memory block before doing
+		 * offlining actually in order to make hugetlbfs's object
+		 * counting consistent.
 		 */
 		ret = dissolve_free_huge_pages(start_pfn, end_pfn);
 		if (ret) {
