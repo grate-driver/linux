@@ -238,9 +238,7 @@ static void amdgpu_mn_invalidate_node(struct amdgpu_mn_node *node,
  * amdgpu_mn_invalidate_range_start_gfx - callback to notify about mm change
  *
  * @mn: our notifier
- * @mm: the mm this callback is about
- * @start: start of updated range
- * @end: end of updated range
+ * @range: mmu notifier context
  *
  * Block for operations on BOs to finish and mark pages as accessed and
  * potentially dirty.
