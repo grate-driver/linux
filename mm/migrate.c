@@ -434,7 +434,7 @@ static int expected_page_refs(struct page *page)
 	 */
 	expected_count += is_device_private_page(page);
 	expected_count += is_device_public_page(page);
-	if (page->mapping)
+	if (page_mapping(page))
 		expected_count += hpage_nr_pages(page) + page_has_private(page);
 
 	return expected_count;
