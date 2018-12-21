@@ -1182,10 +1182,16 @@ static void free_one_page(struct zone *zone,
 
 static void __meminit __init_struct_page_nolru(struct page *page,
 					       unsigned long pfn,
-					       unsigned long zone, int nid)
+					       unsigned long zone, int nid,
+					       bool is_reserved)
 {
 	mm_zero_struct_page(page);
-	set_page_links(page, zone, nid, pfn);
+
+	/*
+	 * We can use a non-atomic operation for setting the
+	 * PG_reserved flag as we are still initializing the pages.
+	 */
+	set_page_links(page, zone, nid, pfn, is_reserved);
 	init_page_count(page);
 	page_mapcount_reset(page);
 	page_cpupid_reset_last(page);
@@ -1201,14 +1207,15 @@ static void __meminit __init_struct_page_nolru(struct page *page,
 static void __meminit __init_single_page(struct page *page, unsigned long pfn,
 				unsigned long zone, int nid)
 {
-	__init_struct_page_nolru(page, pfn, zone, nid);
+	__init_struct_page_nolru(page, pfn, zone, nid, false);
 	INIT_LIST_HEAD(&page->lru);
 }
 
 static void __meminit __init_pageblock(unsigned long start_pfn,
 				       unsigned long nr_pages,
 				       unsigned long zone, int nid,
-				       struct dev_pagemap *pgmap)
+				       struct dev_pagemap *pgmap,
+				       bool is_reserved)
 {
 	unsigned long nr_pgmask = pageblock_nr_pages - 1;
 	struct page *start_page = pfn_to_page(start_pfn);
@@ -1234,15 +1241,8 @@ static void __meminit __init_pageblock(unsigned long start_pfn,
 	 * is not defined.
 	 */
 	for (page = start_page + nr_pages; page-- != start_page; pfn--) {
-		__init_struct_page_nolru(page, pfn, zone, nid);
-		/*
-		 * Mark page reserved as it will need to wait for onlining
-		 * phase for it to be fully associated with a zone.
-		 *
-		 * We can use the non-atomic __set_bit operation for setting
-		 * the flag as we are still initializing the pages.
-		 */
-		__SetPageReserved(page);
+		__init_struct_page_nolru(page, pfn, zone, nid, is_reserved);
+
 		/*
 		 * ZONE_DEVICE pages union ->lru with a ->pgmap back
 		 * pointer and hmm_data.  It is a bug if a ZONE_DEVICE
@@ -5715,7 +5715,18 @@ static void __meminit __memmap_init_hotplug(unsigned long size, int nid,
 		pfn = max(ALIGN_DOWN(pfn - 1, pageblock_nr_pages), start_pfn);
 		stride -= pfn;
 
-		__init_pageblock(pfn, stride, zone, nid, pgmap);
+		/*
+		 * The last argument of __init_pageblock is a boolean
+		 * value indicating if the page will be marked as reserved.
+		 *
+		 * Mark page reserved as it will need to wait for onlining
+		 * phase for it to be fully associated with a zone.
+		 *
+		 * Under certain circumstances ZONE_DEVICE pages may not
+		 * need to be marked as reserved, however there is still
+		 * code that is depending on this being set for now.
+		 */
+		__init_pageblock(pfn, stride, zone, nid, pgmap, true);
 
 		cond_resched();
 	}
