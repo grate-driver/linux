@@ -306,38 +306,33 @@ static inline bool __meminit early_page_uninitialised(unsigned long pfn)
 }
 
 /*
- * Returns true when the remaining initialisation should be deferred until
- * later in the boot cycle when it can be parallelised.
+ * Calculate first_deferred_pfn in case:
+ * - in MEMMAP_EARLY context
+ * - this is the last zone
+ *
+ * If the first aligned section doesn't exceed the end_pfn, set it to
+ * first_deferred_pfn and return it.
  */
-static bool __meminit
-defer_init(int nid, unsigned long pfn, unsigned long end_pfn)
+unsigned long __meminit
+defer_pfn(int nid, unsigned long start_pfn, unsigned long end_pfn,
+	  enum memmap_context context)
 {
-	static unsigned long prev_end_pfn, nr_initialised;
+	struct pglist_data *pgdat = NODE_DATA(nid);
+	unsigned long pfn;
 
-	/*
-	 * prev_end_pfn static that contains the end of previous zone
-	 * No need to protect because called very early in boot before smp_init.
-	 */
-	if (prev_end_pfn != end_pfn) {
-		prev_end_pfn = end_pfn;
-		nr_initialised = 0;
+	if (context != MEMMAP_EARLY)
+		return end_pfn;
+
+	/* Always populate low zones */
+	if (end_pfn < pgdat_end_pfn(pgdat))
+		return end_pfn;
+
+	pfn = roundup(start_pfn + PAGES_PER_SECTION - 1, PAGES_PER_SECTION);
+	if (end_pfn > pfn) {
+		pgdat->first_deferred_pfn = pfn;
+		end_pfn = pfn;
 	}
-
-	/* Always populate low zones for address-constrained allocations */
-	if (end_pfn < pgdat_end_pfn(NODE_DATA(nid)))
-		return false;
-
-	/*
-	 * We start only with one section of pages, more pages are added as
-	 * needed until the rest of deferred pages are initialized.
-	 */
-	nr_initialised++;
-	if ((nr_initialised > PAGES_PER_SECTION) &&
-	    (pfn & (PAGES_PER_SECTION - 1)) == 0) {
-		NODE_DATA(nid)->first_deferred_pfn = pfn;
-		return true;
-	}
-	return false;
+	return end_pfn;
 }
 #else
 static inline bool early_page_uninitialised(unsigned long pfn)
@@ -345,9 +340,11 @@ static inline bool early_page_uninitialised(unsigned long pfn)
 	return false;
 }
 
-static inline bool defer_init(int nid, unsigned long pfn, unsigned long end_pfn)
+unsigned long __meminit
+defer_pfn(int nid, unsigned long start_pfn, unsigned long end_pfn,
+	  enum memmap_context context)
 {
-	return false;
+	return end_pfn;
 }
 #endif
 
@@ -5785,6 +5782,8 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 		return;
 	}
 
+	end_pfn = defer_pfn(nid, start_pfn, end_pfn, context);
+
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
 		struct page *page;
 
@@ -5798,8 +5797,6 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 			continue;
 		if (overlap_memmap_init(zone, &pfn))
 			continue;
-		if (defer_init(nid, pfn, end_pfn))
-			break;
 
 		page = pfn_to_page(pfn);
 		__init_single_page(page, pfn, zone, nid);
