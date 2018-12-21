@@ -2232,7 +2232,7 @@ continue_unlock:
 			if (unlikely(error)) {
 				/*
 				 * Handle errors according to the type of
-				 * writeback. There's no need to continue to for
+				 * writeback. There's no need to continue for
 				 * background writeback. Just push done_index
 				 * past this page so media errors won't choke
 				 * writeout for the entire file. For integrity
