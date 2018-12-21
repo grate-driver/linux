@@ -345,8 +345,8 @@ static enum bp_state reserve_additional_memory(void)
 
 	/*
 	 * add_memory_resource() will call online_pages() which in its turn
-	 * will call xen_online_page() callback causing deadlock if we don't
-	 * release balloon_mutex here. Unlocking here is safe because the
+	 * will call xen_bring_pgs_online() callback causing deadlock if we
+	 * don't release balloon_mutex here. Unlocking here is safe because the
 	 * callers drop the mutex before trying again.
 	 */
 	mutex_unlock(&balloon_mutex);
@@ -369,15 +369,22 @@ static enum bp_state reserve_additional_memory(void)
 	return BP_ECANCELED;
 }
 
-static void xen_online_page(struct page *page)
+static int xen_bring_pgs_online(struct page *pg, unsigned int order)
 {
-	__online_page_set_limits(page);
+	unsigned long i, size = (1 << order);
+	unsigned long start_pfn = page_to_pfn(pg);
+	struct page *p;
 
+	pr_debug("Online %lu pages starting at pfn 0x%lx\n", size, start_pfn);
 	mutex_lock(&balloon_mutex);
-
-	__balloon_append(page);
-
+	for (i = 0; i < size; i++) {
+		p = pfn_to_page(start_pfn + i);
+		__online_page_set_limits(p);
+		__balloon_append(p);
+	}
 	mutex_unlock(&balloon_mutex);
+
+	return 0;
 }
 
 static int xen_memory_notifier(struct notifier_block *nb, unsigned long val, void *v)
@@ -702,7 +709,7 @@ static int __init balloon_init(void)
 	balloon_stats.max_retry_count = RETRY_UNLIMITED;
 
 #ifdef CONFIG_XEN_BALLOON_MEMORY_HOTPLUG
-	set_online_page_callback(&xen_online_page);
+	set_online_page_callback(&xen_bring_pgs_online);
 	register_memory_notifier(&xen_memory_nb);
 	register_sysctl_table(xen_root);
 #endif
