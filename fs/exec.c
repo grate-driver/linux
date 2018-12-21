@@ -526,8 +526,10 @@ static int copy_strings(int argc, struct user_arg_ptr argv,
 		pos = bprm->p;
 		str += len;
 		bprm->p -= len;
+#ifdef CONFIG_MMU
 		if (bprm->p < bprm->argmin)
 			goto out;
+#endif
 
 		while (len > 0) {
 			int offset, bytes_to_copy;
