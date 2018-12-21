@@ -545,36 +545,6 @@ unsigned int vmballoon_page_order(enum vmballoon_page_size_type page_size)
 }
 
 /**
- * vmballoon_mark_page_offline() - mark a page as offline
- * @page: pointer for the page
- * @page_size: the size of the page.
- */
-static void
-vmballoon_mark_page_offline(struct page *page,
-			    enum vmballoon_page_size_type page_size)
-{
-	int i;
-
-	for (i = 0; i < 1ULL << vmballoon_page_order(page_size); i++)
-		__SetPageOffline(page + i);
-}
-
-/**
- * vmballoon_mark_page_online() - mark a page as online
- * @page: pointer for the page
- * @page_size: the size of the page.
- */
-static void
-vmballoon_mark_page_online(struct page *page,
-			   enum vmballoon_page_size_type page_size)
-{
-	int i;
-
-	for (i = 0; i < 1ULL << vmballoon_page_order(page_size); i++)
-		__ClearPageOffline(page + i);
-}
-
-/**
  * vmballoon_page_in_frames() - returns the number of frames in a page.
  * @page_size: the size of the page.
  *
@@ -584,6 +554,36 @@ static inline unsigned int
 vmballoon_page_in_frames(enum vmballoon_page_size_type page_size)
 {
 	return 1 << vmballoon_page_order(page_size);
+}
+
+/**
+ * vmballoon_mark_page_offline() - mark a page as offline
+ * @page: pointer for the page.
+ * @page_size: the size of the page.
+ */
+static void
+vmballoon_mark_page_offline(struct page *page,
+			    enum vmballoon_page_size_type page_size)
+{
+	int i;
+
+	for (i = 0; i < vmballoon_page_in_frames(page_size); i++)
+		__SetPageOffline(page + i);
+}
+
+/**
+ * vmballoon_mark_page_online() - mark a page as online
+ * @page: pointer for the page.
+ * @page_size: the size of the page.
+ */
+static void
+vmballoon_mark_page_online(struct page *page,
+			   enum vmballoon_page_size_type page_size)
+{
+	int i;
+
+	for (i = 0; i < vmballoon_page_in_frames(page_size); i++)
+		__ClearPageOffline(page + i);
 }
 
 /**
