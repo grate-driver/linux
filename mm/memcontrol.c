@@ -1306,10 +1306,10 @@ void mem_cgroup_print_oom_context(struct mem_cgroup *memcg, struct task_struct *
 	rcu_read_lock();
 
 	if (memcg) {
-		pr_info(",oom_memcg=");
+		pr_cont(",oom_memcg=");
 		pr_cont_cgroup_path(memcg->css.cgroup);
 	} else
-		pr_info(",global_oom");
+		pr_cont(",global_oom");
 	if (p) {
 		pr_cont(",task_memcg=");
 		pr_cont_cgroup_path(task_cgroup(p, memory_cgrp_id));
