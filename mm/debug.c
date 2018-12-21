@@ -80,7 +80,7 @@ void __dump_page(struct page *page, const char *reason)
 		if (mapping->host->i_dentry.first) {
 			struct dentry *dentry;
 			dentry = container_of(mapping->host->i_dentry.first, struct dentry, d_u.d_alias);
-			pr_emerg("name:\"%.*s\" ", dentry->d_name.len, dentry->d_name.name);
+			pr_emerg("name:\"%pd\" ", dentry);
 		}
 	}
 	BUILD_BUG_ON(ARRAY_SIZE(pageflag_names) != __NR_PAGEFLAGS + 1);
