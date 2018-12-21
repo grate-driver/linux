@@ -381,7 +381,7 @@ static void ep_nested_calls_init(struct nested_calls *ncalls)
  */
 static inline int ep_events_available(struct eventpoll *ep)
 {
-	return !list_empty(&ep->rdllist) ||
+	return !list_empty_careful(&ep->rdllist) ||
 		READ_ONCE(ep->ovflist) != EP_UNACTIVE_PTR;
 }
 
