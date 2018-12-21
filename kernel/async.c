@@ -55,7 +55,6 @@ asynchronous and synchronous parts of the kernel.
 #include <linux/wait.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
-#include <linux/workqueue.h>
 
 #include "workqueue_internal.h"
 
