@@ -4560,7 +4560,7 @@ void page_frag_free(void *addr)
 	if (unlikely(put_page_testzero(page))) {
 		unsigned int order = compound_order(page);
 
-		if (order == 0)
+		if (order == 0)		/* Via pcp? */
 			free_unref_page(page);
 		else
 			__free_pages_ok(page, order);
