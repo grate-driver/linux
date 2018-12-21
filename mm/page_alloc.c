@@ -1570,10 +1570,10 @@ static void __init deferred_free_pages(unsigned long start_pfn,
 		struct page *page = pfn_to_page(pfn);
 
 		if (count == pageblock_nr_pages) {
-			__free_pages_core(page, pageblock_order);
+			__free_pages_boot_core(page, pageblock_order);
 		} else {
 			while (count--)
-				__free_pages_core(page++, 0);
+				__free_pages_boot_core(page++, 0);
 		}
 
 		touch_nmi_watchdog();
