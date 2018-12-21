@@ -2152,7 +2152,7 @@ static int ocfs2_dio_wr_get_block(struct inode *inode, sector_t iblock,
 	struct ocfs2_dio_write_ctxt *dwc = NULL;
 	struct buffer_head *di_bh = NULL;
 	u64 p_blkno;
-	unsigned i_blkbits = inode->i_sb->s_blocksize_bits;
+	unsigned int i_blkbits = inode->i_sb->s_blocksize_bits;
 	loff_t pos = iblock << i_blkbits;
 	sector_t endblk = (i_size_read(inode) - 1) >> i_blkbits;
 	unsigned len, total_len = bh_result->b_size;
@@ -2163,14 +2163,14 @@ static int ocfs2_dio_wr_get_block(struct inode *inode, sector_t iblock,
 
 	/*
 	 * bh_result->b_size is count in get_more_blocks according to write
- 	 * "pos" and "end", we need map twice to return different buffer state:
- 	 * 1. area in file size, not set NEW;
- 	 * 2. area out file size, set  NEW.
- 	 *
- 	 *		   iblock    endblk
- 	 * |--------|---------|---------|---------
- 	 * |<-------area in file------->|
- 	 */
+	 * "pos" and "end", we need map twice to return different buffer state:
+	 * 1. area in file size, not set NEW;
+	 * 2. area out file size, set  NEW.
+	 *
+	 *		   iblock    endblk
+	 * |--------|---------|---------|---------
+	 * |<-------area in file------->|
+	 */
 
 	if ((iblock <= endblk) &&
 	    ((iblock + ((len - 1) >> i_blkbits)) > endblk))
