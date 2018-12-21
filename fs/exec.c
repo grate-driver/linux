@@ -474,7 +474,7 @@ static int prepare_arg_pages(struct linux_binprm *bprm,
 	 * We've historically supported up to 32 pages (ARG_MAX)
 	 * of argument strings even with small stacks
 	 */
-	limit = max(limit, (unsigned long)ARG_MAX);
+	limit = max_t(unsigned long, limit, ARG_MAX);
 	/*
 	 * We must account for the size of all the argv and envp pointers to
 	 * the argv and envp strings, since they will also take up space in
