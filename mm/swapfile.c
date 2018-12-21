@@ -1180,6 +1180,29 @@ static unsigned char __swap_entry_free_locked(struct swap_info_struct *p,
  * return pointer to swap_info_struct, and keep the swap entry valid
  * via preventing the swap device from being swapoff, until
  * put_swap_device() is called.  Otherwise return NULL.
+ *
+ * Notice that swapoff or swapoff+swapon can still happen before the
+ * preempt_disable() in get_swap_device() or after the
+ * preempt_enable() in put_swap_device() if there isn't any other way
+ * to prevent swapoff, such as page lock, page table lock, etc.  The
+ * caller must be prepared for that.  For example, the following
+ * situation is possible.
+ *
+ *   CPU1				CPU2
+ *   do_swap_page()
+ *     ...				swapoff+swapon
+ *     __read_swap_cache_async()
+ *       swapcache_prepare()
+ *         __swap_duplicate()
+ *           // check swap_map
+ *     // verify PTE not changed
+ *
+ * In __swap_duplicate(), the swap_map need to be checked before
+ * changing partly because the specified swap entry may be for another
+ * swap device which has been swapoff.  And in do_swap_page(), after
+ * the page is read from the swap device, the PTE is verified not
+ * changed with the page table locked to check whether the swap device
+ * has been swapoff or swapoff+swapon.
  */
 struct swap_info_struct *get_swap_device(swp_entry_t entry)
 {
