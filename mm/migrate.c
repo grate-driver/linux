@@ -850,7 +850,6 @@ int buffer_migrate_page_norefs(struct address_space *mapping,
 {
 	return __buffer_migrate_page(mapping, newpage, page, mode, true);
 }
-EXPORT_SYMBOL(buffer_migrate_page_norefs);
 #endif
 
 /*
