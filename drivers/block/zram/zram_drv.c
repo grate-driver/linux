@@ -1026,10 +1026,10 @@ static ssize_t bd_stat_show(struct device *dev,
 
 	down_read(&zram->init_lock);
 	ret = scnprintf(buf, PAGE_SIZE,
-			"%8llu %8llu %8llu\n",
-			(u64)atomic64_read(&zram->stats.bd_count),
-			(u64)atomic64_read(&zram->stats.bd_reads),
-			(u64)atomic64_read(&zram->stats.bd_writes));
+		"%8llu %8llu %8llu\n",
+		(u64)atomic64_read(&zram->stats.bd_count) * (PAGE_SHIFT - 12),
+		(u64)atomic64_read(&zram->stats.bd_reads) * (PAGE_SHIFT - 12),
+		(u64)atomic64_read(&zram->stats.bd_writes) * (PAGE_SHIFT - 12));
 	up_read(&zram->init_lock);
 
 	return ret;
