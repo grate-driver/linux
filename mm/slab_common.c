@@ -1029,7 +1029,7 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 
 		index = size_index[size_index_elem(size)];
 	} else {
-		if (WARN_ON(size > KMALLOC_MAX_CACHE_SIZE))
+		if (WARN_ON_ONCE(size > KMALLOC_MAX_CACHE_SIZE))
 			return NULL;
 		index = fls(size - 1);
 	}
