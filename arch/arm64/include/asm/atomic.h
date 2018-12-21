@@ -166,7 +166,7 @@
 
 #define arch_atomic64_dec_if_positive		arch_atomic64_dec_if_positive
 
-#include <asm-generic/atomic-instrumented.h>
+#include <generated/atomic-instrumented.h>
 
 #endif
 #endif

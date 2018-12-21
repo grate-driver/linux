@@ -71,8 +71,8 @@
 	__ret;								\
 })
 
-#include <linux/atomic-fallback.h>
+#include <generated/atomic-fallback.h>
 
-#include <asm-generic/atomic-long.h>
+#include <generated/atomic-long.h>
 
 #endif /* _LINUX_ATOMIC_H */

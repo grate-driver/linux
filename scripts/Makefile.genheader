@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Generate common headers under include/generated/
+
+include scripts/Kbuild.include
+
+atomics-dir := $(srctree)/scripts/atomic
+atomic-tbl := $(atomics-dir)/atomics.tbl
+
+.PHONY: all
+
+targets += atomic-fallback.h
+targets += atomic-instrumented.h
+targets += atomic-long.h
+
+all: $(addprefix $(obj)/,$(targets))
+
+quiet_cmd_genheader = GENHDR  $@
+cmd_genheader = $(CONFIG_SHELL) $^ >$@
+
+$(obj)/atomic-%.h: $(atomics-dir)/gen-atomic-%.sh $(atomic-tbl)
+	$(call if_changed,genheader)
+
