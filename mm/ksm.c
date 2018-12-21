@@ -1065,7 +1065,8 @@ static int write_protect_page(struct vm_area_struct *vma, struct page *page,
 	BUG_ON(PageTransCompound(page));
 
 	mmu_notifier_range_init(&range, mm, pvmw.address,
-				pvmw.address + PAGE_SIZE);
+				pvmw.address + PAGE_SIZE,
+				MMU_NOTIFY_CLEAR);
 	mmu_notifier_invalidate_range_start(&range);
 
 	if (!page_vma_mapped_walk(&pvmw))
@@ -1152,7 +1153,8 @@ static int replace_page(struct vm_area_struct *vma, struct page *page,
 	if (!pmd)
 		goto out;
 
-	mmu_notifier_range_init(&range, mm, addr, addr + PAGE_SIZE);
+	mmu_notifier_range_init(&range, mm, addr, addr + PAGE_SIZE,
+				MMU_NOTIFY_CLEAR);
 	mmu_notifier_invalidate_range_start(&range);
 
 	ptep = pte_offset_map_lock(mm, pmd, addr, &ptl);

@@ -532,7 +532,7 @@ bool __oom_reap_task_mm(struct mm_struct *mm)
 			struct mmu_gather tlb;
 
 			mmu_notifier_range_init(&range, mm, vma->vm_start,
-						vma->vm_end);
+						vma->vm_end, MMU_NOTIFY_CLEAR);
 			tlb_gather_mmu(&tlb, mm, range.start, range.end);
 			if (mmu_notifier_invalidate_range_start_nonblock(&range)) {
 				tlb_finish_mmu(&tlb, range.start, range.end);

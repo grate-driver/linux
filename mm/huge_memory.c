@@ -1173,7 +1173,8 @@ static vm_fault_t do_huge_pmd_wp_page_fallback(struct vm_fault *vmf,
 	}
 
 	mmu_notifier_range_init(&range, vma->vm_mm, haddr,
-				haddr + HPAGE_PMD_SIZE);
+				haddr + HPAGE_PMD_SIZE,
+				MMU_NOTIFY_CLEAR);
 	mmu_notifier_invalidate_range_start(&range);
 
 	vmf->ptl = pmd_lock(vma->vm_mm, vmf->pmd);
@@ -1336,7 +1337,8 @@ alloc:
 	__SetPageUptodate(new_page);
 
 	mmu_notifier_range_init(&range, vma->vm_mm, haddr,
-				haddr + HPAGE_PMD_SIZE);
+				haddr + HPAGE_PMD_SIZE,
+				MMU_NOTIFY_CLEAR);
 	mmu_notifier_invalidate_range_start(&range);
 
 	spin_lock(vmf->ptl);
@@ -2014,7 +2016,8 @@ void __split_huge_pud(struct vm_area_struct *vma, pud_t *pud,
 	struct mmu_notifier_range range;
 
 	mmu_notifier_range_init(&range, vma->vm_mm, address & HPAGE_PUD_MASK,
-				(address & HPAGE_PUD_MASK) + HPAGE_PUD_SIZE);
+				(address & HPAGE_PUD_MASK) + HPAGE_PUD_SIZE,
+				MMU_NOTIFY_CLEAR);
 	mmu_notifier_invalidate_range_start(&range);
 	ptl = pud_lock(vma->vm_mm, pud);
 	if (unlikely(!pud_trans_huge(*pud) && !pud_devmap(*pud)))
@@ -2232,7 +2235,8 @@ void __split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 	struct mmu_notifier_range range;
 
 	mmu_notifier_range_init(&range, vma->vm_mm, address & HPAGE_PMD_MASK,
-				(address & HPAGE_PMD_MASK) + HPAGE_PMD_SIZE);
+				(address & HPAGE_PMD_MASK) + HPAGE_PMD_SIZE,
+				MMU_NOTIFY_CLEAR);
 	mmu_notifier_invalidate_range_start(&range);
 	ptl = pmd_lock(vma->vm_mm, pmd);
 

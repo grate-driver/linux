@@ -790,6 +790,13 @@ static void dax_entry_mkclean(struct address_space *mapping, pgoff_t index,
 		address = pgoff_address(index, vma);
 
 		/*
+		 * All the field are populated by follow_pte_pmd() except
+		 * the event field.
+		 */
+		mmu_notifier_range_init(&range, NULL, 0, -1UL,
+					MMU_NOTIFY_PROTECTION_PAGE);
+
+		/*
 		 * Note because we provide start/end to follow_pte_pmd it will
 		 * call mmu_notifier_invalidate_range_start() on our behalf
 		 * before taking any lock.

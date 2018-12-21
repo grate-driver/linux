@@ -174,7 +174,8 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 	struct mmu_notifier_range range;
 	struct mem_cgroup *memcg;
 
-	mmu_notifier_range_init(&range, mm, addr, addr + PAGE_SIZE);
+	mmu_notifier_range_init(&range, mm, addr, addr + PAGE_SIZE,
+				MMU_NOTIFY_CLEAR);
 
 	VM_BUG_ON_PAGE(PageTransHuge(old_page), old_page);
 
