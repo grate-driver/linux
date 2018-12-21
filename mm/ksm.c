@@ -734,8 +734,9 @@ again:
 				put_page(page);
 				return ERR_PTR(-EBUSY);
 			}
-		} else
+		} else {
 			lock_page(page);
+		}
 
 		if (READ_ONCE(page->mapping) != expected_mapping) {
 			unlock_page(page);
