@@ -1749,6 +1749,7 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 {
 	int res = 0, eavail, timed_out = 0;
 	u64 slack = 0;
+	bool waiter = false;
 	wait_queue_entry_t wait;
 	ktime_t expires, *to = NULL;
 
@@ -1786,6 +1787,15 @@ fetch_events:
 	if (eavail)
 		goto send_events;
 
+	if (!waiter) {
+		waiter = true;
+		init_waitqueue_entry(&wait, current);
+
+		spin_lock_irq(&ep->wq.lock);
+		__add_wait_queue_exclusive(&ep->wq, &wait);
+		spin_unlock_irq(&ep->wq.lock);
+	}
+
 	/*
 	 * Busy poll timed out.  Drop NAPI ID for now, we can add
 	 * it back in when we have moved a socket with a valid NAPI
@@ -1798,10 +1808,6 @@ fetch_events:
 	 * We need to sleep here, and we will be wake up by
 	 * ep_poll_callback() when events will become available.
 	 */
-	init_waitqueue_entry(&wait, current);
-	spin_lock_irq(&ep->wq.lock);
-	__add_wait_queue_exclusive(&ep->wq, &wait);
-	spin_unlock_irq(&ep->wq.lock);
 
 	for (;;) {
 		/*
@@ -1837,10 +1843,6 @@ fetch_events:
 
 	__set_current_state(TASK_RUNNING);
 
-	spin_lock_irq(&ep->wq.lock);
-	__remove_wait_queue(&ep->wq, &wait);
-	spin_unlock_irq(&ep->wq.lock);
-
 send_events:
 	/*
 	 * Try to transfer events to user space. In case we get 0 events and
@@ -1850,6 +1852,12 @@ send_events:
 	if (!res && eavail &&
 	    !(res = ep_send_events(ep, events, maxevents)) && !timed_out)
 		goto fetch_events;
+
+	if (waiter) {
+		spin_lock_irq(&ep->wq.lock);
+		__remove_wait_queue(&ep->wq, &wait);
+		spin_unlock_irq(&ep->wq.lock);
+	}
 
 	return res;
 }
