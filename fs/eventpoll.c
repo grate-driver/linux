@@ -1821,7 +1821,8 @@ fetch_events:
 			break;
 		}
 
-		if (ep_events_available(ep))
+		eavail = ep_events_available(ep);
+		if (eavail)
 			break;
 		if (signal_pending(current)) {
 			res = -EINTR;
