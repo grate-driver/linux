@@ -183,6 +183,11 @@ static enum dlm_status dlmunlock_common(struct dlm_ctxt *dlm,
 							flags, owner);
 		spin_lock(&res->spinlock);
 		spin_lock(&lock->spinlock);
+
+		if ((flags & LKM_CANCEL) &&
+				dlm_lock_on_list(&res->granted, lock))
+			status = DLM_CANCELGRANT;
+
 		/* if the master told us the lock was already granted,
 		 * let the ast handle all of these actions */
 		if (status == DLM_CANCELGRANT) {
