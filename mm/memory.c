@@ -4119,8 +4119,8 @@ static inline int follow_pte(struct mm_struct *mm, unsigned long address,
 }
 
 int follow_pte_pmd(struct mm_struct *mm, unsigned long address,
-		 	     struct mmu_notifier_range *range,
-			     pte_t **ptepp, pmd_t **pmdpp, spinlock_t **ptlp)
+		   struct mmu_notifier_range *range,
+		   pte_t **ptepp, pmd_t **pmdpp, spinlock_t **ptlp)
 {
 	int res;
 
