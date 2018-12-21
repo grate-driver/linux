@@ -1787,15 +1787,6 @@ fetch_events:
 	if (eavail)
 		goto send_events;
 
-	if (!waiter) {
-		waiter = true;
-		init_waitqueue_entry(&wait, current);
-
-		spin_lock_irq(&ep->wq.lock);
-		__add_wait_queue_exclusive(&ep->wq, &wait);
-		spin_unlock_irq(&ep->wq.lock);
-	}
-
 	/*
 	 * Busy poll timed out.  Drop NAPI ID for now, we can add
 	 * it back in when we have moved a socket with a valid NAPI
@@ -1804,10 +1795,18 @@ fetch_events:
 	ep_reset_busy_poll_napi_id(ep);
 
 	/*
-	 * We don't have any available event to return to the caller.
-	 * We need to sleep here, and we will be wake up by
-	 * ep_poll_callback() when events will become available.
+	 * We don't have any available event to return to the caller.  We need
+	 * to sleep here, and we will be woken by ep_poll_callback() when events
+	 * become available.
 	 */
+	if (!waiter) {
+		waiter = true;
+		init_waitqueue_entry(&wait, current);
+
+		spin_lock_irq(&ep->wq.lock);
+		__add_wait_queue_exclusive(&ep->wq, &wait);
+		spin_unlock_irq(&ep->wq.lock);
+	}
 
 	for (;;) {
 		/*
