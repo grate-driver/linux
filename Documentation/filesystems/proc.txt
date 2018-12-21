@@ -491,8 +491,13 @@ manner. The codes are the following:
     sd  - soft-dirty flag
     mm  - mixed map area
     hg  - huge page advise flag
-    nh  - no-huge page advise flag
+    nh  - no-huge page advise flag [*]
     mg  - mergable advise flag
+
+ [*] A process mapping may be advised to not be backed by transparent hugepages
+     by either madvise(MADV_NOHUGEPAGE) or prctl(PR_SET_THP_DISABLE).  See
+     Documentation/admin-guide/mm/transhuge.rst for system-wide and process
+     mapping policies.
 
 Note that there is no guarantee that every flag and associated mnemonic will
 be present in all further kernel releases. Things get changed, the flags may
