@@ -1411,7 +1411,7 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 					MIGRATE_SYNC, MR_MEMORY_HOTPLUG);
 		if (ret) {
 			list_for_each_entry(page, &source, lru) {
-				pr_warn("migrating pfn %lx failed ",
+				pr_warn("migrating pfn %lx failed: %d",
 				       page_to_pfn(page), ret);
 				dump_page(page, NULL);
 			}
