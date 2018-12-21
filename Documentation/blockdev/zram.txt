@@ -164,6 +164,8 @@ reset             WO    trigger device reset
 mem_used_max      WO    reset the `mem_used_max' counter (see later)
 mem_limit         WO    specifies the maximum amount of memory ZRAM can use
                         to store the compressed data
+writeback_limit   WO    specifies the maximum amount of write IO zram can
+			write out to backing device as 4KB unit
 max_comp_streams  RW    the number of possible concurrent compress operations
 comp_algorithm    RW    show and change the compression algorithm
 compact           WO    trigger memory compaction
