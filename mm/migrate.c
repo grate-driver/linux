@@ -2718,9 +2718,9 @@ static void migrate_vma_pages(struct migrate_vma *migrate)
 			if (!notified) {
 				notified = true;
 
-				mmu_notifier_range_init(&range, mm, addr,
-							migrate->end);
-							migrate->end,
+				mmu_notifier_range_init(&range,
+							migrate->vma->vm_mm,
+							addr, migrate->end,
 							MMU_NOTIFY_CLEAR);
 				mmu_notifier_invalidate_range_start(&range);
 			}
