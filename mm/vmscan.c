@@ -1260,8 +1260,17 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			}
 		}
 
-		if (!force_reclaim)
-			references = page_check_references(page, sc);
+		if (!force_reclaim) {
+			/*
+			 * Don't try to reclaim KSM page in direct reclaim if
+			 * the priority is not high enough.
+			 */
+			if (PageKsm(page) && !current_is_kswapd() &&
+			    sc->priority > (DEF_PRIORITY - 2))
+				references = PAGEREF_KEEP;
+			else
+				references = page_check_references(page, sc);
+		}
 
 		switch (references) {
 		case PAGEREF_ACTIVATE:
@@ -2134,6 +2143,16 @@ static void shrink_active_list(unsigned long nr_to_scan,
 					try_to_release_page(page, 0);
 				unlock_page(page);
 			}
+		}
+
+		/*
+		 * Skip KSM page in direct reclaim if priority is not
+		 * high enough.
+		 */
+		if (PageKsm(page) && !current_is_kswapd() &&
+		    sc->priority > (DEF_PRIORITY - 2)) {
+			putback_lru_page(page);
+			continue;
 		}
 
 		if (page_referenced(page, 0, sc->target_mem_cgroup,
