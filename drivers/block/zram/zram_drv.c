@@ -330,7 +330,6 @@ next:
 }
 
 #ifdef CONFIG_ZRAM_WRITEBACK
-
 static ssize_t writeback_limit_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
@@ -343,7 +342,7 @@ static ssize_t writeback_limit_store(struct device *dev,
 
 	down_read(&zram->init_lock);
 	atomic64_set(&zram->stats.bd_wb_limit, val);
-	if (val == 0 || val > atomic64_read(&zram->stats.bd_writes))
+	if (val == 0)
 		zram->stop_writeback = false;
 	up_read(&zram->init_lock);
 	ret = len;
@@ -605,7 +604,6 @@ static ssize_t writeback_store(struct device *dev,
 	char mode_buf[8];
 	unsigned long mode = -1UL;
 	unsigned long blk_idx = 0;
-	u64 wb_count, wb_limit;
 
 	sz = strscpy(mode_buf, buf, sizeof(mode_buf));
 	if (sz <= 0)
@@ -710,7 +708,7 @@ static ssize_t writeback_store(struct device *dev,
 			continue;
 		}
 
-		wb_count = atomic64_inc_return(&zram->stats.bd_writes);
+		atomic64_inc(&zram->stats.bd_writes);
 		/*
 		 * We released zram_slot_lock so need to check if the slot was
 		 * changed. If there is freeing for the slot, we can catch it
@@ -734,9 +732,11 @@ static ssize_t writeback_store(struct device *dev,
 		zram_set_element(zram, index, blk_idx);
 		blk_idx = 0;
 		atomic64_inc(&zram->stats.pages_stored);
-		wb_limit = atomic64_read(&zram->stats.bd_wb_limit);
-		if (wb_limit != 0 && wb_count >= wb_limit)
-			zram->stop_writeback = true;
+		if (atomic64_add_unless(&zram->stats.bd_wb_limit,
+					-1 << (PAGE_SHIFT - 12), 0)) {
+			if (atomic64_read(&zram->stats.bd_wb_limit) == 0)
+				zram->stop_writeback = true;
+		}
 next:
 		zram_slot_unlock(zram, index);
 	}
@@ -1061,6 +1061,7 @@ static ssize_t mm_stat_show(struct device *dev,
 }
 
 #ifdef CONFIG_ZRAM_WRITEBACK
+#define FOUR_K(x) ((x) * (1 << (PAGE_SHIFT - 12)))
 static ssize_t bd_stat_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1070,9 +1071,9 @@ static ssize_t bd_stat_show(struct device *dev,
 	down_read(&zram->init_lock);
 	ret = scnprintf(buf, PAGE_SIZE,
 		"%8llu %8llu %8llu\n",
-		(u64)atomic64_read(&zram->stats.bd_count) * (PAGE_SHIFT - 12),
-		(u64)atomic64_read(&zram->stats.bd_reads) * (PAGE_SHIFT - 12),
-		(u64)atomic64_read(&zram->stats.bd_writes) * (PAGE_SHIFT - 12));
+			FOUR_K((u64)atomic64_read(&zram->stats.bd_count)),
+			FOUR_K((u64)atomic64_read(&zram->stats.bd_reads)),
+			FOUR_K((u64)atomic64_read(&zram->stats.bd_writes)));
 	up_read(&zram->init_lock);
 
 	return ret;

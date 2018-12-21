@@ -277,6 +277,35 @@ Admin can request writeback of those idle pages at right timing via
 
 With the command, zram writeback idle pages from memory to the storage.
 
+If there are lots of write IO with flash device, potentially, it has
+flash wearout problem so that admin needs to design write limitation
+to guarantee storage health for entire product life.
+To overcome the concern, zram supports "writeback_limit".
+The "writeback_limit"'s default value is 0 so that it doesn't limit
+any writeback. If admin want to measure writeback count in a certain
+period, he could know it via /sys/block/zram0/bd_stat's 3rd column.
+
+If admin want to limit writeback as per-day 400M, he could do it
+like below.
+
+    MB_SHIFT=20
+    4K_SHIFT=12
+    echo $((400<<MB_SHIFT>>4K_SHIFT)) > \
+	    /sys/block/zram0/writeback_limit.
+
+If admin want to allow further write again, he could do it like below
+
+    echo 0 > /sys/block/zram0/writeback_limit
+
+If admin want to see remaining writeback budget since he set,
+
+    cat /sys/block/zram0/writeback_limit
+
+The writeback_limit count will reset whenever you reset zram(e.g.,
+system reboot, echo 1 > /sys/block/zramX/reset) so keeping how many of
+writeback happened until you reset the zram to allocate extra writeback
+budget in next setting is user's job.
+
 = memory tracking
 
 With CONFIG_ZRAM_MEMORY_TRACKING, user can know information of the
