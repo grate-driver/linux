@@ -2783,8 +2783,10 @@ void drain_local_pages(struct zone *zone)
 
 static void drain_local_pages_wq(struct work_struct *work)
 {
-	struct pcpu_drain *drain =
-		container_of(work, struct pcpu_drain, work);
+	struct pcpu_drain *drain;
+
+	drain = container_of(work, struct pcpu_drain, work);
+
 	/*
 	 * drain_all_pages doesn't use proper cpu hotplug protection so
 	 * we can race with cpu offline when the WQ can move this from
