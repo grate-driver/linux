@@ -1853,10 +1853,8 @@ static int unuse_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 			goto out;
 		}
 
-		if (PageSwapCache(page) && (swap_count(*swap_map) == 0))
-			delete_from_swap_cache(compound_head(page));
+		try_to_free_swap(page);
 
-		SetPageDirty(page);
 		unlock_page(page);
 		put_page(page);
 
