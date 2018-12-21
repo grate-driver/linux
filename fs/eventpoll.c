@@ -1820,15 +1820,18 @@ fetch_events:
 			res = -EINTR;
 			break;
 		}
-		if (ep_events_available(ep) || timed_out)
+
+		if (ep_events_available(ep))
 			break;
 		if (signal_pending(current)) {
 			res = -EINTR;
 			break;
 		}
 
-		if (!schedule_hrtimeout_range(to, slack, HRTIMER_MODE_ABS))
+		if (!schedule_hrtimeout_range(to, slack, HRTIMER_MODE_ABS)) {
 			timed_out = 1;
+			break;
+		}
 	}
 
 	__set_current_state(TASK_RUNNING);
