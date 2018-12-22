@@ -331,6 +331,12 @@ struct nvdimm_bus *to_nvdimm_bus(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(to_nvdimm_bus);
 
+struct nvdimm_bus *nvdimm_to_bus(struct nvdimm *nvdimm)
+{
+	return to_nvdimm_bus(nvdimm->dev.parent);
+}
+EXPORT_SYMBOL_GPL(nvdimm_to_bus);
+
 struct nvdimm_bus *nvdimm_bus_register(struct device *parent,
 		struct nvdimm_bus_descriptor *nd_desc)
 {
@@ -387,9 +393,24 @@ static int child_unregister(struct device *dev, void *data)
 	 * i.e. remove classless children
 	 */
 	if (dev->class)
-		/* pass */;
-	else
-		nd_device_unregister(dev, ND_SYNC);
+		return 0;
+
+	if (is_nvdimm(dev)) {
+		struct nvdimm *nvdimm = to_nvdimm(dev);
+		bool dev_put = false;
+
+		/* We are shutting down. Make state frozen artificially. */
+		nvdimm_bus_lock(dev);
+		nvdimm->sec.state = NVDIMM_SECURITY_FROZEN;
+		if (test_and_clear_bit(NDD_WORK_PENDING, &nvdimm->flags))
+			dev_put = true;
+		nvdimm_bus_unlock(dev);
+		cancel_delayed_work_sync(&nvdimm->dwork);
+		if (dev_put)
+			put_device(dev);
+	}
+	nd_device_unregister(dev, ND_SYNC);
+
 	return 0;
 }
 
@@ -902,7 +923,7 @@ static int nd_cmd_clear_to_send(struct nvdimm_bus *nvdimm_bus,
 
 	/* ask the bus provider if it would like to block this request */
 	if (nd_desc->clear_to_send) {
-		int rc = nd_desc->clear_to_send(nd_desc, nvdimm, cmd);
+		int rc = nd_desc->clear_to_send(nd_desc, nvdimm, cmd, data);
 
 		if (rc)
 			return rc;
