@@ -6,7 +6,6 @@
  * busses using the iommu infrastructure
  */
 
-#include <linux/export.h>
 #include <asm/iommu.h>
 
 /*
@@ -117,4 +116,3 @@ struct dma_map_ops dma_iommu_ops = {
 	.unmap_page		= dma_iommu_unmap_page,
 	.get_required_mask	= dma_iommu_get_required_mask,
 };
-EXPORT_SYMBOL(dma_iommu_ops);
