@@ -24,6 +24,7 @@ config MIPS
 	select GENERIC_IOMAP
 	select GENERIC_IRQ_PROBE
 	select GENERIC_IRQ_SHOW
+	select GENERIC_ISA_DMA if EISA
 	select GENERIC_LIB_ASHLDI3
 	select GENERIC_LIB_ASHRDI3
 	select GENERIC_LIB_CMPDI2
@@ -71,6 +72,7 @@ config MIPS
 	select HAVE_SYSCALL_TRACEPOINTS
 	select HAVE_VIRT_CPU_ACCOUNTING_GEN if 64BIT || !SMP
 	select IRQ_FORCED_THREADING
+	select ISA if EISA
 	select MODULES_USE_ELF_RELA if MODULES && 64BIT
 	select MODULES_USE_ELF_REL if MODULES
 	select PERF_USE_VMALLOC
@@ -95,7 +97,7 @@ config MIPS_GENERIC
 	select CPU_MIPSR2_IRQ_EI
 	select CSRC_R4K
 	select DMA_PERDEV_COHERENT
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select IRQ_MIPS_CPU
 	select LIBFDT
 	select MIPS_AUTO_PFN_OFFSET
@@ -256,7 +258,7 @@ config BCM47XX
 	select CEVT_R4K
 	select CSRC_R4K
 	select DMA_NONCOHERENT
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select IRQ_MIPS_CPU
 	select SYS_HAS_CPU_MIPS32_R1
 	select NO_EXCEPT_FILL
@@ -299,13 +301,12 @@ config MIPS_COBALT
 	select CSRC_R4K
 	select CEVT_GT641XX
 	select DMA_NONCOHERENT
-	select HW_HAS_PCI
+	select FORCE_PCI
 	select I8253
 	select I8259
 	select IRQ_MIPS_CPU
 	select IRQ_GT641XX
 	select PCI_GT64XXX_PCI0
-	select PCI
 	select SYS_HAS_CPU_NEVADA
 	select SYS_HAS_EARLY_PRINTK
 	select SYS_SUPPORTS_32BIT_KERNEL
@@ -422,7 +423,7 @@ config LASAT
 	select CSRC_R4K
 	select DMA_NONCOHERENT
 	select SYS_HAS_EARLY_PRINTK
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select IRQ_MIPS_CPU
 	select PCI_GT64XXX_PCI0
 	select MIPS_NILE4
@@ -502,7 +503,7 @@ config MIPS_MALTA
 	select HAVE_PCSPKR_PLATFORM
 	select IRQ_MIPS_CPU
 	select MIPS_GIC
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select I8253
 	select I8259
 	select MIPS_BONITO64
@@ -556,7 +557,7 @@ config MACH_PIC32
 config NEC_MARKEINS
 	bool "NEC EMMA2RH Mark-eins board"
 	select SOC_EMMA2RH
-	select HW_HAS_PCI
+	select HAVE_PCI
 	help
 	  This enables support for the NEC Electronics Mark-eins boards.
 
@@ -633,7 +634,7 @@ config SGI_IP22
 	select CSRC_R4K
 	select DEFAULT_SGI_PARTITION
 	select DMA_NONCOHERENT
-	select HW_HAS_EISA
+	select HAVE_EISA
 	select I8253
 	select I8259
 	select IP22_CPU_SCACHE
@@ -673,7 +674,7 @@ config SGI_IP27
 	select BOOT_ELF64
 	select DEFAULT_SGI_PARTITION
 	select SYS_HAS_EARLY_PRINTK
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select NR_CPUS_DEFAULT_64
 	select SYS_HAS_CPU_R10000
 	select SYS_SUPPORTS_64BIT_KERNEL
@@ -698,7 +699,7 @@ config SGI_IP28
 	select DMA_NONCOHERENT
 	select GENERIC_ISA_DMA_SUPPORT_BROKEN
 	select IRQ_MIPS_CPU
-	select HW_HAS_EISA
+	select HAVE_EISA
 	select I8253
 	select I8259
 	select SGI_HAS_I8042
@@ -733,7 +734,7 @@ config SGI_IP32
 	select CEVT_R4K
 	select CSRC_R4K
 	select DMA_NONCOHERENT
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select IRQ_MIPS_CPU
 	select R5000_CPU_SCACHE
 	select RM7000_CPU_SCACHE
@@ -841,9 +842,9 @@ config SNI_RM
 	select DEFAULT_SGI_PARTITION if CPU_BIG_ENDIAN
 	select DMA_NONCOHERENT
 	select GENERIC_ISA_DMA
+	select HAVE_EISA
 	select HAVE_PCSPKR_PLATFORM
-	select HW_HAS_EISA
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select IRQ_MIPS_CPU
 	select I8253
 	select I8259
@@ -876,7 +877,7 @@ config MIKROTIK_RB532
 	select CEVT_R4K
 	select CSRC_R4K
 	select DMA_NONCOHERENT
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select IRQ_MIPS_CPU
 	select SYS_HAS_CPU_MIPS32_R1
 	select SYS_SUPPORTS_32BIT_KERNEL
@@ -893,7 +894,7 @@ config CAVIUM_OCTEON_SOC
 	bool "Cavium Networks Octeon SoC based boards"
 	select CEVT_R4K
 	select ARCH_HAS_PHYS_TO_DMA
-	select HAS_RAPIDIO
+	select HAVE_RAPIDIO
 	select PHYS_ADDR_T_64BIT
 	select SYS_SUPPORTS_64BIT_KERNEL
 	select SYS_SUPPORTS_BIG_ENDIAN
@@ -903,7 +904,7 @@ config CAVIUM_OCTEON_SOC
 	select SYS_SUPPORTS_HOTPLUG_CPU if CPU_BIG_ENDIAN
 	select SYS_HAS_EARLY_PRINTK
 	select SYS_HAS_CPU_CAVIUM_OCTEON
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select ZONE_DMA32
 	select HOLES_IN_ZONE
 	select GPIOLIB
@@ -936,7 +937,7 @@ config NLM_XLR_BOARD
 	select NLM_COMMON
 	select SYS_HAS_CPU_XLR
 	select SYS_SUPPORTS_SMP
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select SWAP_IO_SPACE
 	select SYS_SUPPORTS_32BIT_KERNEL
 	select SYS_SUPPORTS_64BIT_KERNEL
@@ -962,7 +963,7 @@ config NLM_XLP_BOARD
 	select NLM_COMMON
 	select SYS_HAS_CPU_XLP
 	select SYS_SUPPORTS_SMP
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select SYS_SUPPORTS_32BIT_KERNEL
 	select SYS_SUPPORTS_64BIT_KERNEL
 	select PHYS_ADDR_T_64BIT
@@ -997,7 +998,7 @@ config MIPS_PARAVIRT
 	select SYS_HAS_CPU_MIPS32_R2
 	select SYS_HAS_CPU_MIPS64_R2
 	select SYS_HAS_CPU_CAVIUM_OCTEON
-	select HW_HAS_PCI
+	select HAVE_PCI
 	select SWAP_IO_SPACE
 	help
 	  This option supports guest running under ????
@@ -3025,47 +3026,14 @@ config MIPS_AUTO_PFN_OFFSET
 
 menu "Bus options (PCI, PCMCIA, EISA, ISA, TC)"
 
-config HW_HAS_EISA
-	bool
-config HW_HAS_PCI
-	bool
-
-config PCI
-	bool "Support for PCI controller"
-	depends on HW_HAS_PCI
-	select PCI_DOMAINS
-	help
-	  Find out whether you have a PCI motherboard. PCI is the name of a
-	  bus system, i.e. the way the CPU talks to the other stuff inside
-	  your box. Other bus systems are ISA, EISA, or VESA. If you have PCI,
-	  say Y, otherwise N.
-
-config HT_PCI
-	bool "Support for HT-linked PCI"
-	default y
-	depends on CPU_LOONGSON3
-	select PCI
-	select PCI_DOMAINS
-	help
-	  Loongson family machines use Hyper-Transport bus for inter-core
-	  connection and device connection. The PCI bus is a subordinate
-	  linked at HT. Choose Y for Loongson-3 based machines.
-
-config PCI_DOMAINS
-	bool
-
-config PCI_DOMAINS_GENERIC
-	bool
-
 config PCI_DRIVERS_GENERIC
-	select PCI_DOMAINS_GENERIC if PCI_DOMAINS
+	select PCI_DOMAINS_GENERIC if PCI
 	bool
 
 config PCI_DRIVERS_LEGACY
 	def_bool !PCI_DRIVERS_GENERIC
 	select NO_GENERIC_PCI_IOPORT_MAP
-
-source "drivers/pci/Kconfig"
+	select PCI_DOMAINS if PCI
 
 #
 # ISA support is now enabled via select.  Too many systems still have the one
@@ -3074,26 +3042,6 @@ source "drivers/pci/Kconfig"
 #
 config ISA
 	bool
-
-config EISA
-	bool "EISA support"
-	depends on HW_HAS_EISA
-	select ISA
-	select GENERIC_ISA_DMA
-	---help---
-	  The Extended Industry Standard Architecture (EISA) bus was
-	  developed as an open alternative to the IBM MicroChannel bus.
-
-	  The EISA bus provided some of the features of the IBM MicroChannel
-	  bus while maintaining backward compatibility with cards made for
-	  the older ISA bus.  The EISA bus saw limited use between 1988 and
-	  1995 when it was made obsolete by the PCI bus.
-
-	  Say Y here if you are building a kernel for an EISA-based machine.
-
-	  Otherwise, say N.
-
-source "drivers/eisa/Kconfig"
 
 config TC
 	bool "TURBOchannel support"
@@ -3137,21 +3085,6 @@ config ZONE_DMA
 
 config ZONE_DMA32
 	bool
-
-source "drivers/pcmcia/Kconfig"
-
-config HAS_RAPIDIO
-	bool
-	default n
-
-config RAPIDIO
-	tristate "RapidIO support"
-	depends on HAS_RAPIDIO || PCI
-	help
-	  If you say Y here, the kernel will include drivers and
-	  infrastructure code to support RapidIO interconnect devices.
-
-source "drivers/rapidio/Kconfig"
 
 endmenu
 
