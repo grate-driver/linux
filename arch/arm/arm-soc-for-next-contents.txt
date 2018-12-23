@@ -1,0 +1,230 @@
+next/soc
+	patch
+		ARM: stm32: debug: add low-level debug support
+	socfpga/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_updates_for_v5.0
+	patch
+		ARM: mmp2: initialize clocks before the timer
+		ARM: mmp/mmp2: dt: enable the clock
+		ARM: mmp: add a pxa-usb-phy device
+		ARM: mmp: add an instance of pxa-usb-phy to ttc_dkb and aspenite
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/soc-signed
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.21/soc
+	renesas/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc-for-v4.21
+	davinci/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v4.21/soc
+	sunxi/core
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-core-for-4.21
+	samsung/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-4.21
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-4.21
+	patch
+		ARM: mmp: fix timer_init calls
+		ARM: mmp: fix pxa168_device_usb_phy use on aspenite
+		ARM: pxa: avoid section mismatch warning
+		ARM: ks8695: fix section mismatch warning
+		ARM: tegra: avoid section mismatch warning
+	omap/omap1
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/omap1-signed
+	amlogic/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-soc
+	patch
+		ARM: omap2: avoid section mismatch warning
+
+next/dt
+	sprd/dt
+		https://github.com/lyrazhang/linux next-for-4.21
+	vexpress/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/vexpress-updates-4.20
+	rockchip/dts32
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-dts32-1
+	rockchip/dts64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-dts64-1
+	renesas/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm-dt-for-v4.21
+	renesas/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm64-dt-for-v4.21
+	socfgpa/dts
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_updates_for_v5.0
+	patch
+		dt-bindings: mrvl,mmp-timer: add clock
+		ARM: dts: mmp2: fix the gpio interrupt cell number
+		ARM: dts: mmp2: give gpio node a name
+		ARM: dts: mmp2: add clock to the timer
+		ARM: dts: mmp2: add MMC controllers
+		ARM: dts: mmp2: fix TWSI2
+		ARM: dts: mmp2: add more TWSI controllers
+		ARM: dts: mmp2: add OTG PHY
+		ARM: dts: mmp2: add USB OTG host controller
+		ARM: dts: mmp2: Add SSP controllers
+	vexpress/drm-dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/vexpress-drm-arm-soc
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/dt-signed
+	amlogic/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt
+	amlogic/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64
+	patch
+		ARM: dts: realview-pbx: Fix duplicate regulator nodes
+		ARM: dts: aspeed: add missing memory unit-address
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-4.21
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.21/devicetree
+	patch
+		ARM: mmp2: DT: be compatible with mrvl,mmp2
+	qcom/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-for-4.21
+	qcom/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-dts-for-4.21
+	pxa/dt
+		https://github.com/rjarzmik/linux tags/pxa-dt-4.21
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-4.21-devicetree
+	renesas/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm64-dt2-for-v4.21
+	renesas/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm-dt2-for-v4.21
+	renesas/dt-bindings
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt-bindings-for-v4.21
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-dt-bindings
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-arm-dt
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-arm64-dt
+	sunxi/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.21
+	sunxi/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt64-for-4.21
+	qcom/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-for-4.21-2
+	mvebu/dt64
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-4.21-1
+	samsung/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.21
+	samsung/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-4.21
+	mediatek/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.20-next-dts64
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-4.21
+	imx/dt-imx7d-pico
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx7d-pico-4.21
+	imx/dt-imx7ulp
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx7ulp-dt-4.21
+		contains depends/clk-imx7ulp
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-4.21
+	uniphier/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt-v4.21
+	amlogic/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt-2
+		contains depends/meson-clk
+	at91/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-4.21-dt
+	rockchip/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-dts32-2
+	rockchip/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-dts64-2
+	sunxi/dt-h3-h5
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-h3-h5-for-4.21
+	gemini/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/gemini-dts
+	patch
+		dt-bindings: arm: Convert Rockchip board/soc bindings to json-schema
+	amlogic/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-2-redo
+	xilinx/dt64
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.0
+	xilinx/dt
+		https://github.com/Xilinx/linux-xlnx tags/zynq-dt-for-v5.0
+	omap/ti-sysc-dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/dt-ti-sysc-signed
+	ti-k3/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/am654-for-v4.21
+	patch
+		ARM: dts: suniv: Fix improper bindings include patch
+	imx/qspi-dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-qspi-dt-clean
+	sunxi/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-4.21-2
+	sunxi/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt64-for-4.21-2
+	samsung/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-4.21-2
+
+next/drivers
+	rockchip/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.21-rockchip-drivers-1
+	amlogic/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-drivers
+	omap/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/driver-signed
+	broadcom/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-4.21/drivers
+	qcom/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-drivers-for-4.21
+	pxa/devel
+		https://github.com/rjarzmik/linux tags/pxa-for-4.21
+	renesas/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-drivers-for-v4.21
+	tegra/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-soc
+	tegra/firmware
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-firmware
+	sunxi/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-drivers-for-4.21
+	mediatek/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v4.20-next-soc
+	imx/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-4.21
+	amlogic/drivers-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-drivers-2
+	at91/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-4.21-soc
+	tegra/memory
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-4.21-memory
+	omap/drivers-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/driver-part2-signed
+	drivers/pl353
+		https://github.com/Xilinx/linux-xlnx tags/zynq-soc-for-v5.0
+	qcom/drivers-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-drivers-for-4.21-2
+
+next/defconfig
+	vexpress/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/vexpress-defconfig-arm-soc
+	omap/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.21/defconfig-signed
+	patch
+		ARM: multi_v7_defconfig: enable STM32 analog & timer drivers
+	qcom/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/agross/linux tags/qcom-arm64-defconfig-for-4.21
+	renesas/dwefconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-arm-defconfig-for-v4.21
+	sunxi/defconfig64
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-config64-for-4.21
+	samsung/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-4.21
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-4.21
+	patch
+		arm64: defconfig: Regenerate for v4.20
+		arm64: defconfig: Replace PINCTRL_MT7622 with PINCTRL_MTK_MOORE
+		arm64: defconfig: Enable FSL_MC_BUS and FSL_MC_DPIO
+		Revert "arm64: defconfig: Enable FSL_MC_BUS and FSL_MC_DPIO"
+
+next/late
+
+fixes
+	<no branch> (84fb6c7feb1494ebb7d1ec8b95cfb7ada0264465)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v4.20/fixes-rc6
+	<no branch> (690e16bada6029694740d5501025faf483d14339)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v4.20-rockchip-dts64fixes-2
+
