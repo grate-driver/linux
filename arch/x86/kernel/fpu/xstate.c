@@ -27,8 +27,8 @@ static const char *xfeature_names[] =
 	"x87 floating point registers"	,
 	"SSE registers"			,
 	"AVX registers"			,
-	"MPX bounds registers"		,
-	"MPX CSR"			,
+	"MPX bounds registers (unused)"	,
+	"MPX CSR (unused)"		,
 	"AVX-512 opmask"		,
 	"AVX-512 Hi256"			,
 	"AVX-512 ZMM_Hi256"		,
@@ -306,8 +306,6 @@ static void __init print_xstate_features(void)
 	print_xstate_feature(XFEATURE_MASK_FP);
 	print_xstate_feature(XFEATURE_MASK_SSE);
 	print_xstate_feature(XFEATURE_MASK_YMM);
-	print_xstate_feature(XFEATURE_MASK_BNDREGS);
-	print_xstate_feature(XFEATURE_MASK_BNDCSR);
 	print_xstate_feature(XFEATURE_MASK_OPMASK);
 	print_xstate_feature(XFEATURE_MASK_ZMM_Hi256);
 	print_xstate_feature(XFEATURE_MASK_Hi16_ZMM);
@@ -444,7 +442,7 @@ static int xfeature_uncompacted_offset(int xfeature_nr)
 	 * format. Checking a supervisor state's uncompacted offset is
 	 * an error.
 	 */
-	if (XFEATURE_MASK_SUPERVISOR & (1 << xfeature_nr)) {
+	if (XFEATURE_MASK_SUPERVISOR & BIT_ULL(xfeature_nr)) {
 		WARN_ONCE(1, "No fixed offset for xstate %d\n", xfeature_nr);
 		return -1;
 	}
@@ -808,10 +806,8 @@ void fpu__resume_cpu(void)
  * Given an xstate feature mask, calculate where in the xsave
  * buffer the state is.  Callers should ensure that the buffer
  * is valid.
- *
- * Note: does not work for compacted buffers.
  */
-void *__raw_xsave_addr(struct xregs_state *xsave, int xstate_feature_mask)
+static void *__raw_xsave_addr(struct xregs_state *xsave, int xstate_feature_mask)
 {
 	int feature_nr = fls64(xstate_feature_mask) - 1;
 

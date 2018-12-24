@@ -4836,10 +4836,6 @@ static void kvm_init_msr_list(void)
 		 * to the guests in some cases.
 		 */
 		switch (msrs_to_save[i]) {
-		case MSR_IA32_BNDCFGS:
-			if (!kvm_mpx_supported())
-				continue;
-			break;
 		case MSR_TSC_AUX:
 			if (!kvm_x86_ops->rdtscp_supported())
 				continue;
@@ -8698,27 +8694,6 @@ void kvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	kvm_async_pf_hash_reset(vcpu);
 	vcpu->arch.apf.halted = false;
 
-	if (kvm_mpx_supported()) {
-		void *mpx_state_buffer;
-
-		/*
-		 * To avoid have the INIT path from kvm_apic_has_events() that be
-		 * called with loaded FPU and does not let userspace fix the state.
-		 */
-		if (init_event)
-			kvm_put_guest_fpu(vcpu);
-		mpx_state_buffer = get_xsave_addr(&vcpu->arch.guest_fpu.state.xsave,
-					XFEATURE_MASK_BNDREGS);
-		if (mpx_state_buffer)
-			memset(mpx_state_buffer, 0, sizeof(struct mpx_bndreg_state));
-		mpx_state_buffer = get_xsave_addr(&vcpu->arch.guest_fpu.state.xsave,
-					XFEATURE_MASK_BNDCSR);
-		if (mpx_state_buffer)
-			memset(mpx_state_buffer, 0, sizeof(struct mpx_bndcsr));
-		if (init_event)
-			kvm_load_guest_fpu(vcpu);
-	}
-
 	if (!init_event) {
 		kvm_pmu_reset(vcpu);
 		vcpu->arch.smbase = 0x30000;
@@ -9282,7 +9257,7 @@ static void kvm_mmu_slot_apply_flags(struct kvm *kvm,
 	 * with dirty logging disabled in order to eliminate unnecessary GPA
 	 * logging in PML buffer (and potential PML buffer full VMEXT). This
 	 * guarantees leaving PML enabled during guest's lifetime won't have
-	 * any additonal overhead from PML when guest is running with dirty
+	 * any additional overhead from PML when guest is running with dirty
 	 * logging disabled for memory slots.
 	 *
 	 * kvm_x86_ops->slot_enable_log_dirty is called when switching new slot
