@@ -304,6 +304,7 @@ static const match_table_t cifs_smb_version_tokens = {
 	{ Smb_21, SMB21_VERSION_STRING },
 	{ Smb_30, SMB30_VERSION_STRING },
 	{ Smb_302, SMB302_VERSION_STRING },
+	{ Smb_302, ALT_SMB302_VERSION_STRING },
 	{ Smb_311, SMB311_VERSION_STRING },
 	{ Smb_311, ALT_SMB311_VERSION_STRING },
 	{ Smb_3any, SMB3ANY_VERSION_STRING },
@@ -1827,7 +1828,7 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 				vol->password = NULL;
 				break;
 			}
-			/* Yes it is. Drop down to Opt_pass below.*/
+			/* Fallthrough - to Opt_pass below.*/
 		case Opt_pass:
 			/* Obtain the value string */
 			value = strchr(data, '=');
