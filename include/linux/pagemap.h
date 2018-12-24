@@ -252,6 +252,7 @@ pgoff_t page_cache_prev_miss(struct address_space *mapping,
 #define FGP_WRITE		0x00000008
 #define FGP_NOFS		0x00000010
 #define FGP_NOWAIT		0x00000020
+#define FGP_FOR_MMAP		0x00000040
 
 struct page *pagecache_get_page(struct address_space *mapping, pgoff_t offset,
 		int fgp_flags, gfp_t cache_gfp_mask);
@@ -536,6 +537,8 @@ static inline int wait_on_page_locked_killable(struct page *page)
 		return 0;
 	return wait_on_page_bit_killable(compound_head(page), PG_locked);
 }
+
+extern void put_and_wait_on_page_locked(struct page *page);
 
 /* 
  * Wait for a page to complete writeback

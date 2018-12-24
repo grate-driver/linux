@@ -2134,7 +2134,6 @@ void dlm_move_lockres_to_recovery_list(struct dlm_ctxt *dlm,
 				 * if this had completed successfully
 				 * before sending this lock state to the
 				 * new master */
-				BUG_ON(i != DLM_CONVERTING_LIST);
 				mlog(0, "node died with cancel pending "
 				     "on %.*s. move back to granted list.\n",
 				     res->lockname.len, res->lockname.name);

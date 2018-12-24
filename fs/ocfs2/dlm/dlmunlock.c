@@ -183,6 +183,11 @@ static enum dlm_status dlmunlock_common(struct dlm_ctxt *dlm,
 							flags, owner);
 		spin_lock(&res->spinlock);
 		spin_lock(&lock->spinlock);
+
+		if ((flags & LKM_CANCEL) &&
+				dlm_lock_on_list(&res->granted, lock))
+			status = DLM_CANCELGRANT;
+
 		/* if the master told us the lock was already granted,
 		 * let the ast handle all of these actions */
 		if (status == DLM_CANCELGRANT) {
@@ -229,6 +234,7 @@ static enum dlm_status dlmunlock_common(struct dlm_ctxt *dlm,
 		mlog(0, "clearing convert_type at %smaster node\n",
 		     master_node ? "" : "non-");
 		lock->ml.convert_type = LKM_IVMODE;
+		lock->lksb->flags &= ~(DLM_LKSB_GET_LVB|DLM_LKSB_PUT_LVB);
 	}
 
 	/* remove the extra ref on lock */
