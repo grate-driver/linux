@@ -449,7 +449,7 @@ static int mlx5_query_port_roce(struct ib_device *device, u8 port_num,
 	if (!ndev)
 		goto out;
 
-	if (mlx5_lag_is_active(dev->mdev)) {
+	if (dev->lag_active) {
 		rcu_read_lock();
 		upper = netdev_master_upper_dev_get_rcu(ndev);
 		if (upper) {
@@ -1860,7 +1860,7 @@ static struct ib_ucontext *mlx5_ib_alloc_ucontext(struct ib_device *ibdev,
 	context->lib_caps = req.lib_caps;
 	print_lib_caps(dev, context->lib_caps);
 
-	if (mlx5_lag_is_active(dev->mdev)) {
+	if (dev->lag_active) {
 		u8 port = mlx5_core_native_port_num(dev->mdev);
 
 		atomic_set(&context->tx_port_affinity,
@@ -4864,7 +4864,7 @@ static int mlx5_eth_lag_init(struct mlx5_ib_dev *dev)
 	struct mlx5_flow_table *ft;
 	int err;
 
-	if (!ns || !mlx5_lag_is_active(mdev))
+	if (!ns || !mlx5_lag_is_roce(mdev))
 		return 0;
 
 	err = mlx5_cmd_create_vport_lag(mdev);
@@ -4878,6 +4878,7 @@ static int mlx5_eth_lag_init(struct mlx5_ib_dev *dev)
 	}
 
 	dev->flow_db->lag_demux_ft = ft;
+	dev->lag_active = true;
 	return 0;
 
 err_destroy_vport_lag:
@@ -4889,7 +4890,9 @@ static void mlx5_eth_lag_cleanup(struct mlx5_ib_dev *dev)
 {
 	struct mlx5_core_dev *mdev = dev->mdev;
 
-	if (dev->flow_db->lag_demux_ft) {
+	if (dev->lag_active) {
+		dev->lag_active = false;
+
 		mlx5_destroy_flow_table(dev->flow_db->lag_demux_ft);
 		dev->flow_db->lag_demux_ft = NULL;
 
@@ -6227,7 +6230,7 @@ int mlx5_ib_stage_ib_reg_init(struct mlx5_ib_dev *dev)
 	const char *name;
 
 	rdma_set_device_sysfs_group(&dev->ib_dev, &mlx5_attr_group);
-	if (!mlx5_lag_is_active(dev->mdev))
+	if (!mlx5_lag_is_roce(dev->mdev))
 		name = "mlx5_%d";
 	else
 		name = "mlx5_bond_%d";

@@ -38,6 +38,7 @@
 #include <linux/sched.h>
 #include <linux/if_link.h>
 #include <linux/firmware.h>
+#include <linux/ptp_clock_kernel.h>
 #include <linux/mlx5/cq.h>
 #include <linux/mlx5/fs.h>
 
@@ -121,7 +122,8 @@ int mlx5_modify_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 int mlx5_destroy_scheduling_element_cmd(struct mlx5_core_dev *dev, u8 hierarchy,
 					u32 element_id);
 int mlx5_wait_for_vf_pages(struct mlx5_core_dev *dev);
-u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev);
+u64 mlx5_read_internal_timer(struct mlx5_core_dev *dev,
+			     struct ptp_system_timestamp *sts);
 
 void mlx5_cmd_trigger_completions(struct mlx5_core_dev *dev);
 int mlx5_cq_debugfs_init(struct mlx5_core_dev *dev);
@@ -185,10 +187,8 @@ static inline int mlx5_lag_is_lacp_owner(struct mlx5_core_dev *dev)
 		    MLX5_CAP_GEN(dev, lag_master);
 }
 
-int mlx5_lag_allow(struct mlx5_core_dev *dev);
-int mlx5_lag_forbid(struct mlx5_core_dev *dev);
-
 void mlx5_reload_interface(struct mlx5_core_dev *mdev, int protocol);
+void mlx5_lag_update(struct mlx5_core_dev *dev);
 
 enum {
 	MLX5_NIC_IFC_FULL		= 0,
