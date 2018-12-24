@@ -584,3 +584,38 @@ int tegra_plane_setup_legacy_state(struct tegra_plane *tegra,
 
 	return 0;
 }
+
+void tegra_plane_copy_state(struct drm_plane *plane,
+			    struct drm_plane_state *state)
+{
+	struct tegra_plane_state *tegra = to_tegra_plane_state(plane->state);
+	struct tegra_plane_state *tegra_new = to_tegra_plane_state(state);
+	unsigned int i;
+
+	swap(plane->state->fb, state->fb);
+	plane->state->crtc_x = state->crtc_x;
+	plane->state->crtc_y = state->crtc_y;
+	plane->state->crtc_w = state->crtc_w;
+	plane->state->crtc_h = state->crtc_h;
+	plane->state->src_x = state->src_x;
+	plane->state->src_y = state->src_y;
+	plane->state->src_w = state->src_w;
+	plane->state->src_h = state->src_h;
+	plane->state->alpha = state->alpha;
+	plane->state->rotation = state->rotation;
+	plane->state->zpos = state->zpos;
+	plane->state->normalized_zpos = state->normalized_zpos;
+	plane->state->src = state->src;
+	plane->state->dst = state->dst;
+	plane->state->visible = state->visible;
+
+	tegra->swap = tegra_new->swap;
+	tegra->tiling = tegra_new->tiling;
+	tegra->format = tegra_new->format;
+	tegra->opaque = tegra_new->opaque;
+	tegra->bottom_up = tegra_new->bottom_up;
+	tegra->memory_bandwidth = tegra_new->memory_bandwidth;
+
+	for (i = 0; i < 2; i++)
+		tegra->blending[i] = tegra_new->blending[i];
+}
