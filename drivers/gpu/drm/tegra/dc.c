@@ -760,12 +760,63 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	tegra_dc_setup_window(p, &window);
 }
 
+static int tegra_plane_atomic_async_check(struct drm_plane *plane,
+					  struct drm_plane_state *state)
+{
+	int err;
+
+	/*
+	 * It is not obvious whether it's fine for framebuffer to disappear
+	 * while display controller could be accessing it or hardware could
+	 * cope with that somehow. Let's just disallow that to happen.
+	 */
+	if (!state->fb)
+		return -EINVAL;
+
+	/* the rest should be fine to change asynchronously */
+	err = tegra_plane_atomic_check(plane, state);
+	if (err)
+		return err;
+
+	return 0;
+}
+
+static inline void tegra_plane_clear_latching(struct drm_plane *plane)
+{
+	struct tegra_plane *p = to_tegra_plane(plane);
+	struct tegra_dc *dc = p->dc;
+
+	/* clear pending latching request from the previous async update */
+	tegra_dc_writel(dc, 0, DC_CMD_STATE_CONTROL);
+}
+
+static inline void tegra_plane_atomic_flush(struct drm_plane *plane)
+{
+	struct tegra_plane *p = to_tegra_plane(plane);
+	struct tegra_dc *dc = p->dc;
+
+	/* latch updated registers and activate the new state */
+	tegra_dc_writel(dc, 1 << (p->index + 9), DC_CMD_STATE_CONTROL);
+	tegra_dc_writel(dc, 1 << (p->index + 1), DC_CMD_STATE_CONTROL);
+}
+
+static void tegra_plane_atomic_async_update(struct drm_plane *plane,
+					    struct drm_plane_state *state)
+{
+	tegra_plane_clear_latching(plane);
+	tegra_plane_copy_state(plane, state);
+	tegra_plane_atomic_update(plane, plane->state);
+	tegra_plane_atomic_flush(plane);
+}
+
 static const struct drm_plane_helper_funcs tegra_plane_helper_funcs = {
 	.prepare_fb = tegra_plane_prepare_fb,
 	.cleanup_fb = tegra_plane_cleanup_fb,
 	.atomic_check = tegra_plane_atomic_check,
 	.atomic_disable = tegra_plane_atomic_disable,
 	.atomic_update = tegra_plane_atomic_update,
+	.atomic_async_check = tegra_plane_atomic_async_check,
+	.atomic_async_update = tegra_plane_atomic_async_update,
 };
 
 static unsigned long tegra_plane_get_possible_crtcs(struct drm_device *drm)
