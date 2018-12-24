@@ -234,7 +234,7 @@ clean-targets := %clean mrproper cleandocs
 no-dot-config-targets := $(clean-targets) \
 			 cscope gtags TAGS tags help% %docs check% coccicheck \
 			 $(version_h) headers_% archheaders archscripts \
-			 %asm-generic kernelversion %src-pkg
+			 %asm-generic genheader kernelversion %src-pkg
 no-sync-config-targets := $(no-dot-config-targets) install %install \
 			   kernelrelease
 
@@ -1099,7 +1099,7 @@ endif
 # prepare2 creates a makefile if using a separate output directory.
 # From this point forward, .config has been reprocessed, so any rules
 # that need to depend on updated CONFIG_* values can be checked here.
-prepare2: prepare3 outputmakefile asm-generic
+prepare2: prepare3 outputmakefile asm-generic genheader
 
 prepare1: prepare2 $(version_h) $(autoksyms_h) include/generated/utsrelease.h
 	$(cmd_crmodverdir)
@@ -1121,6 +1121,10 @@ asm-generic: uapi-asm-generic
 	$(Q)$(MAKE) $(asm-generic)=arch/$(SRCARCH)/include/generated/asm
 uapi-asm-generic:
 	$(Q)$(MAKE) $(asm-generic)=arch/$(SRCARCH)/include/generated/uapi/asm
+
+PHONY += genheader
+genheader:
+	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.genheader obj=include/generated
 
 PHONY += prepare-objtool
 prepare-objtool: $(objtool_target)

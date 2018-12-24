@@ -262,6 +262,6 @@ static inline int arch_atomic_fetch_xor(int i, atomic_t *v)
 # include <asm/atomic64_64.h>
 #endif
 
-#include <asm-generic/atomic-instrumented.h>
+#include <generated/atomic-instrumented.h>
 
 #endif /* _ASM_X86_ATOMIC_H */
