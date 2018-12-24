@@ -39,6 +39,7 @@
 #include <linux/memory.h>
 #include <linux/export.h>
 #include <linux/mount.h>
+#include <linux/fs_context.h>
 #include <linux/namei.h>
 #include <linux/pagemap.h>
 #include <linux/proc_fs.h>
@@ -315,25 +316,44 @@ static inline bool is_in_v2_mode(void)
  * users. If someone tries to mount the "cpuset" filesystem, we
  * silently switch it to mount "cgroup" instead
  */
-static struct dentry *cpuset_mount(struct file_system_type *fs_type,
-			 int flags, const char *unused_dev_name, void *data)
+static int cpuset_get_tree(struct fs_context *fc)
 {
-	struct file_system_type *cgroup_fs = get_fs_type("cgroup");
-	struct dentry *ret = ERR_PTR(-ENODEV);
-	if (cgroup_fs) {
-		char mountopts[] =
-			"cpuset,noprefix,"
-			"release_agent=/sbin/cpuset_release_agent";
-		ret = cgroup_fs->mount(cgroup_fs, flags,
-					   unused_dev_name, mountopts);
-		put_filesystem(cgroup_fs);
-	}
-	return ret;
+	char opts[] = "cpuset,noprefix,release_agent=/sbin/cpuset_release_agent";
+	struct file_system_type *cgroup_fs;
+	struct vfsmount *mnt;
+	struct super_block *sb;
+
+	cgroup_fs = get_fs_type("cgroup");
+	if (!cgroup_fs)
+		return -ENODEV;
+
+	mnt = vfs_kern_mount(cgroup_fs, fc->sb_flags, NULL, opts);
+	put_filesystem(cgroup_fs);
+	if (IS_ERR(mnt))
+		return PTR_ERR(mnt);
+	/* this part resembles the tail of mount_subtree().  Hmm... */
+	fc->root = dget(mnt->mnt_root);
+	sb = mnt->mnt_root->d_sb;
+	atomic_inc(&sb->s_active);
+	down_write(&sb->s_umount);
+	mntput(mnt);
+	return 0;
+}
+
+static const struct fs_context_operations cpuset_fs_context_ops = {
+	.get_tree	= cpuset_get_tree,
+};
+
+static int cpuset_init_fs_context(struct fs_context *fc,
+				  struct dentry *reference)
+{
+	fc->ops = &cpuset_fs_context_ops;
+	return 0;
 }
 
 static struct file_system_type cpuset_fs_type = {
-	.name = "cpuset",
-	.mount = cpuset_mount,
+	.name			= "cpuset",
+	.init_fs_context	= cpuset_init_fs_context,
 };
 
 /*

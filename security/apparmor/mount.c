@@ -15,6 +15,7 @@
 #include <linux/fs.h>
 #include <linux/mount.h>
 #include <linux/namei.h>
+#include <uapi/linux/mount.h>
 
 #include "include/apparmor.h"
 #include "include/audit.h"
@@ -545,6 +546,52 @@ int aa_new_mount(struct aa_label *label, const char *dev_name,
 		error = fn_for_each_confined(label, profile,
 			match_mnt_path_str(profile, path, buffer, dev_name,
 					   type, flags, data, binary, NULL));
+	}
+	put_buffers(buffer, dev_buffer);
+	if (dev_path)
+		path_put(dev_path);
+
+	return error;
+}
+
+int aa_new_mount_fc(struct aa_label *label, struct fs_context *fc,
+		    const struct path *mountpoint)
+{
+	struct apparmor_fs_context *afc = fc->security;
+	struct aa_profile *profile;
+	char *buffer = NULL, *dev_buffer = NULL;
+	bool binary;
+	int error;
+	struct path tmp_path, *dev_path = NULL;
+
+	AA_BUG(!label);
+	AA_BUG(!mountpoint);
+
+	binary = fc->fs_type->fs_flags & FS_BINARY_MOUNTDATA;
+
+	if (fc->fs_type->fs_flags & FS_REQUIRES_DEV) {
+		if (!fc->source)
+			return -ENOENT;
+
+		error = kern_path(fc->source, LOOKUP_FOLLOW, &tmp_path);
+		if (error)
+			return error;
+		dev_path = &tmp_path;
+	}
+
+	get_buffers(buffer, dev_buffer);
+	if (dev_path) {
+		error = fn_for_each_confined(label, profile,
+			match_mnt(profile, mountpoint, buffer, dev_path, dev_buffer,
+				  fc->fs_type->name,
+				  fc->sb_flags & ~AA_SB_IGNORE_MASK,
+				  afc->saved_options, binary));
+	} else {
+		error = fn_for_each_confined(label, profile,
+			match_mnt_path_str(profile, mountpoint, buffer,
+					   fc->source, fc->fs_type->name,
+					   fc->sb_flags & ~AA_SB_IGNORE_MASK,
+					   afc->saved_options, binary, NULL));
 	}
 	put_buffers(buffer, dev_buffer);
 	if (dev_path)

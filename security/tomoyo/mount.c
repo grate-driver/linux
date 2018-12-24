@@ -6,6 +6,8 @@
  */
 
 #include <linux/slab.h>
+#include <linux/fs_context.h>
+#include <uapi/linux/mount.h>
 #include "common.h"
 
 /* String table for special mount operations. */
@@ -232,6 +234,50 @@ int tomoyo_mount_permission(const char *dev_name, const struct path *path,
 		type = "<NULL>";
 	idx = tomoyo_read_lock();
 	error = tomoyo_mount_acl(&r, dev_name, path, type, flags);
+	tomoyo_read_unlock(idx);
+	return error;
+}
+
+/**
+ * tomoyo_mount_permission_fc - Check permission to create a new mount.
+ * @fc:		Context describing the object to be mounted.
+ * @mountpoint:	The target object to mount on.
+ * @mnt:	The MNT_* flags to be set on the mountpoint.
+ *
+ * Check the permission to create a mount of the object described in @fc.  Note
+ * that the source object may be a newly created superblock or may be an
+ * existing one picked from the filesystem (bind mount).
+ *
+ * Returns 0 on success, negative value otherwise.
+ */
+int tomoyo_mount_permission_fc(struct fs_context *fc,
+			       const struct path *mountpoint,
+			       unsigned int mnt_flags)
+{
+	struct tomoyo_request_info r;
+	unsigned int ms_flags = 0;
+	int error;
+	int idx;
+
+	if (tomoyo_init_request_info(&r, NULL, TOMOYO_MAC_FILE_MOUNT) ==
+	    TOMOYO_CONFIG_DISABLED)
+		return 0;
+
+	/* Convert MNT_* flags to MS_* equivalents. */
+	if (mnt_flags & MNT_NOSUID)	ms_flags |= MS_NOSUID;
+	if (mnt_flags & MNT_NODEV)	ms_flags |= MS_NODEV;
+	if (mnt_flags & MNT_NOEXEC)	ms_flags |= MS_NOEXEC;
+	if (mnt_flags & MNT_NOATIME)	ms_flags |= MS_NOATIME;
+	if (mnt_flags & MNT_NODIRATIME)	ms_flags |= MS_NODIRATIME;
+	if (mnt_flags & MNT_RELATIME)	ms_flags |= MS_RELATIME;
+	if (mnt_flags & MNT_READONLY)	ms_flags |= MS_RDONLY;
+
+	idx = tomoyo_read_lock();
+	/* TODO: There may be multiple sources; for the moment, just pick the
+	 * first if there is one.
+	 */
+	error = tomoyo_mount_acl(&r, fc->source, mountpoint, fc->fs_type->name,
+				 ms_flags);
 	tomoyo_read_unlock(idx);
 	return error;
 }

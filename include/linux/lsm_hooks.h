@@ -76,6 +76,27 @@
  *	changes on the process such as clearing out non-inheritable signal
  *	state.  This is called immediately after commit_creds().
  *
+ * Security hooks for mount using fs_context.
+ *	[See also Documentation/filesystems/mounting.txt]
+ *
+ * @fs_context_dup:
+ *	Allocate and attach a security structure to sc->security.  This pointer
+ *	is initialised to NULL by the caller.
+ *	@fc indicates the new filesystem context.
+ *	@src_fc indicates the original filesystem context.
+ * @fs_context_parse_param:
+ *	Userspace provided a parameter to configure a superblock.  The LSM may
+ *	reject it with an error and may use it for itself, in which case it
+ *	should return 0; otherwise it should return -ENOPARAM to pass it on to
+ *	the filesystem.
+ *	@fc indicates the filesystem context.
+ *	@param The parameter
+ * @sb_mountpoint:
+ *	Equivalent of sb_mount, but with an fs_context.
+ *	@fc indicates the filesystem context.
+ *	@mountpoint indicates the path on which the mount will take place.
+ *	@mnt_flags indicates the MNT_* flags specified.
+ *
  * Security hooks for filesystem operations.
  *
  * @sb_alloc_security:
@@ -144,6 +165,10 @@
  *	Parse a string of security data filling in the opts structure
  *	@options string containing all mount options known by the LSM
  *	@opts binary data structure usable by the LSM
+ * @move_mount:
+ *	Check permission before a mount is moved.
+ *	@from_path indicates the mount that is going to be moved.
+ *	@to_path indicates the mountpoint that will be mounted upon.
  * @dentry_init_security:
  *	Compute a context for a dentry as the inode is not yet available
  *	since NFSv4 has no label backed by an EA anyway.
@@ -1459,11 +1484,18 @@ union security_list_options {
 	void (*bprm_committing_creds)(struct linux_binprm *bprm);
 	void (*bprm_committed_creds)(struct linux_binprm *bprm);
 
+	int (*fs_context_dup)(struct fs_context *fc, struct fs_context *src_sc);
+	int (*fs_context_parse_param)(struct fs_context *fc, struct fs_parameter *param);
+	int (*fs_context_validate)(struct fs_context *fc);
+	int (*sb_mountpoint)(struct fs_context *fc, struct path *mountpoint,
+			     unsigned int mnt_flags);
+
 	int (*sb_alloc_security)(struct super_block *sb);
 	void (*sb_free_security)(struct super_block *sb);
-	int (*sb_copy_data)(char *orig, char *copy);
-	int (*sb_remount)(struct super_block *sb, void *data);
-	int (*sb_kern_mount)(struct super_block *sb, int flags, void *data);
+	void (*sb_free_mnt_opts)(void *mnt_opts);
+	int (*sb_eat_lsm_opts)(char *orig, void **mnt_opts);
+	int (*sb_remount)(struct super_block *sb, void *mnt_opts);
+	int (*sb_kern_mount)(struct super_block *sb);
 	int (*sb_show_options)(struct seq_file *m, struct super_block *sb);
 	int (*sb_statfs)(struct dentry *dentry);
 	int (*sb_mount)(const char *dev_name, const struct path *path,
@@ -1471,14 +1503,16 @@ union security_list_options {
 	int (*sb_umount)(struct vfsmount *mnt, int flags);
 	int (*sb_pivotroot)(const struct path *old_path, const struct path *new_path);
 	int (*sb_set_mnt_opts)(struct super_block *sb,
-				struct security_mnt_opts *opts,
+				void *mnt_opts,
 				unsigned long kern_flags,
 				unsigned long *set_kern_flags);
 	int (*sb_clone_mnt_opts)(const struct super_block *oldsb,
 					struct super_block *newsb,
 					unsigned long kern_flags,
 					unsigned long *set_kern_flags);
-	int (*sb_parse_opts_str)(char *options, struct security_mnt_opts *opts);
+	int (*sb_add_mnt_opt)(const char *option, const char *val, int len,
+			      void **mnt_opts);
+	int (*move_mount)(const struct path *from_path, const struct path *to_path);
 	int (*dentry_init_security)(struct dentry *dentry, int mode,
 					const struct qstr *name, void **ctx,
 					u32 *ctxlen);
@@ -1798,9 +1832,13 @@ struct security_hook_heads {
 	struct hlist_head bprm_check_security;
 	struct hlist_head bprm_committing_creds;
 	struct hlist_head bprm_committed_creds;
+	struct hlist_head fs_context_dup;
+	struct hlist_head fs_context_parse_param;
+	struct hlist_head sb_mountpoint;
 	struct hlist_head sb_alloc_security;
 	struct hlist_head sb_free_security;
-	struct hlist_head sb_copy_data;
+	struct hlist_head sb_free_mnt_opts;
+	struct hlist_head sb_eat_lsm_opts;
 	struct hlist_head sb_remount;
 	struct hlist_head sb_kern_mount;
 	struct hlist_head sb_show_options;
@@ -1810,7 +1848,8 @@ struct security_hook_heads {
 	struct hlist_head sb_pivotroot;
 	struct hlist_head sb_set_mnt_opts;
 	struct hlist_head sb_clone_mnt_opts;
-	struct hlist_head sb_parse_opts_str;
+	struct hlist_head sb_add_mnt_opt;
+	struct hlist_head move_mount;
 	struct hlist_head dentry_init_security;
 	struct hlist_head dentry_create_files_as;
 #ifdef CONFIG_SECURITY_PATH

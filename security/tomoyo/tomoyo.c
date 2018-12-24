@@ -392,6 +392,20 @@ static int tomoyo_path_chroot(const struct path *path)
 }
 
 /**
+ * tomoyo_sb_mount - Target for security_sb_mountpoint().
+ * @fc:		Context describing the object to be mounted.
+ * @mountpoint:	The target object to mount on.
+ * @mnt_flags:	Mountpoint specific options (as MNT_* flags).
+ *
+ * Returns 0 on success, negative value otherwise.
+ */
+static int tomoyo_sb_mountpoint(struct fs_context *fc, struct path *mountpoint,
+				unsigned int mnt_flags)
+{
+	return tomoyo_mount_permission_fc(fc, mountpoint, mnt_flags);
+}
+
+/**
  * tomoyo_sb_mount - Target for security_sb_mount().
  *
  * @dev_name: Name of device file. Maybe NULL.
@@ -519,6 +533,7 @@ static struct security_hook_list tomoyo_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(path_chmod, tomoyo_path_chmod),
 	LSM_HOOK_INIT(path_chown, tomoyo_path_chown),
 	LSM_HOOK_INIT(path_chroot, tomoyo_path_chroot),
+	LSM_HOOK_INIT(sb_mountpoint, tomoyo_sb_mountpoint),
 	LSM_HOOK_INIT(sb_mount, tomoyo_sb_mount),
 	LSM_HOOK_INIT(sb_umount, tomoyo_sb_umount),
 	LSM_HOOK_INIT(sb_pivotroot, tomoyo_sb_pivotroot),
