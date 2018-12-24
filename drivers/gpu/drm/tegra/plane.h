@@ -92,5 +92,7 @@ bool tegra_plane_format_is_yuv(unsigned int format, bool *planar);
 int tegra_plane_setup_legacy_state(struct tegra_plane *tegra,
 				   struct tegra_plane_state *state);
 int tegra_plane_interconnect_init(struct tegra_plane *plane);
+void tegra_plane_copy_state(struct drm_plane *plane,
+			    struct drm_plane_state *state);
 
 #endif /* TEGRA_PLANE_H */
