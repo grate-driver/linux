@@ -741,6 +741,16 @@ static void pci_bridge_check_ranges(struct pci_bus *bus)
 	struct resource *b_res;
 
 	b_res = &bridge->resource[PCI_BRIDGE_RESOURCES];
+
+	/*
+	 * Don't re-check after this was called once already:
+	 * important since bridge might be in use.
+	 * Note: this is only reliable because as per spec all PCI to PCI
+	 * bridges support memory unconditionally so IORESOURCE_MEM is set.
+	 */
+	if (b_res[1].flags & IORESOURCE_MEM)
+		return;
+
 	b_res[1].flags |= IORESOURCE_MEM;
 
 	pci_read_config_word(bridge, PCI_IO_BASE, &io);
