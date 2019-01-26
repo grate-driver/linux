@@ -13,7 +13,7 @@
 #include <linux/input/matrix_keypad.h>
 #include <linux/mfd/stmpe.h>
 
-/* These are at the same addresses in all STMPE variants */
+/* These are at the same addresses in all STMPE variants, except 1801 */
 #define STMPE_KPC_COL			0x60
 #define STMPE_KPC_ROW_MSB		0x61
 #define STMPE_KPC_ROW_LSB		0x62
@@ -42,14 +42,15 @@
 #define STMPE_KEYPAD_MAX_DEBOUNCE	127
 #define STMPE_KEYPAD_MAX_SCAN_COUNT	15
 
-#define STMPE_KEYPAD_MAX_ROWS		8
-#define STMPE_KEYPAD_MAX_COLS		8
+#define STMPE_KEYPAD_MAX_ROWS		10
+#define STMPE_KEYPAD_MAX_COLS		12
 #define STMPE_KEYPAD_ROW_SHIFT		3
 #define STMPE_KEYPAD_KEYMAP_MAX_SIZE \
 	(STMPE_KEYPAD_MAX_ROWS * STMPE_KEYPAD_MAX_COLS)
 
 
 #define STMPE1601_NUM_DATA	5
+#define STMPE1801_NUM_DATA	5
 #define STMPE2401_NUM_DATA	3
 #define STMPE2403_NUM_DATA	5
 
@@ -67,6 +68,12 @@
  * @max_rows: maximum number of rows supported
  * @col_gpios: bitmask of gpios which can be used for columns
  * @row_gpios: bitmask of gpios which can be used for rows
+ * @col_regs: registers for setting column pins
+ * @row_regs: registers for setting row pins
+ * @data_regs: registers for reading key data
+ * @ctrl_msb_reg: register for setting scan count
+ * @ctrl_lsb_reg: register for setting debounce time
+ * @cmd_reg: register for toggling scan mode
  */
 struct stmpe_keypad_variant {
 	bool		auto_increment;
@@ -77,6 +84,18 @@ struct stmpe_keypad_variant {
 	int		max_rows;
 	unsigned int	col_gpios;
 	unsigned int	row_gpios;
+
+#define MAX_COL_REGS 3
+#define MAX_ROW_REGS 3
+#define MAX_DATA_REGS 5
+
+	u8 col_regs[MAX_COL_REGS];
+	u8 row_regs[MAX_ROW_REGS];
+	u8 data_regs[MAX_DATA_REGS];
+	u8 ctrl_msb_reg;
+	u8 ctrl_lsb_reg;
+	u8 cmd_reg;
+	bool read_inverted;
 };
 
 static const struct stmpe_keypad_variant stmpe_keypad_variants[] = {
@@ -88,6 +107,29 @@ static const struct stmpe_keypad_variant stmpe_keypad_variants[] = {
 		.max_rows		= 8,
 		.col_gpios		= 0x000ff,	/* GPIO 0 - 7 */
 		.row_gpios		= 0x0ff00,	/* GPIO 8 - 15 */
+		.col_regs		= { 0x60 },
+		.row_regs		= { 0x62, 0x61 },
+		.data_regs		= { 0x68, 0x69, 0x6a, 0x6b, 0x6c },
+		.ctrl_msb_reg		= 0x63,
+		.ctrl_lsb_reg		= 0x64,
+		.cmd_reg		= 0x64,
+		.read_inverted		= 0,
+	},
+	[STMPE1801] = {
+		.auto_increment		= true,
+		.num_data		= STMPE1801_NUM_DATA,
+		.num_normal_data	= 3,
+		.max_cols		= 10,
+		.max_rows		= 8,
+		.col_gpios		= 0x3ff00,	/* GPIO 8 - 17 */
+		.row_gpios		= 0x000ff,	/* GPIO 0 - 7 */
+		.col_regs		= { 0x31, 0x32 },
+		.row_regs		= { 0x30 },
+		.data_regs		= { 0x3a, 0x3b, 0x3c, 0x3d, 0x3e },
+		.ctrl_msb_reg		= 0x33,
+		.ctrl_lsb_reg		= 0x34,
+		.cmd_reg		= 0x36,
+		.read_inverted		= 1,
 	},
 	[STMPE2401] = {
 		.auto_increment		= false,
@@ -98,6 +140,13 @@ static const struct stmpe_keypad_variant stmpe_keypad_variants[] = {
 		.max_rows		= 12,
 		.col_gpios		= 0x0000ff,	/* GPIO 0 - 7*/
 		.row_gpios		= 0x1f7f00,	/* GPIO 8-14, 16-20 */
+		.col_regs		= { 0x60 },
+		.row_regs		= { 0x62, 0x61 },
+		.data_regs		= { 0x68, 0x69, 0x6a, 0x6b, 0x6c },
+		.ctrl_msb_reg		= 0x63,
+		.ctrl_lsb_reg		= 0x64,
+		.cmd_reg		= 0x64,
+		.read_inverted		= 0,
 	},
 	[STMPE2403] = {
 		.auto_increment		= true,
@@ -108,6 +157,13 @@ static const struct stmpe_keypad_variant stmpe_keypad_variants[] = {
 		.max_rows		= 12,
 		.col_gpios		= 0x0000ff,	/* GPIO 0 - 7*/
 		.row_gpios		= 0x1fef00,	/* GPIO 8-14, 16-20 */
+		.col_regs		= { 0x60 },
+		.row_regs		= { 0x62, 0x61 },
+		.data_regs		= { 0x68, 0x69, 0x6a, 0x6b, 0x6c },
+		.ctrl_msb_reg		= 0x63,
+		.ctrl_lsb_reg		= 0x64,
+		.cmd_reg		= 0x64,
+		.read_inverted		= 0,
 	},
 };
 
@@ -145,11 +201,11 @@ static int stmpe_keypad_read_data(struct stmpe_keypad *keypad, u8 *data)
 	int i;
 
 	if (variant->auto_increment)
-		return stmpe_block_read(stmpe, STMPE_KPC_DATA_BYTE0,
+		return stmpe_block_read(stmpe, variant->data_regs[0],
 					variant->num_data, data);
 
 	for (i = 0; i < variant->num_data; i++) {
-		ret = stmpe_reg_read(stmpe, STMPE_KPC_DATA_BYTE0 + i);
+		ret = stmpe_reg_read(stmpe, variant->data_regs[i]);
 		if (ret < 0)
 			return ret;
 
@@ -176,7 +232,9 @@ static irqreturn_t stmpe_keypad_irq(int irq, void *dev)
 		u8 data = fifo[i];
 		int row = (data & STMPE_KPC_DATA_ROW) >> 3;
 		int col = data & STMPE_KPC_DATA_COL;
-		int code = MATRIX_SCAN_CODE(row, col, STMPE_KEYPAD_ROW_SHIFT);
+		int code = variant->read_inverted ?
+			MATRIX_SCAN_CODE(col, row, STMPE_KEYPAD_ROW_SHIFT):
+			MATRIX_SCAN_CODE(row, col, STMPE_KEYPAD_ROW_SHIFT);
 		bool up = data & STMPE_KPC_DATA_UP;
 
 		if ((data & STMPE_KPC_DATA_NOKEY_MASK)
@@ -265,7 +323,7 @@ static int stmpe_keypad_chip_init(struct stmpe_keypad *keypad)
 {
 	const struct stmpe_keypad_variant *variant = keypad->variant;
 	struct stmpe *stmpe = keypad->stmpe;
-	int ret;
+	int ret, val, i;
 
 	if (keypad->debounce_ms > STMPE_KEYPAD_MAX_DEBOUNCE)
 		return -EINVAL;
@@ -281,33 +339,37 @@ static int stmpe_keypad_chip_init(struct stmpe_keypad *keypad)
 	if (ret < 0)
 		return ret;
 
-	ret = stmpe_reg_write(stmpe, STMPE_KPC_COL, keypad->cols);
-	if (ret < 0)
-		return ret;
-
-	ret = stmpe_reg_write(stmpe, STMPE_KPC_ROW_LSB, keypad->rows);
-	if (ret < 0)
-		return ret;
-
-	if (variant->max_rows > 8) {
-		ret = stmpe_set_bits(stmpe, STMPE_KPC_ROW_MSB,
-				     STMPE_KPC_ROW_MSB_ROWS,
-				     keypad->rows >> 8);
+	val = keypad->cols;
+	i = 0;
+	do {
+		ret = stmpe_reg_write(stmpe, variant->col_regs[i++], val & 0xff);
 		if (ret < 0)
 			return ret;
-	}
+	} while ((val >>= 8) != 0);
 
-	ret = stmpe_set_bits(stmpe, STMPE_KPC_CTRL_MSB,
+	val = keypad->rows;
+	i = 0;
+	do {
+		ret = stmpe_reg_write(stmpe, variant->row_regs[i++], val & 0xff);
+		if (ret < 0)
+			return ret;
+	} while ((val >>= 8) != 0);
+
+	ret = stmpe_set_bits(stmpe, variant->ctrl_msb_reg,
 			     STMPE_KPC_CTRL_MSB_SCAN_COUNT,
 			     keypad->scan_count << 4);
 	if (ret < 0)
 		return ret;
 
-	return stmpe_set_bits(stmpe, STMPE_KPC_CTRL_LSB,
-			      STMPE_KPC_CTRL_LSB_SCAN |
+	ret = stmpe_set_bits(stmpe, variant->ctrl_lsb_reg,
 			      STMPE_KPC_CTRL_LSB_DEBOUNCE,
-			      STMPE_KPC_CTRL_LSB_SCAN |
 			      (keypad->debounce_ms << 1));
+	if (ret < 0)
+		return ret;
+
+	return stmpe_set_bits(stmpe, variant->cmd_reg,
+			      STMPE_KPC_CTRL_LSB_SCAN,
+			      STMPE_KPC_CTRL_LSB_SCAN);
 }
 
 static void stmpe_keypad_fill_used_pins(struct stmpe_keypad *keypad,
