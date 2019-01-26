@@ -31,7 +31,7 @@ struct reg_entry {
 	unsigned long value;
 };
 
-static const struct reg_entry rgb_enable[] = {
+static struct reg_entry rgb_enable[] = {
 	{ DC_COM_PIN_OUTPUT_ENABLE(0),   0x00000000 },
 	{ DC_COM_PIN_OUTPUT_ENABLE(1),   0x00000000 },
 	{ DC_COM_PIN_OUTPUT_ENABLE(2),   0x00000000 },
@@ -100,6 +100,15 @@ static void tegra_rgb_encoder_enable(struct drm_encoder *encoder)
 	struct tegra_rgb *rgb = to_rgb(output);
 	u32 value;
 
+	/*
+	 * Temporal hack for S6E63M0
+	 *
+	 * Pins DATA_ENABLE, H_SYNC, V_SYNC, PIXEL_CLOCK are low polarity,
+	 * set this in the registers to make the panel working.
+	 */
+	if (of_machine_is_compatible("samsung,i927"))
+		rgb_enable[7].value = 0x00000100;
+
 	tegra_dc_write_regs(rgb->dc, rgb_enable, ARRAY_SIZE(rgb_enable));
 
 	value = DE_SELECT_ACTIVE | DE_CONTROL_NORMAL;
@@ -109,6 +118,10 @@ static void tegra_rgb_encoder_enable(struct drm_encoder *encoder)
 	value = tegra_dc_readl(rgb->dc, DC_COM_PIN_OUTPUT_POLARITY(1));
 	value &= ~LVS_OUTPUT_POLARITY_LOW;
 	value &= ~LHS_OUTPUT_POLARITY_LOW;
+	if (of_machine_is_compatible("samsung,i927")) {
+		value |= LVS_OUTPUT_POLARITY_LOW;
+		value |= LHS_OUTPUT_POLARITY_LOW;
+	}
 	tegra_dc_writel(rgb->dc, value, DC_COM_PIN_OUTPUT_POLARITY(1));
 
 	/* XXX: parameterize? */
