@@ -423,7 +423,7 @@ static void s6e63m0_init(struct s6e63m0 *ctx)
 	s6e63m0_dcs_write_seq_static(ctx, MCS_DISCTL,
 				     0x02, 0x03, 0x1c, 0x10, 0x10);
 	s6e63m0_dcs_write_seq_static(ctx, MCS_IFCTL,
-				     0x03, 0x00, 0x00);
+				     0x00, 0x00, 0x00);
 
 	s6e63m0_dcs_write_seq_static(ctx, MCS_PGAMMACTL,
 				     0x00, 0x18, 0x08, 0x24, 0x64, 0x56, 0x33,
