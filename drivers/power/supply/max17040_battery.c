@@ -348,6 +348,7 @@ static int max17040_probe(struct i2c_client *client,
 
 	max17040_reset(client);
 	max17040_get_version(client);
+	max17040_write_reg(client, MAX17040_RCOMP, 0xff00);
 
 	/* check interrupt */
 	if (client->irq && of_device_is_compatible(client->dev.of_node,
