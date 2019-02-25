@@ -391,7 +391,17 @@ struct mmc_host *mmc_alloc_host(int extra, struct device *dev)
 	/* scanning will be enabled when we're ready */
 	host->rescan_disable = 1;
 
-	err = ida_simple_get(&mmc_host_ida, 0, 0, GFP_KERNEL);
+	err = of_alias_get_id(dev->of_node, "mmc");
+	if (err >= 0)
+		err = ida_alloc_range(&mmc_host_ida, err, err, GFP_KERNEL);
+	if (err < 0) {
+		err = of_alias_get_highest_id("mmc");
+		if (err < 0)
+			err = 0;
+		else
+			++err;
+		err = ida_alloc_min(&mmc_host_ida, err, GFP_KERNEL);
+	}
 	if (err < 0) {
 		kfree(host);
 		return NULL;
