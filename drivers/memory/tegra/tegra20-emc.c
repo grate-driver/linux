@@ -837,6 +837,9 @@ static int tegra_emc_probe(struct platform_device *pdev)
 				err);
 	}
 
+	if (IS_ENABLED(CONFIG_ARM_TEGRA20_DEVFREQ))
+		platform_device_register_simple("tegra20-devfreq", -1, NULL, 0);
+
 	return 0;
 
 unset_cb:
