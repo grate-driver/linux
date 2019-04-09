@@ -704,7 +704,7 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 						 NULL);
 	if (IS_ERR(tegra->devfreq)) {
 		err = PTR_ERR(tegra->devfreq);
-		return err;
+		goto remove_opps;
 	}
 
 	tegra->rate_change_nb.notifier_call = tegra_actmon_rate_notify_cb;
@@ -712,10 +712,15 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 	if (err) {
 		dev_err(&pdev->dev,
 			"Failed to register rate change notifier\n");
-		return err;
+		goto remove_opps;
 	}
 
 	return 0;
+
+remove_opps:
+	dev_pm_opp_remove_table(&pdev->dev);
+
+	return err;
 }
 
 static int tegra_devfreq_remove(struct platform_device *pdev)
@@ -724,6 +729,9 @@ static int tegra_devfreq_remove(struct platform_device *pdev)
 	int irq = platform_get_irq(pdev, 0);
 	u32 val;
 	unsigned int i;
+
+	devm_devfreq_remove_device(&pdev->dev, tegra->devfreq);
+	dev_pm_opp_remove_table(&pdev->dev);
 
 	for (i = 0; i < ARRAY_SIZE(actmon_device_configs); i++) {
 		val = device_readl(&tegra->devices[i], ACTMON_DEV_CTRL);
