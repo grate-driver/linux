@@ -710,6 +710,10 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 						 &tegra_devfreq_profile,
 						 "tegra_actmon",
 						 NULL);
+	if (IS_ERR(tegra->devfreq)) {
+		err = PTR_ERR(tegra->devfreq);
+		return err;
+	}
 
 	return 0;
 }
