@@ -171,6 +171,8 @@ struct tegra_devfreq {
 	struct notifier_block	rate_change_nb;
 
 	struct tegra_devfreq_device devices[ARRAY_SIZE(actmon_device_configs)];
+
+	int irq;
 };
 
 struct tegra_actmon_emc_ratio {
@@ -432,6 +434,8 @@ static void tegra_actmon_disable_interrupts(struct tegra_devfreq *tegra)
 	}
 
 	actmon_write_barrier(tegra);
+
+	synchronize_irq(tegra->irq);
 }
 
 static void tegra_actmon_configure_device(struct tegra_devfreq *tegra,
@@ -606,7 +610,6 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 	struct resource *res;
 	unsigned int i;
 	unsigned long rate;
-	int irq;
 	int err;
 
 	tegra = devm_kzalloc(&pdev->dev, sizeof(*tegra), GFP_KERNEL);
@@ -662,16 +665,16 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 		tegra_actmon_configure_device(tegra, dev);
 	}
 
+	tegra->irq = platform_get_irq(pdev, 0);
+	if (tegra->irq < 0) {
+		err = tegra->irq;
+		dev_err(&pdev->dev, "Failed to get IRQ: %d\n", err);
+		return err;
+	}
+
 	for (rate = 0; rate <= tegra->max_freq * KHZ; rate++) {
 		rate = clk_round_rate(tegra->emc_clock, rate);
 		dev_pm_opp_add(&pdev->dev, rate, 0);
-	}
-
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		err = irq;
-		dev_err(&pdev->dev, "Failed to get IRQ: %d\n", err);
-		goto remove_opps;
 	}
 
 	platform_set_drvdata(pdev, tegra);
@@ -692,10 +695,11 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 		goto remove_governor;
 	}
 
-	err = request_threaded_irq(irq, NULL, actmon_thread_isr, IRQF_ONESHOT,
-				   "tegra-devfreq", tegra);
+	err = devm_request_threaded_irq(&pdev->dev, tegra->irq, NULL,
+					actmon_thread_isr, IRQF_ONESHOT,
+					"tegra-devfreq", tegra);
 	if (err) {
-		dev_err(&pdev->dev, "Interrupt request failed\n");
+		dev_err(&pdev->dev, "Interrupt request failed: %d\n", err);
 		goto remove_devfreq;
 	}
 
@@ -704,13 +708,10 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 	if (err) {
 		dev_err(&pdev->dev,
 			"Failed to register rate change notifier\n");
-		goto disable_interrupt;
+		goto remove_devfreq;
 	}
 
 	return 0;
-
-disable_interrupt:
-	free_irq(irq, tegra);
 
 remove_devfreq:
 	devfreq_remove_device(tegra->devfreq);
@@ -730,10 +731,8 @@ remove_opps:
 static int tegra_devfreq_remove(struct platform_device *pdev)
 {
 	struct tegra_devfreq *tegra = platform_get_drvdata(pdev);
-	int irq = platform_get_irq(pdev, 0);
 
 	clk_notifier_unregister(tegra->emc_clock, &tegra->rate_change_nb);
-	free_irq(irq, tegra);
 
 	devfreq_remove_device(tegra->devfreq);
 	dev_pm_opp_remove_table(&pdev->dev);
