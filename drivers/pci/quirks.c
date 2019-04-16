@@ -2984,23 +2984,27 @@ static void __nv_msi_ht_cap_quirk(struct pci_dev *dev, int all)
 	 */
 	host_bridge = pci_get_domain_bus_and_slot(pci_domain_nr(dev->bus), 0,
 						  PCI_DEVFN(0, 0));
-	if (host_bridge == NULL) {
-		pci_warn(dev, "nv_msi_ht_cap_quirk didn't locate host bridge\n");
-		return;
+	if (host_bridge) {
+		pos = pci_find_ht_capability(host_bridge, HT_CAPTYPE_SLAVE);
+		if (pos != 0) {
+			/* Host bridge is to HT */
+			if (found == 1) {
+				/* it is not enabled, try to enable it */
+				if (all)
+					ht_enable_msi_mapping(dev);
+				else
+					nv_ht_enable_msi_mapping(dev);
+			}
+			goto out;
+		}
 	}
 
-	pos = pci_find_ht_capability(host_bridge, HT_CAPTYPE_SLAVE);
-	if (pos != 0) {
-		/* Host bridge is to HT */
-		if (found == 1) {
-			/* it is not enabled, try to enable it */
-			if (all)
-				ht_enable_msi_mapping(dev);
-			else
-				nv_ht_enable_msi_mapping(dev);
-		}
-		goto out;
-	}
+	/*
+	 * Some systems, such as embedded devices, may not expose the host
+	 * bridge's configuration space. Assume such systems to not support
+	 * HyperTransport and disable the HT MSI mapping capability for all
+	 * devices.
+	 */
 
 	/* HT MSI is not enabled */
 	if (found == 1)
