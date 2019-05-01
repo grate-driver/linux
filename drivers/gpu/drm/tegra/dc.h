@@ -15,6 +15,8 @@
 
 struct tegra_output;
 
+#define TEGRA_DC_LEGACY_PLANES_NUM	6
+
 struct tegra_dc_state {
 	struct drm_crtc_state base;
 
@@ -23,6 +25,8 @@ struct tegra_dc_state {
 	unsigned int div;
 
 	u32 planes;
+
+	unsigned long plane_peak_bw[TEGRA_DC_LEGACY_PLANES_NUM];
 };
 
 static inline struct tegra_dc_state *to_dc_state(struct drm_crtc_state *state)
@@ -31,6 +35,12 @@ static inline struct tegra_dc_state *to_dc_state(struct drm_crtc_state *state)
 		return container_of(state, struct tegra_dc_state, base);
 
 	return NULL;
+}
+
+static inline const struct tegra_dc_state *
+to_const_dc_state(const struct drm_crtc_state *state)
+{
+	return to_dc_state((struct drm_crtc_state *)state);
 }
 
 struct tegra_dc_stats {
@@ -65,7 +75,9 @@ struct tegra_dc_soc_info {
 	unsigned int num_overlay_formats;
 	const u64 *modifiers;
 	bool has_win_a_without_filters;
+	bool has_win_b_vfilter_mem_client;
 	bool has_win_c_without_vert_filter;
+	unsigned int plane_tiled_memory_bandwidth_x2;
 };
 
 struct tegra_dc {
@@ -151,6 +163,8 @@ int tegra_dc_state_setup_clock(struct tegra_dc *dc,
 			       struct drm_crtc_state *crtc_state,
 			       struct clk *clk, unsigned long pclk,
 			       unsigned int div);
+void tegra_crtc_atomic_post_commit(struct drm_crtc *crtc,
+				   struct drm_atomic_state *state);
 
 /* from rgb.c */
 int tegra_dc_rgb_probe(struct tegra_dc *dc);
