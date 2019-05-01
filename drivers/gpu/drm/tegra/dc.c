@@ -7,12 +7,14 @@
 #include <linux/clk.h>
 #include <linux/debugfs.h>
 #include <linux/delay.h>
+#include <linux/interconnect.h>
 #include <linux/iommu.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
 
+#include <soc/tegra/mc.h>
 #include <soc/tegra/pmc.h>
 
 #include <drm/drm_atomic.h>
@@ -617,8 +619,10 @@ static int tegra_plane_atomic_check(struct drm_plane *plane,
 	int err;
 
 	/* no need for further checks if the plane is being disabled */
-	if (!state->crtc)
+	if (!state->crtc) {
+		plane_state->memory_bandwidth = 0;
 		return 0;
+	}
 
 	err = tegra_plane_format(state->fb->format->format,
 				 &plane_state->format,
@@ -684,6 +688,12 @@ static int tegra_plane_atomic_check(struct drm_plane *plane,
 	err = tegra_plane_state_add(tegra, state);
 	if (err < 0)
 		return err;
+
+	/*
+	 * Note that plane must be checked first in order to get visibility
+	 * status. It's done by the tegra_plane_state_add() above.
+	 */
+	plane_state->memory_bandwidth = tegra_plane_memory_bandwidth(state);
 
 	return 0;
 }
@@ -801,6 +811,12 @@ static struct drm_plane *tegra_primary_plane_create(struct drm_device *drm,
 	num_formats = dc->soc->num_primary_formats;
 	formats = dc->soc->primary_formats;
 	modifiers = dc->soc->modifiers;
+
+	err = tegra_plane_interconnect_init(plane);
+	if (err) {
+		kfree(plane);
+		return ERR_PTR(err);
+	}
 
 	err = drm_universal_plane_init(drm, &plane->base, possible_crtcs,
 				       &tegra_plane_funcs, formats,
@@ -973,6 +989,12 @@ static struct drm_plane *tegra_dc_cursor_plane_create(struct drm_device *drm,
 	num_formats = ARRAY_SIZE(tegra_cursor_plane_formats);
 	formats = tegra_cursor_plane_formats;
 
+	err = tegra_plane_interconnect_init(plane);
+	if (err) {
+		kfree(plane);
+		return ERR_PTR(err);
+	}
+
 	err = drm_universal_plane_init(drm, &plane->base, possible_crtcs,
 				       &tegra_plane_funcs, formats,
 				       num_formats, NULL,
@@ -1086,6 +1108,12 @@ static struct drm_plane *tegra_dc_overlay_plane_create(struct drm_device *drm,
 
 	num_formats = dc->soc->num_overlay_formats;
 	formats = dc->soc->overlay_formats;
+
+	err = tegra_plane_interconnect_init(plane);
+	if (err) {
+		kfree(plane);
+		return ERR_PTR(err);
+	}
 
 	if (!cursor)
 		type = DRM_PLANE_TYPE_OVERLAY;
@@ -1204,6 +1232,7 @@ tegra_crtc_atomic_duplicate_state(struct drm_crtc *crtc)
 {
 	struct tegra_dc_state *state = to_dc_state(crtc->state);
 	struct tegra_dc_state *copy;
+	unsigned int i;
 
 	copy = kmalloc(sizeof(*copy), GFP_KERNEL);
 	if (!copy)
@@ -1214,6 +1243,10 @@ tegra_crtc_atomic_duplicate_state(struct drm_crtc *crtc)
 	copy->pclk = state->pclk;
 	copy->div = state->div;
 	copy->planes = state->planes;
+	copy->plane_bw_aggregation_mask = state->plane_bw_aggregation_mask;
+
+	for (i = 0; i < ARRAY_SIZE(state->plane_peak_bw); i++)
+		copy->plane_peak_bw[i] = state->plane_peak_bw[i];
 
 	return &copy->base;
 }
@@ -1917,10 +1950,93 @@ static void tegra_crtc_atomic_enable(struct drm_crtc *crtc,
 	drm_crtc_vblank_on(crtc);
 }
 
+static void
+tegra_crtc_update_memory_bandwidth(struct drm_crtc *crtc,
+				   struct drm_crtc_state *old_crtc_state,
+				   bool prepare_bandwidth_transition)
+{
+	const struct tegra_plane_state *old_tegra_state, *new_tegra_state;
+	const struct drm_plane_state *old_plane_state, *new_plane_state;
+	struct tegra_dc_state *old_dc_state, *new_dc_state;
+	struct tegra_dc *dc = to_tegra_dc(crtc);
+	struct drm_crtc_state *old_state;
+	u64 avg_bw, old_avg_bw, peak_bw;
+	struct tegra_plane *tegra;
+	struct drm_plane *plane;
+	unsigned int i, mask;
+
+	if (dc->soc->has_nvdisplay)
+		return;
+
+	old_state = drm_atomic_get_old_crtc_state(old_crtc_state->state, crtc);
+	old_dc_state = to_dc_state(old_state);
+	new_dc_state = to_dc_state(crtc->state);
+
+	for_each_oldnew_plane_in_state(old_crtc_state->state, plane,
+				       old_plane_state, new_plane_state, i) {
+		old_tegra_state = to_tegra_plane_state(old_plane_state);
+		new_tegra_state = to_tegra_plane_state(new_plane_state);
+		tegra = to_tegra_plane(plane);
+		mask = BIT(tegra->index);
+
+		/*
+		 * We're iterating over the global atomic state and it contains
+		 * planes from another CRTC, hence we need to filter out the
+		 * planes unrelated to this CRTC.
+		 */
+		if (tegra->dc != dc)
+			continue;
+
+		/* skip unchanged bandwidths */
+		if (old_tegra_state->memory_bandwidth ==
+		    new_tegra_state->memory_bandwidth) {
+			if ((old_dc_state->plane_bw_aggregation_mask & mask) ==
+			    (new_dc_state->plane_bw_aggregation_mask & mask))
+				continue;
+		}
+
+		if (new_dc_state->plane_bw_aggregation_mask & mask)
+			avg_bw = new_tegra_state->memory_bandwidth;
+		else
+			avg_bw = 0;
+
+		if (old_dc_state->plane_bw_aggregation_mask & mask)
+			old_avg_bw = old_tegra_state->memory_bandwidth;
+		else
+			old_avg_bw = 0;
+
+		/*
+		 * During the preparation phase, the memory freq should to go
+		 * high before the DC changes are committed if bandwidth
+		 * requirement goes up, otherwise memory freq should to stay
+		 * high if BW requirement goes down. The opposite applies to
+		 * the completion phase.
+		 */
+		if (prepare_bandwidth_transition) {
+			avg_bw = max(old_avg_bw, avg_bw);
+
+			peak_bw = max(old_dc_state->plane_peak_bw[tegra->index],
+				      new_dc_state->plane_peak_bw[tegra->index]);
+		} else {
+			peak_bw = new_dc_state->plane_peak_bw[tegra->index];
+		}
+
+		/*
+		 * Update interconnect tag, which tells whether plane bandwidth
+		 * contributes to the total memory bandwidth, and then update
+		 * the interconnect bandwidth.
+		 */
+		icc_set_bw(tegra->icc_mem, avg_bw, peak_bw);
+		icc_set_bw(tegra->icc_mem_vfilter, 0, peak_bw);
+	}
+}
+
 static void tegra_crtc_atomic_begin(struct drm_crtc *crtc,
 				    struct drm_crtc_state *old_crtc_state)
 {
 	unsigned long flags;
+
+	tegra_crtc_update_memory_bandwidth(crtc, old_crtc_state, true);
 
 	if (crtc->state->event) {
 		spin_lock_irqsave(&crtc->dev->event_lock, flags);
@@ -1952,7 +2068,139 @@ static void tegra_crtc_atomic_flush(struct drm_crtc *crtc,
 	value = tegra_dc_readl(dc, DC_CMD_STATE_CONTROL);
 }
 
+static unsigned int
+tegra_plane_overlap_mask(struct drm_crtc_state *state,
+			 const struct drm_plane_state *plane_state)
+{
+	const struct drm_plane_state *other_state;
+	const struct tegra_plane *tegra;
+	unsigned int overlap_mask = 0;
+	struct drm_plane *plane;
+	struct drm_rect rect;
+
+	if (!plane_state->visible || !plane_state->fb)
+		return 0;
+
+	drm_atomic_crtc_state_for_each_plane_state(plane, other_state, state) {
+		rect = plane_state->dst;
+
+		tegra = to_tegra_plane(other_state->plane);
+
+		if (!other_state->visible || !other_state->fb)
+			continue;
+
+		if (drm_rect_intersect(&rect, &other_state->dst))
+			overlap_mask |= BIT(tegra->index);
+	}
+
+	return overlap_mask;
+}
+
+static int tegra_crtc_atomic_check(struct drm_crtc *crtc,
+				   struct drm_crtc_state *state)
+{
+	unsigned long i, k, peak_bw_plane_idx = 0, overlap_mask[3] = {};
+	unsigned long long overlap_bw, peak_bw = 0, plane_bw[3] = {};
+	struct tegra_dc_state *dc_state = to_dc_state(state);
+	bool all_planes_overlap_simultaneously = true;
+	const struct tegra_plane_state *tegra_state;
+	const struct drm_plane_state *plane_state;
+	struct tegra_dc *dc = to_tegra_dc(crtc);
+	struct tegra_plane *tegra;
+	struct drm_plane *plane;
+	unsigned long mask;
+
+	/*
+	 * The nv-display uses shared planes. The algorithm below assumes
+	 * maximum 3 planes per-CRTC, this assumption isn't applicable to
+	 * the nv-display.
+	 */
+	if (dc->soc->has_nvdisplay)
+		return 0;
+
+	/*
+	 * For overlapping planes pixel's data is fetched for each plane at
+	 * the same time, hence bandwidths are accumulated in this case.
+	 * This needs to be taken into account for calculating total bandwidth
+	 * consumed by all planes.
+	 *
+	 * Here we get the overlapping state of each plane, which is a
+	 * bitmask of plane indices that tells with what planes there is an
+	 * overlap.
+	 */
+	drm_atomic_crtc_state_for_each_plane_state(plane, plane_state, state) {
+		tegra_state = to_tegra_plane_state(plane_state);
+		tegra = to_tegra_plane(plane);
+
+		plane_bw[tegra->index] = tegra_state->memory_bandwidth;
+		mask = tegra_plane_overlap_mask(state, plane_state);
+		overlap_mask[tegra->index] = mask;
+
+		if (hweight_long(mask) != 3)
+			all_planes_overlap_simultaneously = false;
+	}
+
+	/*
+	 * Then we calculate maximum bandwidth of each plane state.
+	 * The bandwidth includes the plane BW + BW of the "simultaneously"
+	 * overlapping planes, where "simultaneously" means areas where DC
+	 * fetches from the planes simultaneously during of scan-out process.
+	 *
+	 * For example, if plane A overlaps with planes B and C, but B and C
+	 * don't overlap, then the peak bandwidth will be either in area where
+	 * A-and-B or A-and-C planes overlap.
+	 *
+	 * Once we know plane's peak bandwidth, we select plane which has
+	 * highest bandwidth requirement and set up the DC's plane_peak_bw[].
+	 *
+	 * The plane_peak_bw[] contains the peak memory bandwidth value for
+	 * each plane, this information is needed by interconnect provider
+	 * in order to set up latency allowness based on the peak BW, see
+	 * tegra_crtc_update_memory_bandwidth().
+	 */
+	for (i = 0; i < 3; i++) {
+		overlap_bw = 0;
+
+		for_each_set_bit(k, &overlap_mask[i], 3) {
+			if (k == i)
+				continue;
+
+			if (all_planes_overlap_simultaneously)
+				overlap_bw += plane_bw[k];
+			else
+				overlap_bw = max(overlap_bw, plane_bw[k]);
+		}
+
+		dc_state->plane_peak_bw[i] = plane_bw[i] + overlap_bw;
+
+		if (dc_state->plane_peak_bw[i] > peak_bw) {
+			peak_bw = dc_state->plane_peak_bw[i];
+			peak_bw_plane_idx = i;
+		}
+	}
+
+	/*
+	 * Finally, we set up the plane_bw_aggregate_mask which tells what
+	 * planes should accumulate the total bandwidth.  For example, if
+	 * there are two non-overlapping active planes, then only the plane
+	 * with the highest bandwidth will contribute to the total consumed
+	 * memory bandwidth.  This information is needed for the interconnect
+	 * provider in order to convey what bandwidths contribute to the total
+	 * consumed memory bandwidth, and thus, need to be accounted
+	 */
+	dc_state->plane_bw_aggregation_mask = overlap_mask[peak_bw_plane_idx];
+
+	return 0;
+}
+
+void tegra_crtc_atomic_post_commit(struct drm_crtc *crtc,
+				   struct drm_crtc_state *old_crtc_state)
+{
+	tegra_crtc_update_memory_bandwidth(crtc, old_crtc_state, false);
+}
+
 static const struct drm_crtc_helper_funcs tegra_crtc_helper_funcs = {
+	.atomic_check = tegra_crtc_atomic_check,
 	.atomic_begin = tegra_crtc_atomic_begin,
 	.atomic_flush = tegra_crtc_atomic_flush,
 	.atomic_enable = tegra_crtc_atomic_enable,
@@ -2244,6 +2492,9 @@ static const struct tegra_dc_soc_info tegra20_dc_soc_info = {
 	.modifiers = tegra20_modifiers,
 	.has_win_a_without_filters = true,
 	.has_win_c_without_vert_filter = true,
+	.plane_memory_bandwidth_num = 29,
+	.plane_memory_bandwidth_denum = 10,
+	.plane_memory_bandwidth_tiling_x2 = false,
 };
 
 static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
@@ -2263,6 +2514,9 @@ static const struct tegra_dc_soc_info tegra30_dc_soc_info = {
 	.modifiers = tegra20_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.plane_memory_bandwidth_num = 12,
+	.plane_memory_bandwidth_denum = 10,
+	.plane_memory_bandwidth_tiling_x2 = true,
 };
 
 static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
@@ -2282,6 +2536,9 @@ static const struct tegra_dc_soc_info tegra114_dc_soc_info = {
 	.modifiers = tegra20_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.plane_memory_bandwidth_num = 12,
+	.plane_memory_bandwidth_denum = 10,
+	.plane_memory_bandwidth_tiling_x2 = true,
 };
 
 static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
@@ -2301,6 +2558,9 @@ static const struct tegra_dc_soc_info tegra124_dc_soc_info = {
 	.modifiers = tegra124_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.plane_memory_bandwidth_num = 12,
+	.plane_memory_bandwidth_denum = 10,
+	.plane_memory_bandwidth_tiling_x2 = false,
 };
 
 static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
@@ -2320,6 +2580,9 @@ static const struct tegra_dc_soc_info tegra210_dc_soc_info = {
 	.modifiers = tegra124_modifiers,
 	.has_win_a_without_filters = false,
 	.has_win_c_without_vert_filter = false,
+	.plane_memory_bandwidth_num = 12,
+	.plane_memory_bandwidth_denum = 10,
+	.plane_memory_bandwidth_tiling_x2 = false,
 };
 
 static const struct tegra_windowgroup_soc tegra186_dc_wgrps[] = {
@@ -2368,6 +2631,9 @@ static const struct tegra_dc_soc_info tegra186_dc_soc_info = {
 	.has_nvdisplay = true,
 	.wgrps = tegra186_dc_wgrps,
 	.num_wgrps = ARRAY_SIZE(tegra186_dc_wgrps),
+	.plane_memory_bandwidth_num = 12,
+	.plane_memory_bandwidth_denum = 10,
+	.plane_memory_bandwidth_tiling_x2 = false,
 };
 
 static const struct tegra_windowgroup_soc tegra194_dc_wgrps[] = {
@@ -2416,6 +2682,9 @@ static const struct tegra_dc_soc_info tegra194_dc_soc_info = {
 	.has_nvdisplay = true,
 	.wgrps = tegra194_dc_wgrps,
 	.num_wgrps = ARRAY_SIZE(tegra194_dc_wgrps),
+	.plane_memory_bandwidth_num = 12,
+	.plane_memory_bandwidth_denum = 10,
+	.plane_memory_bandwidth_tiling_x2 = false,
 };
 
 static const struct of_device_id tegra_dc_of_match[] = {
@@ -2522,6 +2791,7 @@ static int tegra_dc_couple(struct tegra_dc *dc)
 
 static int tegra_dc_probe(struct platform_device *pdev)
 {
+	const char *level = KERN_ERR;
 	struct tegra_dc *dc;
 	int err;
 
@@ -2588,8 +2858,6 @@ static int tegra_dc_probe(struct platform_device *pdev)
 
 	err = tegra_dc_rgb_probe(dc);
 	if (err < 0 && err != -ENODEV) {
-		const char *level = KERN_ERR;
-
 		if (err == -EPROBE_DEFER)
 			level = KERN_DEBUG;
 
