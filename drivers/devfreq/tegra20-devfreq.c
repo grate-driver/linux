@@ -149,10 +149,10 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 
 	tegra->regs = mc->regs;
 
-	max_rate = clk_round_rate(tegra->emc_clock, ULONG_MAX);
+	max_rate = clk_round_rate_unboundly(tegra->emc_clock, ULONG_MAX);
 
 	for (rate = 0; rate <= max_rate; rate++) {
-		rate = clk_round_rate(tegra->emc_clock, rate);
+		rate = clk_round_rate_unboundly(tegra->emc_clock, rate);
 
 		err = dev_pm_opp_add(&pdev->dev, rate, 0);
 		if (err) {
