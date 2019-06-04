@@ -1412,16 +1412,7 @@ unsigned long clk_hw_round_rate(struct clk_hw *hw, unsigned long rate)
 }
 EXPORT_SYMBOL_GPL(clk_hw_round_rate);
 
-/**
- * clk_round_rate - round the given rate for a clk
- * @clk: the clk for which we are rounding a rate
- * @rate: the rate which is to be rounded
- *
- * Takes in a rate as input and rounds it to a rate that the clk can actually
- * use which is then returned.  If clk doesn't support round_rate operation
- * then the parent rate is returned.
- */
-long clk_round_rate(struct clk *clk, unsigned long rate)
+static long __clk_round_rate(struct clk *clk, unsigned long rate, bool bound)
 {
 	struct clk_rate_request req;
 	int ret;
@@ -1434,7 +1425,13 @@ long clk_round_rate(struct clk *clk, unsigned long rate)
 	if (clk->exclusive_count)
 		clk_core_rate_unprotect(clk->core);
 
-	clk_core_get_boundaries(clk->core, &req.min_rate, &req.max_rate);
+	if (bound) {
+		clk_core_get_boundaries(clk->core, &req.min_rate,
+					&req.max_rate);
+	} else {
+		req.min_rate = 0;
+		req.max_rate = ULONG_MAX;
+	}
 	req.rate = rate;
 
 	ret = clk_core_round_rate_nolock(clk->core, &req);
@@ -1449,7 +1446,37 @@ long clk_round_rate(struct clk *clk, unsigned long rate)
 
 	return req.rate;
 }
+
+/**
+ * clk_round_rate - round the given rate for a clk
+ * @clk: the clk for which we are rounding a rate
+ * @rate: the rate which is to be rounded
+ *
+ * Takes in a rate as input and rounds it to a rate that the clk can actually
+ * use which is then returned.  If clk doesn't support round_rate operation
+ * then the parent rate is returned.
+ */
+long clk_round_rate(struct clk *clk, unsigned long rate)
+{
+	return __clk_round_rate(clk, rate, true);
+}
 EXPORT_SYMBOL_GPL(clk_round_rate);
+
+/**
+ * clk_round_rate_unboundly - unboundly round the given rate for a clk
+ * @clk: the clk for which we are rounding a rate
+ * @rate: the rate which is to be rounded
+ *
+ * Takes in a rate as input and rounds it to a rate that the clk can use
+ * which is then returned.  The given rate isn't bounded by clk users min-max
+ * rates, unlike in a case of clk_round_rate().  If clk doesn't support
+ * round_rate operation then the parent rate is returned.
+ */
+long clk_round_rate_unboundly(struct clk *clk, unsigned long rate)
+{
+	return __clk_round_rate(clk, rate, false);
+}
+EXPORT_SYMBOL_GPL(clk_round_rate_unboundly);
 
 /**
  * __clk_notify - call clk notifier chain

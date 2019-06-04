@@ -623,6 +623,19 @@ void devm_clk_put(struct device *dev, struct clk *clk);
 long clk_round_rate(struct clk *clk, unsigned long rate);
 
 /**
+ * clk_round_rate_unboundly - adjust a rate to the rate a clock can provide
+ * @clk: clock source
+ * @rate: desired clock rate in Hz
+ *
+ * This helper function rounds the given rate to a value that hardware
+ * could actually accept, without taking into account current min/max
+ * requests. Useful for cases like OPP table buildup.
+ *
+ * Returns rounded clock rate in Hz, or negative errno.
+ */
+long clk_round_rate_unboundly(struct clk *clk, unsigned long rate);
+
+/**
  * clk_set_rate - set the clock rate for a clock source
  * @clk: clock source
  * @rate: desired clock rate in Hz
@@ -853,6 +866,11 @@ static inline int clk_set_rate_exclusive(struct clk *clk, unsigned long rate)
 }
 
 static inline long clk_round_rate(struct clk *clk, unsigned long rate)
+{
+	return 0;
+}
+
+static inline long clk_round_rate_unboundly(struct clk *clk, unsigned long rate)
 {
 	return 0;
 }
