@@ -29,6 +29,9 @@
 #ifndef __NR_watch_mount
 #define __NR_watch_mount -1
 #endif
+#ifndef __NR_watch_sb
+#define __NR_watch_sb -1
+#endif
 
 #define BUF_SIZE 256
 
@@ -85,6 +88,26 @@ static void saw_mount_change(struct watch_notification *n, size_t len)
 	       m->attr_changes,
 	       m->aux_topology_changes);
 
+}
+
+static const char *super_subtypes[256] = {
+	[NOTIFY_SUPERBLOCK_READONLY]	= "readonly",
+	[NOTIFY_SUPERBLOCK_ERROR]	= "error",
+	[NOTIFY_SUPERBLOCK_EDQUOT]	= "edquot",
+	[NOTIFY_SUPERBLOCK_NETWORK]	= "network",
+};
+
+static void saw_super_change(struct watch_notification *n, size_t len)
+{
+	struct superblock_notification *s = (struct superblock_notification *)n;
+
+	if (len < sizeof(struct superblock_notification))
+		return;
+
+	printf("SUPER %08llx change=%u[%s]\n",
+	       (unsigned long long)s->sb_id,
+	       n->subtype,
+	       super_subtypes[n->subtype]);
 }
 
 /*
@@ -166,6 +189,9 @@ static void consumer(int fd)
 			case WATCH_TYPE_MOUNT_NOTIFY:
 				saw_mount_change(&n.n, len);
 				break;
+			case WATCH_TYPE_SB_NOTIFY:
+				saw_super_change(&n.n, len);
+				break;
 			}
 
 			p += len;
@@ -174,7 +200,7 @@ static void consumer(int fd)
 }
 
 static struct watch_notification_filter filter = {
-	.nr_filters	= 2,
+	.nr_filters	= 3,
 	.filters = {
 		[0]	= {
 			.type			= WATCH_TYPE_KEY_NOTIFY,
@@ -184,6 +210,14 @@ static struct watch_notification_filter filter = {
 			.type			= WATCH_TYPE_MOUNT_NOTIFY,
 			// Reject move-from notifications
 			.subtype_filter[0]	= UINT_MAX & ~(1 << NOTIFY_MOUNT_MOVE_FROM),
+		},
+		[2]	= {
+			.type			= WATCH_TYPE_SB_NOTIFY,
+			// Only accept notification of changes to R/O state
+			.subtype_filter[0]	= (1 << NOTIFY_SUPERBLOCK_READONLY),
+			// Only accept notifications of change-to-R/O
+			.info_mask		= WATCH_INFO_FLAG_0,
+			.info_filter		= WATCH_INFO_FLAG_0,
 		},
 	},
 };
@@ -220,6 +254,11 @@ int main(int argc, char **argv)
 
 	if (syscall(__NR_watch_mount, AT_FDCWD, "/", 0, fd, 0x02) == -1) {
 		perror("watch_mount");
+		exit(1);
+	}
+
+	if (syscall(__NR_watch_sb, AT_FDCWD, "/mnt", 0, fd, 0x03) == -1) {
+		perror("watch_sb");
 		exit(1);
 	}
 
