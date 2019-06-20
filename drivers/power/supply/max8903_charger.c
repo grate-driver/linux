@@ -14,11 +14,13 @@
 #include <linux/slab.h>
 #include <linux/power_supply.h>
 #include <linux/platform_device.h>
+#include <linux/regulator/driver.h>
 
 struct max8903_data {
 	struct device *dev;
 	struct power_supply *psy;
 	struct power_supply_desc psy_desc;
+	struct regulator_desc otg_rdesc;
 	/*
 	 * GPIOs
 	 * chg, flt, dcm and usus are optional.
@@ -35,6 +37,7 @@ struct max8903_data {
 	bool fault;
 	bool usb_in;
 	bool ta_in;
+	bool otg_en;
 };
 
 static enum power_supply_property max8903_charger_props[] = {
@@ -53,7 +56,7 @@ static int max8903_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
 		if (data->chg) {
-			if (gpiod_get_value(data->chg))
+			if (gpiod_get_value_cansleep(data->chg))
 				/* CHG asserted */
 				val->intval = POWER_SUPPLY_STATUS_CHARGING;
 			else if (data->usb_in || data->ta_in)
@@ -99,6 +102,8 @@ static irqreturn_t max8903_dcin(int irq, void *_data)
 
 	data->ta_in = ta_in;
 
+	/* Do not touch OTG mode */
+
 	/* Set Current-Limit-Mode 1:DC 0:USB */
 	if (data->dcm)
 		gpiod_set_value(data->dcm, ta_in);
@@ -143,6 +148,10 @@ static irqreturn_t max8903_usbin(int irq, void *_data)
 	struct max8903_data *data = _data;
 	bool usb_in;
 	enum power_supply_type old_type;
+
+	/* Don't do anything if OTG is active */
+	if (data->otg_en)
+		return IRQ_HANDLED;
 
 	/*
 	 * This means the line is asserted.
@@ -324,11 +333,53 @@ static int max8903_setup_gpios(struct platform_device *pdev)
 	return 0;
 }
 
+static int max8903_otg_enable(struct regulator_dev *rdev)
+{
+	struct max8903_data *data = rdev_get_drvdata(rdev);
+
+	/* Disable charging */
+	data->otg_en = true;
+	if (data->usb_in)
+		gpiod_set_value(data->cen, 1);
+	data->usb_in = false;
+
+	if (data->psy_desc.type != POWER_SUPPLY_TYPE_BATTERY)
+	{
+		data->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
+		power_supply_changed(data->psy);
+	}
+
+	return 0;
+}
+
+static int max8903_otg_disable(struct regulator_dev *rdev)
+{
+	struct max8903_data *data = rdev_get_drvdata(rdev);
+
+	/* Enable charging */
+	data->otg_en = false;
+	return 0;
+}
+
+static int max8903_otg_is_enabled(struct regulator_dev *rdev)
+{
+	struct max8903_data *data = rdev_get_drvdata(rdev);
+	return data->otg_en;
+}
+
+static struct regulator_ops otg_ops = {
+	.enable = max8903_otg_enable,
+	.disable = max8903_otg_disable,
+	.is_enabled = max8903_otg_is_enabled,
+};
+
 static int max8903_probe(struct platform_device *pdev)
 {
 	struct max8903_data *data;
 	struct device *dev = &pdev->dev;
 	struct power_supply_config psy_cfg = {};
+	struct regulator_config config = {};
+	struct regulator_dev *otg_reg;
 	int ret = 0;
 
 	data = devm_kzalloc(dev, sizeof(struct max8903_data), GFP_KERNEL);
@@ -396,6 +447,24 @@ static int max8903_probe(struct platform_device *pdev)
 					gpiod_to_irq(data->flt), ret);
 			return ret;
 		}
+	}
+
+	data->otg_rdesc.id = -1;
+	data->otg_rdesc.name = "otg-vbus";
+	data->otg_rdesc.ops = &otg_ops;
+	data->otg_rdesc.owner = THIS_MODULE;
+	data->otg_rdesc.type = REGULATOR_VOLTAGE;
+	data->otg_rdesc.supply_name = "usb-otg-in";
+	data->otg_rdesc.of_match = of_match_ptr("otg-vbus");
+
+	config.dev = dev;
+	config.driver_data = data;
+
+	otg_reg = devm_regulator_register(dev, &data->otg_rdesc,
+			&config);
+	if (IS_ERR(otg_reg))
+	{
+		dev_info(dev, "regulator not registered");
 	}
 
 	return 0;
