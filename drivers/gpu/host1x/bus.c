@@ -15,6 +15,10 @@
 #include "bus.h"
 #include "dev.h"
 
+#if IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)
+#include <asm/dma-iommu.h>
+#endif
+
 static DEFINE_MUTEX(clients_lock);
 static LIST_HEAD(clients);
 
@@ -711,6 +715,21 @@ int host1x_client_register(struct host1x_client *client)
 	struct host1x *host1x;
 	int err;
 
+#if IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)
+	/*
+	 * The client's driver could be backed by implicit IOMMU mapping
+	 * and we don't want to have that because all of current Tegra
+	 * drivers are managing IOMMU by themselves. This is a convenient
+	 * place for unmapping of the implicit mapping because this function
+	 * is called by all host1x drivers during theirs probe.
+	 */
+	if (client->dev->archdata.mapping) {
+		struct dma_iommu_mapping *mapping =
+			to_dma_iommu_mapping(client->dev);
+		arm_iommu_detach_device(client->dev);
+		arm_iommu_release_mapping(mapping);
+	}
+#endif
 	INIT_LIST_HEAD(&client->list);
 	mutex_init(&client->lock);
 	client->usecount = 0;
