@@ -119,6 +119,9 @@ COND_SYSCALL_COMPAT(signalfd4);
 
 /* fs/sync.c */
 
+/* fs/super.c */
+COND_SYSCALL(watch_sb);
+
 /* fs/timerfd.c */
 COND_SYSCALL(timerfd_create);
 COND_SYSCALL(timerfd_settime);
