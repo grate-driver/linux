@@ -72,6 +72,9 @@
 /* Assume that the bus is saturated if the utilization is 25% */
 #define BUS_SATURATION_RATIO					25
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/tegra30_devfreq.h>
+
 /**
  * struct tegra_devfreq_device_config - configuration specific to an ACTMON
  * device
@@ -273,12 +276,19 @@ static void tegra_devfreq_update_wmark(struct tegra_devfreq *tegra,
 
 	device_writel(dev, do_percent(val, dev->config->boost_down_threshold),
 		      ACTMON_DEV_LOWER_WMARK);
+
+	trace_device_lower_upper(dev->config->offset, tegra->cur_freq,
+				 do_percent(val, dev->config->boost_down_threshold),
+				 do_percent(val, dev->config->boost_up_threshold));
 }
 
 static void actmon_isr_device(struct tegra_devfreq *tegra,
 			      struct tegra_devfreq_device *dev)
 {
 	u32 intr_status, dev_ctrl;
+
+	trace_device_isr_enter(tegra->regs, dev->config->offset,
+			       dev->boost_freq, cpufreq_quick_get(0));
 
 	dev->avg_count = device_readl(dev, ACTMON_DEV_AVG_COUNT);
 	tegra_devfreq_update_avg_wmark(tegra, dev);
@@ -319,6 +329,9 @@ static void actmon_isr_device(struct tegra_devfreq *tegra,
 	device_writel(dev, dev_ctrl, ACTMON_DEV_CTRL);
 
 	device_writel(dev, ACTMON_INTR_STATUS_CLEAR, ACTMON_DEV_INTR_STATUS);
+
+	trace_device_isr_exit(tegra->regs, dev->config->offset,
+			      dev->boost_freq, cpufreq_quick_get(0));
 }
 
 static unsigned long actmon_cpu_to_emc_rate(struct tegra_devfreq *tegra,
@@ -714,6 +727,10 @@ static int tegra_governor_get_target(struct devfreq *devfreq,
 		actmon_update_target(tegra, dev);
 
 		target_freq = max(target_freq, dev->target_freq);
+
+		trace_device_target_freq(dev->config->offset, dev->target_freq);
+		trace_device_target_update(tegra->regs, dev->config->offset,
+					   dev->boost_freq, cpufreq_quick_get(0));
 	}
 
 	/*
