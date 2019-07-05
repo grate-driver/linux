@@ -4202,6 +4202,21 @@ int fsinfo_generic_mount_info(struct path *path, struct fsinfo_context *ctx)
 	p->mnt_unique_id	= m->mnt_unique_id;
 	p->mnt_id		= m->mnt_id;
 
+#ifdef CONFIG_SB_NOTIFICATIONS
+	p->sb_changes		= atomic_read(&sb->s_change_counter);
+	p->sb_notifications	= atomic_read(&sb->s_notify_counter);
+#endif
+#ifdef CONFIG_MOUNT_NOTIFICATIONS
+	p->mnt_subtree_notifications = atomic_read(&m->mnt_subtree_notifications);
+	p->mnt_topology_changes	= atomic_read(&m->mnt_topology_changes);
+	p->mnt_attr_changes	= atomic_read(&m->mnt_attr_changes);
+#endif
+
+	/* Record the counters before reading the attributes as we're not
+	 * holding a lock.  Paired with a write barrier in notify_mount().
+	 */
+	smp_rmb();
+
 	flags = READ_ONCE(m->mnt.mnt_flags);
 	if (flags & MNT_READONLY)
 		p->attr |= MOUNT_ATTR_RDONLY;
@@ -4239,6 +4254,9 @@ int fsinfo_generic_mount_topology(struct path *path, struct fsinfo_context *ctx)
 
 	m = real_mount(path->mnt);
 
+#ifdef CONFIG_MOUNT_NOTIFICATIONS
+	p->mnt_topology_changes	= atomic_read(&m->mnt_topology_changes);
+#endif
 	p->parent_id = m->mnt_parent->mnt_id;
 
 	if (path->mnt == root.mnt) {
@@ -4352,17 +4370,31 @@ int fsinfo_generic_mount_point_full(struct path *path, struct fsinfo_context *ct
 static void fsinfo_store_mount(struct fsinfo_context *ctx, const struct mount *p)
 {
 	struct fsinfo_mount_child record = {};
+#ifdef CONFIG_SB_NOTIFICATIONS
+	const struct super_block *sb = p->mnt.mnt_sb;
+#endif
 	unsigned int usage = ctx->usage;
 
 	if (ctx->usage >= INT_MAX)
 		return;
 	ctx->usage = usage + sizeof(record);
+	if (!ctx->buffer || ctx->usage > ctx->buf_size)
+		return;
 
-	if (ctx->buffer && ctx->usage <= ctx->buf_size) {
-		record.mnt_unique_id	= p->mnt_unique_id;
-		record.mnt_id		= p->mnt_id;
-		memcpy(ctx->buffer + usage, &record, sizeof(record));
-	}
+	record.mnt_unique_id	= p->mnt_unique_id;
+	record.mnt_id		= p->mnt_id;
+	record.notify_sum	= 0;
+#ifdef CONFIG_SB_NOTIFICATIONS
+	record.notify_sum	+= (atomic_read(&sb->s_change_counter) +
+				    atomic_read(&sb->s_notify_counter));
+#endif
+#ifdef CONFIG_MOUNT_NOTIFICATIONS
+	record.notify_sum	+= (atomic_read(&p->mnt_attr_changes) +
+				    atomic_read(&p->mnt_topology_changes) +
+				    atomic_read(&p->mnt_subtree_notifications));
+#endif
+
+	memcpy(ctx->buffer + usage, &record, sizeof(record));
 }
 
 /*
