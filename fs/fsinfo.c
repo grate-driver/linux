@@ -563,6 +563,56 @@ static int vfs_fsinfo_fd(unsigned int fd, struct fsinfo_context *ctx)
 	return ret;
 }
 
+/*
+ * Look up the root of a mount object.  This allows access to mount objects
+ * (and their attached superblocks) that can't be retrieved by path because
+ * they're entirely covered.
+ *
+ * We only permit access to a mount that has a direct path between either the
+ * dentry pointed to by dfd or to our chroot (if dfd is AT_FDCWD).
+ */
+static int vfs_fsinfo_mount(int dfd, const char __user *filename,
+			    struct fsinfo_context *ctx)
+{
+	struct path path;
+	struct fd f = {};
+	char *name;
+	long mnt_id;
+	int ret;
+
+	if (!filename)
+		return -EINVAL;
+
+	name = strndup_user(filename, 32);
+	if (IS_ERR(name))
+		return PTR_ERR(name);
+	ret = kstrtoul(name, 0, &mnt_id);
+	if (ret < 0)
+		goto out_name;
+	if (mnt_id > INT_MAX)
+		goto out_name;
+
+	if (dfd != AT_FDCWD) {
+		ret = -EBADF;
+		f = fdget_raw(dfd);
+		if (!f.file)
+			goto out_name;
+	}
+
+	ret = lookup_mount_object(f.file ? &f.file->f_path : NULL,
+				  mnt_id, &path);
+	if (ret < 0)
+		goto out_fd;
+
+	ret = vfs_fsinfo(&path, ctx);
+	path_put(&path);
+out_fd:
+	fdput(f);
+out_name:
+	kfree(name);
+	return ret;
+}
+
 /**
  * sys_fsinfo - System call to get filesystem information
  * @dfd: Base directory to pathwalk from or fd referring to filesystem.
@@ -635,6 +685,9 @@ SYSCALL_DEFINE6(fsinfo,
 		if (pathname)
 			return -EINVAL;
 		ret = vfs_fsinfo_fd(dfd, &ctx);
+		break;
+	case FSINFO_FLAGS_QUERY_MOUNT:
+		ret = vfs_fsinfo_mount(dfd, pathname, &ctx);
 		break;
 	default:
 		return -EINVAL;

@@ -44,6 +44,7 @@ struct fsinfo_params {
 #define FSINFO_FLAGS_QUERY_MASK	0x0007 /* What object should fsinfo() query? */
 #define FSINFO_FLAGS_QUERY_PATH	0x0000 /* - path, specified by dirfd,pathname,AT_EMPTY_PATH */
 #define FSINFO_FLAGS_QUERY_FD	0x0001 /* - fd specified by dirfd */
+#define FSINFO_FLAGS_QUERY_MOUNT 0x0002	/* - mount object (path=>mount_id, dirfd=>subtree) */
 	__u32	request;	/* ID of requested attribute */
 	__u32	Nth;		/* Instance of it (some may have multiple) */
 	__u32	Mth;		/* Subinstance of Nth instance */
