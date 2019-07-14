@@ -743,6 +743,12 @@ int s6e63m0_probe(struct device *dev,
 		max_brightness = MAX_BRIGHTNESS;
 	}
 
+	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+	if (IS_ERR(ctx->reset_gpio)) {
+		dev_err(dev, "cannot get reset-gpios %ld\n", PTR_ERR(ctx->reset_gpio));
+		return PTR_ERR(ctx->reset_gpio);
+	}
+
 	ctx->supplies[0].supply = "vdd3";
 	ctx->supplies[1].supply = "vci";
 	ret = devm_regulator_bulk_get(dev, ARRAY_SIZE(ctx->supplies),
@@ -750,12 +756,6 @@ int s6e63m0_probe(struct device *dev,
 	if (ret < 0) {
 		dev_err(dev, "failed to get regulators: %d\n", ret);
 		return ret;
-	}
-
-	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
-	if (IS_ERR(ctx->reset_gpio)) {
-		dev_err(dev, "cannot get reset-gpios %ld\n", PTR_ERR(ctx->reset_gpio));
-		return PTR_ERR(ctx->reset_gpio);
 	}
 
 	drm_panel_init(&ctx->panel, dev, &s6e63m0_drm_funcs,
