@@ -3390,7 +3390,7 @@ static const struct constant_table shmem_param_enums_huge[] = {
 	{}
 };
 
-static const struct fs_parameter_spec shmem_param_specs[] = {
+const struct fs_parameter_spec shmem_fs_parameters[] = {
 	fsparam_u32   ("gid",		Opt_gid),
 	fsparam_enum  ("huge",		Opt_huge,  shmem_param_enums_huge),
 	fsparam_u32oct("mode",		Opt_mode),
@@ -3402,10 +3402,6 @@ static const struct fs_parameter_spec shmem_param_specs[] = {
 	{}
 };
 
-const struct fs_parameter_description shmem_fs_parameters = {
-	.specs		= shmem_param_specs,
-};
-
 static int shmem_parse_one(struct fs_context *fc, struct fs_parameter *param)
 {
 	struct shmem_options *ctx = fc->fs_private;
@@ -3414,7 +3410,7 @@ static int shmem_parse_one(struct fs_context *fc, struct fs_parameter *param)
 	char *rest;
 	int opt;
 
-	opt = fs_parse(fc, &shmem_fs_parameters, param, &result);
+	opt = fs_parse(fc, shmem_fs_parameters, param, &result);
 	if (opt < 0)
 		return opt;
 
@@ -3888,7 +3884,7 @@ static struct file_system_type shmem_fs_type = {
 	.name		= "tmpfs",
 	.init_fs_context = shmem_init_fs_context,
 #ifdef CONFIG_TMPFS
-	.parameters	= &shmem_fs_parameters,
+	.parameters	= shmem_fs_parameters,
 #endif
 	.kill_sb	= kill_litter_super,
 	.fs_flags	= FS_USERNS_MOUNT,
@@ -4034,7 +4030,7 @@ bool shmem_huge_enabled(struct vm_area_struct *vma)
 static struct file_system_type shmem_fs_type = {
 	.name		= "tmpfs",
 	.init_fs_context = ramfs_init_fs_context,
-	.parameters	= &ramfs_fs_parameters,
+	.parameters	= ramfs_fs_parameters,
 	.kill_sb	= kill_litter_super,
 	.fs_flags	= FS_USERNS_MOUNT,
 };
