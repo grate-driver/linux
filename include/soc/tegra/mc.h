@@ -7,6 +7,7 @@
 #define __SOC_TEGRA_MC_H__
 
 #include <linux/err.h>
+#include <linux/interconnect-provider.h>
 #include <linux/reset-controller.h>
 #include <linux/types.h>
 
@@ -177,6 +178,8 @@ struct tegra_mc {
 	unsigned int num_timings;
 
 	struct reset_controller_dev reset;
+
+	struct icc_provider provider;
 
 	spinlock_t lock;
 };
