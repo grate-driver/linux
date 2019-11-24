@@ -404,17 +404,8 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 			ext_csd[EXT_CSD_SEC_CNT + 3] << 24;
 
 		/* Cards with density > 2GiB are sector addressed */
-		if (card->ext_csd.sectors > (2u * 1024 * 1024 * 1024) / 512) {
-			if (card->host->caps & MMC_CAP_NONREMOVABLE) {
- 				/*
-				 * Size is in 256K chunks, i.e. 512 sectors each.
- 				 * This algorithm is defined and used by NVIDIA,
-				 * according to eMMC 4.41, size is in 128K chunks.
-				 */
- 				card->ext_csd.sectors -= ext_csd[EXT_CSD_BOOT_MULT] * 512;
- 			}
+		if (card->ext_csd.sectors > (2u * 1024 * 1024 * 1024) / 512)
 			mmc_card_set_blockaddr(card);
-		}
 	}
 
 	card->ext_csd.strobe_support = ext_csd[EXT_CSD_STROBE_SUPPORT];
