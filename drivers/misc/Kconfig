@@ -50,6 +50,15 @@ config AD525X_DPOT_SPI
 	  To compile this driver as a module, choose M here: the
 	  module will be called ad525x_dpot-spi.
 
+config ASUS_DOCKRAM
+	bool "Asus Transformer Pad's EC DockRAM"
+	depends on I2C
+	help
+	  Select this if you are building for Asus Transformer Pad.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called asus-dockram.
+
 config DUMMY_IRQ
 	tristate "Dummy IRQ handler"
 	help
