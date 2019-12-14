@@ -364,8 +364,14 @@ struct gart_device *tegra_gart_probe(struct device *dev, struct tegra_mc *mc)
 		goto unregister_iommu;
 	}
 
+	err = bus_set_iommu(&platform_bus_type, &gart_iommu_ops);
+	if (err)
+		goto free_savedata;
+
 	return gart;
 
+free_savedata:
+	vfree(gart->savedata);
 unregister_iommu:
 	iommu_device_unregister(&gart->iommu);
 remove_sysfs:
