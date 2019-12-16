@@ -23,4 +23,12 @@ arm/fixes
 		git://git.pengutronix.de/git/pza/linux tags/reset-fixes-for-v5.5-2
 	<no branch> (7947e3238b64c00c396e6f5738f94c4d653bc6a2)
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.5
+	<no branch> (e709ed70d122e94cb426b1e1f905829eae19a009)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.5/fixes-rc1-signed
+	<no branch> (fa2cdb1762d15f701b83efa60b04f0d04e71bf89)
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-fixes-for-v5.5-tag1
+	<no branch> (a2315d3aea5976acd919d3d3fcf82f752562c25b)
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-fixes-5.5
+	<no branch> (59034b9d6af8ccc1de0a265ca90b3aa967bae19f)
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.5/soc-fixes
 
