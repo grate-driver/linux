@@ -60,6 +60,7 @@ config CSKY
 	select TIMER_OF
 	select USB_ARCH_HAS_EHCI
 	select USB_ARCH_HAS_OHCI
+	select HAVE_REGS_AND_STACK_ACCESS_API
 
 config CPU_HAS_CACHEV2
 	bool
