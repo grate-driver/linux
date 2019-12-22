@@ -385,7 +385,7 @@ static void tegra_dc_setup_window(struct tegra_plane *plane,
 	if (window->reflect_x)
 		h_offset = (window->src_orig.w - 1) * bpp - h_offset;
 
-	if (window->bottom_up)
+	if (window->reflect_y)
 		v_offset = window->src_orig.h - 1 - v_offset;
 
 	value = V_PRESCALED_SIZE(v_size) | H_PRESCALED_SIZE(h_size);
@@ -490,7 +490,7 @@ static void tegra_dc_setup_window(struct tegra_plane *plane,
 	if (window->reflect_x)
 		value |= H_DIRECTION;
 
-	if (window->bottom_up)
+	if (window->reflect_y)
 		value |= V_DIRECTION;
 
 	if (tegra_plane_use_horizontal_filtering(plane, window)) {
@@ -801,9 +801,9 @@ static int tegra_plane_atomic_check(struct drm_plane *plane,
 		plane_state->reflect_x = false;
 
 	if (rotation & DRM_MODE_REFLECT_Y)
-		plane_state->bottom_up = true;
+		plane_state->reflect_y = true;
 	else
-		plane_state->bottom_up = false;
+		plane_state->reflect_y = false;
 
 	/*
 	 * Tegra doesn't support different strides for U and V planes so we
@@ -871,7 +871,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	window.dst.w = drm_rect_width(&plane->state->dst);
 	window.dst.h = drm_rect_height(&plane->state->dst);
 	window.bits_per_pixel = fb->format->cpp[0] * 8;
-	window.bottom_up = tegra_fb_is_bottom_up(fb) || state->bottom_up;
+	window.reflect_y = tegra_fb_is_bottom_up(fb) || state->reflect_y;
 	window.reflect_x = state->reflect_x;
 
 	/* copy from state */
@@ -885,7 +885,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	if (window.reflect_x)
 		window.dst.x = mode->hdisplay - window.dst.x - window.dst.w;
 
-	if (window.bottom_up)
+	if (window.reflect_y)
 		window.dst.y = mode->vdisplay - window.dst.y - window.dst.h;
 
 	for (i = 0; i < fb->format->num_planes; i++) {
