@@ -377,6 +377,14 @@ static void tegra_dc_setup_window(struct tegra_plane *plane,
 	h_size = window->src.w * bpp;
 	v_size = window->src.h;
 
+	/*
+	 * Note that window->src.w/h are clipped if part of plane is outside
+	 * of visible area, while we need the original sizes in order to set
+	 * up offsets correctly.
+	 */
+	if (window->bottom_up)
+		v_offset = window->src_orig.h - 1 - v_offset;
+
 	value = V_PRESCALED_SIZE(v_size) | H_PRESCALED_SIZE(h_size);
 	tegra_plane_writel(plane, value, DC_WIN_PRESCALED_SIZE);
 
@@ -412,9 +420,6 @@ static void tegra_dc_setup_window(struct tegra_plane *plane,
 	} else {
 		tegra_plane_writel(plane, window->stride[0], DC_WIN_LINE_STRIDE);
 	}
-
-	if (window->bottom_up)
-		v_offset += window->src.h - 1;
 
 	tegra_plane_writel(plane, h_offset, DC_WINBUF_ADDR_H_OFFSET);
 	tegra_plane_writel(plane, v_offset, DC_WINBUF_ADDR_V_OFFSET);
@@ -831,6 +836,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	struct tegra_plane *p = to_tegra_plane(plane);
 	struct tegra_dc_window window;
 	const struct drm_tegra_plane_csc_blob *csc;
+	struct drm_display_mode *mode;
 	unsigned int i;
 
 	/* rien ne va plus */
@@ -841,6 +847,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 		return tegra_plane_atomic_disable(plane, old_state);
 
 	memset(&window, 0, sizeof(window));
+	window.src_orig.h = plane->state->src_h >> 16;
 	window.src.x = plane->state->src.x1 >> 16;
 	window.src.y = plane->state->src.y1 >> 16;
 	window.src.w = drm_rect_width(&plane->state->src) >> 16;
@@ -857,6 +864,11 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	window.tiling = state->tiling;
 	window.format = state->format;
 	window.swap = state->swap;
+
+	mode = &plane->state->crtc->state->adjusted_mode;
+
+	if (window.bottom_up)
+		window.dst.y = mode->vdisplay - window.dst.y - window.dst.h;
 
 	for (i = 0; i < fb->format->num_planes; i++) {
 		window.base[i] = state->iova[i] + fb->offsets[i];

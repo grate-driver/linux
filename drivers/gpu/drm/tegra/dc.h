@@ -142,6 +142,9 @@ static inline u32 tegra_dc_readl(struct tegra_dc *dc, unsigned int offset)
 
 struct tegra_dc_window {
 	struct {
+		unsigned int h;
+	} src_orig;
+	struct {
 		unsigned int x;
 		unsigned int y;
 		unsigned int w;
