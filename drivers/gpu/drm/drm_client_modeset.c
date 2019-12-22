@@ -1006,15 +1006,16 @@ retry:
 	}
 
 	drm_client_for_each_modeset(mode_set, client) {
-		struct drm_plane *primary = mode_set->crtc->primary;
 		unsigned int rotation;
 
 		if (drm_client_rotation(mode_set, &rotation)) {
 			struct drm_plane_state *plane_state;
 
-			/* Cannot fail as we've already gotten the plane state above */
-			plane_state = drm_atomic_get_new_plane_state(state, primary);
-			plane_state->rotation = rotation;
+			drm_for_each_plane(plane, dev) {
+				plane_state = drm_atomic_get_new_plane_state(state, plane);
+				if (plane_state)
+					plane_state->rotation = rotation;
+			}
 		}
 
 		ret = __drm_atomic_helper_set_config(mode_set, state);
