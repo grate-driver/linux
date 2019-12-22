@@ -877,7 +877,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	window.dst.w = drm_rect_width(&plane->state->dst);
 	window.dst.h = drm_rect_height(&plane->state->dst);
 	window.bits_per_pixel = fb->format->cpp[0] * 8;
-	window.reflect_y = tegra_fb_is_bottom_up(fb) || state->reflect_y;
+	window.reflect_y = tegra_fb_is_bottom_up(fb) ^ state->reflect_y;
 	window.reflect_x = state->reflect_x;
 
 	/* copy from state */
