@@ -62,6 +62,7 @@ tegra_plane_atomic_duplicate_state(struct drm_plane *plane)
 	copy->tiling = state->tiling;
 	copy->format = state->format;
 	copy->swap = state->swap;
+	copy->reflect_x = state->reflect_x;
 	copy->bottom_up = state->bottom_up;
 	copy->opaque = state->opaque;
 	copy->memory_bandwidth = state->memory_bandwidth;
@@ -781,6 +782,7 @@ void tegra_plane_copy_state(struct drm_plane *plane,
 	tegra->tiling = tegra_new->tiling;
 	tegra->format = tegra_new->format;
 	tegra->opaque = tegra_new->opaque;
+	tegra->reflect_x = tegra_new->reflect_x;
 	tegra->bottom_up = tegra_new->bottom_up;
 	tegra->memory_bandwidth = tegra_new->memory_bandwidth;
 

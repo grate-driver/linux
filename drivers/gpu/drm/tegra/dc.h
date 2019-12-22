@@ -142,6 +142,7 @@ static inline u32 tegra_dc_readl(struct tegra_dc *dc, unsigned int offset)
 
 struct tegra_dc_window {
 	struct {
+		unsigned int w;
 		unsigned int h;
 	} src_orig;
 	struct {
@@ -170,6 +171,7 @@ struct tegra_dc_window {
 	unsigned int stride[2];
 	unsigned long base[3];
 	unsigned int zpos;
+	bool reflect_x;
 	bool bottom_up;
 
 	struct tegra_bo_tiling tiling;

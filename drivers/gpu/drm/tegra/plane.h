@@ -52,6 +52,7 @@ struct tegra_plane_state {
 	u32 format;
 	u32 swap;
 
+	bool reflect_x;
 	bool bottom_up;
 
 	/* used for legacy blending support only */

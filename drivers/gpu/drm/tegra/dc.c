@@ -382,6 +382,9 @@ static void tegra_dc_setup_window(struct tegra_plane *plane,
 	 * of visible area, while we need the original sizes in order to set
 	 * up offsets correctly.
 	 */
+	if (window->reflect_x)
+		h_offset = (window->src_orig.w - 1) * bpp - h_offset;
+
 	if (window->bottom_up)
 		v_offset = window->src_orig.h - 1 - v_offset;
 
@@ -483,6 +486,9 @@ static void tegra_dc_setup_window(struct tegra_plane *plane,
 	} else if (window->bits_per_pixel < 24) {
 		value |= COLOR_EXPAND;
 	}
+
+	if (window->reflect_x)
+		value |= H_DIRECTION;
 
 	if (window->bottom_up)
 		value |= V_DIRECTION;
@@ -745,7 +751,9 @@ static int tegra_plane_atomic_check(struct drm_plane *plane,
 				    struct drm_plane_state *state)
 {
 	struct tegra_plane_state *plane_state = to_tegra_plane_state(state);
-	unsigned int rotation = DRM_MODE_ROTATE_0 | DRM_MODE_REFLECT_Y;
+	unsigned int rotation = DRM_MODE_ROTATE_0 |
+				DRM_MODE_REFLECT_X |
+				DRM_MODE_REFLECT_Y;
 	struct tegra_bo_tiling *tiling = &plane_state->tiling;
 	struct tegra_plane *tegra = to_tegra_plane(plane);
 	struct tegra_dc *dc = to_tegra_dc(state->crtc);
@@ -786,6 +794,11 @@ static int tegra_plane_atomic_check(struct drm_plane *plane,
 	}
 
 	rotation = drm_rotation_simplify(state->rotation, rotation);
+
+	if (rotation & DRM_MODE_REFLECT_X)
+		plane_state->reflect_x = true;
+	else
+		plane_state->reflect_x = false;
 
 	if (rotation & DRM_MODE_REFLECT_Y)
 		plane_state->bottom_up = true;
@@ -847,6 +860,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 		return tegra_plane_atomic_disable(plane, old_state);
 
 	memset(&window, 0, sizeof(window));
+	window.src_orig.w = plane->state->src_w >> 16;
 	window.src_orig.h = plane->state->src_h >> 16;
 	window.src.x = plane->state->src.x1 >> 16;
 	window.src.y = plane->state->src.y1 >> 16;
@@ -858,6 +872,7 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	window.dst.h = drm_rect_height(&plane->state->dst);
 	window.bits_per_pixel = fb->format->cpp[0] * 8;
 	window.bottom_up = tegra_fb_is_bottom_up(fb) || state->bottom_up;
+	window.reflect_x = state->reflect_x;
 
 	/* copy from state */
 	window.zpos = plane->state->normalized_zpos;
@@ -866,6 +881,9 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 	window.swap = state->swap;
 
 	mode = &plane->state->crtc->state->adjusted_mode;
+
+	if (window.reflect_x)
+		window.dst.x = mode->hdisplay - window.dst.x - window.dst.w;
 
 	if (window.bottom_up)
 		window.dst.y = mode->vdisplay - window.dst.y - window.dst.h;
@@ -1057,6 +1075,7 @@ static struct drm_plane *tegra_primary_plane_create(struct drm_device *drm,
 	err = drm_plane_create_rotation_property(&plane->base,
 						 DRM_MODE_ROTATE_0,
 						 DRM_MODE_ROTATE_0 |
+						 DRM_MODE_REFLECT_X |
 						 DRM_MODE_REFLECT_Y);
 	if (err < 0)
 		dev_err(dc->dev, "failed to create rotation property: %d\n",
@@ -1353,6 +1372,7 @@ static struct drm_plane *tegra_dc_overlay_plane_create(struct drm_device *drm,
 	err = drm_plane_create_rotation_property(&plane->base,
 						 DRM_MODE_ROTATE_0,
 						 DRM_MODE_ROTATE_0 |
+						 DRM_MODE_REFLECT_X |
 						 DRM_MODE_REFLECT_Y);
 	if (err < 0)
 		dev_err(dc->dev, "failed to create rotation property: %d\n",
