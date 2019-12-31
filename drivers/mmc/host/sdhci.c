@@ -1855,11 +1855,10 @@ u16 sdhci_calc_clk(struct sdhci_host *host, unsigned int clock,
 
 			pre_val = sdhci_get_preset_value(host);
 			div = FIELD_GET(SDHCI_PRESET_SDCLK_FREQ_MASK, pre_val);
-			if (host->clk_mul &&
-				(pre_val & SDHCI_PRESET_CLKGEN_SEL)) {
+			if (pre_val & SDHCI_PRESET_CLKGEN_SEL) {
 				clk = SDHCI_PROG_CLOCK_MODE;
 				real_div = div + 1;
-				clk_mul = host->clk_mul;
+				clk_mul = host->clk_mul ?: 1;
 			} else {
 				real_div = max_t(int, 1, div << 1);
 			}
