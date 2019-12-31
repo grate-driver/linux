@@ -1844,10 +1844,13 @@ static u16 sdhci_get_preset_value(struct sdhci_host *host)
 u16 sdhci_calc_clk(struct sdhci_host *host, unsigned int clock,
 		   unsigned int *actual_clock)
 {
-	int div = 0; /* Initialized for compiler warning */
+	unsigned int div = 0; /* Initialized for compiler warning */
 	int real_div = div, clk_mul = 1;
 	u16 clk = 0;
-	bool switch_base_clk = false;
+	bool use_base_clk;
+
+	if (clock == 0)
+		unreachable();
 
 	if (host->version >= SDHCI_SPEC_300) {
 		if (host->preset_enabled) {
@@ -1869,13 +1872,12 @@ u16 sdhci_calc_clk(struct sdhci_host *host, unsigned int clock,
 		 * Check if the Host Controller supports Programmable Clock
 		 * Mode.
 		 */
-		if (host->clk_mul) {
-			for (div = 1; div <= 1024; div++) {
-				if ((host->max_clk * host->clk_mul / div)
-					<= clock)
-					break;
-			}
-			if ((host->max_clk * host->clk_mul / div) <= clock) {
+		use_base_clk = !host->clk_mul;
+
+		if (!use_base_clk) {
+			div = DIV_ROUND_UP(host->max_clk * host->clk_mul, clock);
+
+			if (div <= SDHCI_MAX_DIV_SPEC_300 / 2 + 1) {
 				/*
 				 * Set Programmable Clock Mode in the Clock
 				 * Control register.
@@ -1886,35 +1888,31 @@ u16 sdhci_calc_clk(struct sdhci_host *host, unsigned int clock,
 				div--;
 			} else {
 				/*
-				 * Divisor can be too small to reach clock
-				 * speed requirement. Then use the base clock.
+				 * Divisor is too big for requested clock rate.
+				 * Use the base clock, then.
 				 */
-				switch_base_clk = true;
+				use_base_clk = true;
 			}
 		}
 
-		if (!host->clk_mul || switch_base_clk) {
-			/* Version 3.00 divisors must be a multiple of 2. */
-			if (host->max_clk <= clock) {
-				div = 1;
-				if (host->quirks2 & SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN)
-					div = 2;
-			} else {
-				for (div = 2; div < SDHCI_MAX_DIV_SPEC_300;
-				     div += 2) {
-					if ((host->max_clk / div) <= clock)
-						break;
-				}
+		if (use_base_clk) {
+			/* Version 3.00 divisors must be 1 or a multiple of 2. */
+			div = DIV_ROUND_UP(host->max_clk, clock);
+			if (div > 1) {
+				div = min(div, SDHCI_MAX_DIV_SPEC_300);
+				div = round_up(div, 2);
 			}
-			real_div = div;
 			div >>= 1;
+			if (host->quirks2 & SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN)
+				div += !div;
+
+			real_div = div * 2 + !div;
 		}
 	} else {
 		/* Version 2.00 divisors must be a power of 2. */
-		for (div = 1; div < SDHCI_MAX_DIV_SPEC_200; div *= 2) {
-			if ((host->max_clk / div) <= clock)
-				break;
-		}
+		div = DIV_ROUND_UP(host->max_clk, clock);
+		div = min(div, SDHCI_MAX_DIV_SPEC_200);
+		div = roundup_pow_of_two(div);
 		real_div = div;
 		div >>= 1;
 	}
