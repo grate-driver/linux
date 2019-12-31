@@ -1895,9 +1895,6 @@ u16 sdhci_calc_clk(struct sdhci_host *host, unsigned int clock,
 
 	div = DIV_ROUND_UP(host->max_clk, clock);
 
-	if (div == 1 && (host->quirks2 & SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN))
-		div = 2;
-
 	if (host->version >= SDHCI_SPEC_300) {
 		/* Version 3.00 divisors must be a multiple of 2. */
 		div = min(div, SDHCI_MAX_DIV_SPEC_300);
@@ -1911,6 +1908,12 @@ u16 sdhci_calc_clk(struct sdhci_host *host, unsigned int clock,
 	real_div = div * 2 + !div;
 
 clock_set:
+	if (!div && (host->quirks2 & SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN)) {
+		/* for div == 1, clock rate is divided by 2 in both modes */
+		div = 1;
+		real_div = 2;
+	}
+
 	*actual_clock = (host->max_clk * clk_mul) / real_div;
 	clk |= (div & SDHCI_DIV_MASK) << SDHCI_DIVIDER_SHIFT;
 	clk |= ((div & SDHCI_DIV_HI_MASK) >> SDHCI_DIV_MASK_LEN)
