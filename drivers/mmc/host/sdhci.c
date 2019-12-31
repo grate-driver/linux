@@ -1844,82 +1844,74 @@ static u16 sdhci_get_preset_value(struct sdhci_host *host)
 u16 sdhci_calc_clk(struct sdhci_host *host, unsigned int clock,
 		   unsigned int *actual_clock)
 {
-	unsigned int div = 0; /* Initialized for compiler warning */
-	int real_div = div, clk_mul = 1;
+	unsigned int div, real_div, clk_mul = 1;
 	u16 clk = 0;
-	bool use_base_clk;
 
 	if (clock == 0)
 		unreachable();
 
-	if (host->version >= SDHCI_SPEC_300) {
-		if (host->preset_enabled) {
-			u16 pre_val;
+	if (host->preset_enabled) {
+		/* Only version 3.00+ can have preset_enabled */
+		u16 pre_val;
 
-			pre_val = sdhci_get_preset_value(host);
-			div = FIELD_GET(SDHCI_PRESET_SDCLK_FREQ_MASK, pre_val);
-			if (pre_val & SDHCI_PRESET_CLKGEN_SEL) {
-				clk = SDHCI_PROG_CLOCK_MODE;
-				real_div = div + 1;
-				clk_mul = host->clk_mul ?: 1;
-			} else {
-				real_div = max_t(int, 1, div << 1);
-			}
+		pre_val = sdhci_get_preset_value(host);
+		div = FIELD_GET(SDHCI_PRESET_SDCLK_FREQ_MASK, pre_val);
+		if (pre_val & SDHCI_PRESET_CLKGEN_SEL) {
+			clk = SDHCI_PROG_CLOCK_MODE;
+			real_div = div + 1;
+			clk_mul = host->clk_mul ?: 1;
+		} else {
+			real_div = max_t(int, 1, div << 1);
+		}
+
+		goto clock_set;
+	}
+
+	/*
+	 * Check if the Host Controller supports Programmable Clock
+	 * Mode.
+	 */
+	if (host->version >= SDHCI_SPEC_300 && host->clk_mul) {
+		div = DIV_ROUND_UP(host->max_clk * host->clk_mul, clock);
+
+		if (div <= SDHCI_MAX_DIV_SPEC_300 / 2 + 1) {
+			/*
+			 * Set Programmable Clock Mode in the Clock
+			 * Control register.
+			 */
+			clk = SDHCI_PROG_CLOCK_MODE;
+			real_div = div;
+			clk_mul = host->clk_mul;
+			div--;
+
 			goto clock_set;
 		}
 
 		/*
-		 * Check if the Host Controller supports Programmable Clock
-		 * Mode.
+		 * Divisor is too big for requested clock rate.
+		 * Fall back to the base clock, then.
 		 */
-		use_base_clk = !host->clk_mul;
-
-		if (!use_base_clk) {
-			div = DIV_ROUND_UP(host->max_clk * host->clk_mul, clock);
-
-			if (div <= SDHCI_MAX_DIV_SPEC_300 / 2 + 1) {
-				/*
-				 * Set Programmable Clock Mode in the Clock
-				 * Control register.
-				 */
-				clk = SDHCI_PROG_CLOCK_MODE;
-				real_div = div;
-				clk_mul = host->clk_mul;
-				div--;
-			} else {
-				/*
-				 * Divisor is too big for requested clock rate.
-				 * Use the base clock, then.
-				 */
-				use_base_clk = true;
-			}
-		}
-
-		if (use_base_clk) {
-			/* Version 3.00 divisors must be 1 or a multiple of 2. */
-			div = DIV_ROUND_UP(host->max_clk, clock);
-			if (div > 1) {
-				div = min(div, SDHCI_MAX_DIV_SPEC_300);
-				div = round_up(div, 2);
-			}
-			div >>= 1;
-			if (host->quirks2 & SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN)
-				div += !div;
-
-			real_div = div * 2 + !div;
-		}
-	} else {
-		/* Version 2.00 divisors must be a power of 2. */
-		div = DIV_ROUND_UP(host->max_clk, clock);
-		div = min(div, SDHCI_MAX_DIV_SPEC_200);
-		div = roundup_pow_of_two(div);
-		real_div = div;
-		div >>= 1;
 	}
 
+	div = DIV_ROUND_UP(host->max_clk, clock);
+
+	if (div == 1 && (host->quirks2 & SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN))
+		div = 2;
+
+	if (host->version >= SDHCI_SPEC_300) {
+		/* Version 3.00 divisors must be a multiple of 2. */
+		div = min(div, SDHCI_MAX_DIV_SPEC_300);
+		div = DIV_ROUND_UP(div, 2);
+	} else {
+		/* Version 2.00 divisors must be a power of 2. */
+		div = min(div, SDHCI_MAX_DIV_SPEC_200);
+		div = roundup_pow_of_two(div) / 2;
+	}
+
+	real_div = div * 2 + !div;
+
 clock_set:
-	if (real_div)
-		*actual_clock = (host->max_clk * clk_mul) / real_div;
+	*actual_clock = (host->max_clk * clk_mul) / real_div;
 	clk |= (div & SDHCI_DIV_MASK) << SDHCI_DIVIDER_SHIFT;
 	clk |= ((div & SDHCI_DIV_HI_MASK) >> SDHCI_DIV_MASK_LEN)
 		<< SDHCI_DIVIDER_HI_SHIFT;
