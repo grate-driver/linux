@@ -17,6 +17,10 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm64-dt-for-v5.6-tag1
 	renesas/dt-bindings
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.6-tag1
+	mmp/hsic
+		Merge branch 'mmp/hsic' into arm/dt
+	mmp/hsic-fixed
+		Merge branch 'mmp/hsic' into arm/dt
 
 arm/drivers
 	drivers/scmi
