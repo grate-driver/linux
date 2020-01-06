@@ -7,14 +7,41 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_updates_for_v5.5_part2
 	ux500/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-armsoc-v5.6-1
+	patch
+		arm64: dts: Add Unisoc's SC9863A SoC support
+	ux500/dts2
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-armsoc-v5.6-2
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.6-tag1
+	renesas/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm64-dt-for-v5.6-tag1
+	renesas/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.6-tag1
 
 arm/drivers
+	drivers/scmi
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.6
+	drivers/optee
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-optee-pldrv-for-5.6
+	renesas/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.6-tag1
 
 arm/defconfig
 	patch
 		ARM: defconfig: u8500: activate cpufreq
+		ARM: defconfig: gemini: Update defconfig
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v5.6-tag1
 
 arm/late
 
 arm/fixes
+	<no branch> (210de0e996aee8e360ccc9e173fe7f0a7ed2f695)
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_fix_for_v5.5
+	patch
+		ARM: mmp: do not divide the clock rate
+		clk: mmp2: Fix the order of timer mux parents
+		ARM: dts: mmp3: Fix the TWSI ranges
+	<no branch> (5a769f6ff439cedc547395a6dc78faa26108f741)
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-optee-fix-for-5.5
 
