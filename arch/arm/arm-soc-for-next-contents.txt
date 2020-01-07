@@ -1,4 +1,6 @@
 arm/soc
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/soc-signed
 
 arm/dt
 	exynos/dt-5.5-2
@@ -21,6 +23,14 @@ arm/dt
 		Merge branch 'mmp/hsic' into arm/dt
 	mmp/hsic-fixed
 		Merge branch 'mmp/hsic' into arm/dt
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/dt-signed
+	omap/dt-ti-sysc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/ti-sysc-dt-signed
+	omap/soc
+		Merge branch 'omap/soc' into arm/dt
+	omap/drop-pdata-ti-sysc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/ti-sysc-drop-pdata-signed
 
 arm/drivers
 	drivers/scmi
@@ -48,4 +58,6 @@ arm/fixes
 		ARM: dts: mmp3: Fix the TWSI ranges
 	<no branch> (5a769f6ff439cedc547395a6dc78faa26108f741)
 		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-optee-fix-for-5.5
+	<no branch> (03729cfa0d543bc996bf959e762ec999afc8f3d2)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.5/fixes-rc5
 
