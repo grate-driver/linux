@@ -39,6 +39,8 @@ arm/drivers
 		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-optee-pldrv-for-5.6
 	renesas/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.6-tag1
+	drivers/psci
+		git://git.linaro.org/people/ulf.hansson/linux-pm tags/cpuidle_psci-v5.5-rc4
 
 arm/defconfig
 	patch
@@ -60,4 +62,9 @@ arm/fixes
 		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-optee-fix-for-5.5
 	<no branch> (03729cfa0d543bc996bf959e762ec999afc8f3d2)
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.5/fixes-rc5
+	patch
+		ARM: davinci: select CONFIG_RESET_CONTROLLER
+		ARM: omap2plus: select RESET_CONTROLLER
+	<no branch> (ffcdc5df08bfc4f418693b22cf2a1182de3375b4)
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.5-devicetree-fixes
 
