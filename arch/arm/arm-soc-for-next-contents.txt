@@ -67,4 +67,12 @@ arm/fixes
 		ARM: omap2plus: select RESET_CONTROLLER
 	<no branch> (ffcdc5df08bfc4f418693b22cf2a1182de3375b4)
 		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.5-devicetree-fixes
+	<no branch> (30388cc075720aa0af4f2cb5933afa1f8f39d313)
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes
+	<no branch> (4b0b97e651ecf29f20248420b52b6864fbd40bc2)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.5-2
+	<no branch> (1c226017d3ec93547b58082bdf778d9db7401c95)
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-5.5
+	<no branch> (3433bdf98d8e9dd923118577dc582216a143e60d)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.5-rockchip-dtsfixes
 
