@@ -1,6 +1,10 @@
 arm/soc
 	omap/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/soc-signed
+	brcm/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/soc
+	samsung/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-5.6
 
 arm/dt
 	exynos/dt-5.5-2
@@ -31,6 +35,22 @@ arm/dt
 		Merge branch 'omap/soc' into arm/dt
 	omap/drop-pdata-ti-sysc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/ti-sysc-drop-pdata-signed
+	brcm/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/devicetree
+	hisi/dt
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-5.6
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.6-1
+	patch
+		ARM: multi_v7_defconfig: enable STM32 PWR regulator
+	rockchip/dt32
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.6-rockchip-dts32-1
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.6-rockchip-dts64-1
+	patch
+		dt-bindings: arm: move sprd board file to vendor directory
+	samsung/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.6
 
 arm/drivers
 	drivers/scmi
@@ -41,6 +61,12 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.6-tag1
 	drivers/psci
 		git://git.linaro.org/people/ulf.hansson/linux-pm tags/cpuidle_psci-v5.5-rc4
+	brcm/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/drivers
+	drivers/reset
+		git://git.pengutronix.de/pza/linux tags/reset-for-5.6
+	samsung/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-5.6
 
 arm/defconfig
 	patch
@@ -48,6 +74,8 @@ arm/defconfig
 		ARM: defconfig: gemini: Update defconfig
 	renesas/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v5.6-tag1
+	amlogic/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-defconfig
 
 arm/late
 
