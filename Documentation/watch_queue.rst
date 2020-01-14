@@ -12,6 +12,8 @@ opened by userspace.  This can be used in conjunction with::
 
     * Block layer event notifications
 
+    * USB subsystem event notifications
+
 
 The notifications buffers can be enabled by:
 
@@ -261,6 +263,13 @@ Any particular buffer can be fed from multiple sources.  Sources include:
     Notifications of this type indicate block layer events, such as I/O errors
     or temporary link loss.  Watches of this type are set on the global device
     watch list.
+
+  * WATCH_TYPE_USB_NOTIFY
+
+    Notifications of this type indicate USB subsystem events, such as
+    attachment, removal, reset and I/O errors.  Separate events are generated
+    for buses and devices.  Watchpoints of this type are set on the global
+    device watch list.
 
 
 Event Filtering

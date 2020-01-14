@@ -84,6 +84,26 @@ static void saw_block_change(struct watch_notification *n, size_t len)
 	       (unsigned long long)b->sector);
 }
 
+static const char *usb_subtypes[256] = {
+	[NOTIFY_USB_DEVICE_ADD]		= "dev-add",
+	[NOTIFY_USB_DEVICE_REMOVE]	= "dev-remove",
+	[NOTIFY_USB_DEVICE_RESET]	= "dev-reset",
+	[NOTIFY_USB_DEVICE_ERROR]	= "dev-error",
+};
+
+static void saw_usb_event(struct watch_notification *n, size_t len)
+{
+	struct usb_notification *u = (struct usb_notification *)n;
+
+	if (len < sizeof(struct usb_notification))
+		return;
+
+	printf("USB %*.*s %s e=%x r=%x\n",
+	       u->name_len, u->name_len, u->name,
+	       usb_subtypes[n->subtype],
+	       u->error, u->reserved);
+}
+
 /*
  * Consume and display events.
  */
@@ -160,6 +180,9 @@ static void consumer(int fd)
 			case WATCH_TYPE_BLOCK_NOTIFY:
 				saw_block_change(&n.n, len);
 				break;
+			case WATCH_TYPE_USB_NOTIFY:
+				saw_usb_event(&n.n, len);
+				break;
 			default:
 				printf("other type\n");
 				break;
@@ -171,7 +194,7 @@ static void consumer(int fd)
 }
 
 static struct watch_notification_filter filter = {
-	.nr_filters	= 2,
+	.nr_filters	= 3,
 	.filters = {
 		[0]	= {
 			.type			= WATCH_TYPE_KEY_NOTIFY,
@@ -179,6 +202,10 @@ static struct watch_notification_filter filter = {
 		},
 		[1]	= {
 			.type			= WATCH_TYPE_BLOCK_NOTIFY,
+			.subtype_filter[0]	= UINT_MAX,
+		},
+		[2]	= {
+			.type			= WATCH_TYPE_USB_NOTIFY,
 			.subtype_filter[0]	= UINT_MAX,
 		},
 	},
