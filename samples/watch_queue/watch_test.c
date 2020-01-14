@@ -58,6 +58,32 @@ static void saw_key_change(struct watch_notification *n, size_t len)
 	       k->key_id, n->subtype, key_subtypes[n->subtype], k->aux);
 }
 
+static const char *block_subtypes[256] = {
+	[NOTIFY_BLOCK_ERROR_TIMEOUT]			= "timeout",
+	[NOTIFY_BLOCK_ERROR_NO_SPACE]			= "critical space allocation",
+	[NOTIFY_BLOCK_ERROR_RECOVERABLE_TRANSPORT]	= "recoverable transport",
+	[NOTIFY_BLOCK_ERROR_CRITICAL_TARGET]		= "critical target",
+	[NOTIFY_BLOCK_ERROR_CRITICAL_NEXUS]		= "critical nexus",
+	[NOTIFY_BLOCK_ERROR_CRITICAL_MEDIUM]		= "critical medium",
+	[NOTIFY_BLOCK_ERROR_PROTECTION]			= "protection",
+	[NOTIFY_BLOCK_ERROR_KERNEL_RESOURCE]		= "kernel resource",
+	[NOTIFY_BLOCK_ERROR_DEVICE_RESOURCE]		= "device resource",
+	[NOTIFY_BLOCK_ERROR_IO]				= "I/O",
+};
+
+static void saw_block_change(struct watch_notification *n, size_t len)
+{
+	struct block_notification *b = (struct block_notification *)n;
+
+	if (len < sizeof(struct block_notification))
+		return;
+
+	printf("BLOCK %08llx e=%u[%s] s=%llx\n",
+	       (unsigned long long)b->dev,
+	       n->subtype, block_subtypes[n->subtype],
+	       (unsigned long long)b->sector);
+}
+
 /*
  * Consume and display events.
  */
@@ -131,6 +157,9 @@ static void consumer(int fd)
 			case WATCH_TYPE_KEY_NOTIFY:
 				saw_key_change(&n.n, len);
 				break;
+			case WATCH_TYPE_BLOCK_NOTIFY:
+				saw_block_change(&n.n, len);
+				break;
 			default:
 				printf("other type\n");
 				break;
@@ -142,10 +171,14 @@ static void consumer(int fd)
 }
 
 static struct watch_notification_filter filter = {
-	.nr_filters	= 1,
+	.nr_filters	= 2,
 	.filters = {
 		[0]	= {
 			.type			= WATCH_TYPE_KEY_NOTIFY,
+			.subtype_filter[0]	= UINT_MAX,
+		},
+		[1]	= {
+			.type			= WATCH_TYPE_BLOCK_NOTIFY,
 			.subtype_filter[0]	= UINT_MAX,
 		},
 	},
@@ -178,6 +211,11 @@ int main(int argc, char **argv)
 
 	if (keyctl_watch_key(KEY_SPEC_USER_KEYRING, fd, 0x02) == -1) {
 		perror("keyctl");
+		exit(1);
+	}
+
+	if (syscall(__NR_watch_devices, fd, 0x04, 0) == -1) {
+		perror("watch_devices");
 		exit(1);
 	}
 
