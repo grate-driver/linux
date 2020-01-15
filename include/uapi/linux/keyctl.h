@@ -132,6 +132,8 @@ enum key_ace_standard_subject {
 #define KEYCTL_RESTRICT_KEYRING		29	/* Restrict keys allowed to link to a keyring */
 #define KEYCTL_MOVE			30	/* Move keys between keyrings */
 #define KEYCTL_CAPABILITIES		31	/* Find capabilities of keyrings subsystem */
+/* 32 is reserved for KEYCTL_WATCH_KEY */
+#define KEYCTL_GRANT_PERMISSION		33	/* Grant a permit to a key */
 
 /* keyctl structures */
 struct keyctl_dh_params {
@@ -193,6 +195,8 @@ struct keyctl_pkey_params {
 #define KEYCTL_CAPS0_MOVE		0x80 /* KEYCTL_MOVE supported */
 #define KEYCTL_CAPS1_NS_KEYRING_NAME	0x01 /* Keyring names are per-user_namespace */
 #define KEYCTL_CAPS1_NS_KEY_TAG		0x02 /* Key indexing can include a namespace tag */
-#define KEYCTL_CAPS1_ACL		0x04 /* Keys have ACLs rather than a p-u-g-o bitmask */
+/* 04 - Reserved for NOTIFICATIONS */
+#define KEYCTL_CAPS1_ACL		0x08 /* Keys have ACLs rather than a p-u-g-o bitmask */
+#define KEYCTL_CAPS1_GRANT_PERMISSION	0x10 /* KEYCTL_GRANT_PERMISSION is supported */
 
 #endif /*  _LINUX_KEYCTL_H */
