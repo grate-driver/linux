@@ -35,8 +35,7 @@ static int verity_verify_get_sig_from_key(const char *key_desc,
 	const struct user_key_payload *ukp;
 	int ret = 0;
 
-	key = request_key(&key_type_user,
-			key_desc, NULL);
+	key = request_key(&key_type_user, key_desc, NULL, NULL);
 	if (IS_ERR(key))
 		return PTR_ERR(key);
 
