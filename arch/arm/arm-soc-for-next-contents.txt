@@ -98,6 +98,8 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/dt-part2-signed
 	ti/k3-dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/ti-k3-soc-for-v5.6
+	patch
+		arm64: dts: exynos: Rename Samsung and Exynos to lowercase
 
 arm/drivers
 	drivers/scmi
