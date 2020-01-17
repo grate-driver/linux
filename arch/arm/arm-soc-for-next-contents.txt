@@ -96,6 +96,8 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/sdma-fix-signed
 	omap/dt2
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/dt-part2-signed
+	ti/k3-dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/ti-k3-soc-for-v5.6
 
 arm/drivers
 	drivers/scmi
@@ -128,6 +130,8 @@ arm/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-5.6
 	omap/ti-sysc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/ti-sysc-signed
+	ti/keystone-ringacc
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/drivers_soc_for_5.6
 
 arm/defconfig
 	patch
@@ -153,29 +157,4 @@ arm/defconfig
 arm/late
 
 arm/fixes
-	<no branch> (210de0e996aee8e360ccc9e173fe7f0a7ed2f695)
-		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_fix_for_v5.5
-	patch
-		ARM: mmp: do not divide the clock rate
-		clk: mmp2: Fix the order of timer mux parents
-		ARM: dts: mmp3: Fix the TWSI ranges
-	<no branch> (5a769f6ff439cedc547395a6dc78faa26108f741)
-		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-optee-fix-for-5.5
-	<no branch> (03729cfa0d543bc996bf959e762ec999afc8f3d2)
-		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.5/fixes-rc5
-	patch
-		ARM: davinci: select CONFIG_RESET_CONTROLLER
-		ARM: omap2plus: select RESET_CONTROLLER
-	<no branch> (ffcdc5df08bfc4f418693b22cf2a1182de3375b4)
-		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.5-devicetree-fixes
-	<no branch> (30388cc075720aa0af4f2cb5933afa1f8f39d313)
-		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes
-	<no branch> (4b0b97e651ecf29f20248420b52b6864fbd40bc2)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.5-2
-	<no branch> (1c226017d3ec93547b58082bdf778d9db7401c95)
-		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-5.5
-	<no branch> (3433bdf98d8e9dd923118577dc582216a143e60d)
-		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.5-rockchip-dtsfixes
-	patch
-		MAINTAINERS: Add myself as the co-maintainer for Actions Semi platforms
 
