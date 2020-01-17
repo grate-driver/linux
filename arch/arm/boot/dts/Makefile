@@ -37,7 +37,10 @@ dtb-$(CONFIG_SOC_AT91SAM9) += \
 	at91-ariag25.dtb \
 	at91-ariettag25.dtb \
 	at91-cosino_mega2560.dtb \
-	at91-kizboxmini.dtb \
+	at91-kizboxmini-base.dtb \
+	at91-kizboxmini-mb.dtb \
+	at91-kizboxmini-rd.dtb \
+	at91-smartkiz.dtb \
 	at91-wb45n.dtb \
 	at91sam9g15ek.dtb \
 	at91sam9g25ek.dtb \
@@ -49,6 +52,7 @@ dtb-$(CONFIG_SOC_SAM_V7) += \
 	at91-kizbox3-hs.dtb \
 	at91-nattis-2-natte-2.dtb \
 	at91-sama5d27_som1_ek.dtb \
+	at91-sama5d27_wlsom1_ek.dtb \
 	at91-sama5d2_ptc_ek.dtb \
 	at91-sama5d2_xplained.dtb \
 	at91-sama5d3_xplained.dtb \
@@ -701,6 +705,7 @@ dtb-$(CONFIG_ARCH_OMAP3) += \
 	omap3-devkit8000.dtb \
 	omap3-devkit8000-lcd43.dtb \
 	omap3-devkit8000-lcd70.dtb \
+	omap3-echo.dtb \
 	omap3-evm.dtb \
 	omap3-evm-37xx.dtb \
 	omap3-gta04a3.dtb \
@@ -1139,6 +1144,7 @@ dtb-$(CONFIG_MACH_SUN8I) += \
 	sun8i-h3-orangepi-plus2e.dtb \
 	sun8i-h3-orangepi-zero-plus2.dtb \
 	sun8i-h3-rervision-dvk.dtb \
+	sun8i-h3-emlid-neutis-n5h3-devboard.dtb \
 	sun8i-r16-bananapi-m2m.dtb \
 	sun8i-r16-nintendo-nes-classic.dtb \
 	sun8i-r16-nintendo-super-nes-classic.dtb \
