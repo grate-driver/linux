@@ -100,6 +100,8 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/ti-k3-soc-for-v5.6
 	patch
 		arm64: dts: exynos: Rename Samsung and Exynos to lowercase
+	brcm/dt2
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/devicetree-part2
 
 arm/drivers
 	drivers/scmi
@@ -155,6 +157,8 @@ arm/defconfig
 		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-defconfig-for-5.6
 	patch
 		arm64: defconfig: Enable Actions Semi specific drivers
+	brcm/defconfig
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/defconfig-arm64
 
 arm/late
 
