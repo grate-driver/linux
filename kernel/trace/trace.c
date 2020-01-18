@@ -1889,7 +1889,7 @@ int __init register_tracer(struct tracer *type)
 	}
 
 	if (security_locked_down(LOCKDOWN_TRACEFS)) {
-		pr_warning("Can not register tracer %s due to lockdown\n",
+		pr_warn("Can not register tracer %s due to lockdown\n",
 			   type->name);
 		return -EPERM;
 	}
@@ -4685,6 +4685,10 @@ int trace_keep_overwrite(struct tracer *tracer, u32 mask, int set)
 
 int set_tracer_flag(struct trace_array *tr, unsigned int mask, int enabled)
 {
+	if ((mask == TRACE_ITER_RECORD_TGID) ||
+	    (mask == TRACE_ITER_RECORD_CMD))
+		lockdep_assert_held(&event_mutex);
+
 	/* do nothing if flag is already set */
 	if (!!(tr->trace_flags & mask) == !!enabled)
 		return 0;
@@ -4752,6 +4756,7 @@ static int trace_set_options(struct trace_array *tr, char *option)
 
 	cmp += len;
 
+	mutex_lock(&event_mutex);
 	mutex_lock(&trace_types_lock);
 
 	ret = match_string(trace_options, -1, cmp);
@@ -4762,6 +4767,7 @@ static int trace_set_options(struct trace_array *tr, char *option)
 		ret = set_tracer_flag(tr, 1 << ret, !neg);
 
 	mutex_unlock(&trace_types_lock);
+	mutex_unlock(&event_mutex);
 
 	/*
 	 * If the first trailing whitespace is replaced with '\0' by strstrip,
@@ -8076,9 +8082,11 @@ trace_options_core_write(struct file *filp, const char __user *ubuf, size_t cnt,
 	if (val != 0 && val != 1)
 		return -EINVAL;
 
+	mutex_lock(&event_mutex);
 	mutex_lock(&trace_types_lock);
 	ret = set_tracer_flag(tr, 1 << index, val);
 	mutex_unlock(&trace_types_lock);
+	mutex_unlock(&event_mutex);
 
 	if (ret < 0)
 		return ret;
@@ -8496,7 +8504,7 @@ static struct trace_array *trace_array_create(const char *name)
 
 	ret = event_trace_add_tracer(tr->dir, tr);
 	if (ret) {
-		tracefs_remove_recursive(tr->dir);
+		tracefs_remove(tr->dir);
 		goto out_free_tr;
 	}
 
@@ -8605,7 +8613,7 @@ static int __remove_instance(struct trace_array *tr)
 	event_trace_del_tracer(tr);
 	ftrace_clear_pids(tr);
 	ftrace_destroy_function_files(tr);
-	tracefs_remove_recursive(tr->dir);
+	tracefs_remove(tr->dir);
 	free_trace_buffers(tr);
 
 	for (i = 0; i < tr->nr_topts; i++) {
@@ -8796,7 +8804,7 @@ struct dentry *tracing_init_dentry(void)
 	struct trace_array *tr = &global_trace;
 
 	if (security_locked_down(LOCKDOWN_TRACEFS)) {
-		pr_warning("Tracing disabled due to lockdown\n");
+		pr_warn("Tracing disabled due to lockdown\n");
 		return ERR_PTR(-EPERM);
 	}
 
@@ -9244,7 +9252,7 @@ __init static int tracer_alloc_buffers(void)
 
 
 	if (security_locked_down(LOCKDOWN_TRACEFS)) {
-		pr_warning("Tracing disabled due to lockdown\n");
+		pr_warn("Tracing disabled due to lockdown\n");
 		return -EPERM;
 	}
 
