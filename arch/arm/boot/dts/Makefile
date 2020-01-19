@@ -37,18 +37,24 @@ dtb-$(CONFIG_SOC_AT91SAM9) += \
 	at91-ariag25.dtb \
 	at91-ariettag25.dtb \
 	at91-cosino_mega2560.dtb \
-	at91-kizboxmini.dtb \
+	at91-kizboxmini-base.dtb \
+	at91-kizboxmini-mb.dtb \
+	at91-kizboxmini-rd.dtb \
+	at91-smartkiz.dtb \
 	at91-wb45n.dtb \
 	at91sam9g15ek.dtb \
 	at91sam9g25ek.dtb \
 	at91sam9g35ek.dtb \
 	at91sam9x25ek.dtb \
 	at91sam9x35ek.dtb
+dtb-$(CONFIG_SOC_SAM9X60) += \
+	at91-sam9x60ek.dtb
 dtb-$(CONFIG_SOC_SAM_V7) += \
 	at91-kizbox2-2.dtb \
 	at91-kizbox3-hs.dtb \
 	at91-nattis-2-natte-2.dtb \
 	at91-sama5d27_som1_ek.dtb \
+	at91-sama5d27_wlsom1_ek.dtb \
 	at91-sama5d2_ptc_ek.dtb \
 	at91-sama5d2_xplained.dtb \
 	at91-sama5d3_xplained.dtb \
