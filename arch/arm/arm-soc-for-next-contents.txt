@@ -102,6 +102,14 @@ arm/dt
 		arm64: dts: exynos: Rename Samsung and Exynos to lowercase
 	brcm/dt2
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/devicetree-part2
+	rockchip/dt32-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.6-rockchip-dts32-2
+	rockchip/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.6-rockchip-dts64-2
+	at91/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-5.6-dt-2
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.6-devicetree
 
 arm/drivers
 	drivers/scmi
@@ -136,6 +144,8 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/ti-sysc-signed
 	ti/keystone-ringacc
 		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/drivers_soc_for_5.6
+	patch
+		drivers: soc: ti: knav_qmss_queue: Pass lockdep expression to RCU lists
 
 arm/defconfig
 	patch
@@ -159,6 +169,8 @@ arm/defconfig
 		arm64: defconfig: Enable Actions Semi specific drivers
 	brcm/defconfig
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/defconfig-arm64
+	at91/defconfig-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-5.6-defconfig-2
 
 arm/late
 
