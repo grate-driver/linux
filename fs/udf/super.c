@@ -1035,7 +1035,6 @@ static int check_partition_desc(struct super_block *sb,
 	switch (le32_to_cpu(p->accessType)) {
 	case PD_ACCESS_TYPE_READ_ONLY:
 	case PD_ACCESS_TYPE_WRITE_ONCE:
-	case PD_ACCESS_TYPE_REWRITABLE:
 	case PD_ACCESS_TYPE_NONE:
 		goto force_ro;
 	}
@@ -2403,6 +2402,10 @@ static int udf_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_blocks = sbi->s_partmaps[sbi->s_partition].s_partition_len;
 	buf->f_bfree = udf_count_free(sb);
 	buf->f_bavail = buf->f_bfree;
+	/*
+	 * Let's pretend each free block is also a free 'inode' since UDF does
+	 * not have separate preallocated table of inodes.
+	 */
 	buf->f_files = (lvidiu != NULL ? (le32_to_cpu(lvidiu->numFiles) +
 					  le32_to_cpu(lvidiu->numDirs)) : 0)
 			+ buf->f_bfree;
