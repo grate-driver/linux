@@ -146,6 +146,10 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/drivers_soc_for_5.6
 	patch
 		drivers: soc: ti: knav_qmss_queue: Pass lockdep expression to RCU lists
+	brcm/maintainers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/maintainers
+	mediatek/cmdq
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.5-next-soc
 
 arm/defconfig
 	patch
@@ -171,6 +175,8 @@ arm/defconfig
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/defconfig-arm64
 	at91/defconfig-2
 		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-5.6-defconfig-2
+	samsung/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-5.6
 
 arm/late
 
