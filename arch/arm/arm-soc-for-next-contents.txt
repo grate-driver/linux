@@ -13,6 +13,8 @@ arm/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-5.6-soc
 	omap/soc-smc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/soc-smc-signed
+	xilinx/zynq-soc
+		https://github.com/Xilinx/linux-xlnx tags/zynq-soc-for-v5.6
 
 arm/dt
 	exynos/dt-5.5-2
@@ -110,6 +112,10 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-5.6-dt-2
 	aspeed/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.6-devicetree
+	xilinx/dt64
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.6
+	xilinx/dt
+		https://github.com/Xilinx/linux-xlnx tags/zynq-dt-for-v5.6-v2
 
 arm/drivers
 	drivers/scmi
@@ -150,6 +156,8 @@ arm/drivers
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.6/maintainers
 	mediatek/cmdq
 		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.5-next-soc
+	xilinx/zyncmp-soc
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-v5.6
 
 arm/defconfig
 	patch
