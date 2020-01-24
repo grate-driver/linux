@@ -1084,6 +1084,7 @@ int nfs_neg_need_reval(struct inode *dir, struct dentry *dentry,
 	return !nfs_check_verifier(dir, dentry, flags & LOOKUP_RCU);
 }
 
+#define NFS_DELEGATION_VERF 0xfeeddeaf
 static int
 nfs_lookup_revalidate_done(struct inode *dir, struct dentry *dentry,
 			   struct inode *inode, int error)
@@ -1144,6 +1145,7 @@ nfs_lookup_revalidate_dentry(struct inode *dir, struct dentry *dentry,
 	struct nfs_fh *fhandle;
 	struct nfs_fattr *fattr;
 	struct nfs4_label *label;
+	unsigned long verifier;
 	int ret;
 
 	ret = -ENOMEM;
@@ -1172,6 +1174,11 @@ nfs_lookup_revalidate_dentry(struct inode *dir, struct dentry *dentry,
 	if (nfs_refresh_inode(inode, fattr) < 0)
 		goto out;
 
+	if (NFS_PROTO(dir)->have_delegation(inode, FMODE_READ))
+		verifier = NFS_DELEGATION_VERF;
+	else
+		verifier = nfs_save_change_attribute(dir);
+
 	nfs_setsecurity(inode, fattr, label);
 	nfs_set_verifier(dentry, nfs_save_change_attribute(dir));
 
@@ -1183,6 +1190,15 @@ out:
 	nfs_free_fhandle(fhandle);
 	nfs4_label_free(label);
 	return nfs_lookup_revalidate_done(dir, dentry, inode, ret);
+}
+
+static int nfs_delegation_matches_dentry(struct inode *dir,
+			struct dentry *dentry, struct inode *inode)
+{
+	if (NFS_PROTO(dir)->have_delegation(inode, FMODE_READ) &&
+		dentry->d_time == NFS_DELEGATION_VERF)
+		return 1;
+	return 0;
 }
 
 /*
@@ -1215,7 +1231,7 @@ nfs_do_lookup_revalidate(struct inode *dir, struct dentry *dentry,
 		goto out_bad;
 	}
 
-	if (NFS_PROTO(dir)->have_delegation(inode, FMODE_READ))
+	if (nfs_delegation_matches_dentry(dir, dentry, inode))
 		return nfs_lookup_revalidate_delegated(dir, dentry, inode);
 
 	/* Force a full look up iff the parent directory has changed */
@@ -1653,7 +1669,7 @@ nfs4_do_lookup_revalidate(struct inode *dir, struct dentry *dentry,
 	if (inode == NULL)
 		goto full_reval;
 
-	if (NFS_PROTO(dir)->have_delegation(inode, FMODE_READ))
+	if (nfs_delegation_matches_dentry(dir, dentry, inode))
 		return nfs_lookup_revalidate_delegated(dir, dentry, inode);
 
 	/* NFS only supports OPEN on regular files */
