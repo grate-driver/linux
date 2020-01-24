@@ -118,6 +118,14 @@ arm/dt
 		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.6
 	xilinx/dt
 		https://github.com/Xilinx/linux-xlnx tags/zynq-dt-for-v5.6-v2
+	uniphier/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt-v5.6
+	uniphier/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt64-v5.6
+	patch
+		dt-bindings: fix compilation error of the example in marvell,mmp3-hsic-phy.yaml
+	ti/k3-dt2
+		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/ti-k3-soc-for-v5.6-part2
 
 arm/drivers
 	drivers/scmi
@@ -191,4 +199,8 @@ arm/defconfig
 arm/late
 
 arm/fixes
+	<no branch> (9e0caab8e0f96f0af7d1dd388e62f44184a75372)
+		https://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-optee-fix2-for-5.5
+	<no branch> (b0b03951544534d6d9ad4aa2787eefec988fff20)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-fixes-whenever-signed
 
