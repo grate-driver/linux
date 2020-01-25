@@ -17,6 +17,8 @@ arm/soc
 		https://github.com/Xilinx/linux-xlnx tags/zynq-soc-for-v5.6
 	samsung/soc2
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-5.6-2
+	omap/soc-build-fix
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/soc-build-fix-signed
 
 arm/dt
 	exynos/dt-5.5-2
@@ -197,6 +199,14 @@ arm/defconfig
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-5.6
 
 arm/late
+	omap/more-ti-sysc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/ti-sysc-drop-pdata-crypto-signed
+		contains omap/drop-pdata-ti-sysc
+		contains omap/sdma-fix
+	omap/dt-late
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/dt-late-signed
+		contains omap/dt
+		contains omap/dt2
 
 arm/fixes
 	<no branch> (9e0caab8e0f96f0af7d1dd388e62f44184a75372)
