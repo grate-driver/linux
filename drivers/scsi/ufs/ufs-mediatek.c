@@ -382,11 +382,60 @@ static void ufs_mtk_device_reset(struct ufs_hba *hba)
 	dev_info(hba->dev, "device reset done\n");
 }
 
+static int ufs_mtk_link_set_hpm(struct ufs_hba *hba)
+{
+	int err;
+
+	err = ufshcd_hba_enable(hba);
+	if (err)
+		return err;
+
+	err = ufshcd_dme_set(hba,
+			     UIC_ARG_MIB_SEL(VS_UNIPROPOWERDOWNCONTROL, 0),
+			     0);
+	if (err)
+		return err;
+
+	err = ufshcd_uic_hibern8_exit(hba);
+	if (!err)
+		ufshcd_set_link_active(hba);
+	else
+		return err;
+
+	err = ufshcd_make_hba_operational(hba);
+	if (err)
+		return err;
+
+	return 0;
+}
+
+static int ufs_mtk_link_set_lpm(struct ufs_hba *hba)
+{
+	int err;
+
+	err = ufshcd_dme_set(hba,
+			     UIC_ARG_MIB_SEL(VS_UNIPROPOWERDOWNCONTROL, 0),
+			     1);
+	if (err) {
+		/* Resume UniPro state for following error recovery */
+		ufshcd_dme_set(hba,
+			       UIC_ARG_MIB_SEL(VS_UNIPROPOWERDOWNCONTROL, 0),
+			       0);
+		return err;
+	}
+
+	return 0;
+}
+
 static int ufs_mtk_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 {
+	int err;
 	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
 
 	if (ufshcd_is_link_hibern8(hba)) {
+		err = ufs_mtk_link_set_lpm(hba);
+		if (err)
+			return -EAGAIN;
 		phy_power_off(host->mphy);
 		ufs_mtk_setup_ref_clk(hba, false);
 	}
@@ -397,19 +446,39 @@ static int ufs_mtk_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 static int ufs_mtk_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 {
 	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
+	int err;
 
 	if (ufshcd_is_link_hibern8(hba)) {
 		ufs_mtk_setup_ref_clk(hba, true);
 		phy_power_on(host->mphy);
+		err = ufs_mtk_link_set_hpm(hba);
+		if (err)
+			return err;
 	}
 
 	return 0;
 }
 
-static int ufs_mtk_apply_dev_quirks(struct ufs_hba *hba,
-				    struct ufs_dev_desc *card)
+static void ufs_mtk_dbg_register_dump(struct ufs_hba *hba)
 {
-	if (card->wmanufacturerid == UFS_VENDOR_SAMSUNG)
+	ufshcd_dump_regs(hba, REG_UFS_REFCLK_CTRL, 0x4, "Ref-Clk Ctrl ");
+
+	ufshcd_dump_regs(hba, REG_UFS_EXTREG, 0x4, "Ext Reg ");
+
+	ufshcd_dump_regs(hba, REG_UFS_MPHYCTRL,
+			 REG_UFS_REJECT_MON - REG_UFS_MPHYCTRL + 4,
+			 "MPHY Ctrl ");
+
+	/* Direct debugging information to REG_MTK_PROBE */
+	ufshcd_writel(hba, 0x20, REG_UFS_DEBUG_SEL);
+	ufshcd_dump_regs(hba, REG_UFS_PROBE, 0x4, "Debug Probe ");
+}
+
+static int ufs_mtk_apply_dev_quirks(struct ufs_hba *hba)
+{
+	struct ufs_dev_info *dev_info = &hba->dev_info;
+
+	if (dev_info->wmanufacturerid == UFS_VENDOR_SAMSUNG)
 		ufshcd_dme_set(hba, UIC_ARG_MIB(PA_TACTIVATE), 6);
 
 	return 0;
@@ -430,6 +499,7 @@ static struct ufs_hba_variant_ops ufs_hba_mtk_vops = {
 	.apply_dev_quirks    = ufs_mtk_apply_dev_quirks,
 	.suspend             = ufs_mtk_suspend,
 	.resume              = ufs_mtk_resume,
+	.dbg_register_dump   = ufs_mtk_dbg_register_dump,
 	.device_reset        = ufs_mtk_device_reset,
 };
 
