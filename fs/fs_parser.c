@@ -44,6 +44,7 @@ int lookup_constant(const struct constant_table *tbl, const char *name, int not_
 
 	return p ? p->value : not_found;
 }
+EXPORT_SYMBOL(lookup_constant);
 
 static inline bool is_flag(const struct fs_parameter_spec *p)
 {
