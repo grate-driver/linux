@@ -207,6 +207,8 @@ arm/late
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.6/dt-late-signed
 		contains omap/dt
 		contains omap/dt2
+	davinci/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v5.6/soc
 
 arm/fixes
 	<no branch> (9e0caab8e0f96f0af7d1dd388e62f44184a75372)
