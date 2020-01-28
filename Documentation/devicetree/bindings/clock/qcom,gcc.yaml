@@ -220,6 +220,7 @@ examples:
 
   # Example of MSM8998 GCC:
   - |
+    #include <dt-bindings/clock/qcom,rpmcc.h>
     clock-controller@100000 {
       compatible = "qcom,gcc-msm8998";
       #clock-cells = <1>;
@@ -234,7 +235,7 @@ examples:
                <0>,
                <0>;
       clock-names = "xo",
-                    "sleep",
+                    "sleep_clk",
                     "usb3_pipe",
                     "ufs_rx_symbol0",
                     "ufs_rx_symbol1",
