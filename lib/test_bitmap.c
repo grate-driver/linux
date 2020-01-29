@@ -350,7 +350,6 @@ static const struct test_bitmap_parselist parselist_tests[] __initconst = {
 	{-EINVAL, "0-31:a/1", NULL, 8, 0},
 	{-EINVAL, "0-\n", NULL, 8, 0},
 
-#undef step
 };
 
 static void __init __test_bitmap_parselist(int is_user)
@@ -431,6 +430,7 @@ static const struct test_bitmap_parselist parse_tests[] __initconst = {
 	{-EOVERFLOW, "badf00d,deadbeef,1,0",	NULL, 90, 0},
 	{-EOVERFLOW, "fbadf00d,deadbeef,1,0",	NULL, 95, 0},
 	{-EOVERFLOW, "badf00d,deadbeef,1,0",	NULL, 100, 0},
+#undef step
 };
 
 static void __init __test_bitmap_parse(int is_user)
