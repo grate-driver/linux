@@ -217,7 +217,7 @@ static bool page_same_filled(void *ptr, unsigned long *element)
 	if (val != page[last_pos])
 		return false;
 
-	for (pos = 1; pos < last_pos - 1; pos++) {
+	for (pos = 1; pos < last_pos; pos++) {
 		if (val != page[pos])
 			return false;
 	}
