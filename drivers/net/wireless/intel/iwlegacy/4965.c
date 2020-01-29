@@ -1611,7 +1611,7 @@ il4965_hw_get_temperature(struct il_priv *il)
 	temperature =
 	    (temperature * 97) / 100 + TEMPERATURE_CALIB_KELVIN_OFFSET;
 
-	D_TEMP("Calibrated temperature: %dK, %dC\n", temperature,
+	D_TEMP("Calibrated temperature: %dK, %ldC\n", temperature,
 	       kelvin_to_celsius(temperature));
 
 	return temperature;
@@ -1671,11 +1671,11 @@ il4965_temperature_calib(struct il_priv *il)
 
 	if (il->temperature != temp) {
 		if (il->temperature)
-			D_TEMP("Temperature changed " "from %dC to %dC\n",
+			D_TEMP("Temperature changed " "from %ldC to %ldC\n",
 			       kelvin_to_celsius(il->temperature),
 			       kelvin_to_celsius(temp));
 		else
-			D_TEMP("Temperature " "initialized to %dC\n",
+			D_TEMP("Temperature " "initialized to %ldC\n",
 			       kelvin_to_celsius(temp));
 	}
 
