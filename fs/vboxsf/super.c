@@ -42,7 +42,7 @@ static char * const vboxsf_default_nls = CONFIG_NLS_DEFAULT;
 enum  { opt_nls, opt_uid, opt_gid, opt_ttl, opt_dmode, opt_fmode,
 	opt_dmask, opt_fmask };
 
-static const struct fs_parameter_spec vboxsf_param_specs[] = {
+static const struct fs_parameter_spec vboxsf_fs_parameters[] = {
 	fsparam_string	("nls",		opt_nls),
 	fsparam_u32	("uid",		opt_uid),
 	fsparam_u32	("gid",		opt_gid),
@@ -54,11 +54,6 @@ static const struct fs_parameter_spec vboxsf_param_specs[] = {
 	{}
 };
 
-static const struct fs_parameter_description vboxsf_fs_parameters = {
-	.name  = "vboxsf",
-	.specs  = vboxsf_param_specs,
-};
-
 static int vboxsf_parse_param(struct fs_context *fc, struct fs_parameter *param)
 {
 	struct vboxsf_fs_context *ctx = fc->fs_private;
@@ -67,7 +62,7 @@ static int vboxsf_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	kgid_t gid;
 	int opt;
 
-	opt = fs_parse(fc, &vboxsf_fs_parameters, param, &result);
+	opt = fs_parse(fc, vboxsf_fs_parameters, param, &result);
 	if (opt < 0)
 		return opt;
 
@@ -461,7 +456,6 @@ static struct file_system_type vboxsf_fs_type = {
 	.owner			= THIS_MODULE,
 	.name			= "vboxsf",
 	.init_fs_context	= vboxsf_init_fs_context,
-	.parameters		= &vboxsf_fs_parameters,
 	.kill_sb		= kill_anon_super
 };
 
