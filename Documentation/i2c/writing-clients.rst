@@ -1,6 +1,6 @@
-===================
-Writing I2C Clients
-===================
+===============================
+Implementing I2C device drivers
+===============================
 
 This is a small guide for those who want to write kernel drivers for I2C
 or SMBus devices, using Linux as the protocol host/master (not slave).
@@ -95,7 +95,7 @@ to gather information from the client, or write new information to the
 client.
 
 I have found it useful to define foo_read and foo_write functions for this.
-For some cases, it will be easier to call the i2c functions directly,
+For some cases, it will be easier to call the I2C functions directly,
 but many chips have some kind of register-value idea that can easily
 be encapsulated.
 
@@ -344,7 +344,7 @@ Plain I2C communication
 	int i2c_master_recv(struct i2c_client *client, char *buf, int count);
 
 These routines read and write some bytes from/to a client. The client
-contains the i2c address, so you do not have to include it. The second
+contains the I2C address, so you do not have to include it. The second
 parameter contains the bytes to read/write, the third the number of bytes
 to read/write (must be less than the length of the buffer, also should be
 less than 64k since msg.len is u16.) Returned is the actual number of bytes
@@ -357,9 +357,9 @@ read/written.
 
 This sends a series of messages. Each message can be a read or write,
 and they can be mixed in any way. The transactions are combined: no
-stop bit is sent between transaction. The i2c_msg structure contains
-for each message the client address, the number of bytes of the message
-and the message data itself.
+stop condition is issued between transaction. The i2c_msg structure
+contains for each message the client address, the number of bytes of the
+message and the message data itself.
 
 You can read the file ``i2c-protocol`` for more information about the
 actual I2C protocol.
