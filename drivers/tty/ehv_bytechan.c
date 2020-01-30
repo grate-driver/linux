@@ -136,6 +136,54 @@ static int find_console_handle(void)
 	return 1;
 }
 
+/**
+ * ev_byte_channel_send - send characters to a byte stream
+ * @handle: byte stream handle
+ * @count: (input) num of chars to send, (output) num chars sent
+ * @bp: pointer to chars to send
+ *
+ * Returns 0 for success, or an error code.
+ */
+static unsigned int ev_byte_channel_send(unsigned int handle,
+	unsigned int *count, const char *bp)
+{
+	register uintptr_t r11 __asm__("r11");
+	register uintptr_t r3 __asm__("r3");
+	register uintptr_t r4 __asm__("r4");
+	register uintptr_t r5 __asm__("r5");
+	register uintptr_t r6 __asm__("r6");
+	register uintptr_t r7 __asm__("r7");
+	register uintptr_t r8 __asm__("r8");
+	const uint32_t *p;
+	char buffer[EV_BYTE_CHANNEL_MAX_BYTES];
+	unsigned int c = *count;
+
+	if (c < sizeof(buffer)) {
+		memcpy(buffer, bp, c);
+		memset(&buffer[c], 0, sizeof(buffer) - c);
+		p = (const uint32_t *)buffer;
+	} else {
+		p = (const uint32_t *)bp;
+	}
+	r11 = EV_HCALL_TOKEN(EV_BYTE_CHANNEL_SEND);
+	r3 = handle;
+	r4 = *count;
+	r5 = be32_to_cpu(p[0]);
+	r6 = be32_to_cpu(p[1]);
+	r7 = be32_to_cpu(p[2]);
+	r8 = be32_to_cpu(p[3]);
+
+	asm volatile("bl	epapr_hypercall_start"
+		: "+r" (r11), "+r" (r3),
+		  "+r" (r4), "+r" (r5), "+r" (r6), "+r" (r7), "+r" (r8)
+		: : EV_HCALL_CLOBBERS6
+	);
+
+	*count = r4;
+
+	return r3;
+}
+
 /*************************** EARLY CONSOLE DRIVER ***************************/
 
 #ifdef CONFIG_PPC_EARLY_DEBUG_EHV_BC
