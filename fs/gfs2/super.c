@@ -1378,7 +1378,6 @@ out:
 	gfs2_dir_hash_inval(ip);
 	glock_clear_object(ip->i_gl, ip);
 	wait_on_bit_io(&ip->i_flags, GIF_GLOP_PENDING, TASK_UNINTERRUPTIBLE);
-	gfs2_glock_add_to_lru(ip->i_gl);
 	gfs2_glock_put_eventually(ip->i_gl);
 	ip->i_gl = NULL;
 	if (gfs2_holder_initialized(&ip->i_iopen_gh)) {
