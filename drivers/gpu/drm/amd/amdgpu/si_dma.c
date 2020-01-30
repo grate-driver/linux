@@ -648,7 +648,7 @@ static int si_dma_set_clockgating_state(void *handle,
 	bool enable;
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
-	enable = (state == AMD_CG_STATE_GATE) ? true : false;
+	enable = (state == AMD_CG_STATE_GATE);
 
 	if (enable && (adev->cg_flags & AMD_CG_SUPPORT_SDMA_MGCG)) {
 		for (i = 0; i < adev->sdma.num_instances; i++) {
@@ -775,7 +775,8 @@ static void si_dma_set_irq_funcs(struct amdgpu_device *adev)
 static void si_dma_emit_copy_buffer(struct amdgpu_ib *ib,
 				       uint64_t src_offset,
 				       uint64_t dst_offset,
-				       uint32_t byte_count)
+				       uint32_t byte_count,
+				       bool tmz)
 {
 	ib->ptr[ib->length_dw++] = DMA_PACKET(DMA_PACKET_COPY,
 					      1, 0, 0, byte_count);

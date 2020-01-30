@@ -120,23 +120,17 @@ static inline void amdgpu_vm_eviction_unlock(struct amdgpu_vm *vm)
 static unsigned amdgpu_vm_level_shift(struct amdgpu_device *adev,
 				      unsigned level)
 {
-	unsigned shift = 0xff;
-
 	switch (level) {
 	case AMDGPU_VM_PDB2:
 	case AMDGPU_VM_PDB1:
 	case AMDGPU_VM_PDB0:
-		shift = 9 * (AMDGPU_VM_PDB0 - level) +
+		return 9 * (AMDGPU_VM_PDB0 - level) +
 			adev->vm_manager.block_size;
-		break;
 	case AMDGPU_VM_PTB:
-		shift = 0;
-		break;
+		return 0;
 	default:
-		dev_err(adev->dev, "the level%d isn't supported.\n", level);
+		return ~0;
 	}
-
-	return shift;
 }
 
 /**
@@ -1448,21 +1442,14 @@ static int amdgpu_vm_update_ptes(struct amdgpu_vm_update_params *params,
 		uint64_t incr, entry_end, pe_start;
 		struct amdgpu_bo *pt;
 
-		/* make sure that the page tables covering the address range are
-		 * actually allocated
-		 */
-		r = amdgpu_vm_alloc_pts(params->adev, params->vm, &cursor,
-					params->direct);
-		if (r)
-			return r;
-
-		pt = cursor.entry->base.bo;
-
-		/* The root level can't be a huge page */
-		if (cursor.level == adev->vm_manager.root_level) {
-			if (!amdgpu_vm_pt_descendant(adev, &cursor))
-				return -ENOENT;
-			continue;
+		if (flags & AMDGPU_PTE_VALID) {
+			/* make sure that the page tables covering the
+			 * address range are actually allocated
+			 */
+			r = amdgpu_vm_alloc_pts(params->adev, params->vm,
+						&cursor, params->direct);
+			if (r)
+				return r;
 		}
 
 		shift = amdgpu_vm_level_shift(adev, cursor.level);
@@ -1483,16 +1470,18 @@ static int amdgpu_vm_update_ptes(struct amdgpu_vm_update_params *params,
 			if (!amdgpu_vm_pt_descendant(adev, &cursor))
 				return -ENOENT;
 			continue;
-		} else if (frag >= parent_shift &&
-			   cursor.level - 1 != adev->vm_manager.root_level) {
+		} else if (frag >= parent_shift) {
 			/* If the fragment size is even larger than the parent
-			 * shift we should go up one level and check it again
-			 * unless one level up is the root level.
+			 * shift we should go up one level and check it again.
 			 */
 			if (!amdgpu_vm_pt_ancestor(&cursor))
 				return -ENOENT;
 			continue;
 		}
+
+		pt = cursor.entry->base.bo;
+		if (!pt)
+			return -ENOENT;
 
 		/* Looks good so far, calculate parameters for the update */
 		incr = (uint64_t)AMDGPU_GPU_PAGE_SIZE << shift;
@@ -1764,6 +1753,10 @@ int amdgpu_vm_bo_update(struct amdgpu_device *adev, struct amdgpu_bo_va *bo_va,
 
 	if (bo) {
 		flags = amdgpu_ttm_tt_pte_flags(adev, bo->tbo.ttm, mem);
+
+		if (amdgpu_bo_encrypted(bo))
+			flags |= AMDGPU_PTE_TMZ;
+
 		bo_adev = amdgpu_ttm_adev(bo->tbo.bdev);
 	} else {
 		flags = 0x0;

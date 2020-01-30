@@ -80,7 +80,7 @@ static int amdgpu_vm_sdma_prepare(struct amdgpu_vm_update_params *p,
 		return 0;
 
 	return amdgpu_sync_resv(p->adev, &p->job->sync, root->tbo.base.resv,
-				owner, false);
+				AMDGPU_SYNC_NE_OWNER, owner);
 }
 
 /**
@@ -147,7 +147,7 @@ static void amdgpu_vm_sdma_copy_ptes(struct amdgpu_vm_update_params *p,
 
 	src += p->num_dw_left * 4;
 
-	pe += amdgpu_bo_gpu_offset(bo);
+	pe += amdgpu_gmc_sign_extend(bo->tbo.offset);
 	trace_amdgpu_vm_copy_ptes(pe, src, count, p->direct);
 
 	amdgpu_vm_copy_pte(p->adev, ib, pe, src, count);
@@ -174,7 +174,7 @@ static void amdgpu_vm_sdma_set_ptes(struct amdgpu_vm_update_params *p,
 {
 	struct amdgpu_ib *ib = p->job->ibs;
 
-	pe += amdgpu_bo_gpu_offset(bo);
+	pe += amdgpu_gmc_sign_extend(bo->tbo.offset);
 	trace_amdgpu_vm_set_ptes(pe, addr, count, incr, flags, p->direct);
 	if (count < 3) {
 		amdgpu_vm_write_pte(p->adev, ib, pe, addr | flags,
@@ -207,6 +207,11 @@ static int amdgpu_vm_sdma_update(struct amdgpu_vm_update_params *p,
 	unsigned int i, ndw, nptes;
 	uint64_t *pte;
 	int r;
+
+	/* Wait for PD/PT moves to be completed */
+	r = amdgpu_sync_fence(&p->job->sync, bo->tbo.moving, false);
+	if (r)
+		return r;
 
 	do {
 		ndw = p->num_dw_left;
