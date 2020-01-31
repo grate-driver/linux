@@ -68,6 +68,44 @@ extern int fsinfo_generic_supports(struct path *, struct fsinfo_context *);
 extern int fsinfo_generic_limits(struct path *, struct fsinfo_context *);
 extern int fsinfo_get_attribute(struct path *, struct fsinfo_context *,
 				const struct fsinfo_attribute *);
+extern int fsinfo_generic_features(struct path *, struct fsinfo_context *);
+
+static inline void fsinfo_init_features(struct fsinfo_features *p)
+{
+	p->nr_features = FSINFO_FEAT__NR;
+}
+
+static inline void fsinfo_set_feature(struct fsinfo_features *p,
+				      enum fsinfo_feature feature)
+{
+	p->features[feature / 8] |= 1 << (feature % 8);
+}
+
+static inline void fsinfo_clear_feature(struct fsinfo_features *p,
+					enum fsinfo_feature feature)
+{
+	p->features[feature / 8] &= ~(1 << (feature % 8));
+}
+
+/**
+ * fsinfo_set_unix_features - Set standard UNIX features.
+ * @f: The features mask to alter
+ */
+static inline void fsinfo_set_unix_features(struct fsinfo_features *p)
+{
+	fsinfo_set_feature(p, FSINFO_FEAT_UIDS);
+	fsinfo_set_feature(p, FSINFO_FEAT_GIDS);
+	fsinfo_set_feature(p, FSINFO_FEAT_DIRECTORIES);
+	fsinfo_set_feature(p, FSINFO_FEAT_SYMLINKS);
+	fsinfo_set_feature(p, FSINFO_FEAT_HARD_LINKS);
+	fsinfo_set_feature(p, FSINFO_FEAT_DEVICE_FILES);
+	fsinfo_set_feature(p, FSINFO_FEAT_UNIX_SPECIALS);
+	fsinfo_set_feature(p, FSINFO_FEAT_SPARSE);
+	fsinfo_set_feature(p, FSINFO_FEAT_HAS_ATIME);
+	fsinfo_set_feature(p, FSINFO_FEAT_HAS_CTIME);
+	fsinfo_set_feature(p, FSINFO_FEAT_HAS_MTIME);
+	fsinfo_set_feature(p, FSINFO_FEAT_HAS_INODE_NUMBERS);
+}
 
 #endif /* CONFIG_FSINFO */
 
