@@ -23,6 +23,7 @@
 #define FSINFO_ATTR_VOLUME_ID		0x05	/* Volume ID (string) */
 #define FSINFO_ATTR_VOLUME_UUID		0x06	/* Volume UUID (LE uuid) */
 #define FSINFO_ATTR_VOLUME_NAME		0x07	/* Volume name (string) */
+#define FSINFO_ATTR_FEATURES		0x08	/* Filesystem features (bits) */
 
 #define FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO 0x100	/* Information about attr N (for path) */
 #define FSINFO_ATTR_FSINFO_ATTRIBUTES	0x101	/* List of supported attrs (for path) */
@@ -156,6 +157,73 @@ struct fsinfo_supports {
 };
 
 #define FSINFO_ATTR_SUPPORTS__STRUCT struct fsinfo_supports
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_FEATURES).
+ *
+ * Bitmask indicating filesystem features where renderable as single bits.
+ */
+enum fsinfo_feature {
+	FSINFO_FEAT_IS_KERNEL_FS	= 0,	/* fs is kernel-special filesystem */
+	FSINFO_FEAT_IS_BLOCK_FS		= 1,	/* fs is block-based filesystem */
+	FSINFO_FEAT_IS_FLASH_FS		= 2,	/* fs is flash filesystem */
+	FSINFO_FEAT_IS_NETWORK_FS	= 3,	/* fs is network filesystem */
+	FSINFO_FEAT_IS_AUTOMOUNTER_FS	= 4,	/* fs is automounter special filesystem */
+	FSINFO_FEAT_IS_MEMORY_FS	= 5,	/* fs is memory-based filesystem */
+	FSINFO_FEAT_AUTOMOUNTS		= 6,	/* fs supports automounts */
+	FSINFO_FEAT_ADV_LOCKS		= 7,	/* fs supports advisory file locking */
+	FSINFO_FEAT_MAND_LOCKS		= 8,	/* fs supports mandatory file locking */
+	FSINFO_FEAT_LEASES		= 9,	/* fs supports file leases */
+	FSINFO_FEAT_UIDS		= 10,	/* fs supports numeric uids */
+	FSINFO_FEAT_GIDS		= 11,	/* fs supports numeric gids */
+	FSINFO_FEAT_PROJIDS		= 12,	/* fs supports numeric project ids */
+	FSINFO_FEAT_STRING_USER_IDS	= 13,	/* fs supports string user identifiers */
+	FSINFO_FEAT_GUID_USER_IDS	= 14,	/* fs supports GUID user identifiers */
+	FSINFO_FEAT_WINDOWS_ATTRS	= 15,	/* fs has windows attributes */
+	FSINFO_FEAT_USER_QUOTAS		= 16,	/* fs has per-user quotas */
+	FSINFO_FEAT_GROUP_QUOTAS	= 17,	/* fs has per-group quotas */
+	FSINFO_FEAT_PROJECT_QUOTAS	= 18,	/* fs has per-project quotas */
+	FSINFO_FEAT_XATTRS		= 19,	/* fs has xattrs */
+	FSINFO_FEAT_JOURNAL		= 20,	/* fs has a journal */
+	FSINFO_FEAT_DATA_IS_JOURNALLED	= 21,	/* fs is using data journalling */
+	FSINFO_FEAT_O_SYNC		= 22,	/* fs supports O_SYNC */
+	FSINFO_FEAT_O_DIRECT		= 23,	/* fs supports O_DIRECT */
+	FSINFO_FEAT_VOLUME_ID		= 24,	/* fs has a volume ID */
+	FSINFO_FEAT_VOLUME_UUID		= 25,	/* fs has a volume UUID */
+	FSINFO_FEAT_VOLUME_NAME		= 26,	/* fs has a volume name */
+	FSINFO_FEAT_VOLUME_FSID		= 27,	/* fs has a volume FSID */
+	FSINFO_FEAT_IVER_ALL_CHANGE	= 28,	/* i_version represents data + meta changes */
+	FSINFO_FEAT_IVER_DATA_CHANGE	= 29,	/* i_version represents data changes only */
+	FSINFO_FEAT_IVER_MONO_INCR	= 30,	/* i_version incremented monotonically */
+	FSINFO_FEAT_DIRECTORIES		= 31,	/* fs supports (sub)directories */
+	FSINFO_FEAT_SYMLINKS		= 32,	/* fs supports symlinks */
+	FSINFO_FEAT_HARD_LINKS		= 33,	/* fs supports hard links */
+	FSINFO_FEAT_HARD_LINKS_1DIR	= 34,	/* fs supports hard links in same dir only */
+	FSINFO_FEAT_DEVICE_FILES	= 35,	/* fs supports bdev, cdev */
+	FSINFO_FEAT_UNIX_SPECIALS	= 36,	/* fs supports pipe, fifo, socket */
+	FSINFO_FEAT_RESOURCE_FORKS	= 37,	/* fs supports resource forks/streams */
+	FSINFO_FEAT_NAME_CASE_INDEP	= 38,	/* Filename case independence is mandatory */
+	FSINFO_FEAT_NAME_CASE_FOLD	= 39,	/* Filename case is folded on medium */
+	FSINFO_FEAT_NAME_NON_UTF8	= 40,	/* fs has non-utf8 names */
+	FSINFO_FEAT_NAME_HAS_CODEPAGE	= 41,	/* fs has a filename codepage */
+	FSINFO_FEAT_SPARSE		= 42,	/* fs supports sparse files */
+	FSINFO_FEAT_NOT_PERSISTENT	= 43,	/* fs is not persistent */
+	FSINFO_FEAT_NO_UNIX_MODE	= 44,	/* fs does not support unix mode bits */
+	FSINFO_FEAT_HAS_ATIME		= 45,	/* fs supports access time */
+	FSINFO_FEAT_HAS_BTIME		= 46,	/* fs supports birth/creation time */
+	FSINFO_FEAT_HAS_CTIME		= 47,	/* fs supports change time */
+	FSINFO_FEAT_HAS_MTIME		= 48,	/* fs supports modification time */
+	FSINFO_FEAT_HAS_ACL		= 49,	/* fs supports ACLs of some sort */
+	FSINFO_FEAT_HAS_INODE_NUMBERS	= 50,	/* fs has inode numbers */
+	FSINFO_FEAT__NR
+};
+
+struct fsinfo_features {
+	__u32	nr_features;	/* Number of supported features (FSINFO_FEAT__NR) */
+	__u8	features[(FSINFO_FEAT__NR + 7) / 8];
+};
+
+#define FSINFO_ATTR_FEATURES__STRUCT struct fsinfo_features
 
 struct fsinfo_timestamp_one {
 	__s64	minimum;	/* Minimum timestamp value in seconds */

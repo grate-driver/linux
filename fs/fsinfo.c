@@ -131,6 +131,39 @@ int fsinfo_generic_supports(struct path *path, struct fsinfo_context *ctx)
 }
 EXPORT_SYMBOL(fsinfo_generic_supports);
 
+int fsinfo_generic_features(struct path *path, struct fsinfo_context *ctx)
+{
+	struct fsinfo_features *p = ctx->buffer;
+	struct super_block *sb = path->dentry->d_sb;
+
+	fsinfo_init_features(p);
+	if (sb->s_mtd)
+		fsinfo_set_feature(p, FSINFO_FEAT_IS_FLASH_FS);
+	else if (sb->s_bdev)
+		fsinfo_set_feature(p, FSINFO_FEAT_IS_BLOCK_FS);
+
+	if (sb->s_quota_types & QTYPE_MASK_USR)
+		fsinfo_set_feature(p, FSINFO_FEAT_USER_QUOTAS);
+	if (sb->s_quota_types & QTYPE_MASK_GRP)
+		fsinfo_set_feature(p, FSINFO_FEAT_GROUP_QUOTAS);
+	if (sb->s_quota_types & QTYPE_MASK_PRJ)
+		fsinfo_set_feature(p, FSINFO_FEAT_PROJECT_QUOTAS);
+	if (sb->s_d_op && sb->s_d_op->d_automount)
+		fsinfo_set_feature(p, FSINFO_FEAT_AUTOMOUNTS);
+	if (sb->s_id[0])
+		fsinfo_set_feature(p, FSINFO_FEAT_VOLUME_ID);
+	if (sb->s_flags & SB_MANDLOCK)
+		fsinfo_set_feature(p, FSINFO_FEAT_MAND_LOCKS);
+	if (sb->s_flags & SB_POSIXACL)
+		fsinfo_set_feature(p, FSINFO_FEAT_HAS_ACL);
+
+	fsinfo_set_feature(p, FSINFO_FEAT_HAS_ATIME);
+	fsinfo_set_feature(p, FSINFO_FEAT_HAS_CTIME);
+	fsinfo_set_feature(p, FSINFO_FEAT_HAS_MTIME);
+	return sizeof(*p);
+}
+EXPORT_SYMBOL(fsinfo_generic_features);
+
 static const struct fsinfo_timestamp_info fsinfo_default_timestamp_info = {
 	.atime = {
 		.minimum	= S64_MIN,
@@ -206,6 +239,7 @@ static const struct fsinfo_attribute fsinfo_common_attributes[] = {
 	FSINFO_VSTRUCT	(FSINFO_ATTR_TIMESTAMP_INFO,	fsinfo_generic_timestamp_info),
 	FSINFO_STRING	(FSINFO_ATTR_VOLUME_ID,		fsinfo_generic_volume_id),
 	FSINFO_VSTRUCT	(FSINFO_ATTR_VOLUME_UUID,	fsinfo_generic_volume_uuid),
+	FSINFO_VSTRUCT	(FSINFO_ATTR_FEATURES,		fsinfo_generic_features),
 
 	FSINFO_LIST	(FSINFO_ATTR_FSINFO_ATTRIBUTES,	(void *)123UL),
 	FSINFO_VSTRUCT_N(FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO, (void *)123UL),
