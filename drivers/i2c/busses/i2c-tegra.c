@@ -1314,7 +1314,7 @@ static int tegra_i2c_xfer_msg(struct tegra_i2c_dev *i2c_dev,
 
 	tegra_i2c_mask_irq(i2c_dev, int_mask);
 
-	if (time_left == 0) {
+	if (WARN_ON_ONCE(time_left == 0)) {
 		dev_err(i2c_dev->dev, "i2c transfer timed out\n");
 		tegra_i2c_init(i2c_dev, true);
 		return -ETIMEDOUT;
