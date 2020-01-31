@@ -12,6 +12,17 @@
 #include <linux/slab.h>
 #include <linux/verification.h>
 
+static struct key_acl fsverity_keyring_acl = {
+	.usage	= REFCOUNT_INIT(1),
+	.nr_ace	= 2,
+	.aces = {
+		KEY_POSSESSOR_ACE(KEY_ACE_SEARCH),
+		KEY_OWNER_ACE(KEY_ACE_VIEW | KEY_ACE_READ | KEY_ACE_SEARCH |
+			      KEY_ACE_WRITE | KEY_ACE_CLEAR |
+			      KEY_ACE_SET_SECURITY),
+	}
+};
+
 /*
  * /proc/sys/fs/verity/require_signatures
  * If 1, all verity files must have a valid builtin signature.
@@ -137,9 +148,7 @@ int __init fsverity_init_signature(void)
 	int err;
 
 	ring = keyring_alloc(".fs-verity", KUIDT_INIT(0), KGIDT_INIT(0),
-			     current_cred(), KEY_POS_SEARCH |
-				KEY_USR_VIEW | KEY_USR_READ | KEY_USR_WRITE |
-				KEY_USR_SEARCH | KEY_USR_SETATTR,
+			     current_cred(), &fsverity_keyring_acl,
 			     KEY_ALLOC_NOT_IN_QUOTA, NULL, NULL);
 	if (IS_ERR(ring))
 		return PTR_ERR(ring);

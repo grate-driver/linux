@@ -131,6 +131,11 @@ static noinline void key_gc_unused_keys(struct list_head *keys)
 		kdebug("- %u", key->serial);
 		key_check(key);
 
+#ifdef CONFIG_KEY_NOTIFICATIONS
+		remove_watch_list(key->watchers, key->serial);
+		key->watchers = NULL;
+#endif
+
 		/* Throw away the key data if the key is instantiated */
 		if (state == KEY_IS_POSITIVE && key->type->destroy)
 			key->type->destroy(key);
@@ -151,6 +156,7 @@ static noinline void key_gc_unused_keys(struct list_head *keys)
 
 		key_user_put(key->user);
 		key_put_tag(key->domain_tag);
+		key_put_acl(rcu_access_pointer(key->acl));
 		kfree(key->description);
 
 		memzero_explicit(key, sizeof(*key));
@@ -220,7 +226,6 @@ continue_scanning:
 			if (key->type == key_gc_dead_keytype) {
 				gc_state |= KEY_GC_FOUND_DEAD_KEY;
 				set_bit(KEY_FLAG_DEAD, &key->flags);
-				key->perm = 0;
 				goto skip_dead_key;
 			} else if (key->type == &key_type_keyring &&
 				   key->restrict_link) {
