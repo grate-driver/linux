@@ -213,8 +213,8 @@ config SAMPLE_WATCH_QUEUE
 	bool "Build example watch-queue notification consumer"
 	depends on CC_CAN_LINK && HEADERS_INSTALL
 	help
-	  Build an example userspace program to use the KEYCTL_WATCH_KEY
-	  keyctl() function to generate notifications through a pipe opened
-	  with O_NOTIFICATION_PIPE.
+	  Build an example userspace program to use mount_notify() and the
+	  KEYCTL_WATCH_KEY keyctl() function to generate notifications through
+	  a pipe opened with O_NOTIFICATION_PIPE.
 
 endif # SAMPLES
