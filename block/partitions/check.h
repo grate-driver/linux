@@ -69,4 +69,5 @@ int sgi_partition(struct parsed_partitions *state);
 int sun_partition(struct parsed_partitions *state);
 int sysv68_partition(struct parsed_partitions *state);
 int tegra_partition_forced_gpt(struct parsed_partitions *state);
+int tegra_partition(struct parsed_partitions *state);
 int ultrix_partition(struct parsed_partitions *state);
