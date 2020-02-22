@@ -86,6 +86,7 @@ static int (*check_part[])(struct parsed_partitions *) = {
 #ifdef CONFIG_TEGRA_PARTITION
 	tegra_partition_forced_gpt_cmdline,
 	tegra_partition_forced_gpt,
+	tegra_partition,
 #endif
 	NULL
 };
