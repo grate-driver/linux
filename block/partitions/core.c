@@ -83,6 +83,9 @@ static int (*check_part[])(struct parsed_partitions *) = {
 #ifdef CONFIG_SYSV68_PARTITION
 	sysv68_partition,
 #endif
+#ifdef CONFIG_TEGRA_PARTITION
+	tegra_partition,
+#endif
 	NULL
 };
 
