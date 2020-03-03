@@ -231,6 +231,42 @@ static int fsinfo_generic_volume_id(struct path *path, struct fsinfo_context *ct
 	return fsinfo_string(path->dentry->d_sb->s_id, ctx);
 }
 
+/*
+ * Retrieve the superblock configuration (mount options) as a comma-separated
+ * string.  The initial comma is stripped off and NUL termination is added.
+ */
+static int fsinfo_generic_seq_read(struct path *path, struct fsinfo_context *ctx)
+{
+	struct super_block *sb = path->dentry->d_sb;
+	struct seq_file m = {
+		.buf	= ctx->buffer,
+		.size	= ctx->buf_size - 1,
+	};
+	int ret = 0;
+
+	switch (ctx->requested_attr) {
+	case FSINFO_ATTR_CONFIGURATION:
+		seq_puts(&m, sb_rdonly(sb) ? "ro" : "rw");
+		ret = security_sb_show_options(&m, sb);
+		if (!ret && sb->s_op->show_options)
+			ret = sb->s_op->show_options(&m, path->mnt->mnt_root);
+		break;
+
+	case FSINFO_ATTR_FS_STATISTICS:
+		if (sb->s_op->show_stats)
+			ret = sb->s_op->show_stats(&m, path->mnt->mnt_root);
+		break;
+	}
+
+	if (ret < 0)
+		return ret;
+	if (seq_has_overflowed(&m))
+		return ctx->buf_size + PAGE_SIZE;
+
+	((char *)ctx->buffer)[ctx->skip + m.count] = 0;
+	return m.count + 1;
+}
+
 static const struct fsinfo_attribute fsinfo_common_attributes[] = {
 	FSINFO_VSTRUCT	(FSINFO_ATTR_STATFS,		fsinfo_generic_statfs),
 	FSINFO_VSTRUCT	(FSINFO_ATTR_IDS,		fsinfo_generic_ids),
@@ -240,6 +276,9 @@ static const struct fsinfo_attribute fsinfo_common_attributes[] = {
 	FSINFO_STRING	(FSINFO_ATTR_VOLUME_ID,		fsinfo_generic_volume_id),
 	FSINFO_VSTRUCT	(FSINFO_ATTR_VOLUME_UUID,	fsinfo_generic_volume_uuid),
 	FSINFO_VSTRUCT	(FSINFO_ATTR_FEATURES,		fsinfo_generic_features),
+	FSINFO_STRING	(FSINFO_ATTR_SOURCE,		fsinfo_generic_mount_source),
+	FSINFO_STRING	(FSINFO_ATTR_CONFIGURATION,	fsinfo_generic_seq_read),
+	FSINFO_STRING	(FSINFO_ATTR_FS_STATISTICS,	fsinfo_generic_seq_read),
 
 	FSINFO_LIST	(FSINFO_ATTR_FSINFO_ATTRIBUTES,	(void *)123UL),
 	FSINFO_VSTRUCT_N(FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO, (void *)123UL),
