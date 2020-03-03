@@ -115,6 +115,9 @@ static int mnt_alloc_id(struct mount *mnt)
 	if (res < 0)
 		return res;
 	mnt->mnt_id = res;
+#ifdef CONFIG_FSINFO
+	vfs_generate_unique_id(&mnt->mnt_unique_id);
+#endif
 	return 0;
 }
 
