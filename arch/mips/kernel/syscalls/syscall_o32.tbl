@@ -428,3 +428,4 @@
 439	o32	faccessat2			sys_faccessat2
 440	o32	watch_mount			sys_watch_mount
 441	o32	watch_sb			sys_watch_sb
+442	o32	fsinfo				sys_fsinfo
