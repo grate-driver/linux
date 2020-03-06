@@ -378,3 +378,4 @@
 438	n32	pidfd_getfd			sys_pidfd_getfd
 439	n32	watch_mount			sys_watch_mount
 440	n32	watch_sb			sys_watch_sb
+441	n32	fsinfo				sys_fsinfo

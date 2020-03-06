@@ -887,6 +887,8 @@ __SYSCALL(__NR_pidfd_getfd, sys_pidfd_getfd)
 __SYSCALL(__NR_watch_mount, sys_watch_mount)
 #define __NR_watch_sb 440
 __SYSCALL(__NR_watch_sb, sys_watch_sb)
+#define __NR_fsinfo 441
+__SYSCALL(__NR_fsinfo, sys_fsinfo)
 
 /*
  * Please add new compat syscalls above this comment and update

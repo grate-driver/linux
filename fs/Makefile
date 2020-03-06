@@ -55,6 +55,7 @@ obj-$(CONFIG_COREDUMP)		+= coredump.o
 obj-$(CONFIG_SYSCTL)		+= drop_caches.o
 
 obj-$(CONFIG_FHANDLE)		+= fhandle.o
+obj-$(CONFIG_FSINFO)		+= fsinfo.o
 obj-y				+= iomap/
 
 obj-y				+= quota/

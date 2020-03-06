@@ -1,0 +1,189 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
+/* fsinfo() definitions.
+ *
+ * Copyright (C) 2020 Red Hat, Inc. All Rights Reserved.
+ * Written by David Howells (dhowells@redhat.com)
+ */
+#ifndef _UAPI_LINUX_FSINFO_H
+#define _UAPI_LINUX_FSINFO_H
+
+#include <linux/types.h>
+#include <linux/socket.h>
+#include <linux/openat2.h>
+
+/*
+ * The filesystem attributes that can be requested.  Note that some attributes
+ * may have multiple instances which can be switched in the parameter block.
+ */
+#define FSINFO_ATTR_STATFS		0x00	/* statfs()-style state */
+#define FSINFO_ATTR_IDS			0x01	/* Filesystem IDs */
+#define FSINFO_ATTR_LIMITS		0x02	/* Filesystem limits */
+#define FSINFO_ATTR_SUPPORTS		0x03	/* What's supported in statx, iocflags, ... */
+#define FSINFO_ATTR_TIMESTAMP_INFO	0x04	/* Inode timestamp info */
+#define FSINFO_ATTR_VOLUME_ID		0x05	/* Volume ID (string) */
+#define FSINFO_ATTR_VOLUME_UUID		0x06	/* Volume UUID (LE uuid) */
+#define FSINFO_ATTR_VOLUME_NAME		0x07	/* Volume name (string) */
+
+#define FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO 0x100	/* Information about attr N (for path) */
+#define FSINFO_ATTR_FSINFO_ATTRIBUTES	0x101	/* List of supported attrs (for path) */
+
+/*
+ * Optional fsinfo() parameter structure.
+ *
+ * If this is not given, it is assumed that fsinfo_attr_statfs instance 0,0 is
+ * desired.
+ */
+struct fsinfo_params {
+	__u64	resolve_flags;	/* RESOLVE_* flags */
+	__u32	at_flags;	/* AT_* flags */
+	__u32	flags;		/* Flags controlling fsinfo() specifically */
+#define FSINFO_FLAGS_QUERY_MASK	0x0007 /* What object should fsinfo() query? */
+#define FSINFO_FLAGS_QUERY_PATH	0x0000 /* - path, specified by dirfd,pathname,AT_EMPTY_PATH */
+#define FSINFO_FLAGS_QUERY_FD	0x0001 /* - fd specified by dirfd */
+	__u32	request;	/* ID of requested attribute */
+	__u32	Nth;		/* Instance of it (some may have multiple) */
+	__u32	Mth;		/* Subinstance of Nth instance */
+};
+
+enum fsinfo_value_type {
+	FSINFO_TYPE_VSTRUCT	= 0,	/* Version-lengthed struct (up to 4096 bytes) */
+	FSINFO_TYPE_STRING	= 1,	/* NUL-term var-length string (up to 4095 chars) */
+	FSINFO_TYPE_OPAQUE	= 2,	/* Opaque blob (unlimited size) */
+	FSINFO_TYPE_LIST	= 3,	/* List of ints/structs (unlimited size) */
+};
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO).
+ *
+ * This gives information about the attributes supported by fsinfo for the
+ * given path.
+ */
+struct fsinfo_attribute_info {
+	unsigned int		attr_id;	/* The ID of the attribute */
+	enum fsinfo_value_type	type;		/* The type of the attribute's value(s) */
+	unsigned int		flags;
+#define FSINFO_FLAGS_N		0x01		/* - Attr has a set of values */
+#define FSINFO_FLAGS_NM		0x02		/* - Attr has a set of sets of values */
+	unsigned int		size;		/* - Value size (FSINFO_STRUCT/FSINFO_LIST) */
+};
+
+#define FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO__STRUCT struct fsinfo_attribute_info
+#define FSINFO_ATTR_FSINFO_ATTRIBUTES__STRUCT __u32
+
+struct fsinfo_u128 {
+#if defined(__BYTE_ORDER) ? __BYTE_ORDER == __BIG_ENDIAN : defined(__BIG_ENDIAN)
+	__u64	hi;
+	__u64	lo;
+#elif defined(__BYTE_ORDER) ? __BYTE_ORDER == __LITTLE_ENDIAN : defined(__LITTLE_ENDIAN)
+	__u64	lo;
+	__u64	hi;
+#endif
+};
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_STATFS).
+ * - This gives extended filesystem information.
+ */
+struct fsinfo_statfs {
+	struct fsinfo_u128 f_blocks;	/* Total number of blocks in fs */
+	struct fsinfo_u128 f_bfree;	/* Total number of free blocks */
+	struct fsinfo_u128 f_bavail;	/* Number of free blocks available to ordinary user */
+	struct fsinfo_u128 f_files;	/* Total number of file nodes in fs */
+	struct fsinfo_u128 f_ffree;	/* Number of free file nodes */
+	struct fsinfo_u128 f_favail;	/* Number of file nodes available to ordinary user */
+	__u64	f_bsize;		/* Optimal block size */
+	__u64	f_frsize;		/* Fragment size */
+};
+
+#define FSINFO_ATTR_STATFS__STRUCT struct fsinfo_statfs
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_IDS).
+ *
+ * List of basic identifiers as is normally found in statfs().
+ */
+struct fsinfo_ids {
+	char	f_fs_name[15 + 1];	/* Filesystem name */
+	__u64	f_fsid;			/* Short 64-bit Filesystem ID (as statfs) */
+	__u64	f_sb_id;		/* Internal superblock ID for sbnotify()/mntnotify() */
+	__u32	f_fstype;		/* Filesystem type from linux/magic.h [uncond] */
+	__u32	f_dev_major;		/* As st_dev_* from struct statx [uncond] */
+	__u32	f_dev_minor;
+	__u32	__padding[1];
+};
+
+#define FSINFO_ATTR_IDS__STRUCT struct fsinfo_ids
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_LIMITS).
+ *
+ * List of supported filesystem limits.
+ */
+struct fsinfo_limits {
+	struct fsinfo_u128 max_file_size;	/* Maximum file size */
+	struct fsinfo_u128 max_ino;		/* Maximum inode number */
+	__u64	max_uid;			/* Maximum UID supported */
+	__u64	max_gid;			/* Maximum GID supported */
+	__u64	max_projid;			/* Maximum project ID supported */
+	__u64	max_hard_links;			/* Maximum number of hard links on a file */
+	__u64	max_xattr_body_len;		/* Maximum xattr content length */
+	__u32	max_xattr_name_len;		/* Maximum xattr name length */
+	__u32	max_filename_len;		/* Maximum filename length */
+	__u32	max_symlink_len;		/* Maximum symlink content length */
+	__u32	max_dev_major;			/* Maximum device major representable */
+	__u32	max_dev_minor;			/* Maximum device minor representable */
+	__u32	__padding[1];
+};
+
+#define FSINFO_ATTR_LIMITS__STRUCT struct fsinfo_limits
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_SUPPORTS).
+ *
+ * What's supported in various masks, such as statx() attribute and mask bits
+ * and IOC flags.
+ */
+struct fsinfo_supports {
+	__u64	stx_attributes;		/* What statx::stx_attributes are supported */
+	__u32	stx_mask;		/* What statx::stx_mask bits are supported */
+	__u32	fs_ioc_getflags;	/* What FS_IOC_GETFLAGS may return */
+	__u32	fs_ioc_setflags_set;	/* What FS_IOC_SETFLAGS may set */
+	__u32	fs_ioc_setflags_clear;	/* What FS_IOC_SETFLAGS may clear */
+	__u32	fs_ioc_fsgetxattr_xflags; /* What FS_IOC_FSGETXATTR[A] may return in fsx_xflags */
+	__u32	fs_ioc_fssetxattr_xflags_set; /* What FS_IOC_FSSETXATTR may set in fsx_xflags */
+	__u32	fs_ioc_fssetxattr_xflags_clear; /* What FS_IOC_FSSETXATTR may set in fsx_xflags */
+	__u32	win_file_attrs;		/* What DOS/Windows FILE_* attributes are supported */
+};
+
+#define FSINFO_ATTR_SUPPORTS__STRUCT struct fsinfo_supports
+
+struct fsinfo_timestamp_one {
+	__s64	minimum;	/* Minimum timestamp value in seconds */
+	__s64	maximum;	/* Maximum timestamp value in seconds */
+	__u16	gran_mantissa;	/* Granularity(secs) = mant * 10^exp */
+	__s8	gran_exponent;
+	__u8	__padding[5];
+};
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_TIMESTAMP_INFO).
+ */
+struct fsinfo_timestamp_info {
+	struct fsinfo_timestamp_one	atime;	/* Access time */
+	struct fsinfo_timestamp_one	mtime;	/* Modification time */
+	struct fsinfo_timestamp_one	ctime;	/* Change time */
+	struct fsinfo_timestamp_one	btime;	/* Birth/creation time */
+};
+
+#define FSINFO_ATTR_TIMESTAMP_INFO__STRUCT struct fsinfo_timestamp_info
+
+/*
+ * Information struct for fsinfo(FSINFO_ATTR_VOLUME_UUID).
+ */
+struct fsinfo_volume_uuid {
+	__u8	uuid[16];
+};
+
+#define FSINFO_ATTR_VOLUME_UUID__STRUCT struct fsinfo_volume_uuid
+
+#endif /* _UAPI_LINUX_FSINFO_H */
