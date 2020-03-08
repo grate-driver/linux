@@ -21,7 +21,6 @@ struct coredump_params;
 extern int dump_skip(struct coredump_params *cprm, size_t nr);
 extern int dump_emit(struct coredump_params *cprm, const void *addr, int nr);
 extern int dump_align(struct coredump_params *cprm, int align);
-extern void dump_truncate(struct coredump_params *cprm);
 int dump_user_range(struct coredump_params *cprm, unsigned long start,
 		    unsigned long len);
 int dump_vma_snapshot(struct coredump_params *cprm, int *vma_count,
