@@ -105,7 +105,7 @@ enum fsconfig_command {
 #define FSMOUNT_CLOEXEC		0x00000001
 
 /*
- * Mount attributes.
+ * Mount object attributes (these are separate to filesystem attributes).
  */
 #define MOUNT_ATTR_RDONLY	0x00000001 /* Mount read-only */
 #define MOUNT_ATTR_NOSUID	0x00000002 /* Ignore suid and sgid bits */
@@ -116,5 +116,13 @@ enum fsconfig_command {
 #define MOUNT_ATTR_NOATIME	0x00000010 /* - Do not update access times. */
 #define MOUNT_ATTR_STRICTATIME	0x00000020 /* - Always perform atime updates */
 #define MOUNT_ATTR_NODIRATIME	0x00000080 /* Do not update directory access times */
+
+/*
+ * Mount object propagation attributes.
+ */
+#define MOUNT_PROPAGATION_UNBINDABLE	0x00000001 /* Mount is unbindable */
+#define MOUNT_PROPAGATION_SLAVE		0x00000002 /* Mount is slave */
+#define MOUNT_PROPAGATION_PRIVATE	0x00000000 /* Mount is private (ie. not shared) */
+#define MOUNT_PROPAGATION_SHARED	0x00000004 /* Mount is shared */
 
 #endif /* _UAPI_LINUX_MOUNT_H */

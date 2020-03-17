@@ -4224,6 +4224,53 @@ int fsinfo_generic_mount_info(struct path *path, struct fsinfo_context *ctx)
 }
 
 /*
+ * Retrieve information about the topology at the nominated mount and
+ * its propogation attributes.
+ */
+int fsinfo_generic_mount_topology(struct path *path, struct fsinfo_context *ctx)
+{
+	struct fsinfo_mount_topology *p = ctx->buffer;
+	struct mount *m;
+	struct path root;
+
+	get_fs_root(current->fs, &root);
+
+	namespace_lock();
+
+	m = real_mount(path->mnt);
+
+	p->parent_id = m->mnt_parent->mnt_id;
+
+	if (path->mnt == root.mnt) {
+		p->parent_id = m->mnt_id;
+	} else {
+		rcu_read_lock();
+		if (!are_paths_connected(&root, path))
+			p->parent_id = m->mnt_id;
+		rcu_read_unlock();
+	}
+
+	if (IS_MNT_SHARED(m)) {
+		p->group_id = m->mnt_group_id;
+		p->propagation |= MOUNT_PROPAGATION_SHARED;
+	}
+	if (IS_MNT_SLAVE(m)) {
+		int master = m->mnt_master->mnt_group_id;
+		int dom = get_dominating_id(m, &root);
+		p->master_id = master;
+		if (dom && dom != master)
+			p->from_id = dom;
+		p->propagation |= MOUNT_PROPAGATION_SLAVE;
+	}
+	if (IS_MNT_UNBINDABLE(m))
+		p->propagation |= MOUNT_PROPAGATION_UNBINDABLE;
+
+	namespace_unlock();
+	path_put(&root);
+	return sizeof(*p);
+}
+
+/*
  * Return the path of this mount relative to its parent and clipped to
  * the current chroot.
  */
@@ -4297,6 +4344,50 @@ int fsinfo_generic_mount_point_full(struct path *path, struct fsinfo_context *ct
 
 	ctx->skip = p - ctx->buffer;
 	return (ctx->buffer + ctx->buf_size) - p;
+}
+
+/*
+ * Store a mount record into the fsinfo buffer.
+ */
+static void fsinfo_store_mount(struct fsinfo_context *ctx, const struct mount *p)
+{
+	struct fsinfo_mount_child record = {};
+	unsigned int usage = ctx->usage;
+
+	if (ctx->usage >= INT_MAX)
+		return;
+	ctx->usage = usage + sizeof(record);
+
+	if (ctx->buffer && ctx->usage <= ctx->buf_size) {
+		record.mnt_unique_id	= p->mnt_unique_id;
+		record.mnt_id		= p->mnt_id;
+		memcpy(ctx->buffer + usage, &record, sizeof(record));
+	}
+}
+
+/*
+ * Return information about the submounts relative to path.
+ */
+int fsinfo_generic_mount_children(struct path *path, struct fsinfo_context *ctx)
+{
+	struct mount *m, *child;
+
+	m = real_mount(path->mnt);
+
+	read_seqlock_excl(&mount_lock);
+
+	list_for_each_entry_rcu(child, &m->mnt_mounts, mnt_child) {
+		if (child->mnt_parent != m)
+			continue;
+		fsinfo_store_mount(ctx, child);
+	}
+
+	/* End the list with a copy of the parameter mount's details so that
+	 * userspace can quickly check for changes.
+	 */
+	fsinfo_store_mount(ctx, m);
+	read_sequnlock_excl(&mount_lock);
+	return ctx->usage;
 }
 
 #endif /* CONFIG_FSINFO */
