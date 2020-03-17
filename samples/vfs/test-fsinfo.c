@@ -294,6 +294,17 @@ static void dump_fsinfo_generic_volume_uuid(void *reply, unsigned int size)
 	       f->uuid[14], f->uuid[15]);
 }
 
+static void dump_fsinfo_generic_mount_info(void *reply, unsigned int size)
+{
+	struct fsinfo_mount_info *r = reply;
+
+	printf("\n");
+	printf("\tsb_uniq : %llx\n", (unsigned long long)r->sb_unique_id);
+	printf("\tmnt_uniq: %llx\n", (unsigned long long)r->mnt_unique_id);
+	printf("\tmnt_id  : %x\n", r->mnt_id);
+	printf("\tattr    : %x\n", r->attr);
+}
+
 static void dump_string(void *reply, unsigned int size)
 {
 	char *s = reply, *p;
@@ -370,6 +381,11 @@ static const struct fsinfo_attribute fsinfo_attributes[] = {
 
 	FSINFO_VSTRUCT_N(FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO, fsinfo_meta_attribute_info),
 	FSINFO_LIST	(FSINFO_ATTR_FSINFO_ATTRIBUTES,	fsinfo_meta_attributes),
+
+	FSINFO_VSTRUCT	(FSINFO_ATTR_MOUNT_INFO,	fsinfo_generic_mount_info),
+	FSINFO_STRING	(FSINFO_ATTR_MOUNT_PATH,	string),
+	FSINFO_STRING_N	(FSINFO_ATTR_MOUNT_POINT,	string),
+	FSINFO_STRING_N	(FSINFO_ATTR_MOUNT_POINT_FULL,	string),
 	{}
 };
 
