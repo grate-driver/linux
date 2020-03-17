@@ -252,6 +252,13 @@ static int fsinfo_generic_seq_read(struct path *path, struct fsinfo_context *ctx
 			ret = sb->s_op->show_options(&m, path->mnt->mnt_root);
 		break;
 
+	case FSINFO_ATTR_MOUNT_PATH:
+		if (sb->s_op->show_path)
+			ret = sb->s_op->show_path(&m, path->mnt->mnt_root);
+		else
+			seq_dentry(&m, path->mnt->mnt_root, " \t\n\\");
+		break;
+
 	case FSINFO_ATTR_FS_STATISTICS:
 		if (sb->s_op->show_stats)
 			ret = sb->s_op->show_stats(&m, path->mnt->mnt_root);
@@ -282,6 +289,11 @@ static const struct fsinfo_attribute fsinfo_common_attributes[] = {
 
 	FSINFO_LIST	(FSINFO_ATTR_FSINFO_ATTRIBUTES,	(void *)123UL),
 	FSINFO_VSTRUCT_N(FSINFO_ATTR_FSINFO_ATTRIBUTE_INFO, (void *)123UL),
+
+	FSINFO_VSTRUCT	(FSINFO_ATTR_MOUNT_INFO,	fsinfo_generic_mount_info),
+	FSINFO_STRING	(FSINFO_ATTR_MOUNT_PATH,	fsinfo_generic_seq_read),
+	FSINFO_STRING	(FSINFO_ATTR_MOUNT_POINT,	fsinfo_generic_mount_point),
+	FSINFO_STRING	(FSINFO_ATTR_MOUNT_POINT_FULL,	fsinfo_generic_mount_point_full),
 	{}
 };
 
