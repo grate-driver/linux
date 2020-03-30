@@ -833,7 +833,7 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 
 	reset_control_deassert(tegra->reset);
 
-	rate = clk_round_rate(tegra->emc_clock, ULONG_MAX);
+	rate = clk_round_rate_unboundly(tegra->emc_clock, ULONG_MAX);
 	if (rate < 0) {
 		dev_err(&pdev->dev, "Failed to round clock rate: %ld\n", rate);
 		return rate;
@@ -848,7 +848,7 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 	}
 
 	for (rate = 0; rate <= tegra->max_freq * KHZ; rate++) {
-		rate = clk_round_rate(tegra->emc_clock, rate);
+		rate = clk_round_rate_unboundly(tegra->emc_clock, rate);
 
 		if (rate < 0) {
 			dev_err(&pdev->dev,
