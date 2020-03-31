@@ -325,6 +325,7 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	struct pci_bus *child;
 	struct pci_host_bridge *bridge;
 	struct resource *cfg_res;
+	resource_size_t mem_size;
 	u32 hdr_type;
 	int ret;
 
@@ -362,7 +363,10 @@ int dw_pcie_host_init(struct pcie_port *pp)
 		case IORESOURCE_MEM:
 			pp->mem = win->res;
 			pp->mem->name = "MEM";
-			pp->mem_size = resource_size(pp->mem);
+			mem_size = resource_size(pp->mem);
+			if (upper_32_bits(mem_size))
+				dev_warn(dev, "MEM resource size exceeds max for 32 bits\n");
+			pp->mem_size = mem_size;
 			pp->mem_bus_addr = pp->mem->start - win->offset;
 			break;
 		case 0:
