@@ -151,7 +151,6 @@ struct sdhci_tegra {
 	const struct sdhci_tegra_soc_data *soc_data;
 	struct gpio_desc *power_gpio;
 	struct clk *tmclk;
-	bool ddr_signaling;
 	bool pad_calib_required;
 	bool pad_control_available;
 
@@ -425,7 +424,7 @@ static void tegra_sdhci_reset(struct sdhci_host *host, u8 mask)
 		tegra_host->pad_calib_required = true;
 	}
 
-	tegra_host->ddr_signaling = false;
+	host->quirks2 &= ~SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN;
 }
 
 static void tegra_sdhci_configure_cal_pad(struct sdhci_host *host, bool enable)
@@ -758,34 +757,10 @@ static void tegra_sdhci_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_tegra *tegra_host = sdhci_pltfm_priv(pltfm_host);
-	unsigned long host_clk;
-
-	if (!clock)
-		return sdhci_set_clock(host, clock);
-
-	/*
-	 * In DDR50/52 modes the Tegra SDHCI controllers require the SDHCI
-	 * divider to be configured to divided the host clock by two. The SDHCI
-	 * clock divider is calculated as part of sdhci_set_clock() by
-	 * sdhci_calc_clk(). The divider is calculated from host->max_clk and
-	 * the requested clock rate.
-	 *
-	 * By setting the host->max_clk to clock * 2 the divider calculation
-	 * will always result in the correct value for DDR50/52 modes,
-	 * regardless of clock rate rounding, which may happen if the value
-	 * from clk_get_rate() is used.
-	 */
-	host_clk = tegra_host->ddr_signaling ? clock * 2 : clock;
-	clk_set_rate(pltfm_host->clk, host_clk);
-	tegra_host->curr_clk_rate = host_clk;
-	if (tegra_host->ddr_signaling)
-		host->max_clk = host_clk;
-	else
-		host->max_clk = clk_get_rate(pltfm_host->clk);
 
 	sdhci_set_clock(host, clock);
 
-	if (tegra_host->pad_calib_required) {
+	if (clock && tegra_host->pad_calib_required) {
 		tegra_sdhci_pad_autocalib(host);
 		tegra_host->pad_calib_required = false;
 	}
@@ -990,7 +965,8 @@ static void tegra_sdhci_set_uhs_signaling(struct sdhci_host *host,
 	u8 iter = TRIES_256;
 	u32 val;
 
-	tegra_host->ddr_signaling = false;
+	host->quirks2 &= ~SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN;
+
 	switch (timing) {
 	case MMC_TIMING_UHS_SDR50:
 		break;
@@ -1006,7 +982,7 @@ static void tegra_sdhci_set_uhs_signaling(struct sdhci_host *host,
 		break;
 	case MMC_TIMING_MMC_DDR52:
 	case MMC_TIMING_UHS_DDR50:
-		tegra_host->ddr_signaling = true;
+		host->quirks2 |= SDHCI_QUIRK2_CLOCK_DIV_ZERO_BROKEN;
 		set_default_tap = true;
 		break;
 	default:
@@ -1611,7 +1587,6 @@ static int sdhci_tegra_probe(struct platform_device *pdev)
 	pltfm_host = sdhci_priv(host);
 
 	tegra_host = sdhci_pltfm_priv(pltfm_host);
-	tegra_host->ddr_signaling = false;
 	tegra_host->pad_calib_required = false;
 	tegra_host->pad_control_available = false;
 	tegra_host->soc_data = soc_data;
