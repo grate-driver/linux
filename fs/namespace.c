@@ -4367,7 +4367,8 @@ int fsinfo_generic_mount_point_full(struct path *path, struct fsinfo_context *ct
 /*
  * Store a mount record into the fsinfo buffer.
  */
-static void fsinfo_store_mount(struct fsinfo_context *ctx, const struct mount *p)
+static void fsinfo_store_mount(struct fsinfo_context *ctx, const struct mount *p,
+			       bool is_root)
 {
 	struct fsinfo_mount_child record = {};
 #ifdef CONFIG_SB_NOTIFICATIONS
@@ -4383,6 +4384,7 @@ static void fsinfo_store_mount(struct fsinfo_context *ctx, const struct mount *p
 
 	record.mnt_unique_id	= p->mnt_unique_id;
 	record.mnt_id		= p->mnt_id;
+	record.parent_id	= is_root ? p->mnt_id : p->mnt_parent->mnt_id;
 	record.notify_sum	= 0;
 #ifdef CONFIG_SB_NOTIFICATIONS
 	record.notify_sum	+= (atomic_read(&sb->s_change_counter) +
@@ -4411,14 +4413,52 @@ int fsinfo_generic_mount_children(struct path *path, struct fsinfo_context *ctx)
 	list_for_each_entry_rcu(child, &m->mnt_mounts, mnt_child) {
 		if (child->mnt_parent != m)
 			continue;
-		fsinfo_store_mount(ctx, child);
+		fsinfo_store_mount(ctx, child, false);
 	}
 
 	/* End the list with a copy of the parameter mount's details so that
 	 * userspace can quickly check for changes.
 	 */
-	fsinfo_store_mount(ctx, m);
+	fsinfo_store_mount(ctx, m, true);
 	read_sequnlock_excl(&mount_lock);
+	return ctx->usage;
+}
+
+/*
+ * Return information about all the mounts in the namespace referenced by the
+ * path.
+ */
+int fsinfo_generic_mount_all(struct path *path, struct fsinfo_context *ctx)
+{
+	struct mnt_namespace *ns;
+	struct mount *m, *p;
+	struct path chroot;
+	bool conn = false;
+
+	m = real_mount(path->mnt);
+	ns = m->mnt_ns;
+
+	get_fs_root(current->fs, &chroot);
+	rcu_read_lock();
+	if (!are_paths_connected(&chroot, path) && !capable(CAP_SYS_ADMIN))
+		conn = true;
+	rcu_read_unlock();
+	path_put(&chroot);
+	if (!conn)
+		return -EPERM;
+
+	down_read(&namespace_sem);
+
+	list_for_each_entry(p, &ns->list, mnt_list) {
+		struct path mnt_root;
+
+		mnt_root.mnt	= &p->mnt;
+		mnt_root.dentry	= p->mnt.mnt_root;
+		if (are_paths_connected(path, &mnt_root))
+			fsinfo_store_mount(ctx, p, p == m);
+	}
+
+	up_read(&namespace_sem);
 	return ctx->usage;
 }
 
