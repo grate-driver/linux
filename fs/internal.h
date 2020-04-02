@@ -102,6 +102,7 @@ extern int fsinfo_generic_mount_topology(struct path *, struct fsinfo_context *)
 extern int fsinfo_generic_mount_point(struct path *, struct fsinfo_context *);
 extern int fsinfo_generic_mount_point_full(struct path *, struct fsinfo_context *);
 extern int fsinfo_generic_mount_children(struct path *, struct fsinfo_context *);
+extern int fsinfo_generic_mount_all(struct path *, struct fsinfo_context *);
 
 /*
  * fs_struct.c

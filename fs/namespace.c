@@ -4504,4 +4504,41 @@ int fsinfo_generic_mount_children(struct path *path, struct fsinfo_context *ctx)
 	return ctx->usage;
 }
 
+/*
+ * Return information about all the mounts in the namespace referenced by the
+ * path.
+ */
+int fsinfo_generic_mount_all(struct path *path, struct fsinfo_context *ctx)
+{
+	struct mnt_namespace *ns;
+	struct mount *m, *p;
+	struct path chroot;
+	bool allow;
+
+	m = real_mount(path->mnt);
+	ns = m->mnt_ns;
+
+	get_fs_root(current->fs, &chroot);
+	rcu_read_lock();
+	allow = are_paths_connected(&chroot, path) || capable(CAP_SYS_ADMIN);
+	rcu_read_unlock();
+	path_put(&chroot);
+	if (!allow)
+		return -EPERM;
+
+	down_read(&namespace_sem);
+
+	list_for_each_entry(p, &ns->list, mnt_list) {
+		struct path mnt_root;
+
+		mnt_root.mnt	= &p->mnt;
+		mnt_root.dentry	= p->mnt.mnt_root;
+		if (are_paths_connected(path, &mnt_root))
+			fsinfo_store_mount(ctx, p, p == m);
+	}
+
+	up_read(&namespace_sem);
+	return ctx->usage;
+}
+
 #endif /* CONFIG_FSINFO */

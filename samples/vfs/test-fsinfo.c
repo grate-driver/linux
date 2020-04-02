@@ -346,6 +346,27 @@ static void dump_fsinfo_generic_mount_children(void *reply, unsigned int size)
 	       r->mnt_id, (unsigned long long)r->mnt_unique_id, r->notify_sum, mp);
 }
 
+static void dump_fsinfo_generic_mount_all(void *reply, unsigned int size)
+{
+	struct fsinfo_mount_child *r = reply;
+	ssize_t mplen;
+	char path[32], *mp;
+
+	struct fsinfo_params params = {
+		.flags		= FSINFO_FLAGS_QUERY_MOUNT,
+		.request	= FSINFO_ATTR_MOUNT_POINT_FULL,
+	};
+
+	sprintf(path, "%u", r->mnt_id);
+	mplen = get_fsinfo(path, "FSINFO_ATTR_MOUNT_POINT_FULL", &params, (void **)&mp);
+	if (mplen < 0)
+		mp = "-";
+
+	printf("%5x %5x %12llx %10u %s\n",
+	       r->mnt_id, r->parent_id, (unsigned long long)r->mnt_unique_id,
+	       r->notify_sum, mp);
+}
+
 static void dump_afs_fsinfo_server_address(void *reply, unsigned int size)
 {
 	struct fsinfo_afs_server_address *f = reply;
@@ -473,6 +494,7 @@ static const struct fsinfo_attribute fsinfo_attributes[] = {
 	FSINFO_STRING_N	(FSINFO_ATTR_MOUNT_POINT,	string),
 	FSINFO_STRING_N	(FSINFO_ATTR_MOUNT_POINT_FULL,	string),
 	FSINFO_LIST	(FSINFO_ATTR_MOUNT_CHILDREN,	fsinfo_generic_mount_children),
+	FSINFO_LIST	(FSINFO_ATTR_MOUNT_ALL,		fsinfo_generic_mount_all),
 
 	FSINFO_STRING	(FSINFO_ATTR_AFS_CELL_NAME,	string),
 	FSINFO_STRING	(FSINFO_ATTR_AFS_SERVER_NAME,	string),

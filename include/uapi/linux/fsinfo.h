@@ -37,6 +37,7 @@
 #define FSINFO_ATTR_MOUNT_POINT_FULL	0x203	/* Absolute path of mount (string) */
 #define FSINFO_ATTR_MOUNT_TOPOLOGY	0x204	/* Mount object topology */
 #define FSINFO_ATTR_MOUNT_CHILDREN	0x205	/* Children of this mount (list) */
+#define FSINFO_ATTR_MOUNT_ALL		0x206	/* List all mounts in a namespace (list) */
 
 #define FSINFO_ATTR_AFS_CELL_NAME	0x300	/* AFS cell name (string) */
 #define FSINFO_ATTR_AFS_SERVER_NAME	0x301	/* Name of the Nth server (string) */
@@ -131,6 +132,8 @@ struct fsinfo_mount_topology {
 /*
  * Information struct element for fsinfo(FSINFO_ATTR_MOUNT_CHILDREN).
  * - An extra element is placed on the end representing the parent mount.
+ *
+ * Information struct element for fsinfo(FSINFO_ATTR_MOUNT_ALL).
  */
 struct fsinfo_mount_child {
 	__u64	mnt_unique_id;		/* Kernel-lifetime unique mount ID */
@@ -143,6 +146,7 @@ struct fsinfo_mount_child {
 };
 
 #define FSINFO_ATTR_MOUNT_CHILDREN__STRUCT struct fsinfo_mount_child
+#define FSINFO_ATTR_MOUNT_ALL__STRUCT struct fsinfo_mount_child
 
 /*
  * Information struct for fsinfo(FSINFO_ATTR_STATFS).
