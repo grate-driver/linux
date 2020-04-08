@@ -99,6 +99,7 @@ static int panel_lvds_get_modes(struct drm_panel *panel,
 	connector->display_info.bus_flags = lvds->data_mirror
 					  ? DRM_BUS_FLAG_DATA_LSB_TO_MSB
 					  : DRM_BUS_FLAG_DATA_MSB_TO_LSB;
+	drm_connector_set_panel_orientation(connector, lvds->panel.orientation);
 
 	return 1;
 }
@@ -222,6 +223,11 @@ static int panel_lvds_probe(struct platform_device *pdev)
 	/* Register the panel. */
 	drm_panel_init(&lvds->panel, lvds->dev, &panel_lvds_funcs,
 		       DRM_MODE_CONNECTOR_LVDS);
+
+	ret = of_drm_get_panel_orientation(lvds->dev->of_node,
+					   &lvds->panel.orientation);
+	if (ret)
+		return ret;
 
 	ret = drm_panel_of_backlight(&lvds->panel);
 	if (ret)
