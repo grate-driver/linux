@@ -214,6 +214,7 @@ static struct mount *alloc_vfsmnt(const char *name)
 #endif
 
 		INIT_HLIST_NODE(&mnt->mnt_hash);
+		INIT_HLIST_NODE(&mnt->mnt_safe_link);
 		INIT_LIST_HEAD(&mnt->mnt_child);
 		INIT_LIST_HEAD(&mnt->mnt_mounts);
 		INIT_LIST_HEAD(&mnt->mnt_list);
@@ -839,6 +840,7 @@ static struct mountpoint *unhash_mnt(struct mount *mnt)
 {
 	struct mountpoint *mp;
 	mnt->mnt_parent = mnt;
+	mnt->mnt_parent_id = mnt->mnt_id;
 	mnt->mnt_mountpoint = mnt->mnt.mnt_root;
 	list_del_init(&mnt->mnt_child);
 	hlist_del_init_rcu(&mnt->mnt_hash);
@@ -868,6 +870,7 @@ void mnt_set_mountpoint(struct mount *mnt,
 	mnt_add_count(mnt, 1);	/* essentially, that's mntget */
 	child_mnt->mnt_mountpoint = mp->m_dentry;
 	child_mnt->mnt_parent = mnt;
+	child_mnt->mnt_parent_id = mnt->mnt_id;
 	child_mnt->mnt_mp = mp;
 	hlist_add_head(&child_mnt->mnt_mp_list, &mp->m_list);
 }
@@ -918,9 +921,10 @@ static void commit_tree(struct mount *mnt)
 	BUG_ON(parent == mnt);
 
 	list_add_tail(&head, &mnt->mnt_list);
-	list_for_each_entry(m, &head, mnt_list)
+	list_for_each_entry(m, &head, mnt_list) {
 		m->mnt_ns = n;
-
+		hlist_add_head_rcu(&m->mnt_safe_link, &n->mounts_safe);
+	}
 	list_splice(&head, n->list.prev);
 
 	n->mounts += n->pending_mounts;
@@ -984,6 +988,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
 	mnt->mnt.mnt_root	= dget(fc->root);
 	mnt->mnt_mountpoint	= mnt->mnt.mnt_root;
 	mnt->mnt_parent		= mnt;
+	mnt->mnt_parent_id	= mnt->mnt_id;
 
 	lock_mount_hash();
 	list_add_tail(&mnt->mnt_instance, &mnt->mnt.mnt_sb->s_mounts);
@@ -1079,6 +1084,7 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 	mnt->mnt.mnt_root = dget(root);
 	mnt->mnt_mountpoint = mnt->mnt.mnt_root;
 	mnt->mnt_parent = mnt;
+	mnt->mnt_parent_id = mnt->mnt_id;
 	lock_mount_hash();
 	list_add_tail(&mnt->mnt_instance, &sb->s_mounts);
 	unlock_mount_hash();
@@ -1529,6 +1535,7 @@ static void umount_tree(struct mount *mnt, enum umount_tree_flags how)
 		p = list_first_entry(&tmp_list, struct mount, mnt_list);
 		list_del_init(&p->mnt_expire);
 		list_del_init(&p->mnt_list);
+		hlist_del_rcu(&p->mnt_safe_link);
 
 		ns = p->mnt_ns;
 		if (ns) {
@@ -2432,6 +2439,7 @@ static struct file *open_detached_copy(struct path *path, bool recursive)
 	for (p = mnt; p; p = next_mnt(p, mnt)) {
 		p->mnt_ns = ns;
 		ns->mounts++;
+		hlist_add_head_rcu(&p->mnt_safe_link, &ns->mounts_safe);
 	}
 	ns->root = mnt;
 	list_add_tail(&ns->list, &mnt->mnt_list);
@@ -3296,6 +3304,7 @@ static struct mnt_namespace *alloc_mnt_ns(struct user_namespace *user_ns, bool a
 	if (!anon)
 		new_ns->seq = atomic64_add_return(1, &mnt_ns_seq);
 	atomic_set(&new_ns->count, 1);
+	INIT_HLIST_HEAD(&new_ns->mounts_safe);
 	INIT_LIST_HEAD(&new_ns->list);
 	init_waitqueue_head(&new_ns->poll);
 	spin_lock_init(&new_ns->ns_lock);
@@ -3357,6 +3366,7 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
 	while (p) {
 		q->mnt_ns = new_ns;
 		new_ns->mounts++;
+		hlist_add_head_rcu(&q->mnt_safe_link, &new_ns->mounts_safe);
 		if (new_fs) {
 			if (&p->mnt == new_fs->root.mnt) {
 				new_fs->root.mnt = mntget(&q->mnt);
@@ -3401,6 +3411,7 @@ struct dentry *mount_subtree(struct vfsmount *m, const char *name)
 	ns->root = mnt;
 	ns->mounts++;
 	list_add(&mnt->mnt_list, &ns->list);
+	hlist_add_head_rcu(&mnt->mnt_safe_link, &ns->mounts_safe);
 
 	err = vfs_path_lookup(m->mnt_root, m,
 			name, LOOKUP_FOLLOW|LOOKUP_AUTOMOUNT, &path);
@@ -3567,6 +3578,7 @@ SYSCALL_DEFINE3(fsmount, int, fs_fd, unsigned int, flags,
 	ns->root = mnt;
 	ns->mounts = 1;
 	list_add(&mnt->mnt_list, &ns->list);
+	hlist_add_head_rcu(&mnt->mnt_safe_link, &ns->mounts_safe);
 	mntget(newmount.mnt);
 
 	/* Attach to an apparent O_PATH fd with a note that we need to unmount
@@ -3821,6 +3833,7 @@ static void __init init_mount_tree(void)
 	ns->root = m;
 	ns->mounts = 1;
 	list_add(&m->mnt_list, &ns->list);
+	hlist_add_head_rcu(&m->mnt_safe_link, &ns->mounts_safe);
 	init_task.nsproxy->mnt_ns = ns;
 	get_mnt_ns(ns);
 
@@ -4451,7 +4464,7 @@ static void fsinfo_store_mount(struct fsinfo_context *ctx, const struct mount *p
 {
 	struct fsinfo_mount_child record = {};
 #ifdef CONFIG_SB_NOTIFICATIONS
-	const struct super_block *sb = p->mnt.mnt_sb;
+	const struct super_block *sb = READ_ONCE(p->mnt.mnt_sb);
 #endif
 	unsigned int usage = ctx->usage;
 
@@ -4463,12 +4476,12 @@ static void fsinfo_store_mount(struct fsinfo_context *ctx, const struct mount *p
 
 	record.mnt_unique_id	= p->mnt_unique_id;
 	record.mnt_id		= p->mnt_id;
-	record.parent_id	= is_root ? p->mnt_id : p->mnt_parent->mnt_id;
-
+	record.parent_id	= is_root ? p->mnt_id : p->mnt_parent_id;
 	record.notify_sum	= 0;
 #ifdef CONFIG_SB_NOTIFICATIONS
-	record.notify_sum	+= (atomic_read(&sb->s_change_counter) +
-				    atomic_read(&sb->s_notify_counter));
+	if (sb)
+		record.notify_sum	+= (atomic_read(&sb->s_change_counter) +
+					    atomic_read(&sb->s_notify_counter));
 #endif
 #ifdef CONFIG_MOUNT_NOTIFICATIONS
 	record.notify_sum	+= (atomic_read(&p->mnt_attr_changes) +
@@ -4513,31 +4526,33 @@ int fsinfo_generic_mount_all(struct path *path, struct fsinfo_context *ctx)
 	struct mnt_namespace *ns;
 	struct mount *m, *p;
 	struct path chroot;
-	bool allow;
+	unsigned seq = 0;
 
 	m = real_mount(path->mnt);
 	ns = m->mnt_ns;
 
-	get_fs_root(current->fs, &chroot);
 	rcu_read_lock();
-	allow = are_paths_connected(&chroot, path) || capable(CAP_SYS_ADMIN);
+	do {
+		read_seqbegin_or_lock(&mount_lock, &seq);
+
+		get_fs_root_rcu(current->fs, &chroot);
+		if (!are_paths_connected(&chroot, path) && !capable(CAP_SYS_ADMIN)) {
+			rcu_read_unlock();
+			return -EPERM;
+		}
+
+		hlist_for_each_entry_rcu(p, &ns->mounts_safe, mnt_safe_link) {
+			struct path mnt_root;
+
+			mnt_root.mnt	= &p->mnt;
+			mnt_root.dentry	= p->mnt.mnt_root;
+			if (are_paths_connected(path, &mnt_root))
+				fsinfo_store_mount(ctx, p, p == m);
+		}
+	} while (need_seqretry(&mount_lock, seq));
+
+	done_seqretry(&mount_lock, seq);
 	rcu_read_unlock();
-	path_put(&chroot);
-	if (!allow)
-		return -EPERM;
-
-	down_read(&namespace_sem);
-
-	list_for_each_entry(p, &ns->list, mnt_list) {
-		struct path mnt_root;
-
-		mnt_root.mnt	= &p->mnt;
-		mnt_root.dentry	= p->mnt.mnt_root;
-		if (are_paths_connected(path, &mnt_root))
-			fsinfo_store_mount(ctx, p, p == m);
-	}
-
-	up_read(&namespace_sem);
 	return ctx->usage;
 }
 
