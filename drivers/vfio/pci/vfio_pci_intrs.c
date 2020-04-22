@@ -626,6 +626,8 @@ int vfio_pci_set_irqs_ioctl(struct vfio_pci_device *vdev, uint32_t flags,
 	int (*func)(struct vfio_pci_device *vdev, unsigned index,
 		    unsigned start, unsigned count, uint32_t flags,
 		    void *data) = NULL;
+	int ret;
+	u16 cmd;
 
 	switch (index) {
 	case VFIO_PCI_INTX_IRQ_INDEX:
@@ -673,5 +675,19 @@ int vfio_pci_set_irqs_ioctl(struct vfio_pci_device *vdev, uint32_t flags,
 	if (!func)
 		return -ENOTTY;
 
-	return func(vdev, index, start, count, flags, data);
+	if (index == VFIO_PCI_MSIX_IRQ_INDEX) {
+		down_write(&vdev->memory_lock);
+		pci_read_config_word(vdev->pdev, PCI_COMMAND, &cmd);
+		pci_write_config_word(vdev->pdev, PCI_COMMAND,
+				      cmd | PCI_COMMAND_MEMORY);
+	}
+
+	ret = func(vdev, index, start, count, flags, data);
+
+	if (index == VFIO_PCI_MSIX_IRQ_INDEX) {
+		pci_write_config_word(vdev->pdev, PCI_COMMAND, cmd);
+		up_write(&vdev->memory_lock);
+	}
+
+	return ret;
 }
