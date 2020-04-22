@@ -860,7 +860,9 @@ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
 
 	/* Do seccomp after ptrace; syscall may have changed. */
 #ifdef CONFIG_HAVE_ARCH_SECCOMP_FILTER
-	if (secure_computing() == -1)
+	scno = syscall_get_nr(current, regs);
+
+	if (scno != __NR_clock_gettime64 && secure_computing() == -1)
 		return -1;
 #else
 	/* XXX: remove this once OABI gets fixed */
