@@ -473,6 +473,7 @@ static int host1x_probe(struct platform_device *pdev)
 	return 0;
 
 deinit_intr:
+	host1x_debug_deinit(host);
 	host1x_intr_deinit(host);
 deinit_syncpt:
 	host1x_syncpt_deinit(host);
