@@ -440,8 +440,13 @@ static void tps65910_power_off(void)
 			DEVCTRL_PWR_OFF_MASK) < 0)
 		return;
 
-	tps65910_reg_clear_bits(tps65910, TPS65910_DEVCTRL,
-			DEVCTRL_DEV_ON_MASK);
+	if (tps65910_reg_clear_bits(tps65910, TPS65910_DEVCTRL,
+			DEVCTRL_DEV_SLP_MASK) < 0)
+		return;
+
+	tps65910_reg_update_bits(tps65910, TPS65910_DEVCTRL,
+				 DEVCTRL_DEV_OFF_MASK | DEVCTRL_DEV_ON_MASK,
+				 DEVCTRL_DEV_OFF_MASK);
 }
 
 static int tps65910_i2c_probe(struct i2c_client *i2c,
