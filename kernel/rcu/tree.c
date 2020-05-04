@@ -391,15 +391,9 @@ static int rcu_is_cpu_rrupt_from_idle(void)
 	/* Check for counter underflows */
 	RCU_LOCKDEP_WARN(__this_cpu_read(rcu_data.dynticks_nesting) < 0,
 			 "RCU dynticks_nesting counter underflow!");
-	RCU_LOCKDEP_WARN(__this_cpu_read(rcu_data.dynticks_nmi_nesting) <= 0,
-			 "RCU dynticks_nmi_nesting counter underflow/zero!");
 
-	/* Are we at first interrupt nesting level? */
-	if (__this_cpu_read(rcu_data.dynticks_nmi_nesting) != 1)
-		return false;
-
-	/* Does CPU appear to be idle from an RCU standpoint? */
-	return __this_cpu_read(rcu_data.dynticks_nesting) == 0;
+	/* Are we the outermost interrupt that arrived when RCU was idle? */
+	return __this_cpu_read(rcu_data.dynticks_nesting) == 1;
 }
 
 #define DEFAULT_RCU_BLIMIT 10     /* Maximum callbacks per rcu_do_batch ... */
@@ -562,8 +556,7 @@ static noinstr void rcu_eqs_enter(bool user)
 	 * mean usermode upcalls or idle exit happened from interrupts. Remove
 	 * the warning by 2020.
 	 */
-	if (WARN_ON_ONCE(rdp->dynticks_nmi_nesting != 0))
-		WRITE_ONCE(rdp->dynticks_nmi_nesting, 0);
+	WARN_ON_ONCE(in_irq());
 
 	WARN_ON_ONCE(IS_ENABLED(CONFIG_RCU_EQS_DEBUG) &&
 		     rdp->dynticks_nesting == 0);
@@ -630,9 +623,8 @@ noinstr void rcu_user_enter(void)
  * rcu_nmi_exit - inform RCU of exit from NMI context
  *
  * If we are returning from the outermost NMI handler that interrupted an
- * RCU-idle period, update rdp->dynticks and rdp->dynticks_nmi_nesting
- * to let the RCU grace-period handling know that the CPU is back to
- * being RCU-idle.
+ * RCU-idle period, update rdp->dynticks to let the RCU grace-period handling
+ * know that the CPU is back to being RCU-idle.
  *
  * If you add or remove a call to rcu_nmi_exit(), be sure to test
  * with CONFIG_RCU_EQS_DEBUG=y.
@@ -642,16 +634,13 @@ noinstr void rcu_nmi_exit(void)
 	struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
 
 	/*
-	 * Check for ->dynticks_nmi_nesting underflow and bad ->dynticks.
+	 * Check for ->dynticks_nesting underflow and bad ->dynticks.
 	 * (We are exiting an NMI handler, so RCU better be paying attention
 	 * to us!)
 	 */
 	WARN_ON_ONCE(rdp->dynticks_nesting <= 0);
-	WARN_ON_ONCE(rdp->dynticks_nmi_nesting <= 0);
 	WARN_ON_ONCE(rcu_dynticks_curr_cpu_in_eqs());
 
-	WRITE_ONCE(rdp->dynticks_nmi_nesting, /* No store tearing. */
-		   rdp->dynticks_nmi_nesting - 1);
 	/*
 	 * If the nesting level is not 1, the CPU wasn't RCU-idle, so
 	 * leave it in non-RCU-idle state.
@@ -725,9 +714,6 @@ void rcu_irq_exit_preempt(void)
 
 	RCU_LOCKDEP_WARN(__this_cpu_read(rcu_data.dynticks_nesting) <= 0,
 			 "RCU dynticks_nesting counter underflow/zero!");
-	RCU_LOCKDEP_WARN(__this_cpu_read(rcu_data.dynticks_nmi_nesting) !=
-			 DYNTICK_IRQ_NONIDLE,
-			 "Bad RCU  dynticks_nmi_nesting counter\n");
 	RCU_LOCKDEP_WARN(rcu_dynticks_curr_cpu_in_eqs(),
 			 "RCU in extended quiescent state!");
 }
@@ -781,8 +767,7 @@ static void noinstr rcu_eqs_exit(bool user)
 	 * mean usermode upcalls or idle exit happened from interrupts. Remove
 	 * the warning by 2020.
 	 */
-	if (WARN_ON_ONCE(rdp->dynticks_nmi_nesting != 0))
-		WRITE_ONCE(rdp->dynticks_nmi_nesting, 0);
+	WARN_ON_ONCE(in_irq());
 	instrumentation_end();
 }
 
@@ -824,14 +809,13 @@ void noinstr rcu_user_exit(void)
  * rcu_nmi_enter - inform RCU of entry to NMI context
  * @irq: Is this call from rcu_irq_enter?
  *
- * If the CPU was idle from RCU's viewpoint, update rdp->dynticks and
- * rdp->dynticks_nmi_nesting to let the RCU grace-period handling know
- * that the CPU is active.  This implementation permits nested NMIs, as
- * long as the nesting level does not overflow an int.  (You will probably
- * run out of stack space first.)
+ * If the CPU was idle from RCU's viewpoint, update rdp->dynticks to let the
+ * RCU grace-period handling know that the CPU is active.  This implementation
+ * permits nested NMIs, as long as the nesting level does not overflow a long.
+ * (You will probably run out of stack space first.)
  *
- * If you add or remove a call to rcu_nmi_enter(), be sure to test
- * with CONFIG_RCU_EQS_DEBUG=y.
+ * If you add or remove a call to rcu_nmi_enter(), be sure to test with
+ * CONFIG_RCU_EQS_DEBUG=y.
  */
 noinstr void rcu_nmi_enter(void)
 {
@@ -840,15 +824,16 @@ noinstr void rcu_nmi_enter(void)
 
 	/* Complain about underflow. */
 	WARN_ON_ONCE(rdp->dynticks_nesting < 0);
-	WARN_ON_ONCE(rdp->dynticks_nmi_nesting < 0);
 
 	/*
 	 * If idle from RCU viewpoint, atomically increment ->dynticks
-	 * to mark non-idle and increment ->dynticks_nmi_nesting by one.
-	 * Otherwise, increment ->dynticks_nmi_nesting by two.  This means
-	 * if ->dynticks_nmi_nesting is equal to one, we are guaranteed
+	 * to mark non-idle and increment ->dynticks_nesting by one.
+	 * Otherwise, increment ->dynticks_nesting by two.  This means
+	 * if ->dynticks_nesting is equal to one, we are guaranteed
 	 * to be in the outermost NMI handler that interrupted an RCU-idle
-	 * period (observation due to Andy Lutomirski).
+	 * period (observation due to Andy Lutomirski). An exception
+	 * is if the interrupt arrived in kernel mode; in this case we would
+	 * be the outermost interrupt but still increment by 2 which is Ok.
 	 */
 	if (rcu_dynticks_curr_cpu_in_eqs()) {
 
@@ -866,7 +851,6 @@ noinstr void rcu_nmi_enter(void)
 	} else if (!in_nmi()) {
 		instrumentation_begin();
 		if (tick_nohz_full_cpu(rdp->cpu) &&
-		    !rdp->dynticks_nmi_nesting &&
 		    READ_ONCE(rdp->rcu_urgent_qs) &&
 		    !READ_ONCE(rdp->rcu_forced_tick)) {
 			// We get here only if we had already exited the
@@ -895,9 +879,6 @@ noinstr void rcu_nmi_enter(void)
 
 	WRITE_ONCE(rdp->dynticks_nesting, /* Prevent store tearing. */
 		   rdp->dynticks_nesting + incby);
-
-	WRITE_ONCE(rdp->dynticks_nmi_nesting, /* Prevent store tearing. */
-		   rdp->dynticks_nmi_nesting + 1);
 	barrier();
 }
 

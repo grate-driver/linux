@@ -936,10 +936,9 @@ This portion of the rcu_data structure is declared as follows:
 ::
 
      1   long dynticks_nesting;
-     2   long dynticks_nmi_nesting;
-     3   atomic_t dynticks;
-     4   bool rcu_need_heavy_qs;
-     5   bool rcu_urgent_qs;
+     2   atomic_t dynticks;
+     3   bool rcu_need_heavy_qs;
+     4   bool rcu_urgent_qs;
 
 These fields in the rcu_data structure maintain the per-CPU dyntick-idle
 state for the corresponding CPU. The fields may be accessed only from
@@ -948,26 +947,14 @@ the corresponding CPU (and from tracing) unless otherwise stated.
 The ``->dynticks_nesting`` field counts the nesting depth of process
 execution, so that in normal circumstances this counter has value zero
 or one. NMIs, irqs, and tracers are counted by the
-``->dynticks_nmi_nesting`` field. Because NMIs cannot be masked, changes
+``->dynticks_nesting`` field as well. Because NMIs cannot be masked, changes
 to this variable have to be undertaken carefully using an algorithm
 provided by Andy Lutomirski. The initial transition from idle adds one,
 and nested transitions add two, so that a nesting level of five is
-represented by a ``->dynticks_nmi_nesting`` value of nine. This counter
+represented by a ``->dynticks_nesting`` value of nine. This counter
 can therefore be thought of as counting the number of reasons why this
-CPU cannot be permitted to enter dyntick-idle mode, aside from
-process-level transitions.
-
-However, it turns out that when running in non-idle kernel context, the
-Linux kernel is fully capable of entering interrupt handlers that never
-exit and perhaps also vice versa. Therefore, whenever the
-``->dynticks_nesting`` field is incremented up from zero, the
-``->dynticks_nmi_nesting`` field is set to a large positive number, and
-whenever the ``->dynticks_nesting`` field is decremented down to zero,
-the the ``->dynticks_nmi_nesting`` field is set to zero. Assuming that
-the number of misnested interrupts is not sufficient to overflow the
-counter, this approach corrects the ``->dynticks_nmi_nesting`` field
-every time the corresponding CPU enters the idle loop from process
-context.
+CPU cannot be permitted to enter dyntick-idle mode. It counts both the
+process-level and interrupt transitions.
 
 The ``->dynticks`` field counts the corresponding CPU's transitions to
 and from either dyntick-idle or user mode, so that this counter has an
@@ -1000,7 +987,9 @@ code.
 +-----------------------------------------------------------------------+
 | Because this would fail in the presence of interrupts whose handlers  |
 | never return and of handlers that manage to return from a made-up     |
-| interrupt.                                                            |
+| interrupt. NOTE: The counters have now been combined however          |
+| a temporary warning has been left to make sure this condition never   |
+| occurs.                                                               |
 +-----------------------------------------------------------------------+
 
 Additional fields are present for some special-purpose builds, and are

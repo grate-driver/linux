@@ -191,8 +191,8 @@ For non-RCU-tasks flavors of RCU, when a CPU detects that it is stalling,
 it will print a message similar to the following::
 
 	INFO: rcu_sched detected stalls on CPUs/tasks:
-	2-...: (3 GPs behind) idle=06c/0/0 softirq=1453/1455 fqs=0
-	16-...: (0 ticks this GP) idle=81c/0/0 softirq=764/764 fqs=0
+	2-...: (3 GPs behind) idle=06c/0 softirq=1453/1455 fqs=0
+	16-...: (0 ticks this GP) idle=81c/0 softirq=764/764 fqs=0
 	(detected by 32, t=2603 jiffies, g=7075, q=625)
 
 This message indicates that CPU 32 detected that CPUs 2 and 16 were both
@@ -243,7 +243,7 @@ an estimate of the total number of RCU callbacks queued across all CPUs
 In kernels with CONFIG_RCU_FAST_NO_HZ, more information is printed
 for each CPU::
 
-	0: (64628 ticks this GP) idle=dd5/3fffffffffffffff/0 softirq=82/543 last_accelerate: a345/d342 dyntick_enabled: 1
+	0: (64628 ticks this GP) idle=dd5/3fffffffffffffff softirq=82/543 last_accelerate: a345/d342 dyntick_enabled: 1
 
 The "last_accelerate:" prints the low-order 16 bits (in hex) of the
 jiffies counter when this CPU last invoked rcu_try_advance_all_cbs()
