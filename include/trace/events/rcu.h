@@ -437,9 +437,9 @@ TRACE_EVENT_RCU(rcu_fqs,
 /*
  * Tracepoint for dyntick-idle entry/exit events.  These take 2 strings
  * as argument:
- * polarilty: "Start", "End", "StillIdle" for entering, exiting or still being
- * in dyntick-idle mode.
- * context: "USER" or "KERNEL" or "IRQ".
+ * polarilty: "Start", "End", "StillNonIdle" for entering, exiting or still not
+ *            being in dyntick-idle mode.
+ * context: "USER" or "IDLE" or "IRQ".
  * NMIs nested in IRQs are inferred with dynticks_nesting > 1 in IRQ context.
  *
  * These events also take a pair of numbers, which indicate the nesting
