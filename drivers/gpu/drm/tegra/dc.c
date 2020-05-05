@@ -755,6 +755,23 @@ static void tegra_plane_atomic_update(struct drm_plane *plane,
 		 */
 		if (i < 2)
 			window.stride[i] = fb->pitches[i];
+
+		/*
+		 * There are two ways to set tiling mode on Tegra:
+		 *
+		 *  1. New: using DRM modifiers
+		 *  2. Old: using Tegra BO flags
+		 *
+		 * Older userspace doesn't support ADDFB2 IOCTL. Assume that
+		 * legacy userspace is used if BO flag is set and FB modifier
+		 * isn't set to maintain userspace compatibility.
+		 */
+		if (i == 0 &&
+		    window.tiling.mode == TEGRA_BO_TILING_MODE_PITCH &&
+		    window.tiling.value == 0) {
+			struct tegra_bo *bo = tegra_fb_get_plane(fb, i);
+			window.tiling.mode = bo->tiling.mode;
+		}
 	}
 
 	tegra_dc_setup_window(p, &window);
