@@ -585,9 +585,11 @@ static struct pgpath *__map_bio(struct multipath *m, struct bio *bio)
 
 	/* Do we need to select a new pgpath? */
 	pgpath = READ_ONCE(m->current_pgpath);
-	queue_io = test_bit(MPATHF_QUEUE_IO, &m->flags);
-	if (!pgpath || !queue_io)
+	if (!pgpath || !test_bit(MPATHF_QUEUE_IO, &m->flags))
 		pgpath = choose_pgpath(m, bio->bi_iter.bi_size);
+
+	/* MPATHF_QUEUE_IO might have been cleared by choose_pgpath. */
+	queue_io = test_bit(MPATHF_QUEUE_IO, &m->flags);
 
 	if ((pgpath && queue_io) ||
 	    (!pgpath && test_bit(MPATHF_QUEUE_IF_NO_PATH, &m->flags))) {
@@ -2053,7 +2055,7 @@ static int multipath_busy(struct dm_target *ti)
  *---------------------------------------------------------------*/
 static struct target_type multipath_target = {
 	.name = "multipath",
-	.version = {1, 13, 0},
+	.version = {1, 14, 0},
 	.features = DM_TARGET_SINGLETON | DM_TARGET_IMMUTABLE |
 		    DM_TARGET_PASSES_INTEGRITY,
 	.module = THIS_MODULE,

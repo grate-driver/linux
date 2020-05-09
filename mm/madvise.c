@@ -27,6 +27,7 @@
 #include <linux/swapops.h>
 #include <linux/shmem_fs.h>
 #include <linux/mmu_notifier.h>
+#include <linux/sched/mm.h>
 
 #include <asm/tlb.h>
 
@@ -335,11 +336,13 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 		}
 
 		page = pmd_page(orig_pmd);
+
+		/* Do not interfere with other mappings of this page */
+		if (page_mapcount(page) != 1)
+			goto huge_unlock;
+
 		if (next - addr != HPAGE_PMD_SIZE) {
 			int err;
-
-			if (page_mapcount(page) != 1)
-				goto huge_unlock;
 
 			get_page(page);
 			spin_unlock(ptl);
@@ -425,6 +428,10 @@ regular_page:
 			addr -= PAGE_SIZE;
 			continue;
 		}
+
+		/* Do not interfere with other mappings of this page */
+		if (page_mapcount(page) != 1)
+			continue;
 
 		VM_BUG_ON_PAGE(PageTransCompound(page), page);
 
@@ -1084,6 +1091,23 @@ int do_madvise(unsigned long start, size_t len_in, int behavior)
 	if (write) {
 		if (down_write_killable(&current->mm->mmap_sem))
 			return -EINTR;
+
+		/*
+		 * We may have stolen the mm from another process
+		 * that is undergoing core dumping.
+		 *
+		 * Right now that's io_ring, in the future it may
+		 * be remote process management and not "current"
+		 * at all.
+		 *
+		 * We need to fix core dumping to not do this,
+		 * but for now we have the mmget_still_valid()
+		 * model.
+		 */
+		if (!mmget_still_valid(current->mm)) {
+			up_write(&current->mm->mmap_sem);
+			return -EINTR;
+		}
 	} else {
 		down_read(&current->mm->mmap_sem);
 	}

@@ -162,9 +162,18 @@ static int __cifs_reconnect_tcon(const struct nls_table *nlsc,
 
 	for (it = dfs_cache_get_tgt_iterator(&tl); it;
 	     it = dfs_cache_get_next_tgt(&tl, it)) {
-		const char *tgt = dfs_cache_get_tgt_name(it);
+		const char *share, *prefix;
+		size_t share_len, prefix_len;
 
-		extract_unc_hostname(tgt, &dfs_host, &dfs_host_len);
+		rc = dfs_cache_get_tgt_share(it, &share, &share_len, &prefix,
+					     &prefix_len);
+		if (rc) {
+			cifs_dbg(VFS, "%s: failed to parse target share %d\n",
+				 __func__, rc);
+			continue;
+		}
+
+		extract_unc_hostname(share, &dfs_host, &dfs_host_len);
 
 		if (dfs_host_len != tcp_host_len
 		    || strncasecmp(dfs_host, tcp_host, dfs_host_len) != 0) {
@@ -175,11 +184,13 @@ static int __cifs_reconnect_tcon(const struct nls_table *nlsc,
 			continue;
 		}
 
-		scnprintf(tree, MAX_TREE_SIZE, "\\%s", tgt);
+		scnprintf(tree, MAX_TREE_SIZE, "\\%.*s", (int)share_len, share);
 
 		rc = CIFSTCon(0, tcon->ses, tree, tcon, nlsc);
-		if (!rc)
+		if (!rc) {
+			rc = update_super_prepath(tcon, prefix, prefix_len);
 			break;
+		}
 		if (rc == -EREMOTE)
 			break;
 	}
@@ -320,7 +331,7 @@ cifs_reconnect_tcon(struct cifs_tcon *tcon, int smb_command)
 	atomic_inc(&tconInfoReconnectCount);
 
 	/* tell server Unix caps we support */
-	if (ses->capabilities & CAP_UNIX)
+	if (cap_unix(ses))
 		reset_cifs_unix_caps(0, tcon, NULL, NULL);
 
 	/*
@@ -583,6 +594,8 @@ decode_lanman_negprot_rsp(struct TCP_Server_Info *server, NEGOTIATE_RSP *pSMBr)
 			       cifs_max_pending);
 	set_credits(server, server->maxReq);
 	server->maxBuf = le16_to_cpu(rsp->MaxBufSize);
+	/* set up max_read for readpages check */
+	server->max_read = server->maxBuf;
 	/* even though we do not use raw we might as well set this
 	accurately, in case we ever find a need for it */
 	if ((le16_to_cpu(rsp->RawMode) & RAW_ENABLE) == RAW_ENABLE) {
@@ -744,6 +757,8 @@ CIFSSMBNegotiate(const unsigned int xid, struct cifs_ses *ses)
 	set_credits(server, server->maxReq);
 	/* probably no need to store and check maxvcs */
 	server->maxBuf = le32_to_cpu(pSMBr->MaxBufferSize);
+	/* set up max_read for readpages check */
+	server->max_read = server->maxBuf;
 	server->max_rw = le32_to_cpu(pSMBr->MaxRawSize);
 	cifs_dbg(NOISY, "Max buf = %d\n", ses->server->maxBuf);
 	server->capabilities = le32_to_cpu(pSMBr->Capabilities);
@@ -1492,6 +1507,7 @@ openRetry:
 	*oplock = rsp->OplockLevel;
 	/* cifs fid stays in le */
 	oparms->fid->netfid = rsp->Fid;
+	oparms->fid->access = desired_access;
 
 	/* Let caller know file was created so we can set the mode. */
 	/* Do we care about the CreateAction in any other cases? */
@@ -1590,7 +1606,6 @@ cifs_readv_receive(struct TCP_Server_Info *server, struct mid_q_entry *mid)
 	if (server->ops->is_session_expired &&
 	    server->ops->is_session_expired(buf)) {
 		cifs_reconnect(server);
-		wake_up(&server->response_q);
 		return -1;
 	}
 
@@ -2115,7 +2130,7 @@ cifs_writev_requeue(struct cifs_writedata *wdata)
 		wdata2->tailsz = tailsz;
 		wdata2->bytes = cur_len;
 
-		rc = cifs_get_writable_file(CIFS_I(inode), false,
+		rc = cifs_get_writable_file(CIFS_I(inode), FIND_WR_ANY,
 					    &wdata2->cfile);
 		if (!wdata2->cfile) {
 			cifs_dbg(VFS, "No writable handle to retry writepages rc=%d\n",
