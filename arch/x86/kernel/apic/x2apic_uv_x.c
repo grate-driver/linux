@@ -48,11 +48,9 @@ static struct {
 	unsigned int gnode_shift;
 } uv_cpuid;
 
-int uv_min_hub_revision_id;
-EXPORT_SYMBOL_GPL(uv_min_hub_revision_id);
+static int uv_min_hub_revision_id;
 
 unsigned int uv_apicid_hibits;
-EXPORT_SYMBOL_GPL(uv_apicid_hibits);
 
 static struct apic apic_x2apic_uv_x;
 static struct uv_hub_info_s uv_hub_info_node0;
@@ -385,11 +383,10 @@ int is_uv_hubbed(int uvtype)
 }
 EXPORT_SYMBOL_GPL(is_uv_hubbed);
 
-int is_uv_hubless(int uvtype)
+static int is_uv_hubless(int uvtype)
 {
 	return (uv_hubless_system & uvtype);
 }
-EXPORT_SYMBOL_GPL(is_uv_hubless);
 
 void **__uv_hub_info_list;
 EXPORT_SYMBOL_GPL(__uv_hub_info_list);
@@ -416,12 +413,6 @@ static __initdata unsigned short		*_pnode_to_socket;
 static __initdata struct uv_gam_range_s		*_gr_table;
 
 #define	SOCK_EMPTY	((unsigned short)~0)
-
-extern int uv_hub_info_version(void)
-{
-	return UV_HUB_INFO_VERSION;
-}
-EXPORT_SYMBOL(uv_hub_info_version);
 
 /* Default UV memory block size is 2GB */
 static unsigned long mem_block_size __initdata = (2UL << 30);
@@ -590,12 +581,21 @@ static int uv_wakeup_secondary(int phys_apicid, unsigned long start_rip)
 
 static void uv_send_IPI_one(int cpu, int vector)
 {
-	unsigned long apicid;
-	int pnode;
+	unsigned long apicid = per_cpu(x86_cpu_to_apicid, cpu);
+	int pnode = uv_apicid_to_pnode(apicid);
+	unsigned long dmode, val;
 
-	apicid = per_cpu(x86_cpu_to_apicid, cpu);
-	pnode = uv_apicid_to_pnode(apicid);
-	uv_hub_send_ipi(pnode, apicid, vector);
+	if (vector == NMI_VECTOR)
+		dmode = dest_NMI;
+	else
+		dmode = dest_Fixed;
+
+	val = (1UL << UVH_IPI_INT_SEND_SHFT) |
+		((apicid | uv_apicid_hibits) << UVH_IPI_INT_APIC_ID_SHFT) |
+		(dmode << UVH_IPI_INT_DELIVERY_MODE_SHFT) |
+		(vector << UVH_IPI_INT_VECTOR_SHFT);
+
+	uv_write_global_mmr64(pnode, UVH_IPI_INT, val);
 }
 
 static void uv_send_IPI_mask(const struct cpumask *mask, int vector)
