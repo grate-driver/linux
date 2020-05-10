@@ -1728,6 +1728,7 @@ void vfio_config_free(struct vfio_pci_device *vdev)
 	vdev->vconfig = NULL;
 	kfree(vdev->pci_config_map);
 	vdev->pci_config_map = NULL;
+	free_perm_bits(vdev->msi_perm);
 	kfree(vdev->msi_perm);
 	vdev->msi_perm = NULL;
 }
