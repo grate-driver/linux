@@ -90,6 +90,7 @@
  */
 #define DEF_TIMEOUT             32
 
+#define NO_SLAVE		(-ENXIO)
 #define BUS_ERROR               (-EREMOTEIO)
 #define XFER_NAKED              (-ECONNREFUSED)
 #define I2C_RETRY               (-2000) /* an error has occurred retry transmit */
@@ -794,11 +795,9 @@ static inline void i2c_pxa_stop_message(struct pxa_i2c *i2c)
 {
 	u32 icr;
 
-	/*
-	 * Clear the STOP and ACK flags
-	 */
+	/* Clear the START, STOP, ACK, TB and MA flags */
 	icr = readl(_ICR(i2c));
-	icr &= ~(ICR_STOP | ICR_ACKNAK);
+	icr &= ~(ICR_START | ICR_STOP | ICR_ACKNAK | ICR_TB | ICR_MA);
 	writel(icr, _ICR(i2c));
 }
 
@@ -881,7 +880,7 @@ static void i2c_pxa_irq_txempty(struct pxa_i2c *i2c, u32 isr)
 		 */
 		if (isr & ISR_ACKNAK) {
 			if (i2c->msg_ptr == 0 && i2c->msg_idx == 0)
-				ret = I2C_RETRY;
+				ret = NO_SLAVE;
 			else
 				ret = XFER_NAKED;
 		}
@@ -941,14 +940,8 @@ static void i2c_pxa_irq_txempty(struct pxa_i2c *i2c, u32 isr)
 		icr &= ~ICR_ALDIE;
 		icr |= ICR_START | ICR_TB;
 	} else {
-		if (i2c->msg->len == 0) {
-			/*
-			 * Device probes have a message length of zero
-			 * and need the bus to be reset before it can
-			 * be used again.
-			 */
-			i2c_pxa_reset(i2c);
-		}
+		if (i2c->msg->len == 0)
+			icr |= ICR_MA;
 		i2c_pxa_master_complete(i2c, 0);
 	}
 
@@ -1094,7 +1087,7 @@ static int i2c_pxa_do_xfer(struct pxa_i2c *i2c, struct i2c_msg *msg, int num)
 	ret = i2c->msg_idx;
 
 	if (!timeout && i2c->msg_num) {
-		i2c_pxa_scream_blue_murder(i2c, "timeout");
+		i2c_pxa_scream_blue_murder(i2c, "timeout with active message");
 		ret = I2C_RETRY;
 	}
 
@@ -1102,25 +1095,38 @@ static int i2c_pxa_do_xfer(struct pxa_i2c *i2c, struct i2c_msg *msg, int num)
 	return ret;
 }
 
-static int i2c_pxa_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
+static int i2c_pxa_internal_xfer(struct pxa_i2c *i2c,
+				 struct i2c_msg *msgs, int num,
+				 int (*xfer)(struct pxa_i2c *,
+					     struct i2c_msg *, int num))
 {
-	struct pxa_i2c *i2c = adap->algo_data;
 	int ret, i;
 
-	for (i = adap->retries; i >= 0; i--) {
-		ret = i2c_pxa_do_xfer(i2c, msgs, num);
-		if (ret != I2C_RETRY)
+	for (i = 0; ; ) {
+		ret = xfer(i2c, msgs, num);
+		if (ret != I2C_RETRY && ret != NO_SLAVE)
 			goto out;
+		if (++i >= i2c->adap.retries)
+			break;
 
 		if (i2c_debug)
-			dev_dbg(&adap->dev, "Retrying transmission\n");
+			dev_dbg(&i2c->adap.dev, "Retrying transmission\n");
 		udelay(100);
 	}
-	i2c_pxa_scream_blue_murder(i2c, "exhausted retries");
+	if (ret != NO_SLAVE)
+		i2c_pxa_scream_blue_murder(i2c, "exhausted retries");
 	ret = -EREMOTEIO;
  out:
 	i2c_pxa_set_slave(i2c, ret);
 	return ret;
+}
+
+static int i2c_pxa_xfer(struct i2c_adapter *adap,
+			struct i2c_msg msgs[], int num)
+{
+	struct pxa_i2c *i2c = adap->algo_data;
+
+	return i2c_pxa_internal_xfer(i2c, msgs, num, i2c_pxa_do_xfer);
 }
 
 static u32 i2c_pxa_functionality(struct i2c_adapter *adap)
@@ -1147,15 +1153,13 @@ static int i2c_pxa_pio_set_master(struct pxa_i2c *i2c)
 	/*
 	 * Wait for the bus to become free.
 	 */
-	while (timeout-- && readl(_ISR(i2c)) & (ISR_IBB | ISR_UB)) {
+	while (timeout-- && readl(_ISR(i2c)) & (ISR_IBB | ISR_UB))
 		udelay(1000);
-		show_state(i2c);
-	}
 
 	if (timeout < 0) {
 		show_state(i2c);
 		dev_err(&i2c->adap.dev,
-			"i2c_pxa: timeout waiting for bus free\n");
+			"i2c_pxa: timeout waiting for bus free (set_master)\n");
 		return I2C_RETRY;
 	}
 
@@ -1199,7 +1203,7 @@ static int i2c_pxa_do_pio_xfer(struct pxa_i2c *i2c,
 
 out:
 	if (timeout == 0) {
-		i2c_pxa_scream_blue_murder(i2c, "timeout");
+		i2c_pxa_scream_blue_murder(i2c, "timeout (do_pio_xfer)");
 		ret = I2C_RETRY;
 	}
 
@@ -1210,7 +1214,6 @@ static int i2c_pxa_pio_xfer(struct i2c_adapter *adap,
 			    struct i2c_msg msgs[], int num)
 {
 	struct pxa_i2c *i2c = adap->algo_data;
-	int ret, i;
 
 	/* If the I2C controller is disabled we need to reset it
 	  (probably due to a suspend/resume destroying state). We do
@@ -1219,20 +1222,7 @@ static int i2c_pxa_pio_xfer(struct i2c_adapter *adap,
 	if (!(readl(_ICR(i2c)) & ICR_IUE))
 		i2c_pxa_reset(i2c);
 
-	for (i = adap->retries; i >= 0; i--) {
-		ret = i2c_pxa_do_pio_xfer(i2c, msgs, num);
-		if (ret != I2C_RETRY)
-			goto out;
-
-		if (i2c_debug)
-			dev_dbg(&adap->dev, "Retrying transmission\n");
-		udelay(100);
-	}
-	i2c_pxa_scream_blue_murder(i2c, "exhausted retries");
-	ret = -EREMOTEIO;
- out:
-	i2c_pxa_set_slave(i2c, ret);
-	return ret;
+	return i2c_pxa_internal_xfer(i2c, msgs, num, i2c_pxa_do_pio_xfer);
 }
 
 static const struct i2c_algorithm i2c_pxa_pio_algorithm = {
