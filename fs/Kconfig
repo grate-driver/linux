@@ -307,6 +307,7 @@ menuconfig NETWORK_FILESYSTEMS
 
 if NETWORK_FILESYSTEMS
 
+source "fs/netfs/Kconfig"
 source "fs/nfs/Kconfig"
 source "fs/nfsd/Kconfig"
 
