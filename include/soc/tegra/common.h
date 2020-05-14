@@ -7,10 +7,13 @@
 #define __SOC_TEGRA_COMMON_H__
 
 #include <linux/types.h>
+#include <linux/sysfs.h>
 
 struct device;
 
 #ifdef CONFIG_ARCH_TEGRA
+extern struct kobject *tegra_soc_kobj;
+
 bool soc_is_tegra(void);
 void tegra_soc_device_sync_state(struct device *dev);
 bool tegra_soc_dvfs_state_synced(void);

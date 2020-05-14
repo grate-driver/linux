@@ -11,6 +11,7 @@
 #include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/sysfs.h>
 
 #include <soc/tegra/common.h>
 
@@ -26,6 +27,7 @@ struct tegra_soc_device {
 
 static DEFINE_MUTEX(tegra_soc_lock);
 static struct tegra_soc_device *tegra_soc_devices;
+struct kobject *tegra_soc_kobj;
 
 /*
  * DVFS-critical devices are either active at a boot time or permanently
@@ -175,3 +177,15 @@ static int __init tegra_soc_devices_init(void)
 	return 0;
 }
 postcore_initcall_sync(tegra_soc_devices_init);
+
+static int __init tegra_soc_sysfs_init(void)
+{
+	if (!soc_is_tegra())
+		return 0;
+
+	tegra_soc_kobj = kobject_create_and_add("tegra", NULL);
+	WARN_ON(!tegra_soc_kobj);
+
+	return 0;
+}
+arch_initcall(tegra_soc_sysfs_init);
