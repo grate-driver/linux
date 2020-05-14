@@ -2,6 +2,7 @@
 obj-y += fuse/
 obj-y += cbb/
 
+obj-y += bootdata.o
 obj-y += common.o
 obj-$(CONFIG_SOC_TEGRA_FLOWCTRL) += flowctrl.o
 obj-$(CONFIG_SOC_TEGRA_PMC) += pmc.o
