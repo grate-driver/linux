@@ -72,6 +72,7 @@ static void __init tegra_boot_config_table_init(void)
 	u32 iram_end   = TEGRA_IRAM_BASE + TEGRA_IRAM_SIZE;
 	u32 iram_start = TEGRA_IRAM_BASE;
 	u32 pt_addr, pt_size, bct_size;
+	void __iomem *bct_ptr;
 
 	t20_bit = IO_ADDRESS(TEGRA_IRAM_BASE);
 
@@ -90,6 +91,7 @@ static void __init tegra_boot_config_table_init(void)
 
 		pt_addr = t20_bct->partition_table_logical_sector_address;
 		pt_size = t20_bct->partition_table_num_logical_sectors;
+		bct_ptr = t20_bct;
 
 	} else if (of_machine_is_compatible("nvidia,tegra30")) {
 		bct_size = sizeof(*t30_bct);
@@ -106,12 +108,14 @@ static void __init tegra_boot_config_table_init(void)
 
 		pt_addr = t30_bct->partition_table_logical_sector_address;
 		pt_size = t30_bct->partition_table_num_logical_sectors;
+		bct_ptr = t30_bct;
 	} else {
 		return;
 	}
 
 	pr_info("%s: BCT found in IRAM\n", __func__);
 
+	tegra_bootdata_bct_setup(bct_ptr, bct_size);
 	tegra_partition_table_setup(pt_addr, pt_size);
 }
 
