@@ -43,4 +43,6 @@ struct tegra30_boot_config_table {
 	u32 unused_data[3];
 } __packed;
 
+void tegra_bootdata_bct_setup(void __iomem *bct_ptr, size_t bct_size);
+
 #endif /* __SOC_TEGRA_BOOTDATA_H__ */

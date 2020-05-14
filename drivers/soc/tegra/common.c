@@ -10,9 +10,12 @@
 #include <linux/export.h>
 #include <linux/of.h>
 #include <linux/pm_opp.h>
+#include <linux/sysfs.h>
 
 #include <soc/tegra/common.h>
 #include <soc/tegra/fuse.h>
+
+struct kobject *tegra_soc_kobj;
 
 static const struct of_device_id tegra_machine_match[] = {
 	{ .compatible = "nvidia,tegra20", },
@@ -169,3 +172,15 @@ int devm_tegra_core_dev_init_opp_table(struct device *dev,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(devm_tegra_core_dev_init_opp_table);
+
+static int __init tegra_soc_sysfs_init(void)
+{
+	if (!soc_is_tegra())
+		return 0;
+
+	tegra_soc_kobj = kobject_create_and_add("tegra", NULL);
+	WARN_ON(!tegra_soc_kobj);
+
+	return 0;
+}
+arch_initcall(tegra_soc_sysfs_init);
