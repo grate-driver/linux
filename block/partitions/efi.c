@@ -101,6 +101,15 @@ static int force_gpt;
 static int __init
 force_gpt_fn(char *str)
 {
+	/*
+	 * This check allows to properly parse cmdline variants like
+	 * "gpt gpt_sector=<sector>" and "gpt_sector=<sector> gpt" since
+	 * "gpt" overlaps with the "gpt_sector=", see tegra_gpt_sector_fn().
+	 * The argument should be absent for a boolean cmdline option.
+	 */
+	if (strlen(str))
+		return 0;
+
 	force_gpt = 1;
 	return 1;
 }
