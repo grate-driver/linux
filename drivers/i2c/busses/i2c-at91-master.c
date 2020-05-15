@@ -877,6 +877,7 @@ static int at91_init_twi_recovery_gpio(struct platform_device *pdev,
 			gpiod_put(rinfo->scl_gpiod);
 			rinfo->scl_gpiod = NULL;
 		}
+		pinctrl_select_state(dev->pinctrl, dev->pinctrl_pins_default);
 		return -EINVAL;
 	}
 
