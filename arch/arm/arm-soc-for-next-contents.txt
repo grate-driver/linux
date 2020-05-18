@@ -1,0 +1,52 @@
+arm/soc
+	versatile/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/versatile-v5.8-1
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v5.8-tag1
+	patch
+		clk: versatile: Drop the legacy IM-PD1 clock code
+		ARM/time: Replace <linux/clk-provider.h> by <linux/of_clk.h>
+		ARM: mediatek: Replace <linux/clk-provider.h> by <linux/of_clk.h>
+		ARM: mmp: Replace <linux/clk-provider.h> by <linux/of_clk.h>
+	realtek/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-realtek tags/realtek-soc-for-5.8
+	broadcom/maintainers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.8/maintainers
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.8/soc
+	samsung/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-5.8
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.8/soc-signed-take2
+	vexpress/modules
+		git://git.kernel.org/pub/scm/linux/kernel/git/robh/linux tags/vexpress-modules-for-soc-v2
+	renesas/soc-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v5.8-tag2
+	tegra/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-arm-core
+	patch
+		ARM: arch timer: Drop unneeded select GENERIC_CLOCKEVENTS
+		ARM: actions: Drop unneeded select of COMMON_CLK
+		ARM: alpine: Drop unneeded select of HAVE_SMP
+		ARM: asm9260: Drop unneeded select of GENERIC_CLOCKEVENTS
+		ARM: aspeed: Drop unneeded select of HAVE_SMP
+		ARM: berlin: Drop unneeded select of HAVE_SMP
+		ARM: clps711x: Drop unneeded select of multi-platform selected options
+		ARM: davinci: Drop unneeded select of TIMER_OF
+		ARM: mmp: Drop unneeded select of COMMON_CLK
+		ARM: mvebu: Drop unneeded select of HAVE_SMP
+		ARM: prima2: Drop unneeded select of HAVE_SMP
+		ARM: socfpga: Drop unneeded select of PCI_DOMAINS_GENERIC
+
+arm/dt
+
+arm/drivers
+
+arm/defconfig
+
+arm/newsoc
+
+arm/late
+
+arm/fixes
+
