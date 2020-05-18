@@ -167,11 +167,6 @@ struct cpuidle_attr {
 	ssize_t (*store)(struct cpuidle_device *, const char *, size_t count);
 };
 
-#define define_one_ro(_name, show) \
-	static struct cpuidle_attr attr_##_name = __ATTR(_name, 0444, show, NULL)
-#define define_one_rw(_name, show, store) \
-	static struct cpuidle_attr attr_##_name = __ATTR(_name, 0644, show, store)
-
 #define attr_to_cpuidleattr(a) container_of(a, struct cpuidle_attr, attr)
 
 struct cpuidle_device_kobj {
@@ -431,12 +426,12 @@ static inline void cpuidle_remove_s2idle_attr_group(struct cpuidle_state_kobj *k
 #define attr_to_stateattr(a) container_of(a, struct cpuidle_state_attr, attr)
 
 static ssize_t cpuidle_state_show(struct kobject *kobj, struct attribute *attr,
-				  char * buf)
+				  char *buf)
 {
 	int ret = -EIO;
 	struct cpuidle_state *state = kobj_to_state(kobj);
 	struct cpuidle_state_usage *state_usage = kobj_to_state_usage(kobj);
-	struct cpuidle_state_attr * cattr = attr_to_stateattr(attr);
+	struct cpuidle_state_attr *cattr = attr_to_stateattr(attr);
 
 	if (cattr->show)
 		ret = cattr->show(state, state_usage, buf);
