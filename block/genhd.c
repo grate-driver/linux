@@ -119,37 +119,12 @@ static void part_stat_read_all(struct hd_struct *part, struct disk_stats *stat)
 }
 #endif /* CONFIG_SMP */
 
-void part_inc_in_flight(struct request_queue *q, struct hd_struct *part, int rw)
-{
-	if (queue_is_mq(q))
-		return;
-
-	part_stat_local_inc(part, in_flight[rw]);
-	if (part->partno)
-		part_stat_local_inc(&part_to_disk(part)->part0, in_flight[rw]);
-}
-
-void part_dec_in_flight(struct request_queue *q, struct hd_struct *part, int rw)
-{
-	if (queue_is_mq(q))
-		return;
-
-	part_stat_local_dec(part, in_flight[rw]);
-	if (part->partno)
-		part_stat_local_dec(&part_to_disk(part)->part0, in_flight[rw]);
-}
-
 static unsigned int part_in_flight(struct request_queue *q,
 		struct hd_struct *part)
 {
+	unsigned int inflight = 0;
 	int cpu;
-	unsigned int inflight;
 
-	if (queue_is_mq(q)) {
-		return blk_mq_in_flight(q, part);
-	}
-
-	inflight = 0;
 	for_each_possible_cpu(cpu) {
 		inflight += part_stat_local_read_cpu(part, in_flight[0], cpu) +
 			    part_stat_local_read_cpu(part, in_flight[1], cpu);
@@ -164,11 +139,6 @@ static void part_in_flight_rw(struct request_queue *q, struct hd_struct *part,
 		unsigned int inflight[2])
 {
 	int cpu;
-
-	if (queue_is_mq(q)) {
-		blk_mq_in_flight_rw(q, part, inflight);
-		return;
-	}
 
 	inflight[0] = 0;
 	inflight[1] = 0;
@@ -1307,7 +1277,10 @@ ssize_t part_stat_show(struct device *dev,
 	unsigned int inflight;
 
 	part_stat_read_all(p, &stat);
-	inflight = part_in_flight(q, p);
+	if (queue_is_mq(q))
+		inflight = blk_mq_in_flight(q, p);
+	else
+		inflight = part_in_flight(q, p);
 
 	return sprintf(buf,
 		"%8lu %8lu %8llu %8u "
@@ -1346,7 +1319,11 @@ ssize_t part_inflight_show(struct device *dev, struct device_attribute *attr,
 	struct request_queue *q = part_to_disk(p)->queue;
 	unsigned int inflight[2];
 
-	part_in_flight_rw(q, p, inflight);
+	if (queue_is_mq(q))
+		blk_mq_in_flight_rw(q, p, inflight);
+	else
+		part_in_flight_rw(q, p, inflight);
+
 	return sprintf(buf, "%8u %8u\n", inflight[0], inflight[1]);
 }
 
@@ -1601,7 +1578,10 @@ static int diskstats_show(struct seq_file *seqf, void *v)
 	disk_part_iter_init(&piter, gp, DISK_PITER_INCL_EMPTY_PART0);
 	while ((hd = disk_part_iter_next(&piter))) {
 		part_stat_read_all(hd, &stat);
-		inflight = part_in_flight(gp->queue, hd);
+		if (queue_is_mq(gp->queue))
+			inflight = blk_mq_in_flight(gp->queue, hd);
+		else
+			inflight = part_in_flight(gp->queue, hd);
 
 		seq_printf(seqf, "%4d %7d %s "
 			   "%lu %lu %lu %u "
