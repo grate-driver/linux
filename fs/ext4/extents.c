@@ -4870,11 +4870,31 @@ static const struct iomap_ops ext4_iomap_xattr_ops = {
 	.iomap_begin		= ext4_iomap_xattr_begin,
 };
 
-static int _ext4_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
-			__u64 start, __u64 len, bool from_es_cache)
+static int ext4_fiemap_check_ranges(struct inode *inode, u64 start, u64 *len)
 {
-	ext4_lblk_t start_blk;
-	u32 ext4_fiemap_flags = FIEMAP_FLAG_SYNC | FIEMAP_FLAG_XATTR;
+	u64 maxbytes;
+
+	if (ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS))
+		maxbytes = inode->i_sb->s_maxbytes;
+	else
+		maxbytes = EXT4_SB(inode->i_sb)->s_bitmap_maxbytes;
+
+	if (*len == 0)
+		return -EINVAL;
+	if (start > maxbytes)
+		return -EFBIG;
+
+	/*
+	 * Shrink request scope to what the fs can actually handle.
+	 */
+	if (*len > maxbytes || (maxbytes - *len) < start)
+		*len = maxbytes - start;
+	return 0;
+}
+
+int ext4_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
+		u64 start, u64 len)
+{
 	int error = 0;
 
 	if (fieinfo->fi_flags & FIEMAP_FLAG_CACHE) {
@@ -4884,48 +4904,31 @@ static int _ext4_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 		fieinfo->fi_flags &= ~FIEMAP_FLAG_CACHE;
 	}
 
-	if (from_es_cache)
-		ext4_fiemap_flags &= FIEMAP_FLAG_XATTR;
-
-	if (fiemap_check_flags(fieinfo, ext4_fiemap_flags))
-		return -EBADR;
+	/*
+	 * For bitmap files the maximum size limit could be smaller than
+	 * s_maxbytes, so check len here manually instead of just relying on the
+	 * generic check.
+	 */
+	error = ext4_fiemap_check_ranges(inode, start, &len);
+	if (error)
+		return error;
 
 	if (fieinfo->fi_flags & FIEMAP_FLAG_XATTR) {
 		fieinfo->fi_flags &= ~FIEMAP_FLAG_XATTR;
-		error = iomap_fiemap(inode, fieinfo, start, len,
-				     &ext4_iomap_xattr_ops);
-	} else if (!from_es_cache) {
-		error = iomap_fiemap(inode, fieinfo, start, len,
-				     &ext4_iomap_report_ops);
-	} else {
-		ext4_lblk_t len_blks;
-		__u64 last_blk;
-
-		start_blk = start >> inode->i_sb->s_blocksize_bits;
-		last_blk = (start + len - 1) >> inode->i_sb->s_blocksize_bits;
-		if (last_blk >= EXT_MAX_BLOCKS)
-			last_blk = EXT_MAX_BLOCKS-1;
-		len_blks = ((ext4_lblk_t) last_blk) - start_blk + 1;
-
-		/*
-		 * Walk the extent tree gathering extent information
-		 * and pushing extents back to the user.
-		 */
-		error = ext4_fill_es_cache_info(inode, start_blk, len_blks,
-						fieinfo);
+		return iomap_fiemap(inode, fieinfo, start, len,
+				    &ext4_iomap_xattr_ops);
 	}
-	return error;
-}
 
-int ext4_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
-		__u64 start, __u64 len)
-{
-	return _ext4_fiemap(inode, fieinfo, start, len, false);
+	return iomap_fiemap(inode, fieinfo, start, len, &ext4_iomap_report_ops);
 }
 
 int ext4_get_es_cache(struct inode *inode, struct fiemap_extent_info *fieinfo,
 		      __u64 start, __u64 len)
 {
+	ext4_lblk_t start_blk, len_blks;
+	__u64 last_blk;
+	int error = 0;
+
 	if (ext4_has_inline_data(inode)) {
 		int has_inline;
 
@@ -4936,9 +4939,33 @@ int ext4_get_es_cache(struct inode *inode, struct fiemap_extent_info *fieinfo,
 			return 0;
 	}
 
-	return _ext4_fiemap(inode, fieinfo, start, len, true);
-}
+	if (fieinfo->fi_flags & FIEMAP_FLAG_CACHE) {
+		error = ext4_ext_precache(inode);
+		if (error)
+			return error;
+		fieinfo->fi_flags &= ~FIEMAP_FLAG_CACHE;
+	}
 
+	error = fiemap_prep(inode, fieinfo, start, &len, 0);
+	if (error)
+		return error;
+
+	error = ext4_fiemap_check_ranges(inode, start, &len);
+	if (error)
+		return error;
+
+	start_blk = start >> inode->i_sb->s_blocksize_bits;
+	last_blk = (start + len - 1) >> inode->i_sb->s_blocksize_bits;
+	if (last_blk >= EXT_MAX_BLOCKS)
+		last_blk = EXT_MAX_BLOCKS-1;
+	len_blks = ((ext4_lblk_t) last_blk) - start_blk + 1;
+
+	/*
+	 * Walk the extent tree gathering extent information
+	 * and pushing extents back to the user.
+	 */
+	return ext4_fill_es_cache_info(inode, start_blk, len_blks, fieinfo);
+}
 
 /*
  * ext4_access_path:
