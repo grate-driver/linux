@@ -468,8 +468,19 @@ struct snd_soc_pcm_runtime *snd_soc_get_pcm_runtime(struct snd_soc_card *card,
 				struct snd_soc_dai_link *dai_link);
 
 bool snd_soc_runtime_ignore_pmdown_time(struct snd_soc_pcm_runtime *rtd);
-void snd_soc_runtime_activate(struct snd_soc_pcm_runtime *rtd, int stream);
-void snd_soc_runtime_deactivate(struct snd_soc_pcm_runtime *rtd, int stream);
+
+void snd_soc_runtime_action(struct snd_soc_pcm_runtime *rtd,
+			    int stream, int action);
+static inline void snd_soc_runtime_activate(struct snd_soc_pcm_runtime *rtd,
+				     int stream)
+{
+	snd_soc_runtime_action(rtd, stream, 1);
+}
+static inline void snd_soc_runtime_deactivate(struct snd_soc_pcm_runtime *rtd,
+				       int stream)
+{
+	snd_soc_runtime_action(rtd, stream, -1);
+}
 
 int snd_soc_runtime_calc_hw(struct snd_soc_pcm_runtime *rtd,
 			    struct snd_pcm_hardware *hw, int stream);
@@ -1146,14 +1157,16 @@ struct snd_soc_pcm_runtime {
 	/* runtime devices */
 	struct snd_pcm *pcm;
 	struct snd_compr *compr;
-	struct snd_soc_dai *codec_dai;
-	struct snd_soc_dai *cpu_dai;
+
+	/*
+	 * dais = cpu_dai + codec_dai
+	 * see
+	 *	soc_new_pcm_runtime()
+	 *	asoc_rtd_to_cpu()
+	 *	asoc_rtd_to_codec()
+	 */
 	struct snd_soc_dai **dais;
-
-	struct snd_soc_dai **codec_dais;
 	unsigned int num_codecs;
-
-	struct snd_soc_dai **cpu_dais;
 	unsigned int num_cpus;
 
 	struct delayed_work delayed_work;
@@ -1170,28 +1183,28 @@ struct snd_soc_pcm_runtime {
 	unsigned int fe_compr:1; /* for Dynamic PCM */
 
 	int num_components;
-	struct snd_soc_component *components[0]; /* CPU/Codec/Platform */
+	struct snd_soc_component *components[]; /* CPU/Codec/Platform */
 };
 /* see soc_new_pcm_runtime()  */
 #define asoc_rtd_to_cpu(rtd, n)   (rtd)->dais[n]
 #define asoc_rtd_to_codec(rtd, n) (rtd)->dais[n + (rtd)->num_cpus]
 
 #define for_each_rtd_components(rtd, i, component)			\
-	for ((i) = 0;							\
+	for ((i) = 0, component = NULL;					\
 	     ((i) < rtd->num_components) && ((component) = rtd->components[i]);\
 	     (i)++)
 #define for_each_rtd_cpu_dais(rtd, i, dai)				\
 	for ((i) = 0;							\
-	     ((i) < rtd->num_cpus) && ((dai) = rtd->cpu_dais[i]);	\
+	     ((i) < rtd->num_cpus) && ((dai) = asoc_rtd_to_cpu(rtd, i)); \
 	     (i)++)
 #define for_each_rtd_cpu_dais_rollback(rtd, i, dai)		\
-	for (; (--(i) >= 0) && ((dai) = rtd->cpu_dais[i]);)
+	for (; (--(i) >= 0) && ((dai) = asoc_rtd_to_cpu(rtd, i));)
 #define for_each_rtd_codec_dais(rtd, i, dai)				\
 	for ((i) = 0;							\
-	     ((i) < rtd->num_codecs) && ((dai) = rtd->codec_dais[i]);	\
+	     ((i) < rtd->num_codecs) && ((dai) = asoc_rtd_to_codec(rtd, i)); \
 	     (i)++)
 #define for_each_rtd_codec_dais_rollback(rtd, i, dai)		\
-	for (; (--(i) >= 0) && ((dai) = rtd->codec_dais[i]);)
+	for (; (--(i) >= 0) && ((dai) = asoc_rtd_to_codec(rtd, i));)
 #define for_each_rtd_dais(rtd, i, dai)					\
 	for ((i) = 0;							\
 	     ((i) < (rtd)->num_cpus + (rtd)->num_codecs) &&		\
@@ -1268,13 +1281,13 @@ static inline void *snd_soc_card_get_drvdata(struct snd_soc_card *card)
 static inline bool snd_soc_volsw_is_stereo(struct soc_mixer_control *mc)
 {
 	if (mc->reg == mc->rreg && mc->shift == mc->rshift)
-		return 0;
+		return false;
 	/*
 	 * mc->reg == mc->rreg && mc->shift != mc->rshift, or
 	 * mc->reg != mc->rreg means that the control is
 	 * stereo (bits in one register or in two registers)
 	 */
-	return 1;
+	return true;
 }
 
 static inline unsigned int snd_soc_enum_val_to_item(struct soc_enum *e,
@@ -1384,8 +1397,8 @@ struct snd_soc_dai *snd_soc_card_get_codec_dai(struct snd_soc_card *card,
 	struct snd_soc_pcm_runtime *rtd;
 
 	list_for_each_entry(rtd, &card->rtd_list, list) {
-		if (!strcmp(rtd->codec_dai->name, dai_name))
-			return rtd->codec_dai;
+		if (!strcmp(asoc_rtd_to_codec(rtd, 0)->name, dai_name))
+			return asoc_rtd_to_codec(rtd, 0);
 	}
 
 	return NULL;

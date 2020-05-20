@@ -686,7 +686,7 @@ static int omap_mcbsp_init(struct platform_device *pdev)
 	mcbsp->dma_data[1].addr = omap_mcbsp_dma_reg_params(mcbsp,
 						SNDRV_PCM_STREAM_CAPTURE);
 
-	mcbsp->fclk = clk_get(&pdev->dev, "fck");
+	mcbsp->fclk = devm_clk_get(&pdev->dev, "fck");
 	if (IS_ERR(mcbsp->fclk)) {
 		ret = PTR_ERR(mcbsp->fclk);
 		dev_err(mcbsp->dev, "unable to get fck: %d\n", ret);
@@ -711,7 +711,7 @@ static int omap_mcbsp_init(struct platform_device *pdev)
 		if (ret) {
 			dev_err(mcbsp->dev,
 				"Unable to create additional controls\n");
-			goto err_thres;
+			return ret;
 		}
 	}
 
@@ -724,8 +724,6 @@ static int omap_mcbsp_init(struct platform_device *pdev)
 err_st:
 	if (mcbsp->pdata->buffer_size)
 		sysfs_remove_group(&mcbsp->dev->kobj, &additional_attr_group);
-err_thres:
-	clk_put(mcbsp->fclk);
 	return ret;
 }
 
@@ -788,7 +786,7 @@ static int omap_mcbsp_dai_startup(struct snd_pcm_substream *substream,
 	struct omap_mcbsp *mcbsp = snd_soc_dai_get_drvdata(cpu_dai);
 	int err = 0;
 
-	if (!cpu_dai->active)
+	if (!snd_soc_dai_active(cpu_dai))
 		err = omap_mcbsp_request(mcbsp);
 
 	/*
@@ -843,7 +841,7 @@ static void omap_mcbsp_dai_shutdown(struct snd_pcm_substream *substream,
 
 	mcbsp->latency[stream1] = 0;
 
-	if (!cpu_dai->active) {
+	if (!snd_soc_dai_active(cpu_dai)) {
 		omap_mcbsp_free(mcbsp);
 		mcbsp->configured = 0;
 	}
@@ -1185,7 +1183,7 @@ static int omap_mcbsp_dai_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 	default:
 		return -EINVAL;
 	}
-	if (inv_fs == true)
+	if (inv_fs)
 		regs->pcr0 ^= FSXP | FSRP;
 
 	return 0;
@@ -1441,8 +1439,6 @@ static int asoc_mcbsp_remove(struct platform_device *pdev)
 		sysfs_remove_group(&mcbsp->dev->kobj, &additional_attr_group);
 
 	omap_mcbsp_st_cleanup(pdev);
-
-	clk_put(mcbsp->fclk);
 
 	return 0;
 }
