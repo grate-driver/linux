@@ -1790,6 +1790,8 @@ static int amdgpu_device_attr_create(struct amdgpu_device *adev,
 
 	BUG_ON(!attr);
 
+	attr->states = ATTR_STATE_SUPPORTED;
+
 	attr_update = attr->attr_update ? attr_update : default_attr_update;
 
 	ret = attr_update(adev, attr, mask);
