@@ -5,7 +5,6 @@
  * Copyright (c) 2009, 2014 Intel Corporation.
  */
 
-#include <linux/interrupt.h>
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
@@ -24,18 +23,19 @@ struct spi_pci_desc {
 };
 
 static struct spi_pci_desc spi_pci_mid_desc_1 = {
-	.setup = dw_spi_mid_init,
+	.setup = dw_spi_mid_init_mfld,
 	.num_cs = 5,
 	.bus_num = 0,
 };
 
 static struct spi_pci_desc spi_pci_mid_desc_2 = {
-	.setup = dw_spi_mid_init,
+	.setup = dw_spi_mid_init_mfld,
 	.num_cs = 2,
 	.bus_num = 1,
 };
 
 static struct spi_pci_desc spi_pci_ehl_desc = {
+	.setup = dw_spi_mid_init_generic,
 	.num_cs = 2,
 	.bus_num = -1,
 	.max_freq = 100000000,

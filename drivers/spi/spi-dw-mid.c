@@ -5,16 +5,15 @@
  * Copyright (c) 2009, 2014 Intel Corporation.
  */
 
-#include <linux/dma-mapping.h>
-#include <linux/dmaengine.h>
-#include <linux/interrupt.h>
-#include <linux/slab.h>
 #include <linux/spi/spi.h>
 #include <linux/types.h>
 
 #include "spi-dw.h"
 
 #ifdef CONFIG_SPI_DW_MID_DMA
+#include <linux/dma-mapping.h>
+#include <linux/dmaengine.h>
+#include <linux/irqreturn.h>
 #include <linux/pci.h>
 #include <linux/platform_data/dma-dw.h>
 
@@ -35,7 +34,7 @@ static bool mid_spi_dma_chan_filter(struct dma_chan *chan, void *param)
 	return true;
 }
 
-static int mid_spi_dma_init(struct dw_spi *dws)
+static int mid_spi_dma_init_mfld(struct device *dev, struct dw_spi *dws)
 {
 	struct pci_dev *dma_dev;
 	struct dw_dma_slave *tx = dws->dma_tx;
@@ -58,34 +57,57 @@ static int mid_spi_dma_init(struct dw_spi *dws)
 	dws->rxchan = dma_request_channel(mask, mid_spi_dma_chan_filter, rx);
 	if (!dws->rxchan)
 		goto err_exit;
-	dws->master->dma_rx = dws->rxchan;
 
 	/* 2. Init tx channel */
 	tx->dma_dev = &dma_dev->dev;
 	dws->txchan = dma_request_channel(mask, mid_spi_dma_chan_filter, tx);
 	if (!dws->txchan)
 		goto free_rxchan;
+
+	dws->master->dma_rx = dws->rxchan;
 	dws->master->dma_tx = dws->txchan;
 
-	dws->dma_inited = 1;
 	return 0;
 
 free_rxchan:
 	dma_release_channel(dws->rxchan);
+	dws->rxchan = NULL;
 err_exit:
 	return -EBUSY;
 }
 
+static int mid_spi_dma_init_generic(struct device *dev, struct dw_spi *dws)
+{
+	dws->rxchan = dma_request_slave_channel(dev, "rx");
+	if (!dws->rxchan)
+		return -ENODEV;
+
+	dws->txchan = dma_request_slave_channel(dev, "tx");
+	if (!dws->txchan) {
+		dma_release_channel(dws->rxchan);
+		dws->rxchan = NULL;
+		return -ENODEV;
+	}
+
+	dws->master->dma_rx = dws->rxchan;
+	dws->master->dma_tx = dws->txchan;
+
+	return 0;
+}
+
 static void mid_spi_dma_exit(struct dw_spi *dws)
 {
-	if (!dws->dma_inited)
-		return;
+	if (dws->txchan) {
+		dmaengine_terminate_sync(dws->txchan);
+		dma_release_channel(dws->txchan);
+	}
 
-	dmaengine_terminate_sync(dws->txchan);
-	dma_release_channel(dws->txchan);
+	if (dws->rxchan) {
+		dmaengine_terminate_sync(dws->rxchan);
+		dma_release_channel(dws->rxchan);
+	}
 
-	dmaengine_terminate_sync(dws->rxchan);
-	dma_release_channel(dws->rxchan);
+	dw_writel(dws, DW_SPI_DMACR, 0);
 }
 
 static irqreturn_t dma_transfer(struct dw_spi *dws)
@@ -108,9 +130,6 @@ static bool mid_spi_can_dma(struct spi_controller *master,
 		struct spi_device *spi, struct spi_transfer *xfer)
 {
 	struct dw_spi *dws = spi_controller_get_devdata(master);
-
-	if (!dws->dma_inited)
-		return false;
 
 	return xfer->len > dws->fifo_len;
 }
@@ -135,6 +154,8 @@ static void dw_spi_dma_tx_done(void *arg)
 	clear_bit(TX_BUSY, &dws->dma_chan_busy);
 	if (test_bit(RX_BUSY, &dws->dma_chan_busy))
 		return;
+
+	dw_writel(dws, DW_SPI_DMACR, 0);
 	spi_finalize_current_transfer(dws->master);
 }
 
@@ -147,6 +168,7 @@ static struct dma_async_tx_descriptor *dw_spi_dma_prepare_tx(struct dw_spi *dws,
 	if (!xfer->tx_buf)
 		return NULL;
 
+	memset(&txconf, 0, sizeof(txconf));
 	txconf.direction = DMA_MEM_TO_DEV;
 	txconf.dst_addr = dws->dma_addr;
 	txconf.dst_maxburst = 16;
@@ -181,6 +203,8 @@ static void dw_spi_dma_rx_done(void *arg)
 	clear_bit(RX_BUSY, &dws->dma_chan_busy);
 	if (test_bit(TX_BUSY, &dws->dma_chan_busy))
 		return;
+
+	dw_writel(dws, DW_SPI_DMACR, 0);
 	spi_finalize_current_transfer(dws->master);
 }
 
@@ -193,6 +217,7 @@ static struct dma_async_tx_descriptor *dw_spi_dma_prepare_rx(struct dw_spi *dws,
 	if (!xfer->rx_buf)
 		return NULL;
 
+	memset(&rxconf, 0, sizeof(rxconf));
 	rxconf.direction = DMA_DEV_TO_MEM;
 	rxconf.src_addr = dws->dma_addr;
 	rxconf.src_maxburst = 16;
@@ -273,16 +298,42 @@ static void mid_spi_dma_stop(struct dw_spi *dws)
 		dmaengine_terminate_sync(dws->rxchan);
 		clear_bit(RX_BUSY, &dws->dma_chan_busy);
 	}
+
+	dw_writel(dws, DW_SPI_DMACR, 0);
 }
 
-static const struct dw_spi_dma_ops mid_dma_ops = {
-	.dma_init	= mid_spi_dma_init,
+static const struct dw_spi_dma_ops mfld_dma_ops = {
+	.dma_init	= mid_spi_dma_init_mfld,
 	.dma_exit	= mid_spi_dma_exit,
 	.dma_setup	= mid_spi_dma_setup,
 	.can_dma	= mid_spi_can_dma,
 	.dma_transfer	= mid_spi_dma_transfer,
 	.dma_stop	= mid_spi_dma_stop,
 };
+
+static void dw_spi_mid_setup_dma_mfld(struct dw_spi *dws)
+{
+	dws->dma_tx = &mid_dma_tx;
+	dws->dma_rx = &mid_dma_rx;
+	dws->dma_ops = &mfld_dma_ops;
+}
+
+static const struct dw_spi_dma_ops generic_dma_ops = {
+	.dma_init	= mid_spi_dma_init_generic,
+	.dma_exit	= mid_spi_dma_exit,
+	.dma_setup	= mid_spi_dma_setup,
+	.can_dma	= mid_spi_can_dma,
+	.dma_transfer	= mid_spi_dma_transfer,
+	.dma_stop	= mid_spi_dma_stop,
+};
+
+static void dw_spi_mid_setup_dma_generic(struct dw_spi *dws)
+{
+	dws->dma_ops = &generic_dma_ops;
+}
+#else	/* CONFIG_SPI_DW_MID_DMA */
+static inline void dw_spi_mid_setup_dma_mfld(struct dw_spi *dws) {}
+static inline void dw_spi_mid_setup_dma_generic(struct dw_spi *dws) {}
 #endif
 
 /* Some specific info for SPI0 controller on Intel MID */
@@ -296,7 +347,7 @@ static const struct dw_spi_dma_ops mid_dma_ops = {
 #define CLK_SPI_CDIV_MASK	0x00000e00
 #define CLK_SPI_DISABLE_OFFSET	8
 
-int dw_spi_mid_init(struct dw_spi *dws)
+int dw_spi_mid_init_mfld(struct dw_spi *dws)
 {
 	void __iomem *clk_reg;
 	u32 clk_cdiv;
@@ -313,10 +364,18 @@ int dw_spi_mid_init(struct dw_spi *dws)
 
 	iounmap(clk_reg);
 
-#ifdef CONFIG_SPI_DW_MID_DMA
-	dws->dma_tx = &mid_dma_tx;
-	dws->dma_rx = &mid_dma_rx;
-	dws->dma_ops = &mid_dma_ops;
-#endif
+	/* Register hook to configure CTRLR0 */
+	dws->update_cr0 = dw_spi_update_cr0;
+
+	dw_spi_mid_setup_dma_mfld(dws);
+	return 0;
+}
+
+int dw_spi_mid_init_generic(struct dw_spi *dws)
+{
+	/* Register hook to configure CTRLR0 */
+	dws->update_cr0 = dw_spi_update_cr0;
+
+	dw_spi_mid_setup_dma_generic(dws);
 	return 0;
 }
