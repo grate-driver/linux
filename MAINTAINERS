@@ -1338,10 +1338,11 @@ F:	arch/arm/mach-integrator/
 F:	arch/arm/mach-realview/
 F:	arch/arm/mach-versatile/
 F:	arch/arm/plat-versatile/
+F:	drivers/bus/arm-integrator-lm.c
 F:	drivers/clk/versatile/
 F:	drivers/i2c/busses/i2c-versatile.c
 F:	drivers/irqchip/irq-versatile-fpga.c
-F:	drivers/mtd/maps/physmap_of_versatile.c
+F:	drivers/mtd/maps/physmap-versatile.*
 F:	drivers/power/reset/arm-versatile-reboot.c
 F:	drivers/soc/versatile/
 
@@ -2272,6 +2273,8 @@ L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 L:	linux-realtek-soc@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 F:	Documentation/devicetree/bindings/arm/realtek.yaml
+F:	arch/arm/boot/dts/rtd*
+F:	arch/arm/mach-realtek/
 F:	arch/arm64/boot/dts/realtek/
 
 ARM/RENESAS ARM64 ARCHITECTURE
@@ -3320,7 +3323,7 @@ L:	bcm-kernel-feedback-list@broadcom.com
 L:	linux-rpi-kernel@lists.infradead.org (moderated for non-subscribers)
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
-T:	git git://github.com/anholt/linux
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/nsaenz/linux-rpi.git
 F:	Documentation/devicetree/bindings/pci/brcm,stb-pcie.yaml
 F:	drivers/pci/controller/pcie-brcmstb.c
 F:	drivers/staging/vc04_services
