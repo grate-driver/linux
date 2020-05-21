@@ -39,6 +39,23 @@ arm/soc
 		ARM: socfpga: Drop unneeded select of PCI_DOMAINS_GENERIC
 
 arm/dt
+	patch
+		arm64: dts: Add SC9863A clock nodes
+		arm64: dts: Add SC9863A emmc and sd card nodes
+	sti/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/pchotard/sti tags/sti-dt-for-v5.8-round1
+	integrator/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/versatile-dts-v5.8-1
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.8-tag1
+	renesas/dt-binding
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.8-tag1
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.8/dt-signed
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.8-devicetree
+	realtek/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-realtek tags/realtek-dt-for-5.8
 
 arm/drivers
 
