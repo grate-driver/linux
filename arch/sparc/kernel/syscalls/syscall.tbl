@@ -487,4 +487,4 @@
 440	common	watch_mount			sys_watch_mount
 441	common	watch_sb			sys_watch_sb
 442	common	fsinfo				sys_fsinfo
-443	common	process_madvise			sys_process_madvise
+443	common	process_madvise			sys_process_madvise		compat_sys_process_madvise

@@ -446,4 +446,4 @@
 440	i386	watch_mount		sys_watch_mount
 441	i386	watch_sb		sys_watch_sb
 442	i386	fsinfo			sys_fsinfo
-443	i386	process_madvise		sys_process_madvise
+443	i386	process_madvise		sys_process_madvise		compat_sys_process_madvise
