@@ -836,17 +836,6 @@ static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 #define pmd_page(pmd)	pfn_to_page(pmd_pfn(pmd))
 
 /*
- * the pmd page can be thought of an array like this: pmd_t[PTRS_PER_PMD]
- *
- * this macro returns the index of the entry in the pmd page which would
- * control the given virtual address
- */
-static inline unsigned long pmd_index(unsigned long address)
-{
-	return (address >> PMD_SHIFT) & (PTRS_PER_PMD - 1);
-}
-
-/*
  * Conversion functions: convert a page and protection to a page entry,
  * and a page entry and page directory to the page they refer to.
  *
@@ -886,12 +875,6 @@ static inline unsigned long pud_page_vaddr(pud_t pud)
  * linux/mmzone.h's __section_mem_map_addr() definition:
  */
 #define pud_page(pud)	pfn_to_page(pud_pfn(pud))
-
-/* Find an entry in the second-level page table.. */
-static inline pmd_t *pmd_offset(pud_t *pud, unsigned long address)
-{
-	return (pmd_t *)pud_page_vaddr(*pud) + pmd_index(address);
-}
 
 #define pud_leaf	pud_large
 static inline int pud_large(pud_t pud)

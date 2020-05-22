@@ -1010,7 +1010,6 @@ extern struct page *p4d_page(p4d_t p4d);
 
 #define pgd_index(address) (((address) >> (PGDIR_SHIFT)) & (PTRS_PER_PGD - 1))
 #define pud_index(address) (((address) >> (PUD_SHIFT)) & (PTRS_PER_PUD - 1))
-#define pmd_index(address) (((address) >> (PMD_SHIFT)) & (PTRS_PER_PMD - 1))
 
 /*
  * Find an entry in a page-table-directory.  We combine the address region
@@ -1021,8 +1020,6 @@ extern struct page *p4d_page(p4d_t p4d);
 
 #define pud_offset(p4dp, addr)	\
 	(((pud_t *) p4d_page_vaddr(*(p4dp))) + pud_index(addr))
-#define pmd_offset(pudp,addr) \
-	(((pmd_t *) pud_page_vaddr(*(pudp))) + pmd_index(addr))
 
 /* to find an entry in a kernel page-table-directory */
 /* This now only contains the vmalloc pages */

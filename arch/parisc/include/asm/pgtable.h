@@ -446,14 +446,6 @@ static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 
 /* Find an entry in the second-level page table.. */
 
-#if CONFIG_PGTABLE_LEVELS == 3
-#define pmd_index(addr)         (((addr) >> PMD_SHIFT) & (PTRS_PER_PMD - 1))
-#define pmd_offset(dir,address) \
-((pmd_t *) pud_page_vaddr(*(dir)) + pmd_index(address))
-#else
-#define pmd_offset(dir,addr) ((pmd_t *) dir)
-#endif
-
 extern void paging_init (void);
 
 /* Used for deferring calls to flush_dcache_page() */

@@ -305,6 +305,7 @@ extern inline pmd_t * pmd_offset(pud_t * dir, unsigned long address)
 	smp_read_barrier_depends(); /* see above */
 	return ret;
 }
+#define pmd_offset pmd_offset
 
 /* Find an entry in the third-level page table.. */
 extern inline pte_t * pte_offset_kernel(pmd_t * dir, unsigned long address)

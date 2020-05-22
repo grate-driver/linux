@@ -389,10 +389,6 @@ pgd_offset (const struct mm_struct *mm, unsigned long address)
 	((pud_t *) p4d_page_vaddr(*(dir)) + (((addr) >> PUD_SHIFT) & (PTRS_PER_PUD - 1)))
 #endif
 
-/* Find an entry in the third-level page table.. */
-#define pmd_offset(dir,addr) \
-	((pmd_t *) pud_page_vaddr(*(dir)) + (((addr) >> PMD_SHIFT) & (PTRS_PER_PMD - 1)))
-
 /* atomic versions of the some PTE manipulations: */
 
 static inline int

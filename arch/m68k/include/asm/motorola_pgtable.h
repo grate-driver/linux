@@ -211,13 +211,6 @@ static inline pgd_t *pgd_offset_k(unsigned long address)
 	return kernel_pg_dir + (address >> PGDIR_SHIFT);
 }
 
-
-/* Find an entry in the second-level page table.. */
-static inline pmd_t *pmd_offset(pud_t *dir, unsigned long address)
-{
-	return (pmd_t *)pud_page_vaddr(*dir) + ((address >> PMD_SHIFT) & (PTRS_PER_PMD-1));
-}
-
 /* Encode and de-code a swap entry (must be !pte_none(e) && !pte_present(e)) */
 #define __swp_type(x)		(((x).val >> 4) & 0xff)
 #define __swp_offset(x)		((x).val >> 12)

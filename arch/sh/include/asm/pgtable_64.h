@@ -52,7 +52,6 @@ static __inline__ void set_pte(pte_t *pteptr, pte_t pteval)
 #define pgd_offset_k(address) pgd_offset(&init_mm, address)
 
 #define pud_index(address)	(((address) >> PUD_SHIFT) & (PTRS_PER_PUD-1))
-/* #define pmd_index(address)	(((address) >> PMD_SHIFT) & (PTRS_PER_PMD-1)) */
 
 /*
  * PMD level access routines. Same notes as above.

@@ -1281,6 +1281,7 @@ static inline pmd_t *pmd_offset(pud_t *pud, unsigned long address)
 		return (pmd_t *) pud_deref(*pud) + pmd_index(address);
 	return (pmd_t *) pud;
 }
+#define pmd_offset pmd_offset
 
 static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 {
