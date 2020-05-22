@@ -4,6 +4,7 @@
 #include <linux/poll.h>
 #include <linux/ns_common.h>
 #include <linux/fs_pin.h>
+#include <linux/watch_queue.h>
 
 struct mnt_namespace {
 	atomic_t		count;
@@ -78,6 +79,12 @@ struct mount {
 	int mnt_expiry_mark;		/* true if marked for expiry */
 	struct hlist_head mnt_pins;
 	struct hlist_head mnt_stuck_children;
+#ifdef CONFIG_MOUNT_NOTIFICATIONS
+	atomic_t mnt_topology_changes;	/* Number of topology changes applied */
+	atomic_t mnt_attr_changes;	/* Number of attribute changes applied */
+	atomic_t mnt_subtree_notifications;	/* Number of notifications in subtree */
+	struct watch_list *mnt_watchers; /* Watches on dentries within this mount */
+#endif
 } __randomize_layout;
 
 #define MNT_NS_INTERNAL ERR_PTR(-EINVAL) /* distinct from any mnt_namespace */
@@ -159,3 +166,17 @@ static inline bool is_anon_ns(struct mnt_namespace *ns)
 }
 
 extern void mnt_cursor_del(struct mnt_namespace *ns, struct mount *cursor);
+
+#ifdef CONFIG_MOUNT_NOTIFICATIONS
+extern void notify_mount(struct mount *triggered,
+			 struct mount *aux,
+			 enum mount_notification_subtype subtype,
+			 u32 info_flags);
+#else
+static inline void notify_mount(struct mount *triggered,
+				struct mount *aux,
+				enum mount_notification_subtype subtype,
+				u32 info_flags)
+{
+}
+#endif
