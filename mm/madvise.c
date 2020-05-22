@@ -1230,8 +1230,8 @@ static int process_madvise_vec(struct task_struct *target_task,
 	return ret;
 }
 
-static ssize_t do_process_madvise(int which, pid_t upid, struct iov_iter *iter,
-				       int behavior, unsigned long flags)
+static ssize_t do_process_madvise(int pidfd, struct iov_iter *iter,
+				int behavior, unsigned int flags)
 {
 	ssize_t ret;
 	struct pid *pid;
@@ -1242,26 +1242,12 @@ static ssize_t do_process_madvise(int which, pid_t upid, struct iov_iter *iter,
 	if (flags != 0)
 		return -EINVAL;
 
-	switch (which) {
-	case P_PID:
-		if (upid <= 0)
-			return -EINVAL;
-
-		pid = find_get_pid(upid);
-		if (!pid)
-			return -ESRCH;
-		break;
-	case P_PIDFD:
-		if (upid < 0)
-			return -EINVAL;
-
-		pid = pidfd_get_pid(upid);
-		if (IS_ERR(pid))
-			return PTR_ERR(pid);
-		break;
-	default:
+	if (pidfd < 0)
 		return -EINVAL;
-	}
+
+	pid = pidfd_get_pid(pidfd);
+	if (IS_ERR(pid))
+		return PTR_ERR(pid);
 
 	task = get_pid_task(pid, PIDTYPE_PID);
 	if (!task) {
@@ -1293,9 +1279,8 @@ put_pid:
 	return ret;
 }
 
-SYSCALL_DEFINE6(process_madvise, int, which, pid_t, upid,
-		const struct iovec __user *, vec, unsigned long, vlen,
-		int, behavior, unsigned long, flags)
+SYSCALL_DEFINE5(process_madvise, int, pidfd, const struct iovec __user *, vec,
+		unsigned long, vlen, int, behavior, unsigned int, flags)
 {
 	ssize_t ret;
 	struct iovec iovstack[UIO_FASTIOV];
@@ -1304,19 +1289,18 @@ SYSCALL_DEFINE6(process_madvise, int, which, pid_t, upid,
 
 	ret = import_iovec(READ, vec, vlen, ARRAY_SIZE(iovstack), &iov, &iter);
 	if (ret >= 0) {
-		ret = do_process_madvise(which, upid, &iter, behavior, flags);
+		ret = do_process_madvise(pidfd, &iter, behavior, flags);
 		kfree(iov);
 	}
 	return ret;
 }
 
 #ifdef CONFIG_COMPAT
-COMPAT_SYSCALL_DEFINE6(process_madvise, compat_int_t, which,
-			compat_pid_t, upid,
+COMPAT_SYSCALL_DEFINE5(process_madvise, compat_int_t, pidfd,
 			const struct compat_iovec __user *, vec,
 			compat_ulong_t, vlen,
 			compat_int_t, behavior,
-			compat_ulong_t, flags)
+			compat_int_t, flags)
 
 {
 	ssize_t ret;
@@ -1327,7 +1311,7 @@ COMPAT_SYSCALL_DEFINE6(process_madvise, compat_int_t, which,
 	ret = compat_import_iovec(READ, vec, vlen, ARRAY_SIZE(iovstack),
 				&iov, &iter);
 	if (ret >= 0) {
-		ret = do_process_madvise(which, upid, &iter, behavior, flags);
+		ret = do_process_madvise(pidfd, &iter, behavior, flags);
 		kfree(iov);
 	}
 	return ret;
