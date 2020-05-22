@@ -579,16 +579,17 @@ void kvm_arm_resume_guest(struct kvm *kvm)
 
 	kvm_for_each_vcpu(i, vcpu, kvm) {
 		vcpu->arch.pause = false;
-		swake_up_one(kvm_arch_vcpu_wq(vcpu));
+		rcuwait_wake_up(kvm_arch_vcpu_get_wait(vcpu));
 	}
 }
 
 static void vcpu_req_sleep(struct kvm_vcpu *vcpu)
 {
-	struct swait_queue_head *wq = kvm_arch_vcpu_wq(vcpu);
+	struct rcuwait *wait = kvm_arch_vcpu_get_wait(vcpu);
 
-	swait_event_interruptible_exclusive(*wq, ((!vcpu->arch.power_off) &&
-				       (!vcpu->arch.pause)));
+	rcuwait_wait_event(wait,
+			   (!vcpu->arch.power_off) &&(!vcpu->arch.pause),
+			   TASK_INTERRUPTIBLE);
 
 	if (vcpu->arch.power_off || vcpu->arch.pause) {
 		/* Awaken to handle a signal, request we sleep again later. */
@@ -639,7 +640,6 @@ static void check_vcpu_requests(struct kvm_vcpu *vcpu)
 /**
  * kvm_arch_vcpu_ioctl_run - the main VCPU run function to execute guest code
  * @vcpu:	The VCPU pointer
- * @run:	The kvm_run structure pointer used for userspace state exchange
  *
  * This function is called through the VCPU_RUN ioctl called from user space. It
  * will execute VM code in a loop until the time slice for the process is used
@@ -647,8 +647,9 @@ static void check_vcpu_requests(struct kvm_vcpu *vcpu)
  * return with return value 0 and with the kvm_run structure filled in with the
  * required data for the requested emulation.
  */
-int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
+int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 {
+	struct kvm_run *run = vcpu->run;
 	int ret;
 
 	if (unlikely(!kvm_vcpu_initialized(vcpu)))
@@ -659,7 +660,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		return ret;
 
 	if (run->exit_reason == KVM_EXIT_MMIO) {
-		ret = kvm_handle_mmio_return(vcpu, vcpu->run);
+		ret = kvm_handle_mmio_return(vcpu, run);
 		if (ret)
 			return ret;
 	}

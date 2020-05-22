@@ -97,6 +97,10 @@ struct nested_state {
 	/* A VMEXIT is required but not yet emulated */
 	bool exit_required;
 
+	/* A VMRUN has started but has not yet been performed, so
+	 * we cannot inject a nested vmexit yet.  */
+	bool nested_run_pending;
+
 	/* cache for intercepts of the guest */
 	u32 intercept_cr;
 	u32 intercept_dr;
@@ -360,8 +364,11 @@ u32 svm_msrpm_offset(u32 msr);
 void svm_set_efer(struct kvm_vcpu *vcpu, u64 efer);
 void svm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
 int svm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
-void svm_flush_tlb(struct kvm_vcpu *vcpu, bool invalidate_gpa);
+void svm_flush_tlb(struct kvm_vcpu *vcpu);
 void disable_nmi_singlestep(struct vcpu_svm *svm);
+bool svm_smi_blocked(struct kvm_vcpu *vcpu);
+bool svm_nmi_blocked(struct kvm_vcpu *vcpu);
+bool svm_interrupt_blocked(struct kvm_vcpu *vcpu);
 
 /* nested.c */
 
@@ -369,24 +376,24 @@ void disable_nmi_singlestep(struct vcpu_svm *svm);
 #define NESTED_EXIT_DONE	1	/* Exit caused nested vmexit  */
 #define NESTED_EXIT_CONTINUE	2	/* Further checks needed      */
 
-/* This function returns true if it is save to enable the nmi window */
-static inline bool nested_svm_nmi(struct vcpu_svm *svm)
-{
-	if (!is_guest_mode(&svm->vcpu))
-		return true;
-
-	if (!(svm->nested.intercept & (1ULL << INTERCEPT_NMI)))
-		return true;
-
-	svm->vmcb->control.exit_code = SVM_EXIT_NMI;
-	svm->nested.exit_required = true;
-
-	return false;
-}
-
 static inline bool svm_nested_virtualize_tpr(struct kvm_vcpu *vcpu)
 {
 	return is_guest_mode(vcpu) && (vcpu->arch.hflags & HF_VINTR_MASK);
+}
+
+static inline bool nested_exit_on_smi(struct vcpu_svm *svm)
+{
+	return (svm->nested.intercept & (1ULL << INTERCEPT_SMI));
+}
+
+static inline bool nested_exit_on_intr(struct vcpu_svm *svm)
+{
+	return (svm->nested.intercept & (1ULL << INTERCEPT_INTR));
+}
+
+static inline bool nested_exit_on_nmi(struct vcpu_svm *svm)
+{
+	return (svm->nested.intercept & (1ULL << INTERCEPT_NMI));
 }
 
 void enter_svm_guest_mode(struct vcpu_svm *svm, u64 vmcb_gpa,
@@ -398,8 +405,9 @@ int nested_svm_exit_handled(struct vcpu_svm *svm);
 int nested_svm_check_permissions(struct vcpu_svm *svm);
 int nested_svm_check_exception(struct vcpu_svm *svm, unsigned nr,
 			       bool has_error_code, u32 error_code);
-int svm_check_nested_events(struct kvm_vcpu *vcpu);
 int nested_svm_exit_special(struct vcpu_svm *svm);
+
+extern struct kvm_x86_nested_ops svm_nested_ops;
 
 /* avic.c */
 
