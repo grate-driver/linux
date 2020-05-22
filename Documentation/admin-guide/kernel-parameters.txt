@@ -3442,7 +3442,7 @@
 			bit 4: print ftrace buffer
 			bit 5: print all printk messages in buffer
 
-	panic_on_taint=	Bitmask for conditionally call panic() in add_taint()
+	panic_on_taint=	Bitmask for conditionally calling panic() in add_taint()
 			Format: <hex>[,nousertaint]
 			Hexadecimal bitmask representing the set of TAINT flags
 			that will cause the kernel to panic when add_taint() is
