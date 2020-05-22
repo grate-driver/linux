@@ -697,9 +697,8 @@ config DEBUG_VM_PGFLAGS
 config DEBUG_VM_PGTABLE
 	bool "Debug arch page table for semantics compliance"
 	depends on MMU
-	depends on !IA64 && !ARM
-	depends on ARCH_HAS_DEBUG_VM_PGTABLE || EXPERT
-	default y if ARCH_HAS_DEBUG_VM_PGTABLE && DEBUG_VM
+	depends on ARCH_HAS_DEBUG_VM_PGTABLE
+	default y if DEBUG_VM
 	help
 	  This option provides a debug method which can be used to test
 	  architecture page table helper functions on various platforms in
@@ -707,9 +706,7 @@ config DEBUG_VM_PGTABLE
 	  will help architecture code in making sure that any changes or
 	  new additions of these helpers still conform to expected
 	  semantics of the generic MM. Platforms will have to opt in for
-	  this through ARCH_HAS_DEBUG_VM_PGTABLE. Although it can also be
-	  enabled through EXPERT without requiring code change. This test
-	  is disabled on IA64 and ARM platforms where it fails to build.
+	  this through ARCH_HAS_DEBUG_VM_PGTABLE.
 
 	  If unsure, say N.
 
