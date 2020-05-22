@@ -432,7 +432,7 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 
 	/* Initiate read into locked page */
 	SetPageWorkingset(page);
-	lru_cache_add_anon(page);
+	lru_cache_add(page);
 	*new_page_allocated = true;
 	return page;
 
