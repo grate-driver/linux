@@ -3213,7 +3213,7 @@ static void show_pte(unsigned long addr)
 	unsigned long tskv = 0;
 	struct task_struct *tsk = NULL;
 	struct mm_struct *mm;
-	pgd_t *pgdp, *pgdir;
+	pgd_t *pgdp;
 	p4d_t *p4dp;
 	pud_t *pudp;
 	pmd_t *pmdp;
@@ -3238,13 +3238,10 @@ static void show_pte(unsigned long addr)
 	catch_memory_errors = 1;
 	sync();
 
-	if (mm == &init_mm) {
+	if (mm == &init_mm)
 		pgdp = pgd_offset_k(addr);
-		pgdir = pgd_offset_k(0);
-	} else {
+	else
 		pgdp = pgd_offset(mm, addr);
-		pgdir = pgd_offset(mm, 0);
-	}
 
 	p4dp = p4d_offset(pgdp, addr);
 
