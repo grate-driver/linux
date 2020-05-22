@@ -291,6 +291,7 @@ static int vmap_p4d_range(pgd_t *pgd, unsigned long addr,
 int map_kernel_range_noflush(unsigned long addr, unsigned long size,
 			     pgprot_t prot, struct page **pages)
 {
+	unsigned long start = addr;
 	unsigned long end = addr + size;
 	unsigned long next;
 	pgd_t *pgd;
@@ -308,6 +309,9 @@ int map_kernel_range_noflush(unsigned long addr, unsigned long size,
 		if (err)
 			return err;
 	} while (pgd++, addr = next, addr != end);
+
+	if (mask & ARCH_PAGE_TABLE_SYNC_MASK)
+		arch_sync_kernel_mappings(start, end);
 
 	return 0;
 }
