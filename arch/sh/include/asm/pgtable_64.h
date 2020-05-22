@@ -70,18 +70,6 @@ static __inline__ void set_pte(pte_t *pteptr, pte_t pteval)
 #define pmd_page(pmd) \
 	(virt_to_page(pmd_val(pmd)))
 
-/* PMD to PTE dereferencing */
-#define pte_index(address) \
-		((address >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
-
-#define __pte_offset(address)	pte_index(address)
-
-#define pte_offset_kernel(dir, addr) \
-		((pte_t *) ((pmd_val(*(dir))) & PAGE_MASK) + pte_index((addr)))
-
-#define pte_offset_map(dir,addr)	pte_offset_kernel(dir, addr)
-#define pte_unmap(pte)		do { } while (0)
-
 #ifndef __ASSEMBLY__
 /*
  * PTEL coherent flags.
