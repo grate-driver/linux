@@ -61,19 +61,26 @@ const char *get_reg_name(unsigned long id)
 
 static int wfx_counters_show(struct seq_file *seq, void *v)
 {
-	int ret;
+	int ret, i;
 	struct wfx_dev *wdev = seq->private;
-	struct hif_mib_extended_count_table counters;
+	struct hif_mib_extended_count_table counters[3];
 
-	ret = hif_get_counters_table(wdev, &counters);
-	if (ret < 0)
-		return ret;
-	if (ret > 0)
-		return -EIO;
+	for (i = 0; i < ARRAY_SIZE(counters); i++) {
+		ret = hif_get_counters_table(wdev, i, counters + i);
+		if (ret < 0)
+			return ret;
+		if (ret > 0)
+			return -EIO;
+	}
+
+	seq_printf(seq, "%-24s %12s %12s %12s\n",
+		   "", "global", "iface 0", "iface 1");
 
 #define PUT_COUNTER(name) \
-	seq_printf(seq, "%24s %d\n", #name ":",\
-		   le32_to_cpu(counters.count_##name))
+	seq_printf(seq, "%-24s %12d %12d %12d\n", #name, \
+		   le32_to_cpu(counters[2].count_##name), \
+		   le32_to_cpu(counters[0].count_##name), \
+		   le32_to_cpu(counters[1].count_##name))
 
 	PUT_COUNTER(tx_packets);
 	PUT_COUNTER(tx_multicast_frames);
@@ -104,6 +111,12 @@ static int wfx_counters_show(struct seq_file *seq, void *v)
 	PUT_COUNTER(miss_beacon);
 
 #undef PUT_COUNTER
+
+	for (i = 0; i < ARRAY_SIZE(counters[0].reserved); i++)
+		seq_printf(seq, "reserved[%02d]%12s %12d %12d %12d\n", i, "",
+			   le32_to_cpu(counters[2].reserved[i]),
+			   le32_to_cpu(counters[0].reserved[i]),
+			   le32_to_cpu(counters[1].reserved[i]));
 
 	return 0;
 }
@@ -142,7 +155,7 @@ static int wfx_rx_stats_show(struct seq_file *seq, void *v)
 	mutex_lock(&wdev->rx_stats_lock);
 	seq_printf(seq, "Timestamp: %dus\n", st->date);
 	seq_printf(seq, "Low power clock: frequency %uHz, external %s\n",
-		   st->pwr_clk_freq,
+		   le32_to_cpu(st->pwr_clk_freq),
 		   st->is_ext_pwr_clk ? "yes" : "no");
 	seq_printf(seq,
 		   "Num. of frames: %d, PER (x10e4): %d, Throughput: %dKbps/s\n",
@@ -152,9 +165,12 @@ static int wfx_rx_stats_show(struct seq_file *seq, void *v)
 	for (i = 0; i < ARRAY_SIZE(channel_names); i++) {
 		if (channel_names[i])
 			seq_printf(seq, "%5s %8d %8d %8d %8d %8d\n",
-				   channel_names[i], st->nb_rx_by_rate[i],
-				   st->per[i], st->rssi[i] / 100,
-				   st->snr[i] / 100, st->cfo[i]);
+				   channel_names[i],
+				   le32_to_cpu(st->nb_rx_by_rate[i]),
+				   le16_to_cpu(st->per[i]),
+				   (s16)le16_to_cpu(st->rssi[i]) / 100,
+				   (s16)le16_to_cpu(st->snr[i]) / 100,
+				   (s16)le16_to_cpu(st->cfo[i]));
 	}
 	mutex_unlock(&wdev->rx_stats_lock);
 
@@ -234,7 +250,7 @@ static ssize_t wfx_send_hif_msg_write(struct file *file,
 	request = memdup_user(user_buf, count);
 	if (IS_ERR(request))
 		return PTR_ERR(request);
-	if (request->len != count) {
+	if (le16_to_cpu(request->len) != count) {
 		kfree(request);
 		return -EINVAL;
 	}
