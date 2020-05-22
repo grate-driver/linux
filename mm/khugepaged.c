@@ -535,12 +535,6 @@ static bool is_refcount_suitable(struct page *page)
 	if (PageSwapCache(page))
 		expected_refcount += compound_nr(page);
 
-	if (IS_ENABLED(CONFIG_DEBUG_VM) && expected_refcount > refcount) {
-		pr_err("expected_refcount (%d) > refcount (%d)\n",
-				expected_refcount, refcount);
-		dump_page(page, "Unexpected refcount");
-	}
-
 	return page_count(page) == expected_refcount;
 }
 
@@ -1239,7 +1233,23 @@ static int khugepaged_scan_pmd(struct mm_struct *mm,
 			goto out_unmap;
 		}
 
-		/* Check if the page has any GUP (or other external) pins */
+		/*
+		 * Check if the page has any GUP (or other external) pins.
+		 *
+		 * Here the check is racy it may see totmal_mapcount > refcount
+		 * in some cases.
+		 * For example, one process with one forked child process.
+		 * The parent has the PMD split due to MADV_DONTNEED, then
+		 * the child is trying unmap the whole PMD, but khugepaged
+		 * may be scanning the parent between the child has
+		 * PageDoubleMap flag cleared and dec the mapcount.  So
+		 * khugepaged may see total_mapcount > refcount.
+		 *
+		 * But such case is ephemeral we could always retry collapse
+		 * later.  However it may report false positive if the page
+		 * has excessive GUP pins (i.e. 512).  Anyway the same check
+		 * will be done again later the risk seems low.
+		 */
 		if (!is_refcount_suitable(page)) {
 			result = SCAN_PAGE_COUNT;
 			goto out_unmap;
