@@ -62,11 +62,8 @@ static inline unsigned long pud_index(unsigned long address)
 #endif
 
 #ifndef pgd_index
-static inline unsigned long pgd_index(unsigned long address)
-{
-	return ((address >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1));
-}
-#define pgd_index pgd_index
+/* Must be a compile-time constant, so implement it as a macro */
+#define pgd_index(a)  (((a) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
 #endif
 
 #ifndef pte_offset_kernel
