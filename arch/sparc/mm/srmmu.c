@@ -28,7 +28,6 @@
 #include <asm/tlbflush.h>
 #include <asm/io-unit.h>
 #include <asm/pgalloc.h>
-#include <asm/pgtable.h>
 #include <asm/bitext.h>
 #include <asm/vaddrs.h>
 #include <asm/cache.h>

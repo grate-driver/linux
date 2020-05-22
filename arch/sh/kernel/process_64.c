@@ -27,7 +27,6 @@
 #include <linux/sched/task_stack.h>
 #include <asm/syscalls.h>
 #include <linux/uaccess.h>
-#include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 #include <asm/fpu.h>
 #include <asm/switch_to.h>
