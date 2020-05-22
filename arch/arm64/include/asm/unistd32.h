@@ -891,6 +891,8 @@ __SYSCALL(__NR_watch_mount, sys_watch_mount)
 __SYSCALL(__NR_watch_sb, sys_watch_sb)
 #define __NR_fsinfo 442
 __SYSCALL(__NR_fsinfo, sys_fsinfo)
+#define __NR_process_madvise 443
+__SYSCALL(__NR_process_madvise, process_madvise)
 
 /*
  * Please add new compat syscalls above this comment and update

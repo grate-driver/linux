@@ -356,3 +356,4 @@
 440	n64	watch_mount			sys_watch_mount
 441	n64	watch_sb			sys_watch_sb
 442	n64	fsinfo				sys_fsinfo
+443	n64	process_madvise			sys_process_madvise
