@@ -120,10 +120,27 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
 /* Annotate a C jump table to allow objtool to follow the code flow */
 #define __annotate_jump_table __section(.rodata..c_jump_table)
 
+/* Begin/end of an instrumentation safe region */
+#define instrumentation_begin() ({						\
+	asm volatile("%c0:\n\t"						\
+		     ".pushsection .discard.instr_begin\n\t"		\
+		     ".long %c0b - .\n\t"				\
+		     ".popsection\n\t" : : "i" (__COUNTER__));		\
+})
+
+#define instrumentation_end() ({							\
+	asm volatile("%c0:\n\t"						\
+		     ".pushsection .discard.instr_end\n\t"		\
+		     ".long %c0b - .\n\t"				\
+		     ".popsection\n\t" : : "i" (__COUNTER__));		\
+})
+
 #else
 #define annotate_reachable()
 #define annotate_unreachable()
 #define __annotate_jump_table
+#define instrumentation_begin()		do { } while(0)
+#define instrumentation_end()		do { } while(0)
 #endif
 
 #ifndef ASM_UNREACHABLE
