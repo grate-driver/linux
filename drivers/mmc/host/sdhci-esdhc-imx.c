@@ -8,6 +8,7 @@
  *   Author: Wolfram Sang <kernel@pengutronix.de>
  */
 
+#include <linux/bitfield.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/delay.h>
@@ -214,6 +215,7 @@ static const struct esdhc_soc_data usdhc_imx6sl_data = {
 static const struct esdhc_soc_data usdhc_imx6sll_data = {
 	.flags = ESDHC_FLAG_USDHC | ESDHC_FLAG_STD_TUNING
 			| ESDHC_FLAG_HAVE_CAP1 | ESDHC_FLAG_HS200
+			| ESDHC_FLAG_HS400
 			| ESDHC_FLAG_STATE_LOST_IN_LPMODE,
 };
 
@@ -399,7 +401,8 @@ static u32 esdhc_readl_le(struct sdhci_host *host, int reg)
 				val = SDHCI_SUPPORT_DDR50 | SDHCI_SUPPORT_SDR104
 					| SDHCI_SUPPORT_SDR50
 					| SDHCI_USE_SDR50_TUNING
-					| (SDHCI_TUNING_MODE_3 << SDHCI_RETUNING_MODE_SHIFT);
+					| FIELD_PREP(SDHCI_RETUNING_MODE_MASK,
+						     SDHCI_TUNING_MODE_3);
 
 			if (imx_data->socdata->flags & ESDHC_FLAG_HS400)
 				val |= SDHCI_SUPPORT_HS400;
@@ -417,9 +420,9 @@ static u32 esdhc_readl_le(struct sdhci_host *host, int reg)
 
 	if (unlikely(reg == SDHCI_MAX_CURRENT) && esdhc_is_usdhc(imx_data)) {
 		val = 0;
-		val |= 0xFF << SDHCI_MAX_CURRENT_330_SHIFT;
-		val |= 0xFF << SDHCI_MAX_CURRENT_300_SHIFT;
-		val |= 0xFF << SDHCI_MAX_CURRENT_180_SHIFT;
+		val |= FIELD_PREP(SDHCI_MAX_CURRENT_330_MASK, 0xFF);
+		val |= FIELD_PREP(SDHCI_MAX_CURRENT_300_MASK, 0xFF);
+		val |= FIELD_PREP(SDHCI_MAX_CURRENT_180_MASK, 0xFF);
 	}
 
 	if (unlikely(reg == SDHCI_INT_STATUS)) {

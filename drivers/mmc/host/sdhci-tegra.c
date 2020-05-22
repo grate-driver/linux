@@ -607,46 +607,26 @@ static void tegra_sdhci_parse_pad_autocal_dt(struct sdhci_host *host)
 	err = device_property_read_u32(host->mmc->parent,
 			"nvidia,pad-autocal-pull-up-offset-3v3-timeout",
 			&autocal->pull_up_3v3_timeout);
-	if (err) {
-		if (!IS_ERR(tegra_host->pinctrl_state_3v3) &&
-			(tegra_host->pinctrl_state_3v3_drv == NULL))
-			pr_warn("%s: Missing autocal timeout 3v3-pad drvs\n",
-				mmc_hostname(host->mmc));
+	if (err)
 		autocal->pull_up_3v3_timeout = 0;
-	}
 
 	err = device_property_read_u32(host->mmc->parent,
 			"nvidia,pad-autocal-pull-down-offset-3v3-timeout",
 			&autocal->pull_down_3v3_timeout);
-	if (err) {
-		if (!IS_ERR(tegra_host->pinctrl_state_3v3) &&
-			(tegra_host->pinctrl_state_3v3_drv == NULL))
-			pr_warn("%s: Missing autocal timeout 3v3-pad drvs\n",
-				mmc_hostname(host->mmc));
+	if (err)
 		autocal->pull_down_3v3_timeout = 0;
-	}
 
 	err = device_property_read_u32(host->mmc->parent,
 			"nvidia,pad-autocal-pull-up-offset-1v8-timeout",
 			&autocal->pull_up_1v8_timeout);
-	if (err) {
-		if (!IS_ERR(tegra_host->pinctrl_state_1v8) &&
-			(tegra_host->pinctrl_state_1v8_drv == NULL))
-			pr_warn("%s: Missing autocal timeout 1v8-pad drvs\n",
-				mmc_hostname(host->mmc));
+	if (err)
 		autocal->pull_up_1v8_timeout = 0;
-	}
 
 	err = device_property_read_u32(host->mmc->parent,
 			"nvidia,pad-autocal-pull-down-offset-1v8-timeout",
 			&autocal->pull_down_1v8_timeout);
-	if (err) {
-		if (!IS_ERR(tegra_host->pinctrl_state_1v8) &&
-			(tegra_host->pinctrl_state_1v8_drv == NULL))
-			pr_warn("%s: Missing autocal timeout 1v8-pad drvs\n",
-				mmc_hostname(host->mmc));
+	if (err)
 		autocal->pull_down_1v8_timeout = 0;
-	}
 
 	err = device_property_read_u32(host->mmc->parent,
 			"nvidia,pad-autocal-pull-up-offset-sdr104",
