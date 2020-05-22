@@ -756,10 +756,15 @@ sysctl_test_0006()
 sysctl_test_0007()
 {
 	TARGET="${SYSCTL}/boot_int"
+	if [ ! -f $TARGET ]; then
+		echo "Skipping test for $TARGET as it is not present ..."
+		return $ksft_skip
+	fi
+
 	if [ -d $DIR ]; then
 		echo "Boot param test only possible sysctl_test is built-in, not module:"
 		cat $TEST_DIR/config >&2
-		return 0
+		return $ksft_skip
 	fi
 
 	echo -n "Testing if $TARGET is set to 1 ..."
@@ -785,6 +790,7 @@ sysctl_test_0007()
 
 	echo "Skipping test, expected kernel parameter missing."
 	echo "To perform this test, make sure kernel is booted with parameter: sysctl.debug.test_sysctl.boot_int=1"
+	return $ksft_skip
 }
 
 list_tests()
