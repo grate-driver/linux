@@ -1872,8 +1872,7 @@ static inline bool blk_needs_flush_plug(struct task_struct *tsk)
 	return false;
 }
 
-static inline int blkdev_issue_flush(struct block_device *bdev, gfp_t gfp_mask,
-				     sector_t *error_sector)
+static inline int blkdev_issue_flush(struct block_device *bdev, gfp_t gfp_mask)
 {
 	return 0;
 }
