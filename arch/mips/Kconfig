@@ -92,6 +92,9 @@ config MIPS
 	select SYSCTL_EXCEPTION_TRACE
 	select VIRT_TO_BUS
 
+config MIPS_FIXUP_BIGPHYS_ADDR
+	bool
+
 menu "Machine selection"
 
 choice
@@ -157,6 +160,7 @@ config MIPS_ALCHEMY
 	select CSRC_R4K
 	select IRQ_MIPS_CPU
 	select DMA_MAYBE_COHERENT	# Au1000,1500,1100 aren't, rest is
+	select MIPS_FIXUP_BIGPHYS_ADDR if PCI
 	select SYS_HAS_CPU_MIPS32_R1
 	select SYS_SUPPORTS_32BIT_KERNEL
 	select SYS_SUPPORTS_APM_EMULATION
@@ -426,23 +430,6 @@ config LANTIQ
 	select ARCH_HAS_RESET_CONTROLLER
 	select RESET_CONTROLLER
 
-config LASAT
-	bool "LASAT Networks platforms"
-	select CEVT_R4K
-	select CRC32
-	select CSRC_R4K
-	select DMA_NONCOHERENT
-	select SYS_HAS_EARLY_PRINTK
-	select HAVE_PCI
-	select IRQ_MIPS_CPU
-	select PCI_GT64XXX_PCI0
-	select MIPS_NILE4
-	select R5000_CPU_SCACHE
-	select SYS_HAS_CPU_R5000
-	select SYS_SUPPORTS_32BIT_KERNEL
-	select SYS_SUPPORTS_64BIT_KERNEL if BROKEN
-	select SYS_SUPPORTS_LITTLE_ENDIAN
-
 config MACH_LOONGSON32
 	bool "Loongson 32-bit family of machines"
 	select SYS_SUPPORTS_ZBOOT
@@ -474,7 +461,7 @@ config MACH_LOONGSON64
 	select ISA
 	select I8259
 	select IRQ_MIPS_CPU
-	select NR_CPUS_DEFAULT_4
+	select NR_CPUS_DEFAULT_64
 	select USE_GENERIC_EARLY_PRINTK_8250
 	select SYS_HAS_CPU_LOONGSON64
 	select SYS_HAS_EARLY_PRINTK
@@ -592,13 +579,6 @@ config MACH_PIC32
 	  Microchip PIC32 is a family of general-purpose 32 bit MIPS core
 	  microcontrollers.
 
-config NEC_MARKEINS
-	bool "NEC EMMA2RH Mark-eins board"
-	select SOC_EMMA2RH
-	select HAVE_PCI
-	help
-	  This enables support for the NEC Electronics Mark-eins boards.
-
 config MACH_VR41XX
 	bool "NEC VR4100 series based machines"
 	select CEVT_R4K
@@ -619,30 +599,6 @@ config NXP_STB225
 	select SOC_PNX8335
 	help
 	  Support for NXP Semiconductors STB225 Development Board.
-
-config PMC_MSP
-	bool "PMC-Sierra MSP chipsets"
-	select CEVT_R4K
-	select CSRC_R4K
-	select DMA_NONCOHERENT
-	select SWAP_IO_SPACE
-	select NO_EXCEPT_FILL
-	select BOOT_RAW
-	select SYS_HAS_CPU_MIPS32_R1
-	select SYS_HAS_CPU_MIPS32_R2
-	select SYS_SUPPORTS_32BIT_KERNEL
-	select SYS_SUPPORTS_BIG_ENDIAN
-	select SYS_SUPPORTS_MIPS16
-	select IRQ_MIPS_CPU
-	select SERIAL_8250
-	select SERIAL_8250_CONSOLE
-	select USB_EHCI_BIG_ENDIAN_MMIO
-	select USB_EHCI_BIG_ENDIAN_DESC
-	help
-	  This adds support for the PMC-Sierra family of Multi-Service
-	  Processor System-On-A-Chips.  These parts include a number
-	  of integrated peripherals, interfaces and DSPs in addition to
-	  a variety of MIPS cores.
 
 config RALINK
 	bool "Ralink based machines"
@@ -1086,10 +1042,8 @@ source "arch/mips/generic/Kconfig"
 source "arch/mips/jazz/Kconfig"
 source "arch/mips/jz4740/Kconfig"
 source "arch/mips/lantiq/Kconfig"
-source "arch/mips/lasat/Kconfig"
 source "arch/mips/pic32/Kconfig"
 source "arch/mips/pistachio/Kconfig"
-source "arch/mips/pmcs-msp71xx/Kconfig"
 source "arch/mips/ralink/Kconfig"
 source "arch/mips/sgi-ip27/Kconfig"
 source "arch/mips/sibyte/Kconfig"
@@ -1208,9 +1162,6 @@ config MIPS_BONITO64
 	bool
 
 config MIPS_MSC
-	bool
-
-config MIPS_NILE4
 	bool
 
 config SYNC_R4K
@@ -1333,18 +1284,6 @@ config PCI_XTALK_BRIDGE
 config NO_EXCEPT_FILL
 	bool
 
-config SOC_EMMA2RH
-	bool
-	select CEVT_R4K
-	select CSRC_R4K
-	select DMA_NONCOHERENT
-	select IRQ_MIPS_CPU
-	select SWAP_IO_SPACE
-	select SYS_HAS_CPU_R5500
-	select SYS_SUPPORTS_32BIT_KERNEL
-	select SYS_SUPPORTS_64BIT_KERNEL
-	select SYS_SUPPORTS_BIG_ENDIAN
-
 config SOC_PNX833X
 	bool
 	select CEVT_R4K
@@ -1417,9 +1356,6 @@ config MIPS_L1_CACHE_SHIFT
 	default "5" if MIPS_L1_CACHE_SHIFT_5
 	default "4" if MIPS_L1_CACHE_SHIFT_4
 	default "5"
-
-config HAVE_STD_PC_SERIAL_PORT
-	bool
 
 config ARC_CMDLINE_ONLY
 	bool
@@ -3274,3 +3210,5 @@ endmenu
 source "drivers/firmware/Kconfig"
 
 source "arch/mips/kvm/Kconfig"
+
+source "arch/mips/vdso/Kconfig"

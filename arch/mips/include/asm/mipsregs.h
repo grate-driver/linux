@@ -681,6 +681,10 @@
 #define MIPS_CONF6_FTLBDIS	(_ULCAST_(1) << 22)
 /* FTLB probability bits */
 #define MIPS_CONF6_FTLBP_SHIFT	(16)
+/* Loongson-3 feature bits */
+#define MIPS_CONF6_LOONGSON_SCRAND	(_ULCAST_(1) << 17)
+#define MIPS_CONF6_LOONGSON_LLEXC	(_ULCAST_(1) << 16)
+#define MIPS_CONF6_LOONGSON_STFILL	(_ULCAST_(1) << 8)
 
 #define MIPS_CONF7_WII		(_ULCAST_(1) << 31)
 
@@ -753,10 +757,18 @@
 
 /* MAAR bit definitions */
 #define MIPS_MAAR_VH		(_U64CAST_(1) << 63)
-#define MIPS_MAAR_ADDR		((BIT_ULL(BITS_PER_LONG - 12) - 1) << 12)
+#define MIPS_MAAR_ADDR		GENMASK_ULL(55, 12)
 #define MIPS_MAAR_ADDR_SHIFT	12
 #define MIPS_MAAR_S		(_ULCAST_(1) << 1)
 #define MIPS_MAAR_VL		(_ULCAST_(1) << 0)
+#ifdef CONFIG_XPA
+#define MIPS_MAAR_V		(MIPS_MAAR_VH | MIPS_MAAR_VL)
+#else
+#define MIPS_MAAR_V		MIPS_MAAR_VL
+#endif
+#define MIPS_MAARX_VH		(_ULCAST_(1) << 31)
+#define MIPS_MAARX_ADDR		0xF
+#define MIPS_MAARX_ADDR_SHIFT	32
 
 /* MAARI bit definitions */
 #define MIPS_MAARI_INDEX	(_ULCAST_(0x3f) << 0)
@@ -997,6 +1009,8 @@
 #define LOONGSON_DIAG_ITLB	(_ULCAST_(1) << 2)
 /* Flush DTLB */
 #define LOONGSON_DIAG_DTLB	(_ULCAST_(1) << 3)
+/* Allow some CACHE instructions (CACHE0, 1, 3, 21 and 23) in user mode */
+#define LOONGSON_DIAG_UCAC	(_ULCAST_(1) << 8)
 /* Flush VTLB */
 #define LOONGSON_DIAG_VTLB	(_ULCAST_(1) << 12)
 /* Flush FTLB */
@@ -1717,6 +1731,8 @@ do {									\
 #define write_c0_lladdr(val)	__write_ulong_c0_register($17, 0, val)
 #define read_c0_maar()		__read_ulong_c0_register($17, 1)
 #define write_c0_maar(val)	__write_ulong_c0_register($17, 1, val)
+#define readx_c0_maar()		__readx_32bit_c0_register($17, 1)
+#define writex_c0_maar(val)	__writex_32bit_c0_register($17, 1, val)
 #define read_c0_maari()		__read_32bit_c0_register($17, 2)
 #define write_c0_maari(val)	__write_32bit_c0_register($17, 2, val)
 

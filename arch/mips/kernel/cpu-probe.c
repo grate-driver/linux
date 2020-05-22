@@ -535,19 +535,19 @@ static void set_isa(struct cpuinfo_mips *c, unsigned int isa)
 	case MIPS_CPU_ISA_M64R2:
 		c->isa_level |= MIPS_CPU_ISA_M32R2 | MIPS_CPU_ISA_M64R2;
 		set_elf_base_platform("mips64r2");
-		/* fall through */
+		fallthrough;
 	case MIPS_CPU_ISA_M64R1:
 		c->isa_level |= MIPS_CPU_ISA_M32R1 | MIPS_CPU_ISA_M64R1;
 		set_elf_base_platform("mips64");
-		/* fall through */
+		fallthrough;
 	case MIPS_CPU_ISA_V:
 		c->isa_level |= MIPS_CPU_ISA_V;
 		set_elf_base_platform("mips5");
-		/* fall through */
+		fallthrough;
 	case MIPS_CPU_ISA_IV:
 		c->isa_level |= MIPS_CPU_ISA_IV;
 		set_elf_base_platform("mips4");
-		/* fall through */
+		fallthrough;
 	case MIPS_CPU_ISA_III:
 		c->isa_level |= MIPS_CPU_ISA_II | MIPS_CPU_ISA_III;
 		set_elf_base_platform("mips3");
@@ -557,7 +557,7 @@ static void set_isa(struct cpuinfo_mips *c, unsigned int isa)
 	case MIPS_CPU_ISA_M64R6:
 		c->isa_level |= MIPS_CPU_ISA_M32R6 | MIPS_CPU_ISA_M64R6;
 		set_elf_base_platform("mips64r6");
-		/* fall through */
+		fallthrough;
 	case MIPS_CPU_ISA_M32R6:
 		c->isa_level |= MIPS_CPU_ISA_M32R6;
 		set_elf_base_platform("mips32r6");
@@ -566,11 +566,11 @@ static void set_isa(struct cpuinfo_mips *c, unsigned int isa)
 	case MIPS_CPU_ISA_M32R2:
 		c->isa_level |= MIPS_CPU_ISA_M32R2;
 		set_elf_base_platform("mips32r2");
-		/* fall through */
+		fallthrough;
 	case MIPS_CPU_ISA_M32R1:
 		c->isa_level |= MIPS_CPU_ISA_M32R1;
 		set_elf_base_platform("mips32");
-		/* fall through */
+		fallthrough;
 	case MIPS_CPU_ISA_II:
 		c->isa_level |= MIPS_CPU_ISA_II;
 		set_elf_base_platform("mips2");
@@ -850,7 +850,7 @@ static inline unsigned int decode_config4(struct cpuinfo_mips *c)
 				  MIPS_CONF4_VTLBSIZEEXT_SHIFT) * 0x40;
 			c->tlbsize = c->tlbsizevtlb;
 			ftlb_page = MIPS_CONF4_VFTLBPAGESIZE;
-			/* fall through */
+			fallthrough;
 		case MIPS_CONF4_MMUEXTDEF_FTLBSIZEEXT:
 			if (mips_ftlb_disabled)
 				break;
@@ -1753,10 +1753,10 @@ static inline void cpu_probe_mips(struct cpuinfo_mips *c, unsigned int cpu)
 	switch (__get_cpu_type(c->cputype)) {
 	case CPU_I6500:
 		c->options |= MIPS_CPU_SHARED_FTLB_ENTRIES;
-		/* fall-through */
+		fallthrough;
 	case CPU_I6400:
 		c->options |= MIPS_CPU_SHARED_FTLB_RAM;
-		/* fall-through */
+		fallthrough;
 	default:
 		break;
 	}
@@ -1932,10 +1932,53 @@ platform:
 	}
 }
 
+#ifdef CONFIG_CPU_LOONGSON64
+#include <loongson_regs.h>
+
+static inline void decode_cpucfg(struct cpuinfo_mips *c)
+{
+	u32 cfg1 = read_cpucfg(LOONGSON_CFG1);
+	u32 cfg2 = read_cpucfg(LOONGSON_CFG2);
+	u32 cfg3 = read_cpucfg(LOONGSON_CFG3);
+
+	if (cfg1 & LOONGSON_CFG1_MMI)
+		c->ases |= MIPS_ASE_LOONGSON_MMI;
+
+	if (cfg2 & LOONGSON_CFG2_LEXT1)
+		c->ases |= MIPS_ASE_LOONGSON_EXT;
+
+	if (cfg2 & LOONGSON_CFG2_LEXT2)
+		c->ases |= MIPS_ASE_LOONGSON_EXT2;
+
+	if (cfg2 & LOONGSON_CFG2_LSPW)
+		c->options |= MIPS_CPU_LDPTE;
+
+	if (cfg3 & LOONGSON_CFG3_LCAMP)
+		c->ases |= MIPS_ASE_LOONGSON_CAM;
+}
+
 static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 {
+	decode_configs(c);
+
 	switch (c->processor_id & PRID_IMP_MASK) {
-	case PRID_IMP_LOONGSON_64C:  /* Loongson-2/3 */
+	case PRID_IMP_LOONGSON_64R: /* Loongson-64 Reduced */
+		switch (c->processor_id & PRID_REV_MASK) {
+		case PRID_REV_LOONGSON2K_R1_0:
+		case PRID_REV_LOONGSON2K_R1_1:
+		case PRID_REV_LOONGSON2K_R1_2:
+		case PRID_REV_LOONGSON2K_R1_3:
+			c->cputype = CPU_LOONGSON64;
+			__cpu_name[cpu] = "Loongson-2K";
+			set_elf_platform(cpu, "gs264e");
+			set_isa(c, MIPS_CPU_ISA_M64R2);
+			break;
+		}
+		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
+		c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_EXT |
+				MIPS_ASE_LOONGSON_EXT2);
+		break;
+	case PRID_IMP_LOONGSON_64C:  /* Loongson-3 Classic */
 		switch (c->processor_id & PRID_REV_MASK) {
 		case PRID_REV_LOONGSON3A_R2_0:
 		case PRID_REV_LOONGSON3A_R2_1:
@@ -1952,8 +1995,14 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 			set_isa(c, MIPS_CPU_ISA_M64R2);
 			break;
 		}
-
-		decode_configs(c);
+		/*
+		 * Loongson-3 Classic did not implement MIPS standard TLBINV
+		 * but implemented TLBINVF and EHINV. As currently we're only
+		 * using these two features, enable MIPS_CPU_TLBINV as well.
+		 *
+		 * Also some early Loongson-3A2000 had wrong TLB type in Config
+		 * register, we correct it here.
+		 */
 		c->options |= MIPS_CPU_FTLB | MIPS_CPU_TLBINV | MIPS_CPU_LDPTE;
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
 		c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
@@ -1964,17 +2013,17 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 		__cpu_name[cpu] = "ICT Loongson-3";
 		set_elf_platform(cpu, "loongson3a");
 		set_isa(c, MIPS_CPU_ISA_M64R2);
-		decode_configs(c);
-		c->options |= MIPS_CPU_FTLB | MIPS_CPU_TLBINV | MIPS_CPU_LDPTE;
+		decode_cpucfg(c);
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
-		c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
-			MIPS_ASE_LOONGSON_EXT | MIPS_ASE_LOONGSON_EXT2);
 		break;
 	default:
 		panic("Unknown Loongson Processor ID!");
 		break;
 	}
 }
+#else
+static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu) { }
+#endif
 
 static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 {
@@ -2028,7 +2077,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 		default:
 			break;
 		}
-	/* fall-through */
+		fallthrough;
 	case PRID_IMP_XBURST_REV2:
 		c->cputype = CPU_XBURST;
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
