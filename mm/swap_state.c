@@ -430,6 +430,11 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 	if (mem_cgroup_charge(page, NULL, gfp_mask & GFP_KERNEL))
 		goto fail_delete;
 
+	/* XXX: Move to lru_cache_add() when it supports new vs putback */
+	spin_lock_irq(&page_pgdat(page)->lru_lock);
+	lru_note_cost(page);
+	spin_unlock_irq(&page_pgdat(page)->lru_lock);
+
 	/* Initiate read into locked page */
 	SetPageWorkingset(page);
 	lru_cache_add(page);
