@@ -3716,11 +3716,11 @@ retry:
 		mark = wmark_pages(zone, alloc_flags & ALLOC_WMARK_MASK);
 		/*
 		 * Allow GFP_ATOMIC order-0 allocations to exclude the
-		 * zone->watermark_boost in its watermark calculations.
-		 * We rely on the ALLOC_ flags set for GFP_ATOMIC
-		 * requests in gfp_to_alloc_flags() for this. Reason not to
-		 * use the GFP_ATOMIC directly is that we want to fall back
-		 * to slow path thus wake up kswapd.
+		 * zone->watermark_boost in their watermark calculations.
+		 * We rely on the ALLOC_ flags set for GFP_ATOMIC requests in
+		 * gfp_to_alloc_flags() for this.  Reason not to use the
+		 * GFP_ATOMIC directly is that we want to fall back to slow path
+		 * thus wake up kswapd.
 		 */
 		if (unlikely(!order && !(alloc_flags & ALLOC_WMARK_MASK) &&
 		     (alloc_flags & (ALLOC_HARDER | ALLOC_HIGH)))) {
