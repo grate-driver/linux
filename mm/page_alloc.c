@@ -6251,6 +6251,25 @@ void __init setup_per_cpu_pageset(void)
 	for_each_populated_zone(zone)
 		setup_zone_pageset(zone);
 
+#ifdef CONFIG_NUMA
+	if (static_branch_likely(&vm_numa_stat_key)) {
+		struct per_cpu_pageset *pcp;
+		int cpu;
+
+		/*
+		 * Unpopulated zones continue using the boot pagesets.
+		 * The numa stats for these pagesets need to be reset.
+		 * Otherwise, they will end up skewing the stats of
+		 * the nodes these zones are associated with.
+		 */
+		for_each_possible_cpu(cpu) {
+			pcp = &per_cpu(boot_pageset, cpu);
+			memset(pcp->vm_numa_stat_diff, 0,
+			       sizeof(pcp->vm_numa_stat_diff));
+		}
+	}
+#endif
+
 	for_each_online_pgdat(pgdat)
 		pgdat->per_cpu_nodestats =
 			alloc_percpu(struct per_cpu_nodestat);
