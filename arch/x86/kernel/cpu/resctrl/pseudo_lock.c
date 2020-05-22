@@ -1326,7 +1326,7 @@ int rdtgroup_pseudo_lock_create(struct rdtgroup *rdtgrp)
 	 * pseudo-locked region will still be here on return.
 	 *
 	 * The mutex has to be released temporarily to avoid a potential
-	 * deadlock with the mm->mmap_sem semaphore which is obtained in
+	 * deadlock with the mm->mmap_lock semaphore which is obtained in
 	 * the device_create() and debugfs_create_dir() callpath below
 	 * as well as before the mmap() callback is called.
 	 */
