@@ -1172,8 +1172,8 @@ PAGE_SIZE multiple when read back.
 	Under certain circumstances, the usage may go over the limit
 	temporarily.
 
-	In default configuration regular 0-order allocation always
-	succeed unless OOM killer choose current task as a victim.
+	In default configuration regular 0-order allocations always
+	succeed unless OOM killer chooses current task as a victim.
 
 	Some kinds of allocations don't invoke the OOM killer.
 	Caller could retry them differently, return into userspace
