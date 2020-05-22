@@ -2954,11 +2954,11 @@ static int ib_uverbs_ex_create_wq(struct uverbs_attr_bundle *attrs)
 	wq_init_attr.cq = cq;
 	wq_init_attr.max_sge = cmd.max_sge;
 	wq_init_attr.max_wr = cmd.max_wr;
-	wq_init_attr.wq_context = attrs->ufile;
 	wq_init_attr.wq_type = cmd.wq_type;
 	wq_init_attr.event_handler = ib_uverbs_wq_event_handler;
 	wq_init_attr.create_flags = cmd.create_flags;
 	INIT_LIST_HEAD(&obj->uevent.event_list);
+	obj->uevent.uobject.user_handle = cmd.user_handle;
 
 	wq = pd->device->ops.create_wq(pd, &wq_init_attr, &attrs->driver_udata);
 	if (IS_ERR(wq)) {
@@ -2972,12 +2972,9 @@ static int ib_uverbs_ex_create_wq(struct uverbs_attr_bundle *attrs)
 	wq->cq = cq;
 	wq->pd = pd;
 	wq->device = pd->device;
-	wq->wq_context = wq_init_attr.wq_context;
 	atomic_set(&wq->usecnt, 0);
 	atomic_inc(&pd->usecnt);
 	atomic_inc(&cq->usecnt);
-	wq->uobject = obj;
-	obj->uevent.uobject.object = wq;
 
 	memset(&resp, 0, sizeof(resp));
 	resp.wq_handle = obj->uevent.uobject.id;
@@ -3441,46 +3438,21 @@ static int __uverbs_create_xsrq(struct uverbs_attr_bundle *attrs,
 	}
 
 	attr.event_handler  = ib_uverbs_srq_event_handler;
-	attr.srq_context    = attrs->ufile;
 	attr.srq_type       = cmd->srq_type;
 	attr.attr.max_wr    = cmd->max_wr;
 	attr.attr.max_sge   = cmd->max_sge;
 	attr.attr.srq_limit = cmd->srq_limit;
 
 	INIT_LIST_HEAD(&obj->uevent.event_list);
+	obj->uevent.uobject.user_handle = cmd->user_handle;
 
-	srq = rdma_zalloc_drv_obj(ib_dev, ib_srq);
-	if (!srq) {
-		ret = -ENOMEM;
-		goto err_put;
+	srq = ib_create_srq_user(pd, &attr, obj, udata);
+	if (IS_ERR(srq)) {
+		ret = PTR_ERR(srq);
+		goto err_put_pd;
 	}
-
-	srq->device        = pd->device;
-	srq->pd            = pd;
-	srq->srq_type	   = cmd->srq_type;
-	srq->uobject       = obj;
-	srq->event_handler = attr.event_handler;
-	srq->srq_context   = attr.srq_context;
-
-	ret = pd->device->ops.create_srq(srq, &attr, udata);
-	if (ret)
-		goto err_free;
-
-	if (ib_srq_has_cq(cmd->srq_type)) {
-		srq->ext.cq       = attr.ext.cq;
-		atomic_inc(&attr.ext.cq->usecnt);
-	}
-
-	if (cmd->srq_type == IB_SRQT_XRC) {
-		srq->ext.xrc.xrcd = attr.ext.xrc.xrcd;
-		atomic_inc(&attr.ext.xrc.xrcd->usecnt);
-	}
-
-	atomic_inc(&pd->usecnt);
-	atomic_set(&srq->usecnt, 0);
 
 	obj->uevent.uobject.object = srq;
-	obj->uevent.uobject.user_handle = cmd->user_handle;
 
 	memset(&resp, 0, sizeof resp);
 	resp.srq_handle = obj->uevent.uobject.id;
@@ -3506,13 +3478,8 @@ static int __uverbs_create_xsrq(struct uverbs_attr_bundle *attrs,
 
 err_copy:
 	ib_destroy_srq_user(srq, uverbs_get_cleared_udata(attrs));
-	/* It was released in ib_destroy_srq_user */
-	srq = NULL;
-err_free:
-	kfree(srq);
-err_put:
+err_put_pd:
 	uobj_put_obj_read(pd);
-
 err_put_cq:
 	if (ib_srq_has_cq(cmd->srq_type))
 		rdma_lookup_put_uobject(&attr.ext.cq->uobject->uevent.uobject,

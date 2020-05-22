@@ -1241,10 +1241,9 @@ struct hns_roce_func_clear {
 };
 
 #define FUNC_CLEAR_RST_FUN_DONE_S 0
-/* Each physical function manages up to 248 virtual functions；
- * it takes up to 100ms for each function to execute clear；
- * if an abnormal reset occurs, it is executed twice at most;
- * so it takes up to 249 * 2 * 100ms.
+/* Each physical function manages up to 248 virtual functions, it takes up to
+ * 100ms for each function to execute clear. If an abnormal reset occurs, it is
+ * executed twice at most, so it takes up to 249 * 2 * 100ms.
  */
 #define HNS_ROCE_V2_FUNC_CLEAR_TIMEOUT_MSECS	(249 * 2 * 100)
 #define HNS_ROCE_V2_READ_FUNC_CLEAR_FLAG_INTERVAL	40
@@ -1648,7 +1647,7 @@ struct hns_roce_query_pf_caps_c {
 struct hns_roce_query_pf_caps_d {
 	__le32 wq_hop_num_max_srqs;
 	__le16 srq_depth;
-	__le16 rsv;
+	__le16 cap_flags_ex;
 	__le32 num_ceqs_ceq_depth;
 	__le32 arm_st_aeq_depth;
 	__le32 num_uars_rsv_pds;
