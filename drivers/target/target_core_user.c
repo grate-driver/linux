@@ -2617,7 +2617,9 @@ static struct configfs_attribute *tcmu_action_attrs[] = {
 static struct target_backend_ops tcmu_ops = {
 	.name			= "user",
 	.owner			= THIS_MODULE,
-	.transport_flags	= TRANSPORT_FLAG_PASSTHROUGH,
+	.transport_flags_default = TRANSPORT_FLAG_PASSTHROUGH,
+	.transport_flags_changeable = TRANSPORT_FLAG_PASSTHROUGH_PGR |
+				      TRANSPORT_FLAG_PASSTHROUGH_ALUA,
 	.attach_hba		= tcmu_attach_hba,
 	.detach_hba		= tcmu_detach_hba,
 	.alloc_device		= tcmu_alloc_device,
@@ -2753,12 +2755,12 @@ static int __init tcmu_module_init(void)
 		goto out_unreg_device;
 	}
 
-	for (i = 0; passthrough_attrib_attrs[i] != NULL; i++) {
+	for (i = 0; passthrough_attrib_attrs[i] != NULL; i++)
 		len += sizeof(struct configfs_attribute *);
-	}
-	for (i = 0; tcmu_attrib_attrs[i] != NULL; i++) {
+	for (i = 0; passthrough_pr_attrib_attrs[i] != NULL; i++)
 		len += sizeof(struct configfs_attribute *);
-	}
+	for (i = 0; tcmu_attrib_attrs[i] != NULL; i++)
+		len += sizeof(struct configfs_attribute *);
 	len += sizeof(struct configfs_attribute *);
 
 	tcmu_attrs = kzalloc(len, GFP_KERNEL);
@@ -2767,13 +2769,12 @@ static int __init tcmu_module_init(void)
 		goto out_unreg_genl;
 	}
 
-	for (i = 0; passthrough_attrib_attrs[i] != NULL; i++) {
+	for (i = 0; passthrough_attrib_attrs[i] != NULL; i++)
 		tcmu_attrs[i] = passthrough_attrib_attrs[i];
-	}
-	for (k = 0; tcmu_attrib_attrs[k] != NULL; k++) {
-		tcmu_attrs[i] = tcmu_attrib_attrs[k];
-		i++;
-	}
+	for (k = 0; passthrough_pr_attrib_attrs[k] != NULL; k++)
+		tcmu_attrs[i++] = passthrough_pr_attrib_attrs[k];
+	for (k = 0; tcmu_attrib_attrs[k] != NULL; k++)
+		tcmu_attrs[i++] = tcmu_attrib_attrs[k];
 	tcmu_ops.tb_dev_attrib_attrs = tcmu_attrs;
 
 	ret = transport_backend_register(&tcmu_ops);
