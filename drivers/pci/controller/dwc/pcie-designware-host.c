@@ -264,6 +264,8 @@ int dw_pcie_allocate_domains(struct pcie_port *pp)
 		return -ENOMEM;
 	}
 
+	irq_domain_update_bus_token(pp->irq_domain, DOMAIN_BUS_NEXUS);
+
 	pp->msi_domain = pci_msi_create_irq_domain(fwnode,
 						   &dw_pcie_msi_domain_info,
 						   pp->irq_domain);
@@ -325,6 +327,7 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	struct pci_bus *child;
 	struct pci_host_bridge *bridge;
 	struct resource *cfg_res;
+	resource_size_t mem_size;
 	u32 hdr_type;
 	int ret;
 
@@ -362,7 +365,10 @@ int dw_pcie_host_init(struct pcie_port *pp)
 		case IORESOURCE_MEM:
 			pp->mem = win->res;
 			pp->mem->name = "MEM";
-			pp->mem_size = resource_size(pp->mem);
+			mem_size = resource_size(pp->mem);
+			if (upper_32_bits(mem_size))
+				dev_warn(dev, "MEM resource size exceeds max for 32 bits\n");
+			pp->mem_size = mem_size;
 			pp->mem_bus_addr = pp->mem->start - win->offset;
 			break;
 		case 0:
