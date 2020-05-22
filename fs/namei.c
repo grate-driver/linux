@@ -3212,8 +3212,9 @@ static int do_open(struct nameidata *nd,
 	if ((nd->flags & LOOKUP_DIRECTORY) && !d_can_lookup(nd->path.dentry))
 		return -ENOTDIR;
 
-	/* Any file opened for execution has to be a regular file. */
-	if ((file->f_flags & FMODE_EXEC) && !d_is_reg(nd->path.dentry))
+	/* Opening for execution requires a regular file on an exec mnt. */
+	if ((file->f_flags & FMODE_EXEC) && (!d_is_reg(nd->path.dentry) ||
+					     path_noexec(&nd->path)))
 		return -EACCES;
 
 	do_truncate = false;
