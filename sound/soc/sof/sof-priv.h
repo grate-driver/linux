@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause) */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) */
 /*
  * This file is provided under a dual BSD/GPLv2 license.  When using or
  * redistributing this file, you may do so under either license.
@@ -453,6 +453,7 @@ int snd_sof_runtime_resume(struct device *dev);
 int snd_sof_runtime_idle(struct device *dev);
 int snd_sof_resume(struct device *dev);
 int snd_sof_suspend(struct device *dev);
+int snd_sof_dsp_power_down_notify(struct snd_sof_dev *sdev);
 int snd_sof_prepare(struct device *dev);
 void snd_sof_complete(struct device *dev);
 
@@ -522,7 +523,7 @@ void snd_sof_handle_fw_exception(struct snd_sof_dev *sdev);
 /*
  * Platform specific ops.
  */
-extern struct snd_compr_ops sof_compressed_ops;
+extern struct snd_compress_ops sof_compressed_ops;
 
 /*
  * DSP Architectures.
