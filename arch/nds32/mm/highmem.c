@@ -31,7 +31,6 @@ void *kmap_atomic_high(struct page *page)
 	__nds32__isb();
 	return (void *)vaddr;
 }
-
 EXPORT_SYMBOL(kmap_atomic_high);
 
 void __kunmap_atomic(void *kvaddr)
@@ -48,5 +47,4 @@ void __kunmap_atomic(void *kvaddr)
 	pagefault_enable();
 	preempt_enable();
 }
-
 EXPORT_SYMBOL(__kunmap_atomic);
