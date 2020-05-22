@@ -780,7 +780,8 @@ xfs_qm_qino_alloc(
 	}
 
 	error = xfs_trans_alloc(mp, &M_RES(mp)->tr_create,
-			XFS_QM_QINOCREATE_SPACE_RES(mp), 0, 0, &tp);
+			need_alloc ? XFS_QM_QINOCREATE_SPACE_RES(mp) : 0,
+			0, 0, &tp);
 	if (error)
 		return error;
 
@@ -1730,8 +1731,7 @@ xfs_qm_vop_dqalloc(
 			pq = xfs_qm_dqhold(ip->i_pdquot);
 		}
 	}
-	if (uq)
-		trace_xfs_dquot_dqalloc(ip);
+	trace_xfs_dquot_dqalloc(ip);
 
 	xfs_iunlock(ip, lockflags);
 	if (O_udqpp)
@@ -1932,7 +1932,6 @@ xfs_qm_vop_create_dqattach(
 		return;
 
 	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL));
-	ASSERT(XFS_IS_QUOTA_RUNNING(mp));
 
 	if (udqp && XFS_IS_UQUOTA_ON(mp)) {
 		ASSERT(ip->i_udquot == NULL);

@@ -22,6 +22,7 @@
 #include "xfs_dquot_item.h"
 #include "xfs_dquot.h"
 #include "xfs_reflink.h"
+#include "xfs_ialloc.h"
 
 #include <linux/iversion.h>
 
@@ -62,8 +63,6 @@ xfs_inode_alloc(
 	memset(&ip->i_imap, 0, sizeof(struct xfs_imap));
 	ip->i_afp = NULL;
 	ip->i_cowfp = NULL;
-	ip->i_cnextents = 0;
-	ip->i_cformat = XFS_DINODE_FMT_EXTENTS;
 	memset(&ip->i_df, 0, sizeof(ip->i_df));
 	ip->i_flags = 0;
 	ip->i_delayed_blks = 0;
@@ -88,15 +87,18 @@ xfs_inode_free_callback(
 	case S_IFREG:
 	case S_IFDIR:
 	case S_IFLNK:
-		xfs_idestroy_fork(ip, XFS_DATA_FORK);
+		xfs_idestroy_fork(&ip->i_df);
 		break;
 	}
 
-	if (ip->i_afp)
-		xfs_idestroy_fork(ip, XFS_ATTR_FORK);
-	if (ip->i_cowfp)
-		xfs_idestroy_fork(ip, XFS_COW_FORK);
-
+	if (ip->i_afp) {
+		xfs_idestroy_fork(ip->i_afp);
+		kmem_cache_free(xfs_ifork_zone, ip->i_afp);
+	}
+	if (ip->i_cowfp) {
+		xfs_idestroy_fork(ip->i_cowfp);
+		kmem_cache_free(xfs_ifork_zone, ip->i_cowfp);
+	}
 	if (ip->i_itemp) {
 		ASSERT(!test_bit(XFS_LI_IN_AIL,
 				 &ip->i_itemp->ili_item.li_flags));
@@ -423,6 +425,7 @@ xfs_iget_cache_hit(
 		spin_unlock(&ip->i_flags_lock);
 		rcu_read_unlock();
 
+		ASSERT(!rwsem_is_locked(&inode->i_rwsem));
 		error = xfs_reinit_inode(mp, inode);
 		if (error) {
 			bool wake;
@@ -455,9 +458,6 @@ xfs_iget_cache_hit(
 		inode->i_state = I_NEW;
 		ip->i_sick = 0;
 		ip->i_checked = 0;
-
-		ASSERT(!rwsem_is_locked(&inode->i_rwsem));
-		init_rwsem(&inode->i_rwsem);
 
 		spin_unlock(&ip->i_flags_lock);
 		spin_unlock(&pag->pag_ici_lock);
@@ -510,17 +510,41 @@ xfs_iget_cache_miss(
 	if (!ip)
 		return -ENOMEM;
 
-	error = xfs_iread(mp, tp, ip, flags);
+	error = xfs_imap(mp, tp, ip->i_ino, &ip->i_imap, flags);
 	if (error)
 		goto out_destroy;
 
-	if (!xfs_inode_verify_forks(ip)) {
-		error = -EFSCORRUPTED;
-		goto out_destroy;
+	/*
+	 * For version 5 superblocks, if we are initialising a new inode and we
+	 * are not utilising the XFS_MOUNT_IKEEP inode cluster mode, we can
+	 * simply build the new inode core with a random generation number.
+	 *
+	 * For version 4 (and older) superblocks, log recovery is dependent on
+	 * the di_flushiter field being initialised from the current on-disk
+	 * value and hence we must also read the inode off disk even when
+	 * initializing new inodes.
+	 */
+	if (xfs_sb_version_has_v3inode(&mp->m_sb) &&
+	    (flags & XFS_IGET_CREATE) && !(mp->m_flags & XFS_MOUNT_IKEEP)) {
+		VFS_I(ip)->i_generation = prandom_u32();
+	} else {
+		struct xfs_dinode	*dip;
+		struct xfs_buf		*bp;
+
+		error = xfs_imap_to_bp(mp, tp, &ip->i_imap, &dip, &bp, 0);
+		if (error)
+			goto out_destroy;
+
+		error = xfs_inode_from_disk(ip, dip);
+		if (!error)
+			xfs_buf_set_ref(bp, XFS_INO_REF);
+		xfs_trans_brelse(tp, bp);
+
+		if (error)
+			goto out_destroy;
 	}
 
 	trace_xfs_iget_miss(ip);
-
 
 	/*
 	 * Check the inode free state is valid. This also detects lookup
@@ -1128,7 +1152,7 @@ restart:
 	if (XFS_FORCED_SHUTDOWN(ip->i_mount)) {
 		xfs_iunpin_wait(ip);
 		/* xfs_iflush_abort() drops the flush lock */
-		xfs_iflush_abort(ip, false);
+		xfs_iflush_abort(ip);
 		goto reclaim;
 	}
 	if (xfs_ipincount(ip)) {
