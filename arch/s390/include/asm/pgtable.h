@@ -1259,7 +1259,6 @@ static inline pgd_t *pgd_offset_raw(pgd_t *pgd, unsigned long address)
 }
 
 #define pgd_offset(mm, address) pgd_offset_raw(READ_ONCE((mm)->pgd), address)
-#define pgd_offset_k(address) pgd_offset(&init_mm, address)
 
 static inline p4d_t *p4d_offset(pgd_t *pgd, unsigned long address)
 {

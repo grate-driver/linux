@@ -317,13 +317,6 @@ static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
 }
 
 /*
- * All kernel related VM pages are in init's mm.
- */
-#define pgd_offset_k(address)	pgd_offset(&init_mm, address)
-#define pgd_index(addr)		((addr) >> PGDIR_SHIFT)
-#define pgd_offset(mm, addr)	(((mm)->pgd)+pgd_index(addr))
-
-/*
  * Macro to quickly access the PGD entry, utlising the fact that some
  * arch may cache the pointer to Page Directory of "current" task
  * in a MMU register

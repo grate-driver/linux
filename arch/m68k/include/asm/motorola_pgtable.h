@@ -192,24 +192,8 @@ static inline pte_t pte_mkcache(pte_t pte)
 	return pte;
 }
 
-#define PAGE_DIR_OFFSET(tsk,address) pgd_offset((tsk),(address))
-
-#define pgd_index(address)     ((address) >> PGDIR_SHIFT)
-
-/* to find an entry in a page-table-directory */
-static inline pgd_t *pgd_offset(const struct mm_struct *mm,
-				unsigned long address)
-{
-	return mm->pgd + pgd_index(address);
-}
-
 #define swapper_pg_dir kernel_pg_dir
 extern pgd_t kernel_pg_dir[128];
-
-static inline pgd_t *pgd_offset_k(unsigned long address)
-{
-	return kernel_pg_dir + (address >> PGDIR_SHIFT);
-}
 
 /* Encode and de-code a swap entry (must be !pte_none(e) && !pte_present(e)) */
 #define __swp_type(x)		(((x).val >> 4) & 0xff)

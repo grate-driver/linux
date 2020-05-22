@@ -359,14 +359,6 @@ ptep_set_wrprotect(struct mm_struct *mm, unsigned long addr, pte_t *ptep)
 	update_pte(ptep, pte_wrprotect(pte));
 }
 
-/* to find an entry in a kernel page-table-directory */
-#define pgd_offset_k(address)	pgd_offset(&init_mm, address)
-
-/* to find an entry in a page-table-directory */
-#define pgd_offset(mm,address)	((mm)->pgd + pgd_index(address))
-
-#define pgd_index(address)	((address) >> PGDIR_SHIFT)
-
 /*
  * Encode and decode a swap and file entry.
  */

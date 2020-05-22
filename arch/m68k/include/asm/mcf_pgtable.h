@@ -311,17 +311,6 @@ static inline pte_t pte_mkcache(pte_t pte)
 extern pgd_t kernel_pg_dir[PTRS_PER_PGD];
 
 /*
- * Find an entry in a pagetable directory.
- */
-#define pgd_index(address)	((address) >> PGDIR_SHIFT)
-#define pgd_offset(mm, address)	((mm)->pgd + pgd_index(address))
-
-/*
- * Find an entry in a kernel pagetable directory.
- */
-#define pgd_offset_k(address)	pgd_offset(&init_mm, address)
-
-/*
  * Encode and de-code a swap entry (must be !pte_none(e) && !pte_present(e))
  */
 #define __swp_type(x)		((x).val & 0xFF)

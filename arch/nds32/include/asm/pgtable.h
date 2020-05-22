@@ -340,12 +340,6 @@ static inline pmd_t __mk_pmd(pte_t * ptep, unsigned long prot)
  *
 */
 
-/* to find an entry in a page-table-directory */
-#define pgd_index(address)      (((address) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
-#define pgd_offset(mm, address)	((mm)->pgd + pgd_index(address))
-/* to find an entry in a kernel page-table-directory */
-#define pgd_offset_k(addr)      pgd_offset(&init_mm, addr)
-
 static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 {
 	const unsigned long mask = 0xfff;

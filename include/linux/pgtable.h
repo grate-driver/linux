@@ -61,6 +61,14 @@ static inline unsigned long pud_index(unsigned long address)
 #define pud_index pud_index
 #endif
 
+#ifndef pgd_index
+static inline unsigned long pgd_index(unsigned long address)
+{
+	return ((address >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1));
+}
+#define pgd_index pgd_index
+#endif
+
 #ifndef pte_offset_kernel
 static inline pte_t *pte_offset_kernel(pmd_t *pmd, unsigned long address)
 {
@@ -95,6 +103,24 @@ static inline pud_t *pud_offset(p4d_t *p4d, unsigned long address)
 }
 #define pud_offset pud_offset
 #endif
+
+static inline pgd_t *pgd_offset_pgd(pgd_t *pgd, unsigned long address)
+{
+	return (pgd + pgd_index(address));
+};
+
+/*
+ * a shortcut to get a pgd_t in a given mm
+ */
+#ifndef pgd_offset
+#define pgd_offset(mm, address)		pgd_offset_pgd((mm)->pgd, (address))
+#endif
+
+/*
+ * a shortcut which implies the use of the kernel's pgd, instead
+ * of a process's
+ */
+#define pgd_offset_k(address)		pgd_offset(&init_mm, (address))
 
 /*
  * In many cases it is known that a virtual address is mapped at PMD or PTE

@@ -174,15 +174,6 @@ static inline pte_t pte_mkcache(pte_t pte)	{ return pte; }
 extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
 extern pgd_t kernel_pg_dir[PTRS_PER_PGD];
 
-/* Find an entry in a pagetable directory. */
-#define pgd_index(address)     ((address) >> PGDIR_SHIFT)
-
-#define pgd_offset(mm, address) \
-((mm)->pgd + pgd_index(address))
-
-/* Find an entry in a kernel pagetable directory. */
-#define pgd_offset_k(address) pgd_offset(&init_mm, address)
-
 /* Macros to (de)construct the fake PTEs representing swap pages. */
 #define __swp_type(x)		((x).val & 0x7F)
 #define __swp_offset(x)		(((x).val) >> 7)

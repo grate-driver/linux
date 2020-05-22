@@ -41,17 +41,6 @@ static __inline__ void set_pte(pte_t *pteptr, pte_t pteval)
 #define set_pte_at(mm,addr,ptep,pteval) set_pte(ptep,pteval)
 
 /*
- * PGD defines. Top level.
- */
-
-/* To find an entry in a generic PGD. */
-#define pgd_index(address) (((address) >> PGDIR_SHIFT) & (PTRS_PER_PGD-1))
-#define pgd_offset(mm, address) ((mm)->pgd+pgd_index(address))
-
-/* To find an entry in a kernel PGD. */
-#define pgd_offset_k(address) pgd_offset(&init_mm, address)
-
-/*
  * PMD level access routines. Same notes as above.
  */
 #define _PMD_EMPTY		0x0

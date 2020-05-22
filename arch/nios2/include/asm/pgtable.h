@@ -102,10 +102,6 @@ static inline void set_pmd(pmd_t *pmdptr, pmd_t pmdval)
 	*pmdptr = pmdval;
 }
 
-/* to find an entry in a page-table-directory */
-#define pgd_index(addr)		(((addr) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
-#define pgd_offset(mm, addr)	((mm)->pgd + pgd_index(addr))
-
 static inline int pte_write(pte_t pte)		\
 	{ return pte_val(pte) & _PAGE_WRITE; }
 static inline int pte_dirty(pte_t pte)		\
@@ -247,10 +243,6 @@ static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 {
 	return pmd_val(pmd);
 }
-
-/* to find an entry in a kernel page-table-directory */
-#define pgd_offset_k(addr)	pgd_offset(&init_mm, addr)
-
 
 #define pte_ERROR(e) \
 	pr_err("%s:%d: bad pte %08lx.\n", \

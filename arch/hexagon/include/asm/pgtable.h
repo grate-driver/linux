@@ -207,24 +207,6 @@ static inline void pte_clear(struct mm_struct *mm, unsigned long addr,
 }
 
 /**
- * pgd_index - returns the index of the entry in the PGD page
- * which would control the given virtual address
- *
- * This returns the *index* for the address in the pgd_t
- */
-#define pgd_index(address) (((address) >> PGDIR_SHIFT) & (PTRS_PER_PGD-1))
-
-/*
- * pgd_offset - find an offset in a page-table-directory
- */
-#define pgd_offset(mm, addr) ((mm)->pgd + pgd_index(addr))
-
-/*
- * pgd_offset_k - get kernel (init_mm) pgd entry pointer for addr
- */
-#define pgd_offset_k(address) pgd_offset(&init_mm, address)
-
-/**
  * pmd_none - check if pmd_entry is mapped
  * @pmd_entry:  pmd entry
  *
