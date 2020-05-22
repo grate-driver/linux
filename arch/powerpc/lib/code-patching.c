@@ -12,7 +12,6 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#include <asm/pgtable.h>
 #include <asm/tlbflush.h>
 #include <asm/page.h>
 #include <asm/code-patching.h>
@@ -119,13 +118,18 @@ static inline int unmap_patch_area(unsigned long addr)
 	pte_t *ptep;
 	pmd_t *pmdp;
 	pud_t *pudp;
+	p4d_t *p4dp;
 	pgd_t *pgdp;
 
 	pgdp = pgd_offset_k(addr);
 	if (unlikely(!pgdp))
 		return -EINVAL;
 
-	pudp = pud_offset(pgdp, addr);
+	p4dp = p4d_offset(pgdp, addr);
+	if (unlikely(!p4dp))
+		return -EINVAL;
+
+	pudp = pud_offset(p4dp, addr);
 	if (unlikely(!pudp))
 		return -EINVAL;
 

@@ -175,34 +175,12 @@ static inline pud_t pte_pud(pte_t pte)
 	return __pud(pte_val(pte));
 }
 #define pud_write(pud)		pte_write(pud_pte(pud))
-#define pgd_write(pgd)		pte_write(pgd_pte(pgd))
+#define p4d_write(pgd)		pte_write(p4d_pte(p4d))
 
-static inline void pgd_set(pgd_t *pgdp, unsigned long val)
+static inline void p4d_set(p4d_t *p4dp, unsigned long val)
 {
-	*pgdp = __pgd(val);
+	*p4dp = __p4d(val);
 }
-
-/*
- * Find an entry in a page-table-directory.  We combine the address region
- * (the high order N bits) and the pgd portion of the address.
- */
-#define pgd_index(address) (((address) >> (PGDIR_SHIFT)) & (PTRS_PER_PGD - 1))
-
-#define pgd_offset(mm, address)	 ((mm)->pgd + pgd_index(address))
-
-#define pmd_offset(pudp,addr) \
-  (((pmd_t *) pud_page_vaddr(*(pudp))) + (((addr) >> PMD_SHIFT) & (PTRS_PER_PMD - 1)))
-
-#define pte_offset_kernel(dir,addr) \
-  (((pte_t *) pmd_page_vaddr(*(dir))) + (((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1)))
-
-#define pte_offset_map(dir,addr)	pte_offset_kernel((dir), (addr))
-
-static inline void pte_unmap(pte_t *pte) { }
-
-/* to find an entry in a kernel page-table-directory */
-/* This now only contains the vmalloc pages */
-#define pgd_offset_k(address) pgd_offset(&init_mm, address)
 
 /* Atomic PTE updates */
 static inline unsigned long pte_update(struct mm_struct *mm,

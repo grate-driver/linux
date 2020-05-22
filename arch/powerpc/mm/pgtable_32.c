@@ -24,7 +24,6 @@
 #include <linux/memblock.h>
 #include <linux/slab.h>
 
-#include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <asm/fixmap.h>
 #include <asm/setup.h>
@@ -63,7 +62,7 @@ int __ref map_kernel_page(unsigned long va, phys_addr_t pa, pgprot_t prot)
 	int err = -ENOMEM;
 
 	/* Use upper 10 bits of VA to index the first level map */
-	pd = pmd_ptr_k(va);
+	pd = pmd_off_k(va);
 	/* Use middle 10 bits of VA to index the second-level map */
 	if (likely(slab_is_available()))
 		pg = pte_alloc_kernel(pd, va);

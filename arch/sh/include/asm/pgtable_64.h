@@ -41,21 +41,6 @@ static __inline__ void set_pte(pte_t *pteptr, pte_t pteval)
 #define set_pte_at(mm,addr,ptep,pteval) set_pte(ptep,pteval)
 
 /*
- * PGD defines. Top level.
- */
-
-/* To find an entry in a generic PGD. */
-#define pgd_index(address) (((address) >> PGDIR_SHIFT) & (PTRS_PER_PGD-1))
-#define __pgd_offset(address) pgd_index(address)
-#define pgd_offset(mm, address) ((mm)->pgd+pgd_index(address))
-
-/* To find an entry in a kernel PGD. */
-#define pgd_offset_k(address) pgd_offset(&init_mm, address)
-
-#define __pud_offset(address)	(((address) >> PUD_SHIFT) & (PTRS_PER_PUD-1))
-#define __pmd_offset(address)	(((address) >> PMD_SHIFT) & (PTRS_PER_PMD-1))
-
-/*
  * PMD level access routines. Same notes as above.
  */
 #define _PMD_EMPTY		0x0
@@ -70,18 +55,6 @@ static __inline__ void set_pte(pte_t *pteptr, pte_t pteval)
 
 #define pmd_page(pmd) \
 	(virt_to_page(pmd_val(pmd)))
-
-/* PMD to PTE dereferencing */
-#define pte_index(address) \
-		((address >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
-
-#define __pte_offset(address)	pte_index(address)
-
-#define pte_offset_kernel(dir, addr) \
-		((pte_t *) ((pmd_val(*(dir))) & PAGE_MASK) + pte_index((addr)))
-
-#define pte_offset_map(dir,addr)	pte_offset_kernel(dir, addr)
-#define pte_unmap(pte)		do { } while (0)
 
 #ifndef __ASSEMBLY__
 /*

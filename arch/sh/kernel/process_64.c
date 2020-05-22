@@ -27,7 +27,6 @@
 #include <linux/sched/task_stack.h>
 #include <asm/syscalls.h>
 #include <linux/uaccess.h>
-#include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 #include <asm/fpu.h>
 #include <asm/switch_to.h>
@@ -275,13 +274,12 @@ void show_regs(struct pt_regs *regs)
 	 * If we're in kernel mode, dump the stack too..
 	 */
 	if (!user_mode(regs)) {
-		void show_stack(struct task_struct *tsk, unsigned long *sp);
 		unsigned long sp = regs->regs[15] & 0xffffffff;
 		struct task_struct *tsk = get_current();
 
 		tsk->thread.kregs = regs;
 
-		show_stack(tsk, (unsigned long *)sp);
+		show_stack(tsk, (unsigned long *)sp, KERN_DEFAULT);
 	}
 }
 

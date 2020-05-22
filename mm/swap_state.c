@@ -22,7 +22,6 @@
 #include <linux/swap_slots.h>
 #include <linux/huge_mm.h>
 
-#include <asm/pgtable.h>
 
 /*
  * swapper_space is a fiction, retained to simplify the path through
@@ -58,8 +57,8 @@ static bool enable_vma_readahead __read_mostly = true;
 #define GET_SWAP_RA_VAL(vma)					\
 	(atomic_long_read(&(vma)->swap_readahead_info) ? : 4)
 
-#define INC_CACHE_INFO(x)	do { swap_cache_info.x++; } while (0)
-#define ADD_CACHE_INFO(x, nr)	do { swap_cache_info.x += (nr); } while (0)
+#define INC_CACHE_INFO(x)	data_race(swap_cache_info.x++)
+#define ADD_CACHE_INFO(x, nr)	data_race(swap_cache_info.x += (nr))
 
 static struct {
 	unsigned long add_total;
@@ -547,7 +546,7 @@ static unsigned long swapin_nr_pages(unsigned long offset)
  * This has been extended to use the NUMA policies from the mm triggering
  * the readahead.
  *
- * Caller must hold read mmap_sem if vmf->vma is not NULL.
+ * Caller must hold read mmap_lock if vmf->vma is not NULL.
  */
 struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,
 				struct vm_fault *vmf)
@@ -729,7 +728,7 @@ static void swap_ra_info(struct vm_fault *vmf,
  * Primitive swap readahead code. We simply read in a few pages whoes
  * virtual addresses are around the fault address in the same vma.
  *
- * Caller must hold read mmap_sem if vmf->vma is not NULL.
+ * Caller must hold read mmap_lock if vmf->vma is not NULL.
  *
  */
 static struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,

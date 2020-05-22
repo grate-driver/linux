@@ -28,7 +28,6 @@
 #include <asm/tlbflush.h>
 #include <asm/io-unit.h>
 #include <asm/pgalloc.h>
-#include <asm/pgtable.h>
 #include <asm/bitext.h>
 #include <asm/vaddrs.h>
 #include <asm/cache.h>
@@ -138,16 +137,6 @@ void pmd_set(pmd_t *pmdp, pte_t *ptep)
 {
 	unsigned long ptp = __nocache_pa(ptep) >> 4;
 	set_pte((pte_t *)&pmd_val(*pmdp), __pte(SRMMU_ET_PTD | ptp));
-}
-
-/* Find an entry in the third-level page table.. */
-pte_t *pte_offset_kernel(pmd_t *dir, unsigned long address)
-{
-	void *pte;
-
-	pte = __nocache_va((pmd_val(*dir) & SRMMU_PTD_PMASK) << 4);
-	return (pte_t *) pte +
-	    ((address >> PAGE_SHIFT) & (PTRS_PER_PTE - 1));
 }
 
 /*
@@ -496,19 +485,10 @@ void switch_mm(struct mm_struct *old_mm, struct mm_struct *mm,
 static inline void srmmu_mapioaddr(unsigned long physaddr,
 				   unsigned long virt_addr, int bus_type)
 {
-	pgd_t *pgdp;
-	p4d_t *p4dp;
-	pud_t *pudp;
-	pmd_t *pmdp;
-	pte_t *ptep;
+	pte_t *ptep = virt_to_kpte(virt_addr);
 	unsigned long tmp;
 
 	physaddr &= PAGE_MASK;
-	pgdp = pgd_offset_k(virt_addr);
-	p4dp = p4d_offset(pgdp, virt_addr);
-	pudp = pud_offset(p4dp, virt_addr);
-	pmdp = pmd_offset(pudp, virt_addr);
-	ptep = pte_offset_kernel(pmdp, virt_addr);
 	tmp = (physaddr >> 4) | SRMMU_ET_PTE;
 
 	/* I need to test whether this is consistent over all
@@ -535,18 +515,7 @@ void srmmu_mapiorange(unsigned int bus, unsigned long xpa,
 
 static inline void srmmu_unmapioaddr(unsigned long virt_addr)
 {
-	pgd_t *pgdp;
-	p4d_t *p4dp;
-	pud_t *pudp;
-	pmd_t *pmdp;
-	pte_t *ptep;
-
-
-	pgdp = pgd_offset_k(virt_addr);
-	p4dp = p4d_offset(pgdp, virt_addr);
-	pudp = pud_offset(p4dp, virt_addr);
-	pmdp = pmd_offset(pudp, virt_addr);
-	ptep = pte_offset_kernel(pmdp, virt_addr);
+	pte_t *ptep = virt_to_kpte(virt_addr);
 
 	/* No need to flush uncacheable page. */
 	__pte_clear(ptep);
@@ -899,10 +868,6 @@ void __init srmmu_paging_init(void)
 	int i;
 	phandle cpunode;
 	char node_str[128];
-	pgd_t *pgd;
-	p4d_t *p4d;
-	pud_t *pud;
-	pmd_t *pmd;
 	pte_t *pte;
 	unsigned long pages_avail;
 
@@ -962,11 +927,7 @@ void __init srmmu_paging_init(void)
 		__fix_to_virt(__end_of_fixed_addresses - 1), FIXADDR_TOP);
 	srmmu_allocate_ptable_skeleton(PKMAP_BASE, PKMAP_END);
 
-	pgd = pgd_offset_k(PKMAP_BASE);
-	p4d = p4d_offset(pgd, PKMAP_BASE);
-	pud = pud_offset(p4d, PKMAP_BASE);
-	pmd = pmd_offset(pud, PKMAP_BASE);
-	pte = pte_offset_kernel(pmd, PKMAP_BASE);
+	pte = virt_to_kpte(PKMAP_BASE);
 	pkmap_page_table = pte;
 
 	flush_cache_all();
