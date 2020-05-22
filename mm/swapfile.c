@@ -616,7 +616,8 @@ new_cluster:
 			 * discarding, do discard now and reclaim them
 			 */
 			swap_do_scheduled_discard(si);
-			*scan_base = *offset = si->cluster_next;
+			*scan_base = this_cpu_read(*si->cluster_next_cpu);
+			*offset = *scan_base;
 			goto new_cluster;
 		} else
 			return false;
@@ -722,6 +723,34 @@ static void swap_range_free(struct swap_info_struct *si, unsigned long offset,
 	}
 }
 
+static void set_cluster_next(struct swap_info_struct *si, unsigned long next)
+{
+	unsigned long prev;
+
+	if (!(si->flags & SWP_SOLIDSTATE)) {
+		si->cluster_next = next;
+		return;
+	}
+
+	prev = this_cpu_read(*si->cluster_next_cpu);
+	/*
+	 * Cross the swap address space size aligned trunk, choose
+	 * another trunk randomly to avoid lock contention on swap
+	 * address space if possible.
+	 */
+	if ((prev >> SWAP_ADDRESS_SPACE_SHIFT) !=
+	    (next >> SWAP_ADDRESS_SPACE_SHIFT)) {
+		/* No free swap slots available */
+		if (si->highest_bit <= si->lowest_bit)
+			return;
+		next = si->lowest_bit +
+			prandom_u32_max(si->highest_bit - si->lowest_bit + 1);
+		next = ALIGN(next, SWAP_ADDRESS_SPACE_PAGES);
+		next = max_t(unsigned int, next, si->lowest_bit);
+	}
+	this_cpu_write(*si->cluster_next_cpu, next);
+}
+
 static int scan_swap_map_slots(struct swap_info_struct *si,
 			       unsigned char usage, int nr,
 			       swp_entry_t slots[])
@@ -746,7 +775,16 @@ static int scan_swap_map_slots(struct swap_info_struct *si,
 	 */
 
 	si->flags += SWP_SCANNING;
-	scan_base = offset = si->cluster_next;
+	/*
+	 * Use percpu scan base for SSD to reduce lock contention on
+	 * cluster and swap cache.  For HDD, sequential access is more
+	 * important.
+	 */
+	if (si->flags & SWP_SOLIDSTATE)
+		scan_base = this_cpu_read(*si->cluster_next_cpu);
+	else
+		scan_base = si->cluster_next;
+	offset = scan_base;
 
 	/* SSD algorithm */
 	if (si->cluster_info) {
@@ -835,7 +873,6 @@ checks:
 	unlock_cluster(ci);
 
 	swap_range_alloc(si, offset, 1);
-	si->cluster_next = offset + 1;
 	slots[n_ret++] = swp_entry(si->type, offset);
 
 	/* got enough slots or reach max slots? */
@@ -884,6 +921,7 @@ checks:
 	}
 
 done:
+	set_cluster_next(si, offset + 1);
 	si->flags -= SWP_SCANNING;
 	return n_ret;
 
@@ -2834,6 +2872,11 @@ static struct swap_info_struct *alloc_swap_info(void)
 	p = kvzalloc(struct_size(p, avail_lists, nr_node_ids), GFP_KERNEL);
 	if (!p)
 		return ERR_PTR(-ENOMEM);
+	p->cluster_next_cpu = alloc_percpu(unsigned int);
+	if (!p->cluster_next_cpu) {
+		kvfree(p);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	spin_lock(&swap_lock);
 	for (type = 0; type < nr_swapfiles; type++) {
@@ -3209,7 +3252,10 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		 * select a random position to start with to help wear leveling
 		 * SSD
 		 */
-		p->cluster_next = 1 + prandom_u32_max(p->highest_bit);
+		for_each_possible_cpu(cpu) {
+			per_cpu(*p->cluster_next_cpu, cpu) =
+				1 + prandom_u32_max(p->highest_bit);
+		}
 		nr_cluster = DIV_ROUND_UP(maxpages, SWAPFILE_CLUSTER);
 
 		cluster_info = kvcalloc(nr_cluster, sizeof(*cluster_info),
