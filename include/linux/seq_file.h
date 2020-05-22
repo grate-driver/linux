@@ -150,8 +150,8 @@ static int __name ## _open(struct inode *inode, struct file *file)	\
 {									\
 	int ret = seq_open(file, &__name ## _sops);			\
 	if (!ret && inode->i_private) {					\
-			struct seq_file *seq_f = file->private_data;	\
-			seq_f->private = inode->i_private;		\
+		struct seq_file *seq_f = file->private_data;		\
+		seq_f->private = inode->i_private;			\
 	}								\
 	return ret;							\
 }									\
