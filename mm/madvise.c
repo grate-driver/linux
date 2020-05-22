@@ -1242,9 +1242,6 @@ static ssize_t do_process_madvise(int pidfd, struct iov_iter *iter,
 	if (flags != 0)
 		return -EINVAL;
 
-	if (pidfd < 0)
-		return -EINVAL;
-
 	pid = pidfd_get_pid(pidfd);
 	if (IS_ERR(pid))
 		return PTR_ERR(pid);
