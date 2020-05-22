@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
 /* Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2016 NXP
+ * Copyright 2016-2020 NXP
  */
 
 #ifndef __DPAA2_ETH_H
@@ -288,6 +288,8 @@ struct dpaa2_eth_ch_stats {
 	__u64 xdp_tx;
 	__u64 xdp_tx_err;
 	__u64 xdp_redirect;
+	/* Must be last, does not show up in ethtool stats */
+	__u64 frames;
 };
 
 /* Maximum number of queues associated with a DPNI */
@@ -308,6 +310,11 @@ enum dpaa2_eth_fq_type {
 
 struct dpaa2_eth_priv;
 
+struct dpaa2_eth_xdp_fds {
+	struct dpaa2_fd fds[DEV_MAP_BULK_SIZE];
+	ssize_t num;
+};
+
 struct dpaa2_eth_fq {
 	u32 fqid;
 	u32 tx_qdbin;
@@ -325,6 +332,9 @@ struct dpaa2_eth_fq {
 			const struct dpaa2_fd *fd,
 			struct dpaa2_eth_fq *fq);
 	struct dpaa2_eth_fq_stats stats;
+
+	struct dpaa2_eth_xdp_fds xdp_redirect_fds;
+	struct dpaa2_eth_xdp_fds xdp_tx_fds;
 };
 
 struct dpaa2_eth_ch_xdp {
@@ -371,7 +381,9 @@ struct dpaa2_eth_priv {
 	struct dpaa2_eth_fq fq[DPAA2_ETH_MAX_QUEUES];
 	int (*enqueue)(struct dpaa2_eth_priv *priv,
 		       struct dpaa2_eth_fq *fq,
-		       struct dpaa2_fd *fd, u8 prio);
+		       struct dpaa2_fd *fd, u8 prio,
+		       u32 num_frames,
+		       int *frames_enqueued);
 
 	u8 num_channels;
 	struct dpaa2_eth_channel *channel[DPAA2_ETH_MAX_DPCONS];

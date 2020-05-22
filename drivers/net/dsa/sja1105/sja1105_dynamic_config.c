@@ -97,6 +97,12 @@
 
 #define SJA1105_SIZE_DYN_CMD					4
 
+#define SJA1105ET_SJA1105_SIZE_VL_LOOKUP_DYN_CMD		\
+	SJA1105_SIZE_DYN_CMD
+
+#define SJA1105PQRS_SJA1105_SIZE_VL_LOOKUP_DYN_CMD		\
+	(SJA1105_SIZE_DYN_CMD + SJA1105_SIZE_VL_LOOKUP_ENTRY)
+
 #define SJA1105ET_SIZE_MAC_CONFIG_DYN_ENTRY			\
 	SJA1105_SIZE_DYN_CMD
 
@@ -127,6 +133,9 @@
 #define SJA1105PQRS_SIZE_AVB_PARAMS_DYN_CMD			\
 	(SJA1105_SIZE_DYN_CMD + SJA1105PQRS_SIZE_AVB_PARAMS_ENTRY)
 
+#define SJA1105_SIZE_RETAGGING_DYN_CMD				\
+	(SJA1105_SIZE_DYN_CMD + SJA1105_SIZE_RETAGGING_ENTRY)
+
 #define SJA1105_MAX_DYN_CMD_SIZE				\
 	SJA1105PQRS_SIZE_MAC_CONFIG_DYN_CMD
 
@@ -145,6 +154,29 @@ enum sja1105_hostcmd {
 	SJA1105_HOSTCMD_WRITE = 3,
 	SJA1105_HOSTCMD_INVALIDATE = 4,
 };
+
+static void
+sja1105_vl_lookup_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
+			      enum packing_op op)
+{
+	const int size = SJA1105_SIZE_DYN_CMD;
+
+	sja1105_packing(buf, &cmd->valid,   31, 31, size, op);
+	sja1105_packing(buf, &cmd->errors,  30, 30, size, op);
+	sja1105_packing(buf, &cmd->rdwrset, 29, 29, size, op);
+	sja1105_packing(buf, &cmd->index,    9,  0, size, op);
+}
+
+static size_t sja1105et_vl_lookup_entry_packing(void *buf, void *entry_ptr,
+						enum packing_op op)
+{
+	struct sja1105_vl_lookup_entry *entry = entry_ptr;
+	const int size = SJA1105ET_SJA1105_SIZE_VL_LOOKUP_DYN_CMD;
+
+	sja1105_packing(buf, &entry->egrmirr,  21, 17, size, op);
+	sja1105_packing(buf, &entry->ingrmirr, 16, 16, size, op);
+	return size;
+}
 
 static void
 sja1105pqrs_l2_lookup_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
@@ -496,6 +528,20 @@ sja1105pqrs_avb_params_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 	sja1105_packing(p, &cmd->rdwrset, 29, 29, size, op);
 }
 
+static void
+sja1105_retagging_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
+			      enum packing_op op)
+{
+	u8 *p = buf + SJA1105_SIZE_RETAGGING_ENTRY;
+	const int size = SJA1105_SIZE_DYN_CMD;
+
+	sja1105_packing(p, &cmd->valid,    31, 31, size, op);
+	sja1105_packing(p, &cmd->errors,   30, 30, size, op);
+	sja1105_packing(p, &cmd->valident, 29, 29, size, op);
+	sja1105_packing(p, &cmd->rdwrset,  28, 28, size, op);
+	sja1105_packing(p, &cmd->index,     5,  0, size, op);
+}
+
 #define OP_READ		BIT(0)
 #define OP_WRITE	BIT(1)
 #define OP_DEL		BIT(2)
@@ -505,6 +551,16 @@ sja1105pqrs_avb_params_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 	[BLK_IDX_SCHEDULE] = {0},
 	[BLK_IDX_SCHEDULE_ENTRY_POINTS] = {0},
+	[BLK_IDX_VL_LOOKUP] = {
+		.entry_packing = sja1105et_vl_lookup_entry_packing,
+		.cmd_packing = sja1105_vl_lookup_cmd_packing,
+		.access = OP_WRITE,
+		.max_entry_count = SJA1105_MAX_VL_LOOKUP_COUNT,
+		.packed_size = SJA1105ET_SJA1105_SIZE_VL_LOOKUP_DYN_CMD,
+		.addr = 0x35,
+	},
+	[BLK_IDX_VL_POLICING] = {0},
+	[BLK_IDX_VL_FORWARDING] = {0},
 	[BLK_IDX_L2_LOOKUP] = {
 		.entry_packing = sja1105et_dyn_l2_lookup_entry_packing,
 		.cmd_packing = sja1105et_l2_lookup_cmd_packing,
@@ -548,6 +604,7 @@ struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 	},
 	[BLK_IDX_SCHEDULE_PARAMS] = {0},
 	[BLK_IDX_SCHEDULE_ENTRY_POINTS_PARAMS] = {0},
+	[BLK_IDX_VL_FORWARDING_PARAMS] = {0},
 	[BLK_IDX_L2_LOOKUP_PARAMS] = {
 		.entry_packing = sja1105et_l2_lookup_params_entry_packing,
 		.cmd_packing = sja1105et_l2_lookup_params_cmd_packing,
@@ -566,6 +623,14 @@ struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.packed_size = SJA1105ET_SIZE_GENERAL_PARAMS_DYN_CMD,
 		.addr = 0x34,
 	},
+	[BLK_IDX_RETAGGING] = {
+		.entry_packing = sja1105_retagging_entry_packing,
+		.cmd_packing = sja1105_retagging_cmd_packing,
+		.max_entry_count = SJA1105_MAX_RETAGGING_COUNT,
+		.access = (OP_WRITE | OP_DEL),
+		.packed_size = SJA1105_SIZE_RETAGGING_DYN_CMD,
+		.addr = 0x31,
+	},
 	[BLK_IDX_XMII_PARAMS] = {0},
 };
 
@@ -573,6 +638,16 @@ struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 	[BLK_IDX_SCHEDULE] = {0},
 	[BLK_IDX_SCHEDULE_ENTRY_POINTS] = {0},
+	[BLK_IDX_VL_LOOKUP] = {
+		.entry_packing = sja1105_vl_lookup_entry_packing,
+		.cmd_packing = sja1105_vl_lookup_cmd_packing,
+		.access = (OP_READ | OP_WRITE),
+		.max_entry_count = SJA1105_MAX_VL_LOOKUP_COUNT,
+		.packed_size = SJA1105PQRS_SJA1105_SIZE_VL_LOOKUP_DYN_CMD,
+		.addr = 0x47,
+	},
+	[BLK_IDX_VL_POLICING] = {0},
+	[BLK_IDX_VL_FORWARDING] = {0},
 	[BLK_IDX_L2_LOOKUP] = {
 		.entry_packing = sja1105pqrs_dyn_l2_lookup_entry_packing,
 		.cmd_packing = sja1105pqrs_l2_lookup_cmd_packing,
@@ -616,6 +691,7 @@ struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 	},
 	[BLK_IDX_SCHEDULE_PARAMS] = {0},
 	[BLK_IDX_SCHEDULE_ENTRY_POINTS_PARAMS] = {0},
+	[BLK_IDX_VL_FORWARDING_PARAMS] = {0},
 	[BLK_IDX_L2_LOOKUP_PARAMS] = {
 		.entry_packing = sja1105et_l2_lookup_params_entry_packing,
 		.cmd_packing = sja1105et_l2_lookup_params_cmd_packing,
@@ -640,6 +716,14 @@ struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.access = OP_WRITE,
 		.packed_size = SJA1105ET_SIZE_GENERAL_PARAMS_DYN_CMD,
 		.addr = 0x34,
+	},
+	[BLK_IDX_RETAGGING] = {
+		.entry_packing = sja1105_retagging_entry_packing,
+		.cmd_packing = sja1105_retagging_cmd_packing,
+		.max_entry_count = SJA1105_MAX_RETAGGING_COUNT,
+		.access = (OP_READ | OP_WRITE | OP_DEL),
+		.packed_size = SJA1105_SIZE_RETAGGING_DYN_CMD,
+		.addr = 0x38,
 	},
 	[BLK_IDX_XMII_PARAMS] = {0},
 };

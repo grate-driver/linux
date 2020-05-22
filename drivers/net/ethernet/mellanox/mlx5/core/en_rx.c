@@ -468,22 +468,6 @@ static void mlx5e_post_rx_mpwqe(struct mlx5e_rq *rq, u8 n)
 	mlx5_wq_ll_update_db_record(wq);
 }
 
-static inline void mlx5e_fill_icosq_frag_edge(struct mlx5e_icosq *sq,
-					      struct mlx5_wq_cyc *wq,
-					      u16 pi, u16 nnops)
-{
-	struct mlx5e_sq_wqe_info *edge_wi, *wi = &sq->db.ico_wqe[pi];
-
-	edge_wi = wi + nnops;
-
-	/* fill sq frag edge with nops to avoid wqe wrapping two pages */
-	for (; wi < edge_wi; wi++) {
-		wi->opcode = MLX5_OPCODE_NOP;
-		wi->num_wqebbs = 1;
-		mlx5e_post_nop(wq, sq->sqn, &sq->pc);
-	}
-}
-
 static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 {
 	struct mlx5e_mpw_info *wi = &rq->mpwqe.info[ix];
@@ -492,7 +476,7 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	struct mlx5_wq_cyc *wq = &sq->wq;
 	struct mlx5e_umr_wqe *umr_wqe;
 	u16 xlt_offset = ix << (MLX5E_LOG_ALIGNED_MPWQE_PPW - 1);
-	u16 pi, contig_wqebbs_room;
+	u16 pi;
 	int err;
 	int i;
 
@@ -502,13 +486,7 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 		goto err;
 	}
 
-	pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
-	contig_wqebbs_room = mlx5_wq_cyc_get_contig_wqebbs(wq, pi);
-	if (unlikely(contig_wqebbs_room < MLX5E_UMR_WQEBBS)) {
-		mlx5e_fill_icosq_frag_edge(sq, wq, pi, contig_wqebbs_room);
-		pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
-	}
-
+	pi = mlx5e_icosq_get_next_pi(sq, MLX5E_UMR_WQEBBS);
 	umr_wqe = mlx5_wq_cyc_get_wqe(wq, pi);
 	memcpy(umr_wqe, &rq->mpwqe.umr_wqe, offsetof(struct mlx5e_umr_wqe, inline_mtts));
 
@@ -527,9 +505,12 @@ static int mlx5e_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 			    MLX5_OPCODE_UMR);
 	umr_wqe->uctrl.xlt_offset = cpu_to_be16(xlt_offset);
 
-	sq->db.ico_wqe[pi].opcode = MLX5_OPCODE_UMR;
-	sq->db.ico_wqe[pi].num_wqebbs = MLX5E_UMR_WQEBBS;
-	sq->db.ico_wqe[pi].umr.rq = rq;
+	sq->db.wqe_info[pi] = (struct mlx5e_icosq_wqe_info) {
+		.wqe_type   = MLX5E_ICOSQ_WQE_UMR_RX,
+		.num_wqebbs = MLX5E_UMR_WQEBBS,
+		.umr.rq     = rq,
+	};
+
 	sq->pc += MLX5E_UMR_WQEBBS;
 
 	sq->doorbell_cseg = &umr_wqe->ctrl;
@@ -618,33 +599,38 @@ int mlx5e_poll_ico_cq(struct mlx5e_cq *cq)
 		wqe_counter = be16_to_cpu(cqe->wqe_counter);
 
 		do {
-			struct mlx5e_sq_wqe_info *wi;
+			struct mlx5e_icosq_wqe_info *wi;
 			u16 ci;
 
 			last_wqe = (sqcc == wqe_counter);
 
 			ci = mlx5_wq_cyc_ctr2ix(&sq->wq, sqcc);
-			wi = &sq->db.ico_wqe[ci];
+			wi = &sq->db.wqe_info[ci];
 			sqcc += wi->num_wqebbs;
 
 			if (last_wqe && unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
 				netdev_WARN_ONCE(cq->channel->netdev,
 						 "Bad OP in ICOSQ CQE: 0x%x\n",
 						 get_cqe_opcode(cqe));
+				mlx5e_dump_error_cqe(&sq->cq, sq->sqn,
+						     (struct mlx5_err_cqe *)cqe);
 				if (!test_and_set_bit(MLX5E_SQ_STATE_RECOVERING, &sq->state))
 					queue_work(cq->channel->priv->wq, &sq->recover_work);
 				break;
 			}
 
-			if (likely(wi->opcode == MLX5_OPCODE_UMR))
+			switch (wi->wqe_type) {
+			case MLX5E_ICOSQ_WQE_UMR_RX:
 				wi->umr.rq->mpwqe.umr_completed++;
-			else if (unlikely(wi->opcode != MLX5_OPCODE_NOP))
+				break;
+			case MLX5E_ICOSQ_WQE_NOP:
+				break;
+			default:
 				netdev_WARN_ONCE(cq->channel->netdev,
-						 "Bad OPCODE in ICOSQ WQE info: 0x%x\n",
-						 wi->opcode);
-
+						 "Bad WQE type in ICOSQ WQE info: 0x%x\n",
+						 wi->wqe_type);
+			}
 		} while (!last_wqe);
-
 	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
 
 	sq->cc = sqcc;
@@ -1084,6 +1070,7 @@ mlx5e_skb_from_cqe_linear(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 	if (consumed)
 		return NULL; /* page/packet was consumed by XDP */
 
+	frag_size = MLX5_SKB_FRAG_SZ(rx_headroom + cqe_bcnt);
 	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt);
 	if (unlikely(!skb))
 		return NULL;
@@ -1385,6 +1372,7 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 		return NULL; /* page/packet was consumed by XDP */
 	}
 
+	frag_size = MLX5_SKB_FRAG_SZ(rx_headroom + cqe_bcnt32);
 	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt32);
 	if (unlikely(!skb))
 		return NULL;
@@ -1501,6 +1489,7 @@ out:
 
 #ifdef CONFIG_MLX5_CORE_IPOIB
 
+#define MLX5_IB_GRH_SGID_OFFSET 8
 #define MLX5_IB_GRH_DGID_OFFSET 24
 #define MLX5_GID_SIZE           16
 
@@ -1514,6 +1503,7 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 	struct net_device *netdev;
 	struct mlx5e_priv *priv;
 	char *pseudo_header;
+	u32 flags_rqpn;
 	u32 qpn;
 	u8 *dgid;
 	u8 g;
@@ -1535,7 +1525,8 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 	tstamp = &priv->tstamp;
 	stats = &priv->channel_stats[rq->ix].rq;
 
-	g = (be32_to_cpu(cqe->flags_rqpn) >> 28) & 3;
+	flags_rqpn = be32_to_cpu(cqe->flags_rqpn);
+	g = (flags_rqpn >> 28) & 3;
 	dgid = skb->data + MLX5_IB_GRH_DGID_OFFSET;
 	if ((!g) || dgid[0] != 0xff)
 		skb->pkt_type = PACKET_HOST;
@@ -1544,9 +1535,15 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
 	else
 		skb->pkt_type = PACKET_MULTICAST;
 
-	/* TODO: IB/ipoib: Allow mcast packets from other VFs
-	 * 68996a6e760e5c74654723eeb57bf65628ae87f4
+	/* Drop packets that this interface sent, ie multicast packets
+	 * that the HCA has replicated.
 	 */
+	if (g && (qpn == (flags_rqpn & 0xffffff)) &&
+	    (memcmp(netdev->dev_addr + 4, skb->data + MLX5_IB_GRH_SGID_OFFSET,
+		    MLX5_GID_SIZE) == 0)) {
+		skb->dev = NULL;
+		return;
+	}
 
 	skb_pull(skb, MLX5_IB_GRH_BYTES);
 

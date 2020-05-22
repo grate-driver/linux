@@ -287,7 +287,7 @@ const char *bond_mode_name(int mode)
  * @skb: hw accel VLAN tagged skb to transmit
  * @slave_dev: slave that is supposed to xmit this skbuff
  */
-void bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb,
+netdev_tx_t bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb,
 			struct net_device *slave_dev)
 {
 	skb->dev = slave_dev;
@@ -297,9 +297,9 @@ void bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb,
 	skb_set_queue_mapping(skb, qdisc_skb_cb(skb)->slave_dev_queue_mapping);
 
 	if (unlikely(netpoll_tx_running(bond->dev)))
-		bond_netpoll_send_skb(bond_get_slave_by_dev(bond, slave_dev), skb);
-	else
-		dev_queue_xmit(skb);
+		return bond_netpoll_send_skb(bond_get_slave_by_dev(bond, slave_dev), skb);
+
+	return dev_queue_xmit(skb);
 }
 
 /* In the following 2 functions, bond_vlan_rx_add_vid and bond_vlan_rx_kill_vid,
@@ -3953,7 +3953,7 @@ static struct slave *bond_get_slave_by_id(struct bonding *bond,
 		if (bond_slave_can_tx(slave))
 			return slave;
 	}
-
+	/* no slave that can tx has been found */
 	return NULL;
 }
 
@@ -4035,11 +4035,10 @@ static netdev_tx_t bond_xmit_roundrobin(struct sk_buff *skb,
 	struct slave *slave;
 
 	slave = bond_xmit_roundrobin_slave_get(bond, skb);
-	if (slave)
-		bond_dev_queue_xmit(bond, skb, slave->dev);
-	else
-		bond_tx_drop(bond_dev, skb);
-	return NETDEV_TX_OK;
+	if (likely(slave))
+		return bond_dev_queue_xmit(bond, skb, slave->dev);
+
+	return bond_tx_drop(bond_dev, skb);
 }
 
 static struct slave *bond_xmit_activebackup_slave_get(struct bonding *bond,
@@ -4059,11 +4058,9 @@ static netdev_tx_t bond_xmit_activebackup(struct sk_buff *skb,
 
 	slave = bond_xmit_activebackup_slave_get(bond, skb);
 	if (slave)
-		bond_dev_queue_xmit(bond, skb, slave->dev);
-	else
-		bond_tx_drop(bond_dev, skb);
+		return bond_dev_queue_xmit(bond, skb, slave->dev);
 
-	return NETDEV_TX_OK;
+	return bond_tx_drop(bond_dev, skb);
 }
 
 /* Use this to update slave_array when (a) it's not appropriate to update
@@ -4260,11 +4257,9 @@ static netdev_tx_t bond_3ad_xor_xmit(struct sk_buff *skb,
 	slaves = rcu_dereference(bond->usable_slaves);
 	slave = bond_xmit_3ad_xor_slave_get(bond, skb, slaves);
 	if (likely(slave))
-		bond_dev_queue_xmit(bond, skb, slave->dev);
-	else
-		bond_tx_drop(dev, skb);
+		return bond_dev_queue_xmit(bond, skb, slave->dev);
 
-	return NETDEV_TX_OK;
+	return bond_tx_drop(dev, skb);
 }
 
 /* in broadcast mode, we send everything to all usable interfaces. */
@@ -4290,11 +4285,9 @@ static netdev_tx_t bond_xmit_broadcast(struct sk_buff *skb,
 		}
 	}
 	if (slave && bond_slave_is_up(slave) && slave->link == BOND_LINK_UP)
-		bond_dev_queue_xmit(bond, skb, slave->dev);
-	else
-		bond_tx_drop(bond_dev, skb);
+		return bond_dev_queue_xmit(bond, skb, slave->dev);
 
-	return NETDEV_TX_OK;
+	return bond_tx_drop(bond_dev, skb);
 }
 
 /*------------------------- Device initialization ---------------------------*/
@@ -4415,8 +4408,7 @@ static netdev_tx_t __bond_start_xmit(struct sk_buff *skb, struct net_device *dev
 		/* Should never happen, mode already checked */
 		netdev_err(dev, "Unknown bonding mode %d\n", BOND_MODE(bond));
 		WARN_ON_ONCE(1);
-		bond_tx_drop(dev, skb);
-		return NETDEV_TX_OK;
+		return bond_tx_drop(dev, skb);
 	}
 }
 
@@ -4435,7 +4427,7 @@ static netdev_tx_t bond_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (bond_has_slaves(bond))
 		ret = __bond_start_xmit(skb, dev);
 	else
-		bond_tx_drop(dev, skb);
+		ret = bond_tx_drop(dev, skb);
 	rcu_read_unlock();
 
 	return ret;
@@ -4603,7 +4595,6 @@ static void bond_uninit(struct net_device *bond_dev)
 
 	list_del(&bond->bond_list);
 
-	lockdep_unregister_key(&bond->stats_lock_key);
 	bond_debug_unregister(bond);
 }
 
@@ -5008,8 +4999,7 @@ static int bond_init(struct net_device *bond_dev)
 		return -ENOMEM;
 
 	spin_lock_init(&bond->stats_lock);
-	lockdep_register_key(&bond->stats_lock_key);
-	lockdep_set_class(&bond->stats_lock, &bond->stats_lock_key);
+	netdev_lockdep_set_classes(bond_dev);
 
 	list_add_tail(&bond->bond_list, &bn->dev_list);
 

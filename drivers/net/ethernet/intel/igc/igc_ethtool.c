@@ -6,6 +6,7 @@
 #include <linux/pm_runtime.h>
 
 #include "igc.h"
+#include "igc_diag.h"
 
 /* forward declaration */
 struct igc_stats {
@@ -153,7 +154,7 @@ static void igc_get_regs(struct net_device *netdev,
 
 	memset(p, 0, IGC_REGS_LEN * sizeof(u32));
 
-	regs->version = (1u << 24) | (hw->revision_id << 16) | hw->device_id;
+	regs->version = (2u << 24) | (hw->revision_id << 16) | hw->device_id;
 
 	/* General Registers */
 	regs_buff[0] = rd32(IGC_CTRL);
@@ -306,6 +307,20 @@ static void igc_get_regs(struct net_device *netdev,
 		regs_buff[164 + i] = rd32(IGC_TDT(i));
 	for (i = 0; i < 4; i++)
 		regs_buff[168 + i] = rd32(IGC_TXDCTL(i));
+
+	/* XXX: Due to a bug few lines above, RAL and RAH registers are
+	 * overwritten. To preserve the ABI, we write these registers again in
+	 * regs_buff.
+	 */
+	for (i = 0; i < 16; i++)
+		regs_buff[172 + i] = rd32(IGC_RAL(i));
+	for (i = 0; i < 16; i++)
+		regs_buff[188 + i] = rd32(IGC_RAH(i));
+
+	regs_buff[204] = rd32(IGC_VLANPQF);
+
+	for (i = 0; i < 8; i++)
+		regs_buff[205 + i] = rd32(IGC_ETQF(i));
 }
 
 static void igc_get_wol(struct net_device *netdev, struct ethtool_wolinfo *wol)
@@ -1145,8 +1160,8 @@ static int igc_set_rss_hash_opt(struct igc_adapter *adapter,
 
 		if ((flags & UDP_RSS_FLAGS) &&
 		    !(adapter->flags & UDP_RSS_FLAGS))
-			dev_err(&adapter->pdev->dev,
-				"enabling UDP RSS: fragmented packets may arrive out of order to the stack above\n");
+			netdev_err(adapter->netdev,
+				   "Enabling UDP RSS: fragmented packets may arrive out of order to the stack above\n");
 
 		adapter->flags = flags;
 
@@ -1171,73 +1186,6 @@ static int igc_set_rss_hash_opt(struct igc_adapter *adapter,
 	return 0;
 }
 
-static int igc_rxnfc_write_etype_filter(struct igc_adapter *adapter,
-					struct igc_nfc_filter *input)
-{
-	struct igc_hw *hw = &adapter->hw;
-	u8 i;
-	u32 etqf;
-	u16 etype;
-
-	/* find an empty etype filter register */
-	for (i = 0; i < MAX_ETYPE_FILTER; ++i) {
-		if (!adapter->etype_bitmap[i])
-			break;
-	}
-	if (i == MAX_ETYPE_FILTER) {
-		dev_err(&adapter->pdev->dev, "ethtool -N: etype filters are all used.\n");
-		return -EINVAL;
-	}
-
-	adapter->etype_bitmap[i] = true;
-
-	etqf = rd32(IGC_ETQF(i));
-	etype = ntohs(input->filter.etype & ETHER_TYPE_FULL_MASK);
-
-	etqf |= IGC_ETQF_FILTER_ENABLE;
-	etqf &= ~IGC_ETQF_ETYPE_MASK;
-	etqf |= (etype & IGC_ETQF_ETYPE_MASK);
-
-	etqf &= ~IGC_ETQF_QUEUE_MASK;
-	etqf |= ((input->action << IGC_ETQF_QUEUE_SHIFT)
-		& IGC_ETQF_QUEUE_MASK);
-	etqf |= IGC_ETQF_QUEUE_ENABLE;
-
-	wr32(IGC_ETQF(i), etqf);
-
-	input->etype_reg_index = i;
-
-	return 0;
-}
-
-static int igc_rxnfc_write_vlan_prio_filter(struct igc_adapter *adapter,
-					    struct igc_nfc_filter *input)
-{
-	struct igc_hw *hw = &adapter->hw;
-	u8 vlan_priority;
-	u16 queue_index;
-	u32 vlapqf;
-
-	vlapqf = rd32(IGC_VLAPQF);
-	vlan_priority = (ntohs(input->filter.vlan_tci) & VLAN_PRIO_MASK)
-				>> VLAN_PRIO_SHIFT;
-	queue_index = (vlapqf >> (vlan_priority * 4)) & IGC_VLAPQF_QUEUE_MASK;
-
-	/* check whether this vlan prio is already set */
-	if (vlapqf & IGC_VLAPQF_P_VALID(vlan_priority) &&
-	    queue_index != input->action) {
-		dev_err(&adapter->pdev->dev, "ethtool rxnfc set vlan prio filter failed.\n");
-		return -EEXIST;
-	}
-
-	vlapqf |= IGC_VLAPQF_P_VALID(vlan_priority);
-	vlapqf |= IGC_VLAPQF_QUEUE_SEL(vlan_priority, input->action);
-
-	wr32(IGC_VLAPQF, vlapqf);
-
-	return 0;
-}
-
 int igc_add_filter(struct igc_adapter *adapter, struct igc_nfc_filter *input)
 {
 	struct igc_hw *hw = &adapter->hw;
@@ -1245,92 +1193,65 @@ int igc_add_filter(struct igc_adapter *adapter, struct igc_nfc_filter *input)
 
 	if (hw->mac.type == igc_i225 &&
 	    !(input->filter.match_flags & ~IGC_FILTER_FLAG_SRC_MAC_ADDR)) {
-		dev_err(&adapter->pdev->dev,
-			"i225 doesn't support flow classification rules specifying only source addresses.\n");
+		netdev_err(adapter->netdev,
+			   "i225 doesn't support flow classification rules specifying only source addresses\n");
 		return -EOPNOTSUPP;
 	}
 
 	if (input->filter.match_flags & IGC_FILTER_FLAG_ETHER_TYPE) {
-		err = igc_rxnfc_write_etype_filter(adapter, input);
+		u16 etype = ntohs(input->filter.etype);
+
+		err = igc_add_etype_filter(adapter, etype, input->action);
 		if (err)
 			return err;
 	}
 
 	if (input->filter.match_flags & IGC_FILTER_FLAG_DST_MAC_ADDR) {
-		err = igc_add_mac_steering_filter(adapter,
-						  input->filter.dst_addr,
-						  input->action, 0);
-		err = min_t(int, err, 0);
+		err = igc_add_mac_filter(adapter, input->filter.dst_addr,
+					 input->action, 0);
 		if (err)
 			return err;
 	}
 
 	if (input->filter.match_flags & IGC_FILTER_FLAG_SRC_MAC_ADDR) {
-		err = igc_add_mac_steering_filter(adapter,
-						  input->filter.src_addr,
-						  input->action,
-						  IGC_MAC_STATE_SRC_ADDR);
-		err = min_t(int, err, 0);
+		err = igc_add_mac_filter(adapter, input->filter.src_addr,
+					 input->action,
+					 IGC_MAC_STATE_SRC_ADDR);
 		if (err)
 			return err;
 	}
 
-	if (input->filter.match_flags & IGC_FILTER_FLAG_VLAN_TCI)
-		err = igc_rxnfc_write_vlan_prio_filter(adapter, input);
+	if (input->filter.match_flags & IGC_FILTER_FLAG_VLAN_TCI) {
+		int prio = (ntohs(input->filter.vlan_tci) & VLAN_PRIO_MASK) >>
+			   VLAN_PRIO_SHIFT;
+		err = igc_add_vlan_prio_filter(adapter, prio, input->action);
+		if (err)
+			return err;
+	}
 
-	return err;
-}
-
-static void igc_clear_etype_filter_regs(struct igc_adapter *adapter,
-					u16 reg_index)
-{
-	struct igc_hw *hw = &adapter->hw;
-	u32 etqf = rd32(IGC_ETQF(reg_index));
-
-	etqf &= ~IGC_ETQF_QUEUE_ENABLE;
-	etqf &= ~IGC_ETQF_QUEUE_MASK;
-	etqf &= ~IGC_ETQF_FILTER_ENABLE;
-
-	wr32(IGC_ETQF(reg_index), etqf);
-
-	adapter->etype_bitmap[reg_index] = false;
-}
-
-static void igc_clear_vlan_prio_filter(struct igc_adapter *adapter,
-				       u16 vlan_tci)
-{
-	struct igc_hw *hw = &adapter->hw;
-	u8 vlan_priority;
-	u32 vlapqf;
-
-	vlan_priority = (vlan_tci & VLAN_PRIO_MASK) >> VLAN_PRIO_SHIFT;
-
-	vlapqf = rd32(IGC_VLAPQF);
-	vlapqf &= ~IGC_VLAPQF_P_VALID(vlan_priority);
-	vlapqf &= ~IGC_VLAPQF_QUEUE_SEL(vlan_priority,
-						IGC_VLAPQF_QUEUE_MASK);
-
-	wr32(IGC_VLAPQF, vlapqf);
+	return 0;
 }
 
 int igc_erase_filter(struct igc_adapter *adapter, struct igc_nfc_filter *input)
 {
-	if (input->filter.match_flags & IGC_FILTER_FLAG_ETHER_TYPE)
-		igc_clear_etype_filter_regs(adapter,
-					    input->etype_reg_index);
+	if (input->filter.match_flags & IGC_FILTER_FLAG_ETHER_TYPE) {
+		u16 etype = ntohs(input->filter.etype);
 
-	if (input->filter.match_flags & IGC_FILTER_FLAG_VLAN_TCI)
-		igc_clear_vlan_prio_filter(adapter,
-					   ntohs(input->filter.vlan_tci));
+		igc_del_etype_filter(adapter, etype);
+	}
+
+	if (input->filter.match_flags & IGC_FILTER_FLAG_VLAN_TCI) {
+		int prio = (ntohs(input->filter.vlan_tci) & VLAN_PRIO_MASK) >>
+			   VLAN_PRIO_SHIFT;
+		igc_del_vlan_prio_filter(adapter, prio);
+	}
 
 	if (input->filter.match_flags & IGC_FILTER_FLAG_SRC_MAC_ADDR)
-		igc_del_mac_steering_filter(adapter, input->filter.src_addr,
-					    input->action,
-					    IGC_MAC_STATE_SRC_ADDR);
+		igc_del_mac_filter(adapter, input->filter.src_addr,
+				   IGC_MAC_STATE_SRC_ADDR);
 
 	if (input->filter.match_flags & IGC_FILTER_FLAG_DST_MAC_ADDR)
-		igc_del_mac_steering_filter(adapter, input->filter.dst_addr,
-					    input->action, 0);
+		igc_del_mac_filter(adapter, input->filter.dst_addr, 0);
 
 	return 0;
 }
@@ -1400,13 +1321,14 @@ static int igc_add_ethtool_nfc_entry(struct igc_adapter *adapter,
 	 */
 	if (fsp->ring_cookie == RX_CLS_FLOW_DISC ||
 	    fsp->ring_cookie >= adapter->num_rx_queues) {
-		dev_err(&adapter->pdev->dev, "ethtool -N: The specified action is invalid\n");
+		netdev_err(netdev,
+			   "ethtool -N: The specified action is invalid\n");
 		return -EINVAL;
 	}
 
 	/* Don't allow indexes to exist outside of available space */
 	if (fsp->location >= IGC_MAX_RXNFC_FILTERS) {
-		dev_err(&adapter->pdev->dev, "Location out of range\n");
+		netdev_err(netdev, "Location out of range\n");
 		return -EINVAL;
 	}
 
@@ -1438,7 +1360,8 @@ static int igc_add_ethtool_nfc_entry(struct igc_adapter *adapter,
 
 	if ((fsp->flow_type & FLOW_EXT) && fsp->m_ext.vlan_tci) {
 		if (fsp->m_ext.vlan_tci != htons(VLAN_PRIO_MASK)) {
-			err = -EINVAL;
+			netdev_dbg(netdev, "VLAN mask not supported\n");
+			err = -EOPNOTSUPP;
 			goto err_out;
 		}
 		input->filter.vlan_tci = fsp->h_ext.vlan_tci;
@@ -1454,8 +1377,8 @@ static int igc_add_ethtool_nfc_entry(struct igc_adapter *adapter,
 		if (!memcmp(&input->filter, &rule->filter,
 			    sizeof(input->filter))) {
 			err = -EEXIST;
-			dev_err(&adapter->pdev->dev,
-				"ethtool: this filter is already set\n");
+			netdev_err(netdev,
+				   "ethtool: this filter is already set\n");
 			goto err_out_w_lock;
 		}
 	}
@@ -1828,6 +1751,7 @@ static int igc_set_link_ksettings(struct net_device *netdev,
 				  const struct ethtool_link_ksettings *cmd)
 {
 	struct igc_adapter *adapter = netdev_priv(netdev);
+	struct net_device *dev = adapter->netdev;
 	struct igc_hw *hw = &adapter->hw;
 	u32 advertising;
 
@@ -1835,8 +1759,7 @@ static int igc_set_link_ksettings(struct net_device *netdev,
 	 * cannot be changed
 	 */
 	if (igc_check_reset_block(hw)) {
-		dev_err(&adapter->pdev->dev,
-			"Cannot change link characteristics when reset is active.\n");
+		netdev_err(dev, "Cannot change link characteristics when reset is active\n");
 		return -EINVAL;
 	}
 
@@ -1847,7 +1770,7 @@ static int igc_set_link_ksettings(struct net_device *netdev,
 	if (cmd->base.eth_tp_mdix_ctrl) {
 		if (cmd->base.eth_tp_mdix_ctrl != ETH_TP_MDI_AUTO &&
 		    cmd->base.autoneg != AUTONEG_ENABLE) {
-			dev_err(&adapter->pdev->dev, "forcing MDI/MDI-X state is not supported when link speed and/or duplex are forced\n");
+			netdev_err(dev, "Forcing MDI/MDI-X state is not supported when link speed and/or duplex are forced\n");
 			return -EINVAL;
 		}
 	}
@@ -1864,9 +1787,7 @@ static int igc_set_link_ksettings(struct net_device *netdev,
 		if (adapter->fc_autoneg)
 			hw->fc.requested_mode = igc_fc_default;
 	} else {
-		/* calling this overrides forced MDI setting */
-		dev_info(&adapter->pdev->dev,
-			 "Force mode currently not supported\n");
+		netdev_info(dev, "Force mode currently not supported\n");
 	}
 
 	/* MDI-X => 2; MDI => 1; Auto => 3 */
@@ -1891,6 +1812,64 @@ static int igc_set_link_ksettings(struct net_device *netdev,
 	clear_bit(__IGC_RESETTING, &adapter->state);
 
 	return 0;
+}
+
+static void igc_diag_test(struct net_device *netdev,
+			  struct ethtool_test *eth_test, u64 *data)
+{
+	struct igc_adapter *adapter = netdev_priv(netdev);
+	bool if_running = netif_running(netdev);
+
+	if (eth_test->flags == ETH_TEST_FL_OFFLINE) {
+		netdev_info(adapter->netdev, "Offline testing starting");
+		set_bit(__IGC_TESTING, &adapter->state);
+
+		/* Link test performed before hardware reset so autoneg doesn't
+		 * interfere with test result
+		 */
+		if (!igc_link_test(adapter, &data[TEST_LINK]))
+			eth_test->flags |= ETH_TEST_FL_FAILED;
+
+		if (if_running)
+			igc_close(netdev);
+		else
+			igc_reset(adapter);
+
+		netdev_info(adapter->netdev, "Register testing starting");
+		if (!igc_reg_test(adapter, &data[TEST_REG]))
+			eth_test->flags |= ETH_TEST_FL_FAILED;
+
+		igc_reset(adapter);
+
+		netdev_info(adapter->netdev, "EEPROM testing starting");
+		if (!igc_eeprom_test(adapter, &data[TEST_EEP]))
+			eth_test->flags |= ETH_TEST_FL_FAILED;
+
+		igc_reset(adapter);
+
+		/* loopback and interrupt tests
+		 * will be implemented in the future
+		 */
+		data[TEST_LOOP] = 0;
+		data[TEST_IRQ] = 0;
+
+		clear_bit(__IGC_TESTING, &adapter->state);
+		if (if_running)
+			igc_open(netdev);
+	} else {
+		netdev_info(adapter->netdev, "Online testing starting");
+
+		/* register, eeprom, intr and loopback tests not run online */
+		data[TEST_REG] = 0;
+		data[TEST_EEP] = 0;
+		data[TEST_IRQ] = 0;
+		data[TEST_LOOP] = 0;
+
+		if (!igc_link_test(adapter, &data[TEST_LINK]))
+			eth_test->flags |= ETH_TEST_FL_FAILED;
+	}
+
+	msleep_interruptible(4 * 1000);
 }
 
 static const struct ethtool_ops igc_ethtool_ops = {
@@ -1930,6 +1909,7 @@ static const struct ethtool_ops igc_ethtool_ops = {
 	.complete		= igc_ethtool_complete,
 	.get_link_ksettings	= igc_get_link_ksettings,
 	.set_link_ksettings	= igc_set_link_ksettings,
+	.self_test		= igc_diag_test,
 };
 
 void igc_set_ethtool_ops(struct net_device *netdev)

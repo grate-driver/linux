@@ -50,7 +50,6 @@ struct xdp_umem {
 	u32 headroom;
 	u32 chunk_size_nohr;
 	struct user_struct *user;
-	unsigned long address;
 	refcount_t users;
 	struct work_struct work;
 	struct page **pgs;
@@ -62,8 +61,8 @@ struct xdp_umem {
 	struct net_device *dev;
 	struct xdp_umem_fq_reuse *fq_reuse;
 	bool zc;
-	spinlock_t xsk_list_lock;
-	struct list_head xsk_list;
+	spinlock_t xsk_tx_list_lock;
+	struct list_head xsk_tx_list;
 };
 
 /* Nodes are linked in the struct xdp_sock map_list field, and used to
@@ -237,6 +236,12 @@ static inline u64 xsk_umem_adjust_offset(struct xdp_umem *umem, u64 address,
 	else
 		return address + offset;
 }
+
+static inline u32 xsk_umem_xdp_frame_sz(struct xdp_umem *umem)
+{
+	return umem->chunk_size_nohr + umem->headroom;
+}
+
 #else
 static inline int xsk_generic_rcv(struct xdp_sock *xs, struct xdp_buff *xdp)
 {
@@ -363,6 +368,11 @@ static inline bool xsk_umem_uses_need_wakeup(struct xdp_umem *umem)
 
 static inline u64 xsk_umem_adjust_offset(struct xdp_umem *umem, u64 handle,
 					 u64 offset)
+{
+	return 0;
+}
+
+static inline u32 xsk_umem_xdp_frame_sz(struct xdp_umem *umem)
 {
 	return 0;
 }

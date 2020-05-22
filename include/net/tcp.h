@@ -126,6 +126,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 				  * to combine FIN-WAIT-2 timeout with
 				  * TIME-WAIT timer.
 				  */
+#define TCP_FIN_TIMEOUT_MAX (120 * HZ) /* max TCP_LINGER2 value (two minutes) */
 
 #define TCP_DELACK_MAX	((unsigned)(HZ/5))	/* maximal time to delay before sending an ACK */
 #if HZ >= 100
@@ -1288,26 +1289,22 @@ static inline bool tcp_needs_internal_pacing(const struct sock *sk)
 	return smp_load_acquire(&sk->sk_pacing_status) == SK_PACING_NEEDED;
 }
 
-/* Return in jiffies the delay before one skb is sent.
- * If @skb is NULL, we look at EDT for next packet being sent on the socket.
+/* Estimates in how many jiffies next packet for this flow can be sent.
+ * Scheduling a retransmit timer too early would be silly.
  */
-static inline unsigned long tcp_pacing_delay(const struct sock *sk,
-					     const struct sk_buff *skb)
+static inline unsigned long tcp_pacing_delay(const struct sock *sk)
 {
-	s64 pacing_delay = skb ? skb->tstamp : tcp_sk(sk)->tcp_wstamp_ns;
+	s64 delay = tcp_sk(sk)->tcp_wstamp_ns - tcp_sk(sk)->tcp_clock_cache;
 
-	pacing_delay -= tcp_sk(sk)->tcp_clock_cache;
-
-	return pacing_delay > 0 ? nsecs_to_jiffies(pacing_delay) : 0;
+	return delay > 0 ? nsecs_to_jiffies(delay) : 0;
 }
 
 static inline void tcp_reset_xmit_timer(struct sock *sk,
 					const int what,
 					unsigned long when,
-					const unsigned long max_when,
-					const struct sk_buff *skb)
+					const unsigned long max_when)
 {
-	inet_csk_reset_xmit_timer(sk, what, when + tcp_pacing_delay(sk, skb),
+	inet_csk_reset_xmit_timer(sk, what, when + tcp_pacing_delay(sk),
 				  max_when);
 }
 
@@ -1335,8 +1332,7 @@ static inline void tcp_check_probe_timer(struct sock *sk)
 {
 	if (!tcp_sk(sk)->packets_out && !inet_csk(sk)->icsk_pending)
 		tcp_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
-				     tcp_probe0_base(sk), TCP_RTO_MAX,
-				     NULL);
+				     tcp_probe0_base(sk), TCP_RTO_MAX);
 }
 
 static inline void tcp_init_wl(struct tcp_sock *tp, u32 seq)

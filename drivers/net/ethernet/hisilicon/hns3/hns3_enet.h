@@ -8,10 +8,6 @@
 
 #include "hnae3.h"
 
-#define HNS3_MOD_VERSION "1.0"
-
-extern const char hns3_driver_version[];
-
 enum hns3_nic_state {
 	HNS3_NIC_STATE_TESTING,
 	HNS3_NIC_STATE_RESETTING,
@@ -50,23 +46,6 @@ enum hns3_nic_state {
 #define HNS3_RING_CFG_VF_NUM_REG		0x00080
 #define HNS3_RING_ASID_REG			0x0008C
 #define HNS3_RING_EN_REG			0x00090
-#define HNS3_RING_T0_BE_RST			0x00094
-#define HNS3_RING_COULD_BE_RST			0x00098
-#define HNS3_RING_WRR_WEIGHT_REG		0x0009c
-
-#define HNS3_RING_INTMSK_RXWL_REG		0x000A0
-#define HNS3_RING_INTSTS_RX_RING_REG		0x000A4
-#define HNS3_RX_RING_INT_STS_REG		0x000A8
-#define HNS3_RING_INTMSK_TXWL_REG		0x000AC
-#define HNS3_RING_INTSTS_TX_RING_REG		0x000B0
-#define HNS3_TX_RING_INT_STS_REG		0x000B4
-#define HNS3_RING_INTMSK_RX_OVERTIME_REG	0x000B8
-#define HNS3_RING_INTSTS_RX_OVERTIME_REG	0x000BC
-#define HNS3_RING_INTMSK_TX_OVERTIME_REG	0x000C4
-#define HNS3_RING_INTSTS_TX_OVERTIME_REG	0x000C8
-
-#define HNS3_RING_MB_CTRL_REG			0x00100
-#define HNS3_RING_MB_DATA_BASE_REG		0x00200
 
 #define HNS3_TX_REG_OFFSET			0x40
 
@@ -580,15 +559,6 @@ static inline void hns3_write_reg(void __iomem *base, u32 reg, u32 value)
 	writel(value, reg_addr + reg);
 }
 
-static inline bool hns3_dev_ongoing_func_reset(struct hnae3_ae_dev *ae_dev)
-{
-	return (ae_dev && (ae_dev->reset_type == HNAE3_FUNC_RESET ||
-			   ae_dev->reset_type == HNAE3_FLR_RESET ||
-			   ae_dev->reset_type == HNAE3_VF_FUNC_RESET ||
-			   ae_dev->reset_type == HNAE3_VF_FULL_RESET ||
-			   ae_dev->reset_type == HNAE3_VF_PF_FUNC_RESET));
-}
-
 #define hns3_read_dev(a, reg) \
 	hns3_read_reg((a)->io_base, (reg))
 
@@ -662,6 +632,7 @@ void hns3_set_vector_coalesce_rl(struct hns3_enet_tqp_vector *tqp_vector,
 
 void hns3_enable_vlan_filter(struct net_device *netdev, bool enable);
 int hns3_update_promisc_mode(struct net_device *netdev, u8 promisc_flags);
+void hns3_request_update_promisc_mode(struct hnae3_handle *handle);
 
 #ifdef CONFIG_HNS3_DCB
 void hns3_dcbnl_setup(struct hnae3_handle *handle);
