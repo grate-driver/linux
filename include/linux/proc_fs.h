@@ -210,4 +210,6 @@ static inline struct pid_namespace *proc_pid_ns(struct super_block *sb)
 	return proc_sb_info(sb)->pid_ns;
 }
 
+bool proc_ns_file(const struct file *file);
+
 #endif /* _LINUX_PROC_FS_H */
