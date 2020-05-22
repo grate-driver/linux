@@ -79,7 +79,7 @@ void __init early_init_dt_add_memory_arch(u64 base, u64 size)
 
 bool arch_has_descending_max_zone_pfns(void)
 {
-	return true;
+	return !IS_ENABLED(CONFIG_ARC_HAS_PAE40);
 }
 
 /*
