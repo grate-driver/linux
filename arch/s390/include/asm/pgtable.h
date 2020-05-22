@@ -1274,6 +1274,7 @@ static inline pud_t *pud_offset(p4d_t *p4d, unsigned long address)
 		return (pud_t *) p4d_deref(*p4d) + pud_index(address);
 	return (pud_t *) p4d;
 }
+#define pud_offset pud_offset
 
 static inline pmd_t *pmd_offset(pud_t *pud, unsigned long address)
 {

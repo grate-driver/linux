@@ -895,11 +895,6 @@ static inline int pud_large(pud_t pud)
 }
 #endif	/* CONFIG_PGTABLE_LEVELS > 2 */
 
-static inline unsigned long pud_index(unsigned long address)
-{
-	return (address >> PUD_SHIFT) & (PTRS_PER_PUD - 1);
-}
-
 #if CONFIG_PGTABLE_LEVELS > 3
 static inline int p4d_none(p4d_t p4d)
 {
@@ -921,12 +916,6 @@ static inline unsigned long p4d_page_vaddr(p4d_t p4d)
  * linux/mmzone.h's __section_mem_map_addr() definition:
  */
 #define p4d_page(p4d)	pfn_to_page(p4d_pfn(p4d))
-
-/* Find an entry in the third-level page table.. */
-static inline pud_t *pud_offset(p4d_t *p4d, unsigned long address)
-{
-	return (pud_t *)p4d_page_vaddr(*p4d) + pud_index(address);
-}
 
 static inline int p4d_bad(p4d_t p4d)
 {
