@@ -187,12 +187,12 @@ enum {
 #define SWAP_HAS_CACHE	0x40	/* Flag page is cached, in first swap_map */
 #define COUNT_CONTINUED	0x80	/* Flag swap_map continuation for full count */
 
-/* Special Value in first swap_map */
+/* Special value in first swap_map */
 #define SWAP_MAP_MAX	0x3e	/* Max count */
 #define SWAP_MAP_BAD	0x3f	/* Note page is bad */
 #define SWAP_MAP_SHMEM	0xbf	/* Owned by shmem/tmpfs */
 
-/* Special Value in each swap_map continuation */
+/* Special value in each swap_map continuation */
 #define SWAP_CONT_MAX	0x7f	/* Max count */
 
 /*
