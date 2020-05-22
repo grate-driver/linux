@@ -54,7 +54,8 @@ static inline void __write_pkey_reg(u64 pkey_reg)
 	dprintf4("%s() changing %016llx to %016llx\n",
 			 __func__, __read_pkey_reg(), pkey_reg);
 
-	asm volatile("mtspr 0xd, %0" : : "r" ((unsigned long)(amr)) : "memory");
+	asm volatile("isync; mtspr 0xd, %0; isync"
+		     : : "r" ((unsigned long)(amr)) : "memory");
 
 	dprintf4("%s() pkey register after changing %016llx to %016llx\n",
 			__func__, __read_pkey_reg(), pkey_reg);
