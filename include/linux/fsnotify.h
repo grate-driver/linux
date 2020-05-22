@@ -90,7 +90,7 @@ static inline int fsnotify_perm(struct file *file, int mask)
 	if (mask & MAY_OPEN) {
 		fsnotify_mask = FS_OPEN_PERM;
 
-		if (file->f_flags & __FMODE_EXEC) {
+		if (file->f_mode & FMODE_EXEC) {
 			ret = fsnotify_file(file, FS_OPEN_EXEC_PERM);
 
 			if (ret)
@@ -264,7 +264,7 @@ static inline void fsnotify_open(struct file *file)
 {
 	__u32 mask = FS_OPEN;
 
-	if (file->f_flags & __FMODE_EXEC)
+	if (file->f_mode & FMODE_EXEC)
 		mask |= FS_OPEN_EXEC;
 
 	fsnotify_file(file, mask);

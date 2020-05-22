@@ -83,8 +83,6 @@ static void __put_single_page(struct page *page)
 
 static void __put_compound_page(struct page *page)
 {
-	compound_page_dtor *dtor;
-
 	/*
 	 * __page_cache_release() is supposed to be called for thp, not for
 	 * hugetlb. This is because hugetlb page does never have PageLRU set
@@ -93,8 +91,7 @@ static void __put_compound_page(struct page *page)
 	 */
 	if (!PageHuge(page))
 		__page_cache_release(page);
-	dtor = get_compound_page_dtor(page);
-	(*dtor)(page);
+	destroy_compound_page(page);
 }
 
 void __put_page(struct page *page)
@@ -262,21 +259,47 @@ void rotate_reclaimable_page(struct page *page)
 	}
 }
 
-static void update_page_reclaim_stat(struct lruvec *lruvec,
-				     int file, int rotated)
+void lru_note_cost(struct lruvec *lruvec, bool file, unsigned int nr_pages)
 {
-	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
+	do {
+		unsigned long lrusize;
 
-	reclaim_stat->recent_scanned[file]++;
-	if (rotated)
-		reclaim_stat->recent_rotated[file]++;
+		/* Record cost event */
+		if (file)
+			lruvec->file_cost += nr_pages;
+		else
+			lruvec->anon_cost += nr_pages;
+
+		/*
+		 * Decay previous events
+		 *
+		 * Because workloads change over time (and to avoid
+		 * overflow) we keep these statistics as a floating
+		 * average, which ends up weighing recent refaults
+		 * more than old ones.
+		 */
+		lrusize = lruvec_page_state(lruvec, NR_INACTIVE_ANON) +
+			  lruvec_page_state(lruvec, NR_ACTIVE_ANON) +
+			  lruvec_page_state(lruvec, NR_INACTIVE_FILE) +
+			  lruvec_page_state(lruvec, NR_ACTIVE_FILE);
+
+		if (lruvec->file_cost + lruvec->anon_cost > lrusize / 4) {
+			lruvec->file_cost /= 2;
+			lruvec->anon_cost /= 2;
+		}
+	} while ((lruvec = parent_lruvec(lruvec)));
+}
+
+void lru_note_cost_page(struct page *page)
+{
+	lru_note_cost(mem_cgroup_page_lruvec(page, page_pgdat(page)),
+		      page_is_file_lru(page), hpage_nr_pages(page));
 }
 
 static void __activate_page(struct page *page, struct lruvec *lruvec,
 			    void *arg)
 {
 	if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
-		int file = page_is_file_lru(page);
 		int lru = page_lru_base_type(page);
 
 		del_page_from_lru_list(page, lruvec, lru);
@@ -286,7 +309,6 @@ static void __activate_page(struct page *page, struct lruvec *lruvec,
 		trace_mm_lru_activate(page);
 
 		__count_vm_event(PGACTIVATE);
-		update_page_reclaim_stat(lruvec, file, 1);
 	}
 }
 
@@ -402,35 +424,6 @@ void mark_page_accessed(struct page *page)
 }
 EXPORT_SYMBOL(mark_page_accessed);
 
-static void __lru_cache_add(struct page *page)
-{
-	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);
-
-	get_page(page);
-	if (!pagevec_add(pvec, page) || PageCompound(page))
-		__pagevec_lru_add(pvec);
-	put_cpu_var(lru_add_pvec);
-}
-
-/**
- * lru_cache_add_anon - add a page to the page lists
- * @page: the page to add
- */
-void lru_cache_add_anon(struct page *page)
-{
-	if (PageActive(page))
-		ClearPageActive(page);
-	__lru_cache_add(page);
-}
-
-void lru_cache_add_file(struct page *page)
-{
-	if (PageActive(page))
-		ClearPageActive(page);
-	__lru_cache_add(page);
-}
-EXPORT_SYMBOL(lru_cache_add_file);
-
 /**
  * lru_cache_add - add a page to a page list
  * @page: the page to be added to the LRU.
@@ -442,10 +435,17 @@ EXPORT_SYMBOL(lru_cache_add_file);
  */
 void lru_cache_add(struct page *page)
 {
+	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);
+
 	VM_BUG_ON_PAGE(PageActive(page) && PageUnevictable(page), page);
 	VM_BUG_ON_PAGE(PageLRU(page), page);
-	__lru_cache_add(page);
+
+	get_page(page);
+	if (!pagevec_add(pvec, page) || PageCompound(page))
+		__pagevec_lru_add(pvec);
+	put_cpu_var(lru_add_pvec);
 }
+EXPORT_SYMBOL(lru_cache_add);
 
 /**
  * lru_cache_add_active_or_unevictable
@@ -541,14 +541,12 @@ static void lru_deactivate_file_fn(struct page *page, struct lruvec *lruvec,
 
 	if (active)
 		__count_vm_event(PGDEACTIVATE);
-	update_page_reclaim_stat(lruvec, file, 0);
 }
 
 static void lru_deactivate_fn(struct page *page, struct lruvec *lruvec,
 			    void *arg)
 {
 	if (PageLRU(page) && PageActive(page) && !PageUnevictable(page)) {
-		int file = page_is_file_lru(page);
 		int lru = page_lru_base_type(page);
 
 		del_page_from_lru_list(page, lruvec, lru + LRU_ACTIVE);
@@ -557,7 +555,6 @@ static void lru_deactivate_fn(struct page *page, struct lruvec *lruvec,
 		add_page_to_lru_list(page, lruvec, lru);
 
 		__count_vm_events(PGDEACTIVATE, hpage_nr_pages(page));
-		update_page_reclaim_stat(lruvec, file, 0);
 	}
 }
 
@@ -582,7 +579,6 @@ static void lru_lazyfree_fn(struct page *page, struct lruvec *lruvec,
 
 		__count_vm_events(PGLAZYFREE, hpage_nr_pages(page));
 		count_memcg_page_event(page, PGLAZYFREE);
-		update_page_reclaim_stat(lruvec, 1, 0);
 	}
 }
 
@@ -890,8 +886,6 @@ EXPORT_SYMBOL(__pagevec_release);
 void lru_add_page_tail(struct page *page, struct page *page_tail,
 		       struct lruvec *lruvec, struct list_head *list)
 {
-	const int file = 0;
-
 	VM_BUG_ON_PAGE(!PageHead(page), page);
 	VM_BUG_ON_PAGE(PageCompound(page_tail), page);
 	VM_BUG_ON_PAGE(PageLRU(page_tail), page);
@@ -917,9 +911,6 @@ void lru_add_page_tail(struct page *page, struct page *page_tail,
 		add_page_to_lru_list_tail(page_tail, lruvec,
 					  page_lru(page_tail));
 	}
-
-	if (!PageUnevictable(page))
-		update_page_reclaim_stat(lruvec, file, PageActive(page_tail));
 }
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 
@@ -962,8 +953,6 @@ static void __pagevec_lru_add_fn(struct page *page, struct lruvec *lruvec,
 
 	if (page_evictable(page)) {
 		lru = page_lru(page);
-		update_page_reclaim_stat(lruvec, page_is_file_lru(page),
-					 PageActive(page));
 		if (was_unevictable)
 			count_vm_event(UNEVICTABLE_PGRESCUED);
 	} else {

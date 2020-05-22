@@ -802,8 +802,6 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		get_page(page);
 		page_dup_rmap(page, false);
 		rss[mm_counter(page)]++;
-	} else if (pte_devmap(pte)) {
-		page = pte_page(pte);
 	}
 
 out_set_pte:
@@ -2469,7 +2467,7 @@ static inline bool cow_user_page(struct page *dst, struct page *src,
 		}
 
 		/*
-		 * The same page can be mapped back since last copy attampt.
+		 * The same page can be mapped back since last copy attempt.
 		 * Try to copy again under PTL.
 		 */
 		if (__copy_from_user_inatomic(kaddr, uaddr, PAGE_SIZE)) {
@@ -2647,7 +2645,6 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 	struct page *new_page = NULL;
 	pte_t entry;
 	int page_copied = 0;
-	struct mem_cgroup *memcg;
 	struct mmu_notifier_range range;
 
 	if (unlikely(anon_vma_prepare(vma)))
@@ -2678,8 +2675,9 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 		}
 	}
 
-	if (mem_cgroup_try_charge_delay(new_page, mm, GFP_KERNEL, &memcg, false))
+	if (mem_cgroup_charge(new_page, mm, GFP_KERNEL))
 		goto oom_free_new;
+	cgroup_throttle_swaprate(new_page, GFP_KERNEL);
 
 	__SetPageUptodate(new_page);
 
@@ -2713,7 +2711,6 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 		 */
 		ptep_clear_flush_notify(vma, vmf->address, vmf->pte);
 		page_add_new_anon_rmap(new_page, vma, vmf->address, false);
-		mem_cgroup_commit_charge(new_page, memcg, false, false);
 		lru_cache_add_active_or_unevictable(new_page, vma);
 		/*
 		 * We call the notify macro here because, when using secondary
@@ -2751,8 +2748,6 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 		/* Free the old page.. */
 		new_page = old_page;
 		page_copied = 1;
-	} else {
-		mem_cgroup_cancel_charge(new_page, memcg, false);
 	}
 
 	if (new_page)
@@ -3090,7 +3085,6 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
 	struct page *page = NULL, *swapcache;
-	struct mem_cgroup *memcg;
 	swp_entry_t entry;
 	pte_t pte;
 	int locked;
@@ -3131,10 +3125,21 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 			page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma,
 							vmf->address);
 			if (page) {
+				int err;
+
 				__SetPageLocked(page);
 				__SetPageSwapBacked(page);
 				set_page_private(page, entry.val);
-				lru_cache_add_anon(page);
+
+				/* Tell memcg to use swap ownership records */
+				SetPageSwapCache(page);
+				err = mem_cgroup_charge(page, vma->vm_mm,
+							GFP_KERNEL);
+				ClearPageSwapCache(page);
+				if (err)
+					goto out_page;
+
+				lru_cache_add(page);
 				swap_readpage(page, true);
 			}
 		} else {
@@ -3195,11 +3200,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 		goto out_page;
 	}
 
-	if (mem_cgroup_try_charge_delay(page, vma->vm_mm, GFP_KERNEL,
-					&memcg, false)) {
-		ret = VM_FAULT_OOM;
-		goto out_page;
-	}
+	cgroup_throttle_swaprate(page, GFP_KERNEL);
 
 	/*
 	 * Back out if somebody else already faulted in this pte.
@@ -3247,11 +3248,9 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	/* ksm created a completely new copy */
 	if (unlikely(page != swapcache && swapcache)) {
 		page_add_new_anon_rmap(page, vma, vmf->address, false);
-		mem_cgroup_commit_charge(page, memcg, false, false);
 		lru_cache_add_active_or_unevictable(page, vma);
 	} else {
 		do_page_add_anon_rmap(page, vma, vmf->address, exclusive);
-		mem_cgroup_commit_charge(page, memcg, true, false);
 		activate_page(page);
 	}
 
@@ -3287,7 +3286,6 @@ unlock:
 out:
 	return ret;
 out_nomap:
-	mem_cgroup_cancel_charge(page, memcg, false);
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
 out_page:
 	unlock_page(page);
@@ -3308,7 +3306,6 @@ out_release:
 static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-	struct mem_cgroup *memcg;
 	struct page *page;
 	vm_fault_t ret = 0;
 	pte_t entry;
@@ -3361,9 +3358,9 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	if (!page)
 		goto oom;
 
-	if (mem_cgroup_try_charge_delay(page, vma->vm_mm, GFP_KERNEL, &memcg,
-					false))
+	if (mem_cgroup_charge(page, vma->vm_mm, GFP_KERNEL))
 		goto oom_free_page;
+	cgroup_throttle_swaprate(page, GFP_KERNEL);
 
 	/*
 	 * The memory barrier inside __SetPageUptodate makes sure that
@@ -3388,14 +3385,12 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	/* Deliver the page fault to userland, check inside PT lock */
 	if (userfaultfd_missing(vma)) {
 		pte_unmap_unlock(vmf->pte, vmf->ptl);
-		mem_cgroup_cancel_charge(page, memcg, false);
 		put_page(page);
 		return handle_userfault(vmf, VM_UFFD_MISSING);
 	}
 
 	inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
 	page_add_new_anon_rmap(page, vma, vmf->address, false);
-	mem_cgroup_commit_charge(page, memcg, false, false);
 	lru_cache_add_active_or_unevictable(page, vma);
 setpte:
 	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, entry);
@@ -3406,7 +3401,6 @@ unlock:
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
 	return ret;
 release:
-	mem_cgroup_cancel_charge(page, memcg, false);
 	put_page(page);
 	goto unlock;
 oom_free_page:
@@ -3611,7 +3605,6 @@ static vm_fault_t do_set_pmd(struct vm_fault *vmf, struct page *page)
  * mapping. If needed, the fucntion allocates page table or use pre-allocated.
  *
  * @vmf: fault environment
- * @memcg: memcg to charge page (only for private mappings)
  * @page: page to map
  *
  * Caller must take care of unlocking vmf->ptl, if vmf->pte is non-NULL on
@@ -3622,8 +3615,7 @@ static vm_fault_t do_set_pmd(struct vm_fault *vmf, struct page *page)
  *
  * Return: %0 on success, %VM_FAULT_ code in case of error.
  */
-vm_fault_t alloc_set_pte(struct vm_fault *vmf, struct mem_cgroup *memcg,
-		struct page *page)
+vm_fault_t alloc_set_pte(struct vm_fault *vmf, struct page *page)
 {
 	struct vm_area_struct *vma = vmf->vma;
 	bool write = vmf->flags & FAULT_FLAG_WRITE;
@@ -3631,9 +3623,6 @@ vm_fault_t alloc_set_pte(struct vm_fault *vmf, struct mem_cgroup *memcg,
 	vm_fault_t ret;
 
 	if (pmd_none(*vmf->pmd) && PageTransCompound(page)) {
-		/* THP on COW? */
-		VM_BUG_ON_PAGE(memcg, page);
-
 		ret = do_set_pmd(vmf, page);
 		if (ret != VM_FAULT_FALLBACK)
 			return ret;
@@ -3657,7 +3646,6 @@ vm_fault_t alloc_set_pte(struct vm_fault *vmf, struct mem_cgroup *memcg,
 	if (write && !(vma->vm_flags & VM_SHARED)) {
 		inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
 		page_add_new_anon_rmap(page, vma, vmf->address, false);
-		mem_cgroup_commit_charge(page, memcg, false, false);
 		lru_cache_add_active_or_unevictable(page, vma);
 	} else {
 		inc_mm_counter_fast(vma->vm_mm, mm_counter_file(page));
@@ -3706,7 +3694,7 @@ vm_fault_t finish_fault(struct vm_fault *vmf)
 	if (!(vmf->vma->vm_flags & VM_SHARED))
 		ret = check_stable_address_space(vmf->vma->vm_mm);
 	if (!ret)
-		ret = alloc_set_pte(vmf, vmf->memcg, page);
+		ret = alloc_set_pte(vmf, page);
 	if (vmf->pte)
 		pte_unmap_unlock(vmf->pte, vmf->ptl);
 	return ret;
@@ -3866,11 +3854,11 @@ static vm_fault_t do_cow_fault(struct vm_fault *vmf)
 	if (!vmf->cow_page)
 		return VM_FAULT_OOM;
 
-	if (mem_cgroup_try_charge_delay(vmf->cow_page, vma->vm_mm, GFP_KERNEL,
-				&vmf->memcg, false)) {
+	if (mem_cgroup_charge(vmf->cow_page, vma->vm_mm, GFP_KERNEL)) {
 		put_page(vmf->cow_page);
 		return VM_FAULT_OOM;
 	}
+	cgroup_throttle_swaprate(vmf->cow_page, GFP_KERNEL);
 
 	ret = __do_fault(vmf);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
@@ -3888,7 +3876,6 @@ static vm_fault_t do_cow_fault(struct vm_fault *vmf)
 		goto uncharge_out;
 	return ret;
 uncharge_out:
-	mem_cgroup_cancel_charge(vmf->cow_page, vmf->memcg, false);
 	put_page(vmf->cow_page);
 	return ret;
 }
