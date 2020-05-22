@@ -515,7 +515,7 @@ void show_stack(struct task_struct *task, unsigned long *sp)
 	print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE,
 		       STACK_DUMP_LINE_SIZE, STACK_DUMP_ENTRY_SIZE,
 		       sp, len, false);
-	show_trace(task, stack, KERN_INFO);
+	show_trace(task, sp, KERN_INFO);
 }
 
 DEFINE_SPINLOCK(die_lock);
