@@ -439,7 +439,7 @@ failed:
 }
 
 /*
- * dm_report_EIO() is a macro instead of a function to make pr_debug()
+ * dm_report_EIO() is a macro instead of a function to make pr_debug_ratelimited()
  * report the function name and line number of the function from which
  * it has been invoked.
  */
@@ -447,11 +447,11 @@ failed:
 do {									\
 	struct mapped_device *md = dm_table_get_md((m)->ti->table);	\
 									\
-	pr_debug("%s: returning EIO; QIFNP = %d; SQIFNP = %d; DNFS = %d\n", \
-		 dm_device_name(md),					\
-		 test_bit(MPATHF_QUEUE_IF_NO_PATH, &(m)->flags),	\
-		 test_bit(MPATHF_SAVED_QUEUE_IF_NO_PATH, &(m)->flags),	\
-		 dm_noflush_suspending((m)->ti));			\
+	DMDEBUG_LIMIT("%s: returning EIO; QIFNP = %d; SQIFNP = %d; DNFS = %d", \
+		      dm_device_name(md),				\
+		      test_bit(MPATHF_QUEUE_IF_NO_PATH, &(m)->flags),	\
+		      test_bit(MPATHF_SAVED_QUEUE_IF_NO_PATH, &(m)->flags), \
+		      dm_noflush_suspending((m)->ti));			\
 } while (0)
 
 /*
@@ -567,7 +567,8 @@ static void multipath_release_clone(struct request *clone,
 		if (pgpath && pgpath->pg->ps.type->end_io)
 			pgpath->pg->ps.type->end_io(&pgpath->pg->ps,
 						    &pgpath->path,
-						    mpio->nr_bytes);
+						    mpio->nr_bytes,
+						    clone->io_start_time_ns);
 	}
 
 	blk_put_request(clone);
@@ -1617,7 +1618,8 @@ static int multipath_end_io(struct dm_target *ti, struct request *clone,
 		struct path_selector *ps = &pgpath->pg->ps;
 
 		if (ps->type->end_io)
-			ps->type->end_io(ps, &pgpath->path, mpio->nr_bytes);
+			ps->type->end_io(ps, &pgpath->path, mpio->nr_bytes,
+					 clone->io_start_time_ns);
 	}
 
 	return r;
@@ -1661,7 +1663,8 @@ done:
 		struct path_selector *ps = &pgpath->pg->ps;
 
 		if (ps->type->end_io)
-			ps->type->end_io(ps, &pgpath->path, mpio->nr_bytes);
+			ps->type->end_io(ps, &pgpath->path, mpio->nr_bytes,
+					 dm_start_time_ns_from_clone(clone));
 	}
 
 	return r;
@@ -1918,7 +1921,7 @@ static int multipath_prepare_ioctl(struct dm_target *ti,
 	int r;
 
 	current_pgpath = READ_ONCE(m->current_pgpath);
-	if (!current_pgpath)
+	if (!current_pgpath || !test_bit(MPATHF_QUEUE_IO, &m->flags))
 		current_pgpath = choose_pgpath(m, 0);
 
 	if (current_pgpath) {
