@@ -427,7 +427,7 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 	if (add_to_swap_cache(page, entry, gfp_mask & GFP_KERNEL))
 		goto fail_unlock;
 
-	if (mem_cgroup_charge(page, NULL, gfp_mask & GFP_KERNEL, false))
+	if (mem_cgroup_charge(page, NULL, gfp_mask & GFP_KERNEL))
 		goto fail_delete;
 
 	/* Initiate read into locked page */
