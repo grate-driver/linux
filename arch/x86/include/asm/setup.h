@@ -78,6 +78,15 @@ static inline bool kaslr_enabled(void)
 	return !!(boot_params.hdr.loadflags & KASLR_FLAG);
 }
 
+/*
+ * Apply no randomization if KASLR was disabled at boot or if KASAN
+ * is enabled. KASAN shadow mappings rely on regions being PGD aligned.
+ */
+static inline bool kaslr_memory_enabled(void)
+{
+	return kaslr_enabled() && !IS_ENABLED(CONFIG_KASAN);
+}
+
 static inline unsigned long kaslr_offset(void)
 {
 	return (unsigned long)&_text - __START_KERNEL;
