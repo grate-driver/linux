@@ -935,12 +935,16 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		}
 
 		/*
-		 * Migration will fail if an anonymous page is pinned in memory,
+		 * Migration will fail if an page is pinned in memory,
 		 * so avoid taking lru_lock and isolating it unnecessarily in an
-		 * admittedly racy check.
+		 * admittedly racy check simplest case for 0-order pages.
+		 *
+		 * Open code page_mapcount() to avoid VM_BUG_ON(PageSlab(page)).
+		 * Page could have extra reference from mapping or swap cache.
 		 */
-		if (!page_mapping(page) &&
-		    page_count(page) > page_mapcount(page))
+		if (!PageCompound(page) &&
+		    page_count(page) > atomic_read(&page->_mapcount) + 1 +
+				(!PageAnon(page) || PageSwapCache(page)))
 			goto isolate_fail;
 
 		/*
@@ -975,6 +979,11 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 				low_pfn += compound_nr(page) - 1;
 				goto isolate_fail;
 			}
+
+			/* Recheck page extra references under lock */
+			if (page_count(page) > page_mapcount(page) +
+				    (!PageAnon(page) || PageSwapCache(page)))
+				goto isolate_fail;
 		}
 
 		lruvec = mem_cgroup_page_lruvec(page, pgdat);
