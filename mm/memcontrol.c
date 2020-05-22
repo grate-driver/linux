@@ -6882,6 +6882,9 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
 	VM_BUG_ON_PAGE(PageLRU(page), page);
 	VM_BUG_ON_PAGE(page_count(page), page);
 
+	if (mem_cgroup_disabled())
+		return;
+
 	if (cgroup_subsys_on_dfl(memory_cgrp_subsys))
 		return;
 
@@ -6947,6 +6950,10 @@ int mem_cgroup_try_charge_swap(struct page *page, swp_entry_t entry)
 	struct mem_cgroup *memcg;
 	unsigned short oldid;
 
+	if (mem_cgroup_disabled())
+		return 0;
+
+	/* Only cgroup2 has swap.max */
 	if (!cgroup_subsys_on_dfl(memory_cgrp_subsys))
 		return 0;
 
@@ -6991,6 +6998,9 @@ void mem_cgroup_uncharge_swap(swp_entry_t entry, unsigned int nr_pages)
 	struct mem_cgroup *memcg;
 	unsigned short id;
 
+	if (mem_cgroup_disabled())
+		return;
+
 	id = swap_cgroup_record(entry, 0, nr_pages);
 	rcu_read_lock();
 	memcg = mem_cgroup_from_id(id);
@@ -7011,12 +7021,25 @@ long mem_cgroup_get_nr_swap_pages(struct mem_cgroup *memcg)
 {
 	long nr_swap_pages = get_nr_swap_pages();
 
-	if (cgroup_memory_noswap || !cgroup_subsys_on_dfl(memory_cgrp_subsys))
-		return nr_swap_pages;
+	if (mem_cgroup_disabled())
+		goto out;
+
+	/* Swap control disabled */
+	if (cgroup_memory_noswap)
+		goto out;
+
+	/*
+	 * Only cgroup2 has swap.max, cgroup1 does mem+sw accounting,
+	 * which does not place restrictions specifically on swap.
+	 */
+	if (!cgroup_subsys_on_dfl(memory_cgrp_subsys))
+		goto out;
+
 	for (; memcg != root_mem_cgroup; memcg = parent_mem_cgroup(memcg))
 		nr_swap_pages = min_t(long, nr_swap_pages,
 				      READ_ONCE(memcg->swap.max) -
 				      page_counter_read(&memcg->swap));
+out:
 	return nr_swap_pages;
 }
 
@@ -7028,18 +7051,30 @@ bool mem_cgroup_swap_full(struct page *page)
 
 	if (vm_swap_full())
 		return true;
-	if (cgroup_memory_noswap || !cgroup_subsys_on_dfl(memory_cgrp_subsys))
-		return false;
+
+	if (mem_cgroup_disabled())
+		goto out;
+
+	/* Swap control disabled */
+	if (cgroup_memory_noswap)
+		goto out;
+
+	/*
+	 * Only cgroup2 has swap.max, cgroup1 does mem+sw accounting,
+	 * which does not place restrictions specifically on swap.
+	 */
+	if (!cgroup_subsys_on_dfl(memory_cgrp_subsys))
+		goto out;
 
 	memcg = page->mem_cgroup;
 	if (!memcg)
-		return false;
+		goto out;
 
 	for (; memcg != root_mem_cgroup; memcg = parent_mem_cgroup(memcg))
 		if (page_counter_read(&memcg->swap) * 2 >=
 		    READ_ONCE(memcg->swap.max))
 			return true;
-
+out:
 	return false;
 }
 
