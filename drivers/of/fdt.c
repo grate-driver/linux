@@ -471,7 +471,7 @@ void *initial_boot_params __ro_after_init;
 static u32 of_fdt_crc32;
 
 /**
- * res_mem_reserve_reg() - reserve all memory described in 'reg' property
+ * __reserved_mem_reserve_reg() - reserve all memory described in 'reg' property
  */
 static int __init __reserved_mem_reserve_reg(unsigned long node,
 					     const char *uname)
@@ -1078,7 +1078,7 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 #endif
 #endif /* CONFIG_CMDLINE */
 
-	pr_debug("Command line is: %s\n", (char*)data);
+	pr_debug("Command line is: %s\n", (char *)data);
 
 	rng_seed = of_get_flat_dt_prop(node, "rng-seed", &l);
 	if (rng_seed && l > 0) {

@@ -2699,8 +2699,8 @@ L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Supported
 W:	http://wiki.xilinx.com
 T:	git https://github.com/Xilinx/linux-xlnx.git
-F:	Documentation/devicetree/bindings/i2c/i2c-cadence.txt
-F:	Documentation/devicetree/bindings/i2c/i2c-xiic.txt
+F:	Documentation/devicetree/bindings/i2c/cdns,i2c-r1p10.yaml
+F:	Documentation/devicetree/bindings/i2c/xlnx,xps-iic-2.00.a.yaml
 F:	arch/arm/mach-zynq/
 F:	drivers/block/xsysace.c
 F:	drivers/clocksource/timer-cadence-ttc.c
@@ -12615,8 +12615,8 @@ M:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
 M:	Frank Rowand <frowand.list@gmail.com>
 L:	devicetree@vger.kernel.org
 S:	Maintained
-F:	Documentation/devicetree/dynamic-resolution-notes.txt
-F:	Documentation/devicetree/overlay-notes.txt
+F:	Documentation/devicetree/dynamic-resolution-notes.rst
+F:	Documentation/devicetree/overlay-notes.rst
 F:	drivers/of/overlay.c
 F:	drivers/of/resolver.c
 K:	of_overlay_notifier_
