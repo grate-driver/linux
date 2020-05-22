@@ -15,6 +15,7 @@ struct mount;
 struct shrink_control;
 struct fs_context;
 struct user_namespace;
+struct fsinfo_context;
 
 /*
  * block_dev.c
@@ -45,6 +46,11 @@ extern int __block_write_begin_int(struct page *page, loff_t pos, unsigned len,
  * char_dev.c
  */
 extern void __init chrdev_init(void);
+
+/*
+ * d_path.c
+ */
+extern void get_fs_root_rcu(struct fs_struct *fs, struct path *root);
 
 /*
  * fs_context.c
@@ -89,6 +95,15 @@ extern int __mnt_want_write_file(struct file *);
 extern void __mnt_drop_write_file(struct file *);
 
 extern void dissolve_on_fput(struct vfsmount *);
+extern int lookup_mount_object(struct path *, int, struct path *);
+extern int fsinfo_generic_mount_source(struct path *, struct fsinfo_context *);
+extern int fsinfo_generic_mount_info(struct path *, struct fsinfo_context *);
+extern int fsinfo_generic_mount_topology(struct path *, struct fsinfo_context *);
+extern int fsinfo_generic_mount_point(struct path *, struct fsinfo_context *);
+extern int fsinfo_generic_mount_point_full(struct path *, struct fsinfo_context *);
+extern int fsinfo_generic_mount_children(struct path *, struct fsinfo_context *);
+extern int fsinfo_generic_mount_all(struct path *, struct fsinfo_context *);
+
 /*
  * fs_struct.c
  */

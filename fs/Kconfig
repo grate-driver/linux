@@ -15,6 +15,13 @@ config VALIDATE_FS_PARSER
 	  Enable this to perform validation of the parameter description for a
 	  filesystem when it is registered.
 
+config FSINFO
+	bool "Enable the fsinfo() system call"
+	help
+	  Enable the file system information querying system call to allow
+	  comprehensive information to be retrieved about a filesystem,
+	  superblock or mount object.
+
 if BLOCK
 
 config FS_IOMAP
