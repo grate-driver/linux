@@ -49,6 +49,7 @@ struct tegra_smmu_as {
 	struct iommu_domain domain;
 	struct tegra_smmu *smmu;
 	unsigned int use_count;
+	struct mutex lock;
 	u32 *count;
 	struct page **pts;
 	struct page *pd;
@@ -307,6 +308,8 @@ static struct iommu_domain *tegra_smmu_domain_alloc(unsigned type)
 		kfree(as);
 		return NULL;
 	}
+
+	mutex_init(&as->lock);
 
 	/* setup aperture */
 	as->domain.geometry.aperture_start = 0;
@@ -655,8 +658,9 @@ static void tegra_smmu_set_pte(struct tegra_smmu_as *as, unsigned long iova,
 	smmu_flush(smmu);
 }
 
-static int tegra_smmu_map(struct iommu_domain *domain, unsigned long iova,
-			  phys_addr_t paddr, size_t size, int prot, gfp_t gfp)
+static int
+__tegra_smmu_map(struct iommu_domain *domain, unsigned long iova,
+		 phys_addr_t paddr, size_t size, int prot, gfp_t gfp)
 {
 	struct tegra_smmu_as *as = to_smmu_as(domain);
 	dma_addr_t pte_dma;
@@ -685,8 +689,9 @@ static int tegra_smmu_map(struct iommu_domain *domain, unsigned long iova,
 	return 0;
 }
 
-static size_t tegra_smmu_unmap(struct iommu_domain *domain, unsigned long iova,
-			       size_t size, struct iommu_iotlb_gather *gather)
+static size_t
+__tegra_smmu_unmap(struct iommu_domain *domain, unsigned long iova,
+		   size_t size, struct iommu_iotlb_gather *gather)
 {
 	struct tegra_smmu_as *as = to_smmu_as(domain);
 	dma_addr_t pte_dma;
@@ -698,6 +703,31 @@ static size_t tegra_smmu_unmap(struct iommu_domain *domain, unsigned long iova,
 
 	tegra_smmu_set_pte(as, iova, pte, pte_dma, 0);
 	tegra_smmu_pte_put_use(as, iova);
+
+	return size;
+}
+
+static int tegra_smmu_map(struct iommu_domain *domain, unsigned long iova,
+			  phys_addr_t paddr, size_t size, int prot, gfp_t gfp)
+{
+	struct tegra_smmu_as *as = to_smmu_as(domain);
+	int ret;
+
+	mutex_lock(&as->lock);
+	ret = __tegra_smmu_map(domain, iova, paddr, size, prot, gfp);
+	mutex_unlock(&as->lock);
+
+	return ret;
+}
+
+static size_t tegra_smmu_unmap(struct iommu_domain *domain, unsigned long iova,
+			       size_t size, struct iommu_iotlb_gather *gather)
+{
+	struct tegra_smmu_as *as = to_smmu_as(domain);
+
+	mutex_lock(&as->lock);
+	size = __tegra_smmu_unmap(domain, iova, size, gather);
+	mutex_unlock(&as->lock);
 
 	return size;
 }
