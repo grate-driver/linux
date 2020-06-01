@@ -53,6 +53,17 @@ properties:
           - const: nvidia,cardhu
           - const: nvidia,tegra30
       - items:
+          - const: asus,tf201
+          - const: nvidia,tegra30
+      - items:
+          - enum:
+              - asus,tf300t
+              - asus,tf300tg
+          - const: nvidia,tegra30
+      - items:
+          - const: asus,tf700t
+          - const: nvidia,tegra30
+      - items:
           - const: toradex,apalis_t30-eval
           - const: toradex,apalis_t30
           - const: nvidia,tegra30
