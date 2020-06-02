@@ -11,7 +11,9 @@
 #include <linux/clk-provider.h>
 #include <linux/clk.h>
 #include <linux/clkdev.h>
+#include <linux/clk/tegra.h>
 #include <linux/delay.h>
+#include <linux/export.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
@@ -21,10 +23,10 @@
 #include <linux/string.h>
 
 #include <soc/tegra/fuse.h>
-#include <soc/tegra/emc.h>
 
 #include "clk.h"
 
+#define CLK_BASE 0x60006000
 #define CLK_SOURCE_EMC 0x19c
 
 #define CLK_SOURCE_EMC_EMC_2X_CLK_DIVISOR_SHIFT 0
@@ -79,7 +81,9 @@ struct tegra_clk_emc {
 
 	int num_timings;
 	struct emc_timing *timings;
-	spinlock_t *lock;
+
+	tegra124_emc_prepare_timing_change_cb *prepare_timing_change;
+	tegra124_emc_complete_timing_change_cb *complete_timing_change;
 };
 
 /* Common clock framework callback implementations */
@@ -98,7 +102,7 @@ static unsigned long emc_recalc_rate(struct clk_hw *hw,
 	 */
 	parent_rate = clk_hw_get_rate(clk_hw_get_parent(hw));
 
-	val = readl(tegra->clk_regs + CLK_SOURCE_EMC);
+	val = readl(tegra->clk_regs);
 	div = val & CLK_SOURCE_EMC_EMC_2X_CLK_DIVISOR_MASK;
 
 	return parent_rate / (div + 2) * 2;
@@ -163,7 +167,7 @@ static u8 emc_get_parent(struct clk_hw *hw)
 
 	tegra = container_of(hw, struct tegra_clk_emc, hw);
 
-	val = readl(tegra->clk_regs + CLK_SOURCE_EMC);
+	val = readl(tegra->clk_regs);
 
 	return (val >> CLK_SOURCE_EMC_EMC_2X_CLK_SRC_SHIFT)
 		& CLK_SOURCE_EMC_EMC_2X_CLK_SRC_MASK;
@@ -204,7 +208,6 @@ static int emc_set_timing(struct tegra_clk_emc *tegra,
 	int err;
 	u8 div;
 	u32 car_value;
-	unsigned long flags = 0;
 	struct tegra_emc *emc = emc_ensure_emc_driver(tegra);
 
 	if (!emc)
@@ -241,13 +244,11 @@ static int emc_set_timing(struct tegra_clk_emc *tegra,
 
 	div = timing->parent_rate / (timing->rate / 2) - 2;
 
-	err = tegra_emc_prepare_timing_change(emc, timing->rate);
+	err = tegra->prepare_timing_change(emc, timing->rate);
 	if (err)
 		return err;
 
-	spin_lock_irqsave(tegra->lock, flags);
-
-	car_value = readl(tegra->clk_regs + CLK_SOURCE_EMC);
+	car_value = readl(tegra->clk_regs);
 
 	car_value &= ~CLK_SOURCE_EMC_EMC_2X_CLK_SRC(~0);
 	car_value |= CLK_SOURCE_EMC_EMC_2X_CLK_SRC(timing->parent_index);
@@ -255,11 +256,9 @@ static int emc_set_timing(struct tegra_clk_emc *tegra,
 	car_value &= ~CLK_SOURCE_EMC_EMC_2X_CLK_DIVISOR(~0);
 	car_value |= CLK_SOURCE_EMC_EMC_2X_CLK_DIVISOR(div);
 
-	writel(car_value, tegra->clk_regs + CLK_SOURCE_EMC);
+	writel(car_value, tegra->clk_regs);
 
-	spin_unlock_irqrestore(tegra->lock, flags);
-
-	tegra_emc_complete_timing_change(emc, timing->rate);
+	tegra->complete_timing_change(emc, timing->rate);
 
 	clk_hw_reparent(&tegra->hw, __clk_get_hw(timing->parent));
 	clk_disable_unprepare(tegra->prev_parent);
@@ -473,12 +472,15 @@ static const struct clk_ops tegra_clk_emc_ops = {
 	.get_parent = emc_get_parent,
 };
 
-struct clk *tegra_clk_register_emc(void __iomem *base, struct device_node *np,
-				   spinlock_t *lock)
+struct clk *
+tegra124_clk_register_emc(struct device_node *emc_np,
+			  tegra124_emc_prepare_timing_change_cb *prep_cb,
+			  tegra124_emc_complete_timing_change_cb *complete_cb)
 {
 	struct tegra_clk_emc *tegra;
 	struct clk_init_data init;
 	struct device_node *node;
+	struct resource res;
 	u32 node_ram_code;
 	struct clk *clk;
 	int err;
@@ -487,12 +489,21 @@ struct clk *tegra_clk_register_emc(void __iomem *base, struct device_node *np,
 	if (!tegra)
 		return ERR_PTR(-ENOMEM);
 
-	tegra->clk_regs = base;
-	tegra->lock = lock;
+	res.start = CLK_BASE + CLK_SOURCE_EMC;
+	res.end = res.start + 3;
+	res.flags = IORESOURCE_MEM;
 
-	tegra->num_timings = 0;
+	tegra->clk_regs = ioremap(res.start, resource_size(&res));
+	if (!tegra->clk_regs) {
+		pr_err("failed to map CLK_SOURCE_EMC\n");
+		return ERR_PTR(-EINVAL);
+	}
 
-	for_each_child_of_node(np, node) {
+	tegra->emc_node = emc_np;
+	tegra->prepare_timing_change = prep_cb;
+	tegra->complete_timing_change = complete_cb;
+
+	for_each_child_of_node(emc_np, node) {
 		err = of_property_read_u32(node, "nvidia,ram-code",
 					   &node_ram_code);
 		if (err)
@@ -511,11 +522,6 @@ struct clk *tegra_clk_register_emc(void __iomem *base, struct device_node *np,
 
 	if (tegra->num_timings == 0)
 		pr_warn("%s: no memory timings registered\n", __func__);
-
-	tegra->emc_node = of_parse_phandle(np,
-			"nvidia,external-memory-controller", 0);
-	if (!tegra->emc_node)
-		pr_warn("%s: couldn't find node for EMC driver\n", __func__);
 
 	init.name = "emc";
 	init.ops = &tegra_clk_emc_ops;
@@ -536,5 +542,12 @@ struct clk *tegra_clk_register_emc(void __iomem *base, struct device_node *np,
 	/* Allow debugging tools to see the EMC clock */
 	clk_register_clkdev(clk, "emc", "tegra-clk-debug");
 
+	/*
+	 * Don't allow the kernel module to be unloaded, unloading is not
+	 * supported by the EMC driver.
+	 */
+	try_module_get(THIS_MODULE);
+
 	return clk;
-};
+}
+EXPORT_SYMBOL_GPL(tegra124_clk_register_emc);
