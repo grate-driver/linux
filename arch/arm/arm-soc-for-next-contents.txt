@@ -1,0 +1,246 @@
+arm/soc
+	versatile/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/versatile-v5.8-1
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v5.8-tag1
+	patch
+		clk: versatile: Drop the legacy IM-PD1 clock code
+		ARM/time: Replace <linux/clk-provider.h> by <linux/of_clk.h>
+		ARM: mediatek: Replace <linux/clk-provider.h> by <linux/of_clk.h>
+		ARM: mmp: Replace <linux/clk-provider.h> by <linux/of_clk.h>
+	realtek/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-realtek tags/realtek-soc-for-5.8
+	broadcom/maintainers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.8/maintainers
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.8/soc
+	samsung/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-5.8
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.8/soc-signed-take2
+	vexpress/modules
+		git://git.kernel.org/pub/scm/linux/kernel/git/robh/linux tags/vexpress-modules-for-soc-v2
+	renesas/soc-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v5.8-tag2
+	tegra/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-arm-core
+	patch
+		ARM: arch timer: Drop unneeded select GENERIC_CLOCKEVENTS
+		ARM: actions: Drop unneeded select of COMMON_CLK
+		ARM: alpine: Drop unneeded select of HAVE_SMP
+		ARM: asm9260: Drop unneeded select of GENERIC_CLOCKEVENTS
+		ARM: aspeed: Drop unneeded select of HAVE_SMP
+		ARM: berlin: Drop unneeded select of HAVE_SMP
+		ARM: clps711x: Drop unneeded select of multi-platform selected options
+		ARM: davinci: Drop unneeded select of TIMER_OF
+		ARM: mmp: Drop unneeded select of COMMON_CLK
+		ARM: mvebu: Drop unneeded select of HAVE_SMP
+		ARM: prima2: Drop unneeded select of HAVE_SMP
+		ARM: socfpga: Drop unneeded select of PCI_DOMAINS_GENERIC
+		bus: arm-integrator-lm: Fix return value check in integrator_ap_lm_probe()
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-5.8
+	omap/timer
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.8/timer-signed
+	patch
+		ARM: pxa: remove Compulab pxa2xx boards
+		MAINTAINERS: pxa: remove Compulab arm/pxa support
+	mvebu/arm
+		git://git.infradead.org/linux-mvebu tags/mvebu-arm-5.8-1
+	rockchip/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.8-rockchip-soc32-1
+	patch
+		Revert "ARM: vexpress: Don't select VEXPRESS_CONFIG"
+		power: vexpress: add suppress_bind_attrs to true
+		power: vexpress: cleanup: use builtin_platform_driver
+		power: reset: vexpress: fix build issue
+		ARM: davinci: fix build failure without I2C
+		clk: versatile: Fix kconfig dependency on COMMON_CLK_VERSATILE
+		ARM: OMAP2+: Fix regression for using local timer on non-SMP SoCs
+		ARM: zynq: Don't select CONFIG_ICST
+		ARM: omap2: fix omap5_realtime_timer_init definition
+
+arm/dt
+	patch
+		arm64: dts: Add SC9863A clock nodes
+		arm64: dts: Add SC9863A emmc and sd card nodes
+	sti/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/pchotard/sti tags/sti-dt-for-v5.8-round1
+	integrator/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/versatile-dts-v5.8-1
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.8-tag1
+	renesas/dt-binding
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.8-tag1
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.8/dt-signed
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.8-devicetree
+	realtek/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/afaerber/linux-realtek tags/realtek-dt-for-5.8
+	hisi/dt
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-5.8
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.8/devicetree
+	samsung/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.8
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.8-1
+	renesas/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.8-tag2
+	renesas/dt-bindings-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.8-tag2
+	ti-k3/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/kristo/linux tags/ti-k3-dt-for-v5.8
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-dt-bindings
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-arm-dt
+	sunxi/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-5.8-1
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_update_for_v5.8
+	mediatek/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.7-next-dts32
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-dts-v5.8
+	mediatek/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.7-next-dts64
+	uniphier/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt-v5.8
+	uniphier/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/masahiroy/linux-uniphier tags/uniphier-dt64-v5.8
+	at91/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-5.8-dt
+	qcom/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-5.8
+	qcom/dt32
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-dts-for-5.8
+	juno/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/juno-updates-5.8
+	mvebu/dt
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-5.8-1
+	mvebu/dt64
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt64-5.8-1
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.8-rockchip-dts64-1
+	rockchip/dt32
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.8-rockchip-dts32-1
+	patch
+		ARM: dts: kirkwood: Fix interrupt controller node name
+		ARM: dts: dove: Fix interrupt controller node name
+		ARM: dts: pxa168: Add missing address/size cells to i2c nodes
+		ARM: dts: pxa168: Fix the gpio interrupt cell number
+		ARM: dts: pxa3xx: Fix up encoding of the /gpio interrupts property
+		ARM: dts: pxa910: Fix the gpio interrupt cell number
+		ARM: dts: pxa*: Fix up encoding of the /rtc interrupts property
+		ARM: dts: mmp*: Fix up encoding of the /rtc interrupts property
+		ARM: dts: mmp3: Fix L2 cache controller node name
+		ARM: dts: mmp3: Fix USB & USB PHY node names
+		ARM: dts: berlin*: Fix up the SDHCI node names
+		ARM: dts: mmp3: Add the fifth SD HCI
+	mmp/fixes
+		Merge branch 'mmp/fixes' into arm/dt
+	amlogic/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt
+	amlogic/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-arm64-dt-v2
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-5.8
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-5.8
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-5.8
+	mediatek/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.7-next-dts64.2
+	keystone/dts
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_dts_for_5.8
+	keystone/dts-5.7
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_dts_for_5.7
+	zynq/dt
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.8
+
+arm/drivers
+	drivers/scmi
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.8
+	renesas/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.8-tag1
+	drivers/tee
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-subsys-for-5.8
+	renesas/drivers-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.8-tag2
+	tegra/firmware
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-firmware-v2
+	mediatek/mmsys
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.7-next-soc
+	drivers/tee-fix
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-smatch-for-5.8
+	amlogic/ee-power-control
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-drivers
+	drivers/reset
+		git://git.pengutronix.de/pza/linux tags/reset-for-v5.8
+	drivers/tee-login
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-login-for-5.8
+	mediatek/soc-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.7-next-soc.2
+	qcom/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-5.8
+	samsung/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-5.8
+	tegra/cpufreq
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-cpufreq
+	tegra/cpuidle
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-cpuidle
+	tegra/of
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-of
+	tegra/media
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-media
+		contains tegra/dt-bindings
+	tegra/soc-driver
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.8-soc-v2
+	imx/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-5.8
+	hisi/logic_pio
+		git://github.com/hisilicon/linux-hisi tags/hisi-drivers-for-5.8
+	patch
+		tee: fix crypto select
+	fsl/driver
+		git://git.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-next-v5.8
+	patch
+		staging: tegra-video: fix V4L2 dependency
+	ti/k3-chipid
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/drivers_soc_for_5.8
+	baikal/drivers-1
+		Merge branch 'baikal/drivers' into arm/drivers
+	baikal/drivers
+		Merge branch 'baikal/drivers' into arm/drivers
+	patch
+		clk: sprd: fix compile-testing
+
+arm/defconfig
+	ux500/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-defconfig-v5.7
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v5.8-tag1
+	broadcom/defconfig
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.8/defconfig
+	samsung/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-5.8
+	renesas/defconfig-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v5.8-tag2
+	sunxi/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-config-for-5.8-1
+	at91/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-5.8-defconfig
+	qcom/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-5.8
+	amlogic/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-defconfig
+	hisi/defconfig
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-defconfig-for-5.8
+	socfpga/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/arm64_defconfig_for_v5.8
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-5.8
