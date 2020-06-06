@@ -862,7 +862,9 @@ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
 #ifdef CONFIG_HAVE_ARCH_SECCOMP_FILTER
 	scno = syscall_get_nr(current, regs);
 
-	if (scno != __NR_clock_gettime64 && secure_computing() == -1)
+	if (scno != __NR_clock_gettime64 &&
+	    scno != __NR_clock_nanosleep_time64 &&
+	    secure_computing() == -1)
 		return -1;
 #else
 	/* XXX: remove this once OABI gets fixed */
