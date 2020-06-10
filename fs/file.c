@@ -937,6 +937,7 @@ out_unlock:
 /**
  * __fd_install_received() - Install received file into file descriptor table
  *
+ * @fd: fd to install into (if negative, a new fd will be allocated)
  * @file: struct file that was received from another process
  * @ufd: __user pointer to write new fd number to
  * @o_flags: the O_* flags to apply to the new fd entry
@@ -947,7 +948,8 @@ out_unlock:
  *
  * Returns newly install fd or -ve on error.
  */
-int __fd_install_received(struct file *file, int __user *ufd, unsigned int o_flags)
+int __fd_install_received(int fd, struct file *file, int __user *ufd,
+			  unsigned int o_flags)
 {
 	struct socket *sock;
 	int new_fd;
@@ -957,16 +959,28 @@ int __fd_install_received(struct file *file, int __user *ufd, unsigned int o_fla
 	if (error)
 		return error;
 
-	new_fd = get_unused_fd_flags(o_flags);
-	if (new_fd < 0)
-		return new_fd;
+	if (fd < 0) {
+		new_fd = get_unused_fd_flags(o_flags);
+		if (new_fd < 0)
+			return new_fd;
+	} else
+		new_fd = fd;
 
 	if (ufd) {
 		error = put_user(new_fd, ufd);
 		if (error) {
-			put_unused_fd(new_fd);
+			if (fd < 0)
+				put_unused_fd(new_fd);
 			return error;
 		}
+	}
+
+	if (fd < 0)
+		fd_install(new_fd, get_file(file));
+	else {
+		error = replace_fd(new_fd, file, o_flags);
+		if (error)
+			return error;
 	}
 
 	/*
@@ -979,7 +993,6 @@ int __fd_install_received(struct file *file, int __user *ufd, unsigned int o_fla
 		sock_update_netprioidx(&sock->sk->sk_cgrp_data);
 		sock_update_classid(&sock->sk->sk_cgrp_data);
 	}
-	fd_install(new_fd, get_file(file));
 	return new_fd;
 }
 
