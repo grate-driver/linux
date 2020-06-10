@@ -11,6 +11,7 @@
 #include <linux/export.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/net.h>
 #include <linux/sched/signal.h>
 #include <linux/slab.h>
 #include <linux/file.h>
@@ -18,6 +19,8 @@
 #include <linux/bitops.h>
 #include <linux/spinlock.h>
 #include <linux/rcupdate.h>
+#include <net/cls_cgroup.h>
+#include <net/netprio_cgroup.h>
 
 unsigned int sysctl_nr_open __read_mostly = 1024*1024;
 unsigned int sysctl_nr_open_min = BITS_PER_LONG;
@@ -929,6 +932,48 @@ int replace_fd(unsigned fd, struct file *file, unsigned flags)
 out_unlock:
 	spin_unlock(&files->file_lock);
 	return err;
+}
+
+/**
+ * __fd_install_received() - Install received file into file descriptor table
+ *
+ * @file: struct file that was received from another process
+ * @ufd: __user pointer to write new fd number to
+ * @o_flags: the O_* flags to apply to the new fd entry
+ *
+ * Installs a received file into the file descriptor table, with appropriate
+ * checks and count updates. Writes the fd number to userspace.
+ *
+ * Returns -ve on error.
+ */
+int __fd_install_received(struct file *file, int __user *ufd, unsigned int o_flags)
+{
+	struct socket *sock;
+	int new_fd;
+	int error;
+
+	error = security_file_receive(file);
+	if (error)
+		return error;
+
+	new_fd = get_unused_fd_flags(o_flags);
+	if (new_fd < 0)
+		return new_fd;
+
+	error = put_user(new_fd, ufd);
+	if (error) {
+		put_unused_fd(new_fd);
+		return error;
+	}
+
+	/* Bump the usage count and install the file. */
+	sock = sock_from_file(file, &error);
+	if (sock) {
+		sock_update_netprioidx(&sock->sk->sk_cgrp_data);
+		sock_update_classid(&sock->sk->sk_cgrp_data);
+	}
+	fd_install(new_fd, get_file(file));
+	return 0;
 }
 
 static int ksys_dup3(unsigned int oldfd, unsigned int newfd, int flags)
