@@ -9,6 +9,7 @@
 #include <linux/compiler.h>
 #include <linux/types.h>
 #include <linux/posix_types.h>
+#include <linux/errno.h>
 
 struct file;
 
@@ -96,7 +97,13 @@ extern int __fd_install_received(struct file *file, int __user *ufd,
 static inline int fd_install_received_user(struct file *file, int __user *ufd,
 					   unsigned int o_flags)
 {
+	if (ufd == NULL)
+		return -EFAULT;
 	return __fd_install_received(file, ufd, o_flags);
+}
+static inline int fd_install_received(struct file *file, unsigned int o_flags)
+{
+	return __fd_install_received(file, NULL, o_flags);
 }
 
 extern void flush_delayed_fput(void);
