@@ -33,6 +33,7 @@
 #include <drm/drm_sysfs.h>
 #include <drm/drm_utils.h>
 
+#include <linux/of.h>
 #include <linux/property.h>
 #include <linux/uaccess.h>
 
@@ -2558,6 +2559,10 @@ int drm_connector_set_panel_orientation(
 	struct drm_device *dev = connector->dev;
 	struct drm_display_info *info = &connector->display_info;
 	struct drm_property *prop;
+
+	/* Temporal hack for Nexus 7 */
+	if (of_machine_is_compatible("asus,grouper"))
+		return 0;
 
 	/* Already set? */
 	if (info->panel_orientation != DRM_MODE_PANEL_ORIENTATION_UNKNOWN)
