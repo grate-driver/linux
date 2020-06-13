@@ -2193,6 +2193,10 @@ int drm_connector_set_panel_orientation(
 	struct drm_display_info *info = &connector->display_info;
 	struct drm_property *prop;
 
+	/* Temporal hack for Nexus 7 */
+	if (of_machine_is_compatible("asus,grouper"))
+		return 0;
+
 	/* Already set? */
 	if (info->panel_orientation != DRM_MODE_PANEL_ORIENTATION_UNKNOWN)
 		return 0;
