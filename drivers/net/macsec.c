@@ -1305,7 +1305,8 @@ static struct crypto_aead *macsec_alloc_tfm(char *key, int key_len, int icv_len)
 	struct crypto_aead *tfm;
 	int ret;
 
-	tfm = crypto_alloc_aead("gcm(aes)", 0, 0);
+	/* Pick a sync gcm(aes) cipher to ensure order is preserved. */
+	tfm = crypto_alloc_aead("gcm(aes)", 0, CRYPTO_ALG_ASYNC);
 
 	if (IS_ERR(tfm))
 		return tfm;
@@ -2640,11 +2641,12 @@ static int macsec_upd_offload(struct sk_buff *skb, struct genl_info *info)
 	if (ret)
 		goto rollback;
 
-	rtnl_unlock();
 	/* Force features update, since they are different for SW MACSec and
 	 * HW offloading cases.
 	 */
 	netdev_update_features(dev);
+
+	rtnl_unlock();
 	return 0;
 
 rollback:
@@ -4046,6 +4048,8 @@ static int macsec_newlink(struct net *net, struct net_device *dev,
 	err = register_netdevice(dev);
 	if (err < 0)
 		return err;
+
+	netdev_lockdep_set_classes(dev);
 
 	err = netdev_upper_dev_link(real_dev, dev, extack);
 	if (err < 0)
