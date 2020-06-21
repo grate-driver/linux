@@ -103,6 +103,19 @@ struct mm_struct *copy_init_mm(void);
 extern pid_t kernel_thread(int (*fn)(void *), void *arg, unsigned long flags);
 extern long kernel_wait4(pid_t, int __user *, int, struct rusage *);
 
+/* Only add helpers for actual use cases in the kernel */
+#define KWEXITSTATUS(status)		(__KWEXITSTATUS(status))
+#define KWIFEXITED(status)		(__KWIFEXITED(status))
+
+/* Nonzero if STATUS indicates normal termination.  */
+#define __KWIFEXITED(status)     (__KWTERMSIG(status) == 0)
+
+/* If KWIFEXITED(STATUS), the low-order 8 bits of the status.  */
+#define __KWEXITSTATUS(status)   (((status) & 0xff00) >> 8)
+
+/* If KWIFSIGNALED(STATUS), the terminating signal.  */
+#define __KWTERMSIG(status)      ((status) & 0x7f)
+
 extern void free_task(struct task_struct *tsk);
 
 /* sched_exec is called by processes performing an exec */
