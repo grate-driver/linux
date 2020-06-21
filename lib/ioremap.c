@@ -11,6 +11,7 @@
 #include <linux/sched.h>
 #include <linux/io.h>
 #include <linux/export.h>
+#include <linux/pgalloc-track.h>
 #include <asm/cacheflush.h>
 
 #ifdef CONFIG_HAVE_ARCH_HUGE_VMAP
