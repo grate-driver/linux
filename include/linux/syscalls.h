@@ -48,7 +48,6 @@ struct statfs;
 struct statfs64;
 struct statx;
 struct fsinfo_params;
-struct __sysctl_args;
 struct sysinfo;
 struct timespec;
 struct __kernel_old_timeval;
@@ -1125,7 +1124,6 @@ asmlinkage long sys_send(int, void __user *, size_t, unsigned);
 asmlinkage long sys_bdflush(int func, long data);
 asmlinkage long sys_oldumount(char __user *name);
 asmlinkage long sys_uselib(const char __user *library);
-asmlinkage long sys_sysctl(struct __sysctl_args __user *args);
 asmlinkage long sys_sysfs(int option,
 				unsigned long arg1, unsigned long arg2);
 asmlinkage long sys_fork(void);
