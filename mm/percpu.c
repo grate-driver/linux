@@ -1438,7 +1438,9 @@ static struct pcpu_chunk *pcpu_alloc_chunk(enum pcpu_chunk_type type, gfp_t gfp)
 
 	return chunk;
 
+#ifdef CONFIG_MEMCG_KMEM
 objcg_fail:
+#endif
 	pcpu_mem_free(chunk->md_blocks);
 md_blocks_fail:
 	pcpu_mem_free(chunk->bound_map);
@@ -1630,13 +1632,13 @@ static void pcpu_memcg_free_hook(struct pcpu_chunk *chunk, int off, size_t size)
 }
 
 #else /* CONFIG_MEMCG_KMEM */
-static enum pcpu_chunk_type pcpu_memcg_pre_alloc_hook(size_t size, gfp_t gfp,
-						     struct mem_cgroup **memcgp)
+static enum pcpu_chunk_type
+pcpu_memcg_pre_alloc_hook(size_t size, gfp_t gfp, struct obj_cgroup **objcgp)
 {
 	return PCPU_CHUNK_ROOT;
 }
 
-static void pcpu_memcg_post_alloc_hook(struct mem_cgroup *memcg,
+static void pcpu_memcg_post_alloc_hook(struct obj_cgroup *objcg,
 				       struct pcpu_chunk *chunk, int off,
 				       size_t size)
 {
