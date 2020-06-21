@@ -155,7 +155,7 @@ static void free_direct_key(struct fscrypt_direct_key *dk)
 {
 	if (dk) {
 		crypto_free_skcipher(dk->dk_ctfm);
-		kzfree(dk);
+		kfree_sensitive(dk);
 	}
 }
 
@@ -285,7 +285,7 @@ static int setup_v1_file_key_derived(struct fscrypt_info *ci,
 
 	err = fscrypt_set_per_file_enc_key(ci, derived_key);
 out:
-	kzfree(derived_key);
+	kfree_sensitive(derived_key);
 	return err;
 }
 
