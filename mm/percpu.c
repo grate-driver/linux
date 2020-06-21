@@ -1440,8 +1440,8 @@ static struct pcpu_chunk *pcpu_alloc_chunk(enum pcpu_chunk_type type, gfp_t gfp)
 
 #ifdef CONFIG_MEMCG_KMEM
 objcg_fail:
-#endif
 	pcpu_mem_free(chunk->md_blocks);
+#endif
 md_blocks_fail:
 	pcpu_mem_free(chunk->bound_map);
 bound_map_fail:
