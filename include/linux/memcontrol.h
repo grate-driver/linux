@@ -319,7 +319,7 @@ struct mem_cgroup {
 	enum memcg_kmem_state kmem_state;
 	struct list_head kmem_caches;
 	struct obj_cgroup __rcu *objcg;
-	struct list_head objcg_list;
+	struct list_head objcg_list; /* list of inherited objcgs */
 #endif
 
 #ifdef CONFIG_CGROUP_WRITEBACK

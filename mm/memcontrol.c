@@ -2827,7 +2827,7 @@ __always_inline struct obj_cgroup *get_obj_cgroup_from_current(void)
 	struct obj_cgroup *objcg = NULL;
 	struct mem_cgroup *memcg;
 
-	if (unlikely(!current->mm))
+	if (unlikely(!current->mm && !current->active_memcg))
 		return NULL;
 
 	rcu_read_lock();
