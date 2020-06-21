@@ -452,7 +452,8 @@ static inline int memcg_alloc_page_obj_cgroups(struct page *page,
 	unsigned int objects = objs_per_slab_page(s, page);
 	void *vec;
 
-	vec = kcalloc(objects, sizeof(struct obj_cgroup *), gfp);
+	vec = kcalloc_node(objects, sizeof(struct obj_cgroup *), gfp,
+			   page_to_nid(page));
 	if (!vec)
 		return -ENOMEM;
 
