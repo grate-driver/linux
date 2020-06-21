@@ -57,6 +57,7 @@ my $max_line_length = 100;
 my $ignore_perl_version = 0;
 my $minimum_perl_version = 5.10.0;
 my $min_conf_desc_length = 4;
+my $deprecated_terms_file = "$D/deprecated_terms.txt";
 my $spelling_file = "$D/spelling.txt";
 my $codespell = 0;
 my $codespellfile = "/usr/share/codespell/dictionary.txt";
@@ -692,28 +693,39 @@ our $allowed_asm_includes = qr{(?x:
 )};
 # memory.h: ARM has a custom one
 
+sub read_word_corrections {
+	my ($file, $fixesRef) = @_;
+	my $suspects;
+
+	if (open(my $corrections, '<', $file)) {
+		while (<$corrections>) {
+			my $line = $_;
+
+			$line =~ s/\s*\n?$//g;
+			$line =~ s/^\s*//g;
+
+			next if ($line =~ m/^\s*#/);
+			next if ($line =~ m/^\s*$/);
+
+			my ($suspect, $fix) = split(/\|\|/, $line);
+
+			$fixesRef->{$suspect} = $fix;
+		}
+		close($corrections);
+	} else {
+		warn "No correction will be found - file '$file': $!\n";
+	}
+}
+
+# Load deprecated terms and build regular expression list.
+my %deprecated_terms_fix;
+read_word_corrections($deprecated_terms_file, \%deprecated_terms_fix);
+my $deprecated_terms = join("|", sort keys %deprecated_terms_fix) if keys %deprecated_terms_fix;
+
 # Load common spelling mistakes and build regular expression list.
 my $misspellings;
 my %spelling_fix;
-
-if (open(my $spelling, '<', $spelling_file)) {
-	while (<$spelling>) {
-		my $line = $_;
-
-		$line =~ s/\s*\n?$//g;
-		$line =~ s/^\s*//g;
-
-		next if ($line =~ m/^\s*#/);
-		next if ($line =~ m/^\s*$/);
-
-		my ($suspect, $fix) = split(/\|\|/, $line);
-
-		$spelling_fix{$suspect} = $fix;
-	}
-	close($spelling);
-} else {
-	warn "No typos will be found - file '$spelling_file': $!\n";
-}
+read_word_corrections($spelling_file, \%spelling_fix);
 
 if ($codespell) {
 	if (open(my $spelling, '<', $codespellfile)) {
@@ -2953,6 +2965,24 @@ sub process {
 					#
 				} else {
 					check_absolute_file($file, $herecurr);
+				}
+			}
+		}
+
+# Check for deprecated terms
+		if (defined($deprecated_terms) &&
+		    ($in_commit_log || $line =~ /^(?:\+|Subject:)/i)) {
+			while ($rawline =~ /(?:^|[^a-z@])($deprecated_terms)(?:\b|$|[^a-z@])/gi) {
+				my $deprecated_term = $1;
+				my $suggested = $deprecated_terms_fix{lc($deprecated_term)};
+				$suggested = ucfirst($suggested) if ($deprecated_term=~ /^[A-Z]/);
+				$suggested = uc($suggested) if ($deprecated_term =~ /^[A-Z]+$/);
+				my $msg_level = \&WARN;
+				$msg_level = \&CHK if ($file);
+				if (&{$msg_level}("DEPRECATED_TERM",
+						  "Use of '$deprecated_term' is deprecated, please '$suggested', instead.\n" . $herecurr) &&
+				    $fix) {
+					$fixed[$fixlinenr] =~ s/(^|[^A-Za-z@])($deprecated_term)($|[^A-Za-z@])/$1$suggested$3/;
 				}
 			}
 		}
