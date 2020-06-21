@@ -1245,7 +1245,7 @@ out:
 	 * we want to retry.
 	 */
 	if (rc == MIGRATEPAGE_SUCCESS) {
-		if (PageTransHuge(newpage))
+		if (newpage && PageTransHuge(newpage))
 			thp_migration_success(true);
 		put_page(page);
 		if (reason == MR_MEMORY_FAILURE) {
