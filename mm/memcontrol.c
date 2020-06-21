@@ -2826,7 +2826,10 @@ struct mem_cgroup *mem_cgroup_from_obj(void *p)
 
 		off = obj_to_index(page->slab_cache, page, p);
 		objcg = page_obj_cgroups(page)[off];
-		return obj_cgroup_memcg(objcg);
+		if (objcg)
+			return obj_cgroup_memcg(objcg);
+
+		return NULL;
 	}
 
 	/* All other pages use page->mem_cgroup */
