@@ -32,10 +32,18 @@ struct kmem_cache;
 enum memcg_stat_item {
 	MEMCG_SWAP = NR_VM_NODE_STAT_ITEMS,
 	MEMCG_SOCK,
+	MEMCG_PERCPU_B,
 	/* XXX: why are these zone and not node counters? */
 	MEMCG_KERNEL_STACK_KB,
 	MEMCG_NR_STAT,
 };
+
+static __always_inline bool memcg_stat_item_in_bytes(enum memcg_stat_item item)
+{
+	if (item == MEMCG_PERCPU_B)
+		return true;
+	return vmstat_item_in_bytes(item);
+}
 
 enum memcg_memory_event {
 	MEMCG_LOW,
