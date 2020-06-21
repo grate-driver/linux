@@ -127,16 +127,17 @@ DEFINE_STATIC_KEY_FALSE(slub_debug_enabled);
  * cache. Use only for flags parsed by setup_slub_debug() as it also enables
  * the static key.
  */
-static inline int kmem_cache_debug_flags(struct kmem_cache *s, slab_flags_t flags)
+static inline bool kmem_cache_debug_flags(struct kmem_cache *s, slab_flags_t flags)
 {
+	VM_WARN_ON_ONCE(!(flags & SLAB_DEBUG_FLAGS));
 #ifdef CONFIG_SLUB_DEBUG
 	if (static_branch_unlikely(&slub_debug_enabled))
 		return s->flags & flags;
 #endif
-	return 0;
+	return false;
 }
 
-static inline int kmem_cache_debug(struct kmem_cache *s)
+static inline bool kmem_cache_debug(struct kmem_cache *s)
 {
 	return kmem_cache_debug_flags(s, SLAB_DEBUG_FLAGS);
 }
