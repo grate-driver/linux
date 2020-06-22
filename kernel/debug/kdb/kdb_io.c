@@ -554,7 +554,7 @@ int vkdb_printf(enum kdb_msgsrc src, const char *fmt, va_list ap)
 	char *cp, *cp2, *cphold = NULL, replaced_byte = ' ';
 	char *moreprompt = "more> ";
 	struct console *c;
-	unsigned long uninitialized_var(flags);
+	unsigned long flags;
 
 	/* Serialize kdb_printf if multiple cpus try to write at once.
 	 * But if any cpu goes recursive in kdb, just print the output,
