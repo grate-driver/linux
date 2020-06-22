@@ -41,6 +41,8 @@
 #include "blk-mq-sched.h"
 #include "blk-rq-qos.h"
 
+static DEFINE_PER_CPU(struct list_head, blk_cpu_done);
+
 static void blk_mq_poll_stats_start(struct request_queue *q);
 static void blk_mq_poll_stats_fn(struct blk_stat_callback *cb);
 
@@ -574,71 +576,139 @@ void blk_mq_end_request(struct request *rq, blk_status_t error)
 }
 EXPORT_SYMBOL(blk_mq_end_request);
 
+/*
+ * Softirq action handler - move entries to local list and loop over them
+ * while passing them to the queue registered handler.
+ */
+static __latent_entropy void blk_done_softirq(struct softirq_action *h)
+{
+	struct list_head *cpu_list, local_list;
+
+	local_irq_disable();
+	cpu_list = this_cpu_ptr(&blk_cpu_done);
+	list_replace_init(cpu_list, &local_list);
+	local_irq_enable();
+
+	while (!list_empty(&local_list)) {
+		struct request *rq;
+
+		rq = list_entry(local_list.next, struct request, ipi_list);
+		list_del_init(&rq->ipi_list);
+		rq->q->mq_ops->complete(rq);
+	}
+}
+
+static void blk_mq_trigger_softirq(struct request *rq)
+{
+	struct list_head *list;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	list = this_cpu_ptr(&blk_cpu_done);
+	list_add_tail(&rq->ipi_list, list);
+
+	/*
+	 * If the list only contains our just added request, signal a raise of
+	 * the softirq.  If there are already entries there, someone already
+	 * raised the irq but it hasn't run yet.
+	 */
+	if (list->next == &rq->ipi_list)
+		raise_softirq_irqoff(BLOCK_SOFTIRQ);
+	local_irq_restore(flags);
+}
+
+static int blk_softirq_cpu_dead(unsigned int cpu)
+{
+	/*
+	 * If a CPU goes away, splice its entries to the current CPU
+	 * and trigger a run of the softirq
+	 */
+	local_irq_disable();
+	list_splice_init(&per_cpu(blk_cpu_done, cpu),
+			 this_cpu_ptr(&blk_cpu_done));
+	raise_softirq_irqoff(BLOCK_SOFTIRQ);
+	local_irq_enable();
+
+	return 0;
+}
+
+
 static void __blk_mq_complete_request_remote(void *data)
 {
 	struct request *rq = data;
-	struct request_queue *q = rq->q;
 
-	q->mq_ops->complete(rq);
+	/*
+	 * For most of single queue controllers, there is only one irq vector
+	 * for handling I/O completion, and the only irq's affinity is set
+	 * to all possible CPUs.  On most of ARCHs, this affinity means the irq
+	 * is handled on one specific CPU.
+	 *
+	 * So complete I/O requests in softirq context in case of single queue
+	 * devices to avoid degrading I/O performance due to irqsoff latency.
+	 */
+	if (rq->q->nr_hw_queues == 1)
+		blk_mq_trigger_softirq(rq);
+	else
+		rq->q->mq_ops->complete(rq);
 }
 
-/**
- * blk_mq_force_complete_rq() - Force complete the request, bypassing any error
- * 				injection that could drop the completion.
- * @rq: Request to be force completed
- *
- * Drivers should use blk_mq_complete_request() to complete requests in their
- * normal IO path. For timeout error recovery, drivers may call this forced
- * completion routine after they've reclaimed timed out requests to bypass
- * potentially subsequent fake timeouts.
- */
-void blk_mq_force_complete_rq(struct request *rq)
+static inline bool blk_mq_complete_need_ipi(struct request *rq)
 {
-	struct blk_mq_ctx *ctx = rq->mq_ctx;
-	struct request_queue *q = rq->q;
-	bool shared = false;
-	int cpu;
+	int cpu = raw_smp_processor_id();
 
+	if (!IS_ENABLED(CONFIG_SMP) ||
+	    !test_bit(QUEUE_FLAG_SAME_COMP, &rq->q->queue_flags))
+		return false;
+
+	/* same CPU or cache domain?  Complete locally */
+	if (cpu == rq->mq_ctx->cpu ||
+	    (!test_bit(QUEUE_FLAG_SAME_FORCE, &rq->q->queue_flags) &&
+	     cpus_share_cache(cpu, rq->mq_ctx->cpu)))
+		return false;
+
+	/* don't try to IPI to an offline CPU */
+	return cpu_online(rq->mq_ctx->cpu);
+}
+
+bool blk_mq_complete_request_remote(struct request *rq)
+{
 	WRITE_ONCE(rq->state, MQ_RQ_COMPLETE);
-	/*
-	 * Most of single queue controllers, there is only one irq vector
-	 * for handling IO completion, and the only irq's affinity is set
-	 * as all possible CPUs. On most of ARCHs, this affinity means the
-	 * irq is handled on one specific CPU.
-	 *
-	 * So complete IO reqeust in softirq context in case of single queue
-	 * for not degrading IO performance by irqsoff latency.
-	 */
-	if (q->nr_hw_queues == 1) {
-		__blk_complete_request(rq);
-		return;
-	}
 
 	/*
 	 * For a polled request, always complete locallly, it's pointless
 	 * to redirect the completion.
 	 */
-	if ((rq->cmd_flags & REQ_HIPRI) ||
-	    !test_bit(QUEUE_FLAG_SAME_COMP, &q->queue_flags)) {
-		q->mq_ops->complete(rq);
-		return;
-	}
+	if (rq->cmd_flags & REQ_HIPRI)
+		return false;
 
-	cpu = get_cpu();
-	if (!test_bit(QUEUE_FLAG_SAME_FORCE, &q->queue_flags))
-		shared = cpus_share_cache(cpu, ctx->cpu);
-
-	if (cpu != ctx->cpu && !shared && cpu_online(ctx->cpu)) {
+	if (blk_mq_complete_need_ipi(rq)) {
 		rq->csd.func = __blk_mq_complete_request_remote;
 		rq->csd.info = rq;
 		rq->csd.flags = 0;
-		smp_call_function_single_async(ctx->cpu, &rq->csd);
+		smp_call_function_single_async(rq->mq_ctx->cpu, &rq->csd);
 	} else {
-		q->mq_ops->complete(rq);
+		if (rq->q->nr_hw_queues > 1)
+			return false;
+		blk_mq_trigger_softirq(rq);
 	}
-	put_cpu();
+
+	return true;
 }
-EXPORT_SYMBOL_GPL(blk_mq_force_complete_rq);
+EXPORT_SYMBOL_GPL(blk_mq_complete_request_remote);
+
+/**
+ * blk_mq_complete_request - end I/O on a request
+ * @rq:		the request being processed
+ *
+ * Description:
+ *	Complete a request by scheduling the ->complete_rq operation.
+ **/
+void blk_mq_complete_request(struct request *rq)
+{
+	if (!blk_mq_complete_request_remote(rq))
+		rq->q->mq_ops->complete(rq);
+}
+EXPORT_SYMBOL(blk_mq_complete_request);
 
 static void hctx_unlock(struct blk_mq_hw_ctx *hctx, int srcu_idx)
 	__releases(hctx->srcu)
@@ -659,23 +729,6 @@ static void hctx_lock(struct blk_mq_hw_ctx *hctx, int *srcu_idx)
 	} else
 		*srcu_idx = srcu_read_lock(hctx->srcu);
 }
-
-/**
- * blk_mq_complete_request - end I/O on a request
- * @rq:		the request being processed
- *
- * Description:
- *	Ends all I/O on a request. It does not handle partial completions.
- *	The actual completion happens out-of-order, through a IPI handler.
- **/
-bool blk_mq_complete_request(struct request *rq)
-{
-	if (unlikely(blk_should_fake_timeout(rq->q)))
-		return false;
-	blk_mq_force_complete_rq(rq);
-	return true;
-}
-EXPORT_SYMBOL(blk_mq_complete_request);
 
 /**
  * blk_mq_start_request - Start processing a request
@@ -3760,6 +3813,15 @@ EXPORT_SYMBOL(blk_mq_rq_cpu);
 
 static int __init blk_mq_init(void)
 {
+	int i;
+
+	for_each_possible_cpu(i)
+		INIT_LIST_HEAD(&per_cpu(blk_cpu_done, i));
+	open_softirq(BLOCK_SOFTIRQ, blk_done_softirq);
+
+	cpuhp_setup_state_nocalls(CPUHP_BLOCK_SOFTIRQ_DEAD,
+				  "block/softirq:dead", NULL,
+				  blk_softirq_cpu_dead);
 	cpuhp_setup_state_multi(CPUHP_BLK_MQ_DEAD, "block/mq:dead", NULL,
 				blk_mq_hctx_notify_dead);
 	cpuhp_setup_state_multi(CPUHP_AP_BLK_MQ_ONLINE, "block/mq:online",
