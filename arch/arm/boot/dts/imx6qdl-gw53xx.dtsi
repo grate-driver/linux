@@ -8,6 +8,7 @@
 / {
 	/* these are used by bootloader for disabling nodes */
 	aliases {
+		ethernet1 = &eth1;
 		led0 = &led0;
 		led1 = &led1;
 		led2 = &led2;
@@ -341,6 +342,23 @@
 	pinctrl-0 = <&pinctrl_pcie>;
 	reset-gpio = <&gpio1 29 GPIO_ACTIVE_LOW>;
 	status = "okay";
+
+	pcie@0,0,0 {
+		reg = <0x0000 0 0 0 0>;
+
+		pcie@1,0,0 {
+			reg = <0x0000 0 0 0 0>;
+
+			pcie@2,4,0 {
+				reg = <0x2000 0 0 0 0>;
+
+				eth1: pcie@4,0,0 {
+					reg = <0x0000 0 0 0 0>;
+					local-mac-address = [00 00 00 00 00 00];
+				};
+			};
+		};
+	};
 };
 
 &pwm2 {
