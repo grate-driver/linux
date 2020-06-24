@@ -354,3 +354,5 @@
 437	n64	openat2				sys_openat2
 438	n64	pidfd_getfd			sys_pidfd_getfd
 439	n64	faccessat2			sys_faccessat2
+440	n64	watch_mount			sys_watch_mount
+441	n64	watch_sb			sys_watch_sb

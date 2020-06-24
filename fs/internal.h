@@ -107,6 +107,7 @@ extern int reconfigure_super(struct fs_context *);
 extern bool trylock_super(struct super_block *sb);
 extern struct super_block *user_get_super(dev_t);
 extern bool mount_capable(struct fs_context *);
+extern void vfs_generate_unique_id(u64 *);
 
 /*
  * open.c
