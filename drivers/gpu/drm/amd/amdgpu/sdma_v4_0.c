@@ -505,6 +505,36 @@ static void sdma_v4_0_init_golden_registers(struct amdgpu_device *adev)
 	}
 }
 
+static void sdma_v4_0_setup_ulv(struct amdgpu_device *adev)
+{
+	int i;
+
+	/*
+	 * The only chips with SDMAv4 and ULV are VG10 and VG20.
+	 * Server SKUs take a different hysteresis setting from other SKUs.
+	 */
+	switch (adev->asic_type) {
+	case CHIP_VEGA10:
+		if (adev->pdev->device == 0x6860)
+			break;
+		return;
+	case CHIP_VEGA20:
+		if (adev->pdev->device == 0x66a1)
+			break;
+		return;
+	default:
+		return;
+	}
+
+	for (i = 0; i < adev->sdma.num_instances; i++) {
+		uint32_t temp;
+
+		temp = RREG32_SDMA(i, mmSDMA0_ULV_CNTL);
+		temp = REG_SET_FIELD(temp, SDMA0_ULV_CNTL, HYSTERESIS, 0x0);
+		WREG32_SDMA(i, mmSDMA0_ULV_CNTL, temp);
+	}
+}
+
 static int sdma_v4_0_init_inst_ctx(struct amdgpu_sdma_instance *sdma_inst)
 {
 	int err = 0;
@@ -1072,6 +1102,7 @@ static uint32_t sdma_v4_0_rb_cntl(struct amdgpu_ring *ring, uint32_t rb_cntl)
 	/* Set ring buffer size in dwords */
 	uint32_t rb_bufsz = order_base_2(ring->ring_size / 4);
 
+	barrier(); /* work around https://bugs.llvm.org/show_bug.cgi?id=42576 */
 	rb_cntl = REG_SET_FIELD(rb_cntl, SDMA0_GFX_RB_CNTL, RB_SIZE, rb_bufsz);
 #ifdef __BIG_ENDIAN
 	rb_cntl = REG_SET_FIELD(rb_cntl, SDMA0_GFX_RB_CNTL, RB_SWAP_ENABLE, 1);
@@ -1774,7 +1805,7 @@ static int sdma_v4_0_early_init(void *handle)
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 	int r;
 
-	if (adev->asic_type == CHIP_RAVEN || adev->asic_type == CHIP_RENOIR)
+	if (adev->flags & AMD_IS_APU)
 		adev->sdma.num_instances = 1;
 	else if (adev->asic_type == CHIP_ARCTURUS)
 		adev->sdma.num_instances = 8;
@@ -1812,6 +1843,8 @@ static int sdma_v4_0_late_init(void *handle)
 	struct ras_ih_if ih_info = {
 		.cb = sdma_v4_0_process_ras_data_cb,
 	};
+
+	sdma_v4_0_setup_ulv(adev);
 
 	if (adev->sdma.funcs && adev->sdma.funcs->reset_ras_error_count)
 		adev->sdma.funcs->reset_ras_error_count(adev);
@@ -1912,9 +1945,7 @@ static int sdma_v4_0_hw_init(void *handle)
 	int r;
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
-	if ((adev->asic_type == CHIP_RAVEN && adev->powerplay.pp_funcs &&
-			adev->powerplay.pp_funcs->set_powergating_by_smu) ||
-			(adev->asic_type == CHIP_RENOIR && !adev->in_gpu_reset))
+	if (adev->flags & AMD_IS_APU)
 		amdgpu_dpm_set_powergating_by_smu(adev, AMD_IP_BLOCK_TYPE_SDMA, false);
 
 	if (!amdgpu_sriov_vf(adev))
@@ -1941,9 +1972,7 @@ static int sdma_v4_0_hw_fini(void *handle)
 	sdma_v4_0_ctx_switch_enable(adev, false);
 	sdma_v4_0_enable(adev, false);
 
-	if ((adev->asic_type == CHIP_RAVEN && adev->powerplay.pp_funcs
-			&& adev->powerplay.pp_funcs->set_powergating_by_smu) ||
-			adev->asic_type == CHIP_RENOIR)
+	if (adev->flags & AMD_IS_APU)
 		amdgpu_dpm_set_powergating_by_smu(adev, AMD_IP_BLOCK_TYPE_SDMA, true);
 
 	return 0;
@@ -2202,6 +2231,7 @@ static int sdma_v4_0_set_powergating_state(void *handle,
 
 	switch (adev->asic_type) {
 	case CHIP_RAVEN:
+	case CHIP_RENOIR:
 		sdma_v4_1_update_power_gating(adev,
 				state == AMD_PG_STATE_GATE ? true : false);
 		break;

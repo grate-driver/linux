@@ -4444,14 +4444,56 @@
 
 /* Registers that spilled out of sid.h */
 #define mmDATA_FORMAT                              0x1AC0
+#define mmLB0_DATA_FORMAT                               0x1AC0
+#define mmLB1_DATA_FORMAT                               0x1DC0
+#define mmLB2_DATA_FORMAT                               0x40C0
+#define mmLB3_DATA_FORMAT                               0x43C0
+#define mmLB4_DATA_FORMAT                               0x46C0
+#define mmLB5_DATA_FORMAT                               0x49C0
 #define mmDESKTOP_HEIGHT                           0x1AC1
+#define mmLB0_DESKTOP_HEIGHT                            0x1AC1
+#define mmLB1_DESKTOP_HEIGHT                            0x1DC1
+#define mmLB2_DESKTOP_HEIGHT                            0x40C1
+#define mmLB3_DESKTOP_HEIGHT                            0x43C1
+#define mmLB4_DESKTOP_HEIGHT                            0x46C1
+#define mmLB5_DESKTOP_HEIGHT                            0x49C1
 #define mmDC_LB_MEMORY_SPLIT                       0x1AC3
+#define mmLB0_DC_LB_MEMORY_SPLIT                        0x1AC3
+#define mmLB1_DC_LB_MEMORY_SPLIT                        0x1DC3
+#define mmLB2_DC_LB_MEMORY_SPLIT                        0x40C3
+#define mmLB3_DC_LB_MEMORY_SPLIT                        0x43C3
+#define mmLB4_DC_LB_MEMORY_SPLIT                        0x46C3
+#define mmLB5_DC_LB_MEMORY_SPLIT                        0x49C3
+#define mmDC_LB_MEM_SIZE                                0x1AC4
+#define mmLB0_DC_LB_MEM_SIZE                            0x1AC4
+#define mmLB1_DC_LB_MEM_SIZE                            0x1DC4
+#define mmLB2_DC_LB_MEM_SIZE                            0x40C4
+#define mmLB3_DC_LB_MEM_SIZE                            0x43C4
+#define mmLB4_DC_LB_MEM_SIZE                            0x46C4
+#define mmLB5_DC_LB_MEM_SIZE                            0x49C4
 #define mmPRIORITY_A_CNT                           0x1AC6
 #define mmPRIORITY_B_CNT                           0x1AC7
 #define mmDPG_PIPE_ARBITRATION_CONTROL3            0x1B32
+#define mmDMIF_PG0_DPG_PIPE_ARBITRATION_CONTROL3        0x1B32
+#define mmDMIF_PG1_DPG_PIPE_ARBITRATION_CONTROL3        0x1E32
+#define mmDMIF_PG2_DPG_PIPE_ARBITRATION_CONTROL3        0x4132
+#define mmDMIF_PG3_DPG_PIPE_ARBITRATION_CONTROL3        0x4432
+#define mmDMIF_PG4_DPG_PIPE_ARBITRATION_CONTROL3        0x4732
+#define mmDMIF_PG5_DPG_PIPE_ARBITRATION_CONTROL3        0x4A32
 #define mmINT_MASK                                 0x1AD0
 #define mmVLINE_STATUS                             0x1AEE
+#define mmLB0_VLINE_STATUS                              0x1AEE
+#define mmLB1_VLINE_STATUS                              0x1DEE
+#define mmLB2_VLINE_STATUS                              0x40EE
+#define mmLB3_VLINE_STATUS                              0x43EE
+#define mmLB4_VLINE_STATUS                              0x46EE
+#define mmLB5_VLINE_STATUS                              0x49EE
 #define mmVBLANK_STATUS                            0x1AEF
-
+#define mmLB0_VBLANK_STATUS                             0x1AEF
+#define mmLB1_VBLANK_STATUS                             0x1DEF
+#define mmLB2_VBLANK_STATUS                             0x40EF
+#define mmLB3_VBLANK_STATUS                             0x43EF
+#define mmLB4_VBLANK_STATUS                             0x46EF
+#define mmLB5_VBLANK_STATUS                             0x49EF
 
 #endif
