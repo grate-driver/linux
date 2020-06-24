@@ -7,7 +7,7 @@
  * Authors: Paul E. McKenney <paulmck@linux.ibm.com>
  *	  Josh Triplett <josh@joshtriplett.org>
  *
- * See also:  Documentation/RCU/torture.txt
+ * See also:  Documentation/RCU/torture.rst
  */
 
 #define pr_fmt(fmt) fmt
@@ -51,19 +51,6 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Paul E. McKenney <paulmck@linux.ibm.com> and Josh Triplett <josh@joshtriplett.org>");
-
-#ifndef data_race
-#define data_race(expr)							\
-	({								\
-		expr;							\
-	})
-#endif
-#ifndef ASSERT_EXCLUSIVE_WRITER
-#define ASSERT_EXCLUSIVE_WRITER(var) do { } while (0)
-#endif
-#ifndef ASSERT_EXCLUSIVE_ACCESS
-#define ASSERT_EXCLUSIVE_ACCESS(var) do { } while (0)
-#endif
 
 /* Bits for ->extendables field, extendables param, and related definitions. */
 #define RCUTORTURE_RDR_SHIFT	 8	/* Put SRCU index in upper bits. */
@@ -109,6 +96,10 @@ torture_param(int, object_debug, 0,
 torture_param(int, onoff_holdoff, 0, "Time after boot before CPU hotplugs (s)");
 torture_param(int, onoff_interval, 0,
 	     "Time between CPU hotplugs (jiffies), 0=disable");
+torture_param(int, read_exit_delay, 13,
+	      "Delay between read-then-exit episodes (s)");
+torture_param(int, read_exit_burst, 16,
+	      "# of read-then-exit bursts per episode, zero to disable");
 torture_param(int, shuffle_interval, 3, "Number of seconds between shuffles");
 torture_param(int, shutdown_secs, 0, "Shutdown time (s), <= zero to disable.");
 torture_param(int, stall_cpu, 0, "Stall duration (s), zero to disable.");
@@ -146,6 +137,7 @@ static struct task_struct *stall_task;
 static struct task_struct *fwd_prog_task;
 static struct task_struct **barrier_cbs_tasks;
 static struct task_struct *barrier_task;
+static struct task_struct *read_exit_task;
 
 #define RCU_TORTURE_PIPE_LEN 10
 
@@ -177,8 +169,10 @@ static long n_rcu_torture_boosts;
 static atomic_long_t n_rcu_torture_timers;
 static long n_barrier_attempts;
 static long n_barrier_successes; /* did rcu_barrier test succeed? */
+static unsigned long n_read_exits;
 static struct list_head rcu_torture_removed;
 static unsigned long shutdown_jiffies;
+static unsigned long start_gp_seq;
 
 static int rcu_torture_writer_state;
 #define RTWS_FIXED_DELAY	0
@@ -1161,6 +1155,7 @@ rcu_torture_writer(void *arg)
 					WARN(1, "%s: rtort_pipe_count: %d\n", __func__, rcu_tortures[i].rtort_pipe_count);
 				}
 	} while (!torture_must_stop());
+	rcu_torture_current = NULL;  // Let stats task know that we are done.
 	/* Reset expediting back to unexpedited. */
 	if (expediting > 0)
 		expediting = -expediting;
@@ -1365,6 +1360,7 @@ static bool rcu_torture_one_read(struct torture_random_state *trsp)
 	struct rt_read_seg *rtrsp1;
 	unsigned long long ts;
 
+	WARN_ON_ONCE(!rcu_is_watching());
 	newstate = rcutorture_extend_mask(readstate, trsp);
 	rcutorture_one_extend(&readstate, newstate, trsp, rtrsp++);
 	started = cur_ops->get_gp_seq();
@@ -1534,10 +1530,11 @@ rcu_torture_stats_print(void)
 		n_rcu_torture_boosts,
 		atomic_long_read(&n_rcu_torture_timers));
 	torture_onoff_stats();
-	pr_cont("barrier: %ld/%ld:%ld\n",
+	pr_cont("barrier: %ld/%ld:%ld ",
 		data_race(n_barrier_successes),
 		data_race(n_barrier_attempts),
 		data_race(n_rcu_torture_barrier_error));
+	pr_cont("read-exits: %ld\n", data_race(n_read_exits));
 
 	pr_alert("%s%s ", torture_type, TORTURE_FLAG);
 	if (atomic_read(&n_rcu_torture_mberror) ||
@@ -1629,7 +1626,8 @@ rcu_torture_print_module_parms(struct rcu_torture_ops *cur_ops, const char *tag)
 		 "stall_cpu=%d stall_cpu_holdoff=%d stall_cpu_irqsoff=%d "
 		 "stall_cpu_block=%d "
 		 "n_barrier_cbs=%d "
-		 "onoff_interval=%d onoff_holdoff=%d\n",
+		 "onoff_interval=%d onoff_holdoff=%d "
+		 "read_exit_delay=%d read_exit_burst=%d\n",
 		 torture_type, tag, nrealreaders, nfakewriters,
 		 stat_interval, verbose, test_no_idle_hz, shuffle_interval,
 		 stutter, irqreader, fqs_duration, fqs_holdoff, fqs_stutter,
@@ -1638,7 +1636,8 @@ rcu_torture_print_module_parms(struct rcu_torture_ops *cur_ops, const char *tag)
 		 stall_cpu, stall_cpu_holdoff, stall_cpu_irqsoff,
 		 stall_cpu_block,
 		 n_barrier_cbs,
-		 onoff_interval, onoff_holdoff);
+		 onoff_interval, onoff_holdoff,
+		 read_exit_delay, read_exit_burst);
 }
 
 static int rcutorture_booster_cleanup(unsigned int cpu)
@@ -2170,7 +2169,7 @@ static void rcu_torture_barrier1cb(void *rcu_void)
 static int rcu_torture_barrier_cbs(void *arg)
 {
 	long myid = (long)arg;
-	bool lastphase = 0;
+	bool lastphase = false;
 	bool newphase;
 	struct rcu_head rcu;
 
@@ -2333,6 +2332,99 @@ static bool rcu_torture_can_boost(void)
 	return true;
 }
 
+static bool read_exit_child_stop;
+static bool read_exit_child_stopped;
+static wait_queue_head_t read_exit_wq;
+
+// Child kthread which just does an rcutorture reader and exits.
+static int rcu_torture_read_exit_child(void *trsp_in)
+{
+	struct torture_random_state *trsp = trsp_in;
+
+	set_user_nice(current, MAX_NICE);
+	// Minimize time between reading and exiting.
+	while (!kthread_should_stop())
+		schedule_timeout_uninterruptible(1);
+	(void)rcu_torture_one_read(trsp);
+	return 0;
+}
+
+// Parent kthread which creates and destroys read-exit child kthreads.
+static int rcu_torture_read_exit(void *unused)
+{
+	int count = 0;
+	bool errexit = false;
+	int i;
+	struct task_struct *tsp;
+	DEFINE_TORTURE_RANDOM(trs);
+
+	// Allocate and initialize.
+	set_user_nice(current, MAX_NICE);
+	VERBOSE_TOROUT_STRING("rcu_torture_read_exit: Start of test");
+
+	// Each pass through this loop does one read-exit episode.
+	do {
+		if (++count > read_exit_burst) {
+			VERBOSE_TOROUT_STRING("rcu_torture_read_exit: End of episode");
+			rcu_barrier(); // Wait for task_struct free, avoid OOM.
+			for (i = 0; i < read_exit_delay; i++) {
+				schedule_timeout_uninterruptible(HZ);
+				if (READ_ONCE(read_exit_child_stop))
+					break;
+			}
+			if (!READ_ONCE(read_exit_child_stop))
+				VERBOSE_TOROUT_STRING("rcu_torture_read_exit: Start of episode");
+			count = 0;
+		}
+		if (READ_ONCE(read_exit_child_stop))
+			break;
+		// Spawn child.
+		tsp = kthread_run(rcu_torture_read_exit_child,
+				     &trs, "%s",
+				     "rcu_torture_read_exit_child");
+		if (IS_ERR(tsp)) {
+			VERBOSE_TOROUT_ERRSTRING("out of memory");
+			errexit = true;
+			tsp = NULL;
+			break;
+		}
+		cond_resched();
+		kthread_stop(tsp);
+		n_read_exits ++;
+		stutter_wait("rcu_torture_read_exit");
+	} while (!errexit && !READ_ONCE(read_exit_child_stop));
+
+	// Clean up and exit.
+	smp_store_release(&read_exit_child_stopped, true); // After reaping.
+	smp_mb(); // Store before wakeup.
+	wake_up(&read_exit_wq);
+	while (!torture_must_stop())
+		schedule_timeout_uninterruptible(1);
+	torture_kthread_stopping("rcu_torture_read_exit");
+	return 0;
+}
+
+static int rcu_torture_read_exit_init(void)
+{
+	if (read_exit_burst <= 0)
+		return -EINVAL;
+	init_waitqueue_head(&read_exit_wq);
+	read_exit_child_stop = false;
+	read_exit_child_stopped = false;
+	return torture_create_kthread(rcu_torture_read_exit, NULL,
+				      read_exit_task);
+}
+
+static void rcu_torture_read_exit_cleanup(void)
+{
+	if (!read_exit_task)
+		return;
+	WRITE_ONCE(read_exit_child_stop, true);
+	smp_mb(); // Above write before wait.
+	wait_event(read_exit_wq, smp_load_acquire(&read_exit_child_stopped));
+	torture_stop_kthread(rcutorture_read_exit, read_exit_task);
+}
+
 static enum cpuhp_state rcutor_hp;
 
 static void
@@ -2354,6 +2446,7 @@ rcu_torture_cleanup(void)
 	}
 
 	show_rcu_gp_kthreads();
+	rcu_torture_read_exit_cleanup();
 	rcu_torture_barrier_cleanup();
 	torture_stop_kthread(rcu_torture_fwd_prog, fwd_prog_task);
 	torture_stop_kthread(rcu_torture_stall, stall_task);
@@ -2365,7 +2458,6 @@ rcu_torture_cleanup(void)
 					     reader_tasks[i]);
 		kfree(reader_tasks);
 	}
-	rcu_torture_current = NULL;
 
 	if (fakewriter_tasks) {
 		for (i = 0; i < nfakewriters; i++) {
@@ -2378,8 +2470,9 @@ rcu_torture_cleanup(void)
 
 	rcutorture_get_gp_data(cur_ops->ttype, &flags, &gp_seq);
 	srcutorture_get_gp_data(cur_ops->ttype, srcu_ctlp, &flags, &gp_seq);
-	pr_alert("%s:  End-test grace-period state: g%lu f%#x\n",
-		 cur_ops->name, gp_seq, flags);
+	pr_alert("%s:  End-test grace-period state: g%ld f%#x total-gps=%ld\n",
+		 cur_ops->name, (long)gp_seq, flags,
+		 rcutorture_seq_diff(gp_seq, start_gp_seq));
 	torture_stop_kthread(rcu_torture_stats, stats_task);
 	torture_stop_kthread(rcu_torture_fqs, fqs_task);
 	if (rcu_torture_can_boost())
@@ -2503,6 +2596,8 @@ rcu_torture_init(void)
 	long i;
 	int cpu;
 	int firsterr = 0;
+	int flags = 0;
+	unsigned long gp_seq = 0;
 	static struct rcu_torture_ops *torture_ops[] = {
 		&rcu_ops, &rcu_busted_ops, &srcu_ops, &srcud_ops,
 		&busted_srcud_ops, &tasks_ops, &tasks_rude_ops,
@@ -2545,6 +2640,11 @@ rcu_torture_init(void)
 			nrealreaders = 1;
 	}
 	rcu_torture_print_module_parms(cur_ops, "Start of test");
+	rcutorture_get_gp_data(cur_ops->ttype, &flags, &gp_seq);
+	srcutorture_get_gp_data(cur_ops->ttype, srcu_ctlp, &flags, &gp_seq);
+	start_gp_seq = gp_seq;
+	pr_alert("%s:  Start-test grace-period state: g%ld f%#x\n",
+		 cur_ops->name, (long)gp_seq, flags);
 
 	/* Set up the freelist. */
 
@@ -2675,6 +2775,9 @@ rcu_torture_init(void)
 	if (firsterr)
 		goto unwind;
 	firsterr = rcu_torture_barrier_init();
+	if (firsterr)
+		goto unwind;
+	firsterr = rcu_torture_read_exit_init();
 	if (firsterr)
 		goto unwind;
 	if (object_debug)
