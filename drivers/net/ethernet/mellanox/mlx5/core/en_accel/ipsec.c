@@ -207,7 +207,7 @@ mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 
 static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
 {
-	struct net_device *netdev = x->xso.dev;
+	struct net_device *netdev = x->xso.real_dev;
 	struct mlx5e_priv *priv;
 
 	priv = netdev_priv(netdev);
@@ -285,7 +285,7 @@ static inline int mlx5e_xfrm_validate_state(struct xfrm_state *x)
 static int mlx5e_xfrm_add_state(struct xfrm_state *x)
 {
 	struct mlx5e_ipsec_sa_entry *sa_entry = NULL;
-	struct net_device *netdev = x->xso.dev;
+	struct net_device *netdev = x->xso.real_dev;
 	struct mlx5_accel_esp_xfrm_attrs attrs;
 	struct mlx5e_priv *priv;
 	unsigned int sa_handle;
