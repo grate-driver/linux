@@ -4044,7 +4044,6 @@ static int ahash_finup_no_ctx(struct ahash_request *req)
 					  DMA_TO_DEVICE);
 	if (dma_mapping_error(ctx->dev, edesc->qm_sg_dma)) {
 		dev_err(ctx->dev, "unable to map S/G table\n");
-		ret = -ENOMEM;
 		goto unmap;
 	}
 	edesc->qm_sg_bytes = qm_sg_bytes;
@@ -4055,7 +4054,6 @@ static int ahash_finup_no_ctx(struct ahash_request *req)
 	if (dma_mapping_error(ctx->dev, state->ctx_dma)) {
 		dev_err(ctx->dev, "unable to map ctx\n");
 		state->ctx_dma = 0;
-		ret = -ENOMEM;
 		goto unmap;
 	}
 
@@ -4697,6 +4695,13 @@ static void dpaa2_dpseci_free(struct dpaa2_caam_priv *priv)
 {
 	struct device *dev = priv->dev;
 	struct fsl_mc_device *ls_dev = to_fsl_mc_device(dev);
+	int err;
+
+	if (DPSECI_VER(priv->major_ver, priv->minor_ver) > DPSECI_VER(5, 3)) {
+		err = dpseci_reset(priv->mc_io, 0, ls_dev->mc_handle);
+		if (err)
+			dev_err(dev, "dpseci_reset() failed\n");
+	}
 
 	dpaa2_dpseci_congestion_free(priv);
 	dpseci_close(priv->mc_io, 0, ls_dev->mc_handle);
@@ -4893,6 +4898,14 @@ static int __cold dpaa2_dpseci_setup(struct fsl_mc_device *ls_dev)
 	}
 
 	dev_info(dev, "dpseci v%d.%d\n", priv->major_ver, priv->minor_ver);
+
+	if (DPSECI_VER(priv->major_ver, priv->minor_ver) > DPSECI_VER(5, 3)) {
+		err = dpseci_reset(priv->mc_io, 0, ls_dev->mc_handle);
+		if (err) {
+			dev_err(dev, "dpseci_reset() failed\n");
+			goto err_get_vers;
+		}
+	}
 
 	err = dpseci_get_attributes(priv->mc_io, 0, ls_dev->mc_handle,
 				    &priv->dpseci_attr);
