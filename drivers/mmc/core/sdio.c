@@ -303,30 +303,49 @@ static int sdio_disable_wide(struct mmc_card *card)
 	return 0;
 }
 
+static int sdio_disable_4bit_bus(struct mmc_card *card)
+{
+	int err;
+
+	if (card->type == MMC_TYPE_SDIO)
+		goto out;
+
+	if (!(card->host->caps & MMC_CAP_4_BIT_DATA))
+		return 0;
+
+	if (!(card->scr.bus_widths & SD_SCR_BUS_WIDTH_4))
+		return 0;
+
+	err = mmc_app_set_bus_width(card, MMC_BUS_WIDTH_1);
+	if (err)
+		return err;
+
+out:
+	return sdio_disable_wide(card);
+}
+
 
 static int sdio_enable_4bit_bus(struct mmc_card *card)
 {
 	int err;
 
+	err = sdio_enable_wide(card);
+	if (err <= 0)
+		return err;
 	if (card->type == MMC_TYPE_SDIO)
-		err = sdio_enable_wide(card);
-	else if ((card->host->caps & MMC_CAP_4_BIT_DATA) &&
-		 (card->scr.bus_widths & SD_SCR_BUS_WIDTH_4)) {
+		goto out;
+
+	if (card->scr.bus_widths & SD_SCR_BUS_WIDTH_4) {
 		err = mmc_app_set_bus_width(card, MMC_BUS_WIDTH_4);
-		if (err)
+		if (err) {
+			sdio_disable_wide(card);
 			return err;
-		err = sdio_enable_wide(card);
-		if (err <= 0)
-			mmc_app_set_bus_width(card, MMC_BUS_WIDTH_1);
-	} else
-		return 0;
-
-	if (err > 0) {
-		mmc_set_bus_width(card->host, MMC_BUS_WIDTH_4);
-		err = 0;
+		}
 	}
+out:
+	mmc_set_bus_width(card->host, MMC_BUS_WIDTH_4);
 
-	return err;
+	return 0;
 }
 
 
@@ -972,7 +991,7 @@ static int mmc_sdio_suspend(struct mmc_host *host)
 	mmc_claim_host(host);
 
 	if (mmc_card_keep_power(host) && mmc_card_wake_sdio_irq(host))
-		sdio_disable_wide(host->card);
+		sdio_disable_4bit_bus(host->card);
 
 	if (!mmc_card_keep_power(host)) {
 		mmc_power_off(host);
