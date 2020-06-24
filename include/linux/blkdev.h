@@ -528,9 +528,9 @@ struct request_queue {
 	unsigned int		sg_timeout;
 	unsigned int		sg_reserved_size;
 	int			node;
+	struct mutex		debugfs_mutex;
 #ifdef CONFIG_BLK_DEV_IO_TRACE
 	struct blk_trace __rcu	*blk_trace;
-	struct mutex		blk_trace_mutex;
 #endif
 	/*
 	 * for flush operations
@@ -574,8 +574,9 @@ struct request_queue {
 	struct list_head	tag_set_list;
 	struct bio_set		bio_split;
 
-#ifdef CONFIG_BLK_DEBUG_FS
 	struct dentry		*debugfs_dir;
+
+#ifdef CONFIG_BLK_DEBUG_FS
 	struct dentry		*sched_debugfs_dir;
 	struct dentry		*rqos_debugfs_dir;
 #endif
@@ -583,8 +584,6 @@ struct request_queue {
 	bool			mq_sysfs_init_done;
 
 	size_t			cmd_size;
-
-	struct work_struct	release_work;
 
 #define BLK_MAX_WRITE_HINTS	5
 	u64			write_hints[BLK_MAX_WRITE_HINTS];
@@ -1078,7 +1077,6 @@ void blk_steal_bios(struct bio_list *list, struct request *rq);
 extern bool blk_update_request(struct request *rq, blk_status_t error,
 			       unsigned int nr_bytes);
 
-extern void __blk_complete_request(struct request *);
 extern void blk_abort_request(struct request *);
 
 /*
@@ -1189,6 +1187,7 @@ struct blk_plug {
 	struct list_head cb_list; /* md requires an unplug callback */
 	unsigned short rq_count;
 	bool multiple_queues;
+	bool nowait;
 };
 #define BLK_MAX_REQUEST_COUNT 16
 #define BLK_PLUG_FLUSH_SIZE (128 * 1024)
