@@ -25,7 +25,7 @@
 #include <linux/list.h>
 #include <linux/notifier.h>
 #include <linux/rbtree.h>
-#include <linux/radix-tree.h>
+#include <linux/xarray.h>
 #include <linux/rcupdate.h>
 #include <linux/pfn.h>
 #include <linux/kmemleak.h>
@@ -35,6 +35,7 @@
 #include <linux/bitops.h>
 #include <linux/rbtree_augmented.h>
 #include <linux/overflow.h>
+#include <linux/pgalloc-track.h>
 
 #include <linux/uaccess.h>
 #include <asm/tlbflush.h>
@@ -632,43 +633,17 @@ unlink_va(struct vmap_area *va, struct rb_root *root)
 
 #if DEBUG_AUGMENT_PROPAGATE_CHECK
 static void
-augment_tree_propagate_check(struct rb_node *n)
+augment_tree_propagate_check(void)
 {
 	struct vmap_area *va;
-	struct rb_node *node;
-	unsigned long size;
-	bool found = false;
+	unsigned long computed_size;
 
-	if (n == NULL)
-		return;
-
-	va = rb_entry(n, struct vmap_area, rb_node);
-	size = va->subtree_max_size;
-	node = n;
-
-	while (node) {
-		va = rb_entry(node, struct vmap_area, rb_node);
-
-		if (get_subtree_max_size(node->rb_left) == size) {
-			node = node->rb_left;
-		} else {
-			if (va_size(va) == size) {
-				found = true;
-				break;
-			}
-
-			node = node->rb_right;
-		}
+	list_for_each_entry(va, &free_vmap_area_list, list) {
+		computed_size = compute_subtree_max_size(va);
+		if (computed_size != va->subtree_max_size)
+			pr_emerg("tree is corrupted: %lu, %lu\n",
+				va_size(va), va->subtree_max_size);
 	}
-
-	if (!found) {
-		va = rb_entry(n, struct vmap_area, rb_node);
-		pr_emerg("tree is corrupted: %lu, %lu\n",
-			va_size(va), va->subtree_max_size);
-	}
-
-	augment_tree_propagate_check(n->rb_left);
-	augment_tree_propagate_check(n->rb_right);
 }
 #endif
 
@@ -702,28 +677,15 @@ augment_tree_propagate_check(struct rb_node *n)
 static __always_inline void
 augment_tree_propagate_from(struct vmap_area *va)
 {
-	struct rb_node *node = &va->rb_node;
-	unsigned long new_va_sub_max_size;
-
-	while (node) {
-		va = rb_entry(node, struct vmap_area, rb_node);
-		new_va_sub_max_size = compute_subtree_max_size(va);
-
-		/*
-		 * If the newly calculated maximum available size of the
-		 * subtree is equal to the current one, then it means that
-		 * the tree is propagated correctly. So we have to stop at
-		 * this point to save cycles.
-		 */
-		if (va->subtree_max_size == new_va_sub_max_size)
-			break;
-
-		va->subtree_max_size = new_va_sub_max_size;
-		node = rb_parent(&va->rb_node);
-	}
+	/*
+	 * Populate the tree from bottom towards the root until
+	 * the calculated maximum available size of checked node
+	 * is equal to its current one.
+	 */
+	free_vmap_area_rb_augment_cb_propagate(&va->rb_node, NULL);
 
 #if DEBUG_AUGMENT_PROPAGATE_CHECK
-	augment_tree_propagate_check(free_vmap_area_root.rb_node);
+	augment_tree_propagate_check();
 #endif
 }
 
@@ -796,9 +758,6 @@ merge_or_add_vmap_area(struct vmap_area *va,
 		if (sibling->va_start == va->va_end) {
 			sibling->va_start = va->va_start;
 
-			/* Check and update the tree if needed. */
-			augment_tree_propagate_from(sibling);
-
 			/* Free vmap_area object. */
 			kmem_cache_free(vmap_area_cachep, va);
 
@@ -818,13 +777,17 @@ merge_or_add_vmap_area(struct vmap_area *va,
 	if (next->prev != head) {
 		sibling = list_entry(next->prev, struct vmap_area, list);
 		if (sibling->va_end == va->va_start) {
-			sibling->va_end = va->va_end;
-
-			/* Check and update the tree if needed. */
-			augment_tree_propagate_from(sibling);
-
+			/*
+			 * If both neighbors are coalesced, it is important
+			 * to unlink the "next" node first, followed by merging
+			 * with "previous" one. Otherwise the tree might not be
+			 * fully populated if a sibling's augmented value is
+			 * "normalized" because of rotation operations.
+			 */
 			if (merged)
 				unlink_va(va, root);
+
+			sibling->va_end = va->va_end;
 
 			/* Free vmap_area object. */
 			kmem_cache_free(vmap_area_cachep, va);
@@ -836,11 +799,13 @@ merge_or_add_vmap_area(struct vmap_area *va,
 	}
 
 insert:
-	if (!merged) {
+	if (!merged)
 		link_va(va, root, parent, link, head);
-		augment_tree_propagate_from(va);
-	}
 
+	/*
+	 * Last step is to check and update the tree.
+	 */
+	augment_tree_propagate_from(va);
 	return va;
 }
 
@@ -1513,12 +1478,11 @@ struct vmap_block {
 static DEFINE_PER_CPU(struct vmap_block_queue, vmap_block_queue);
 
 /*
- * Radix tree of vmap blocks, indexed by address, to quickly find a vmap block
+ * XArray of vmap blocks, indexed by address, to quickly find a vmap block
  * in the free path. Could get rid of this if we change the API to return a
  * "cookie" from alloc, to be passed to free. But no big deal yet.
  */
-static DEFINE_SPINLOCK(vmap_block_tree_lock);
-static RADIX_TREE(vmap_block_tree, GFP_ATOMIC);
+static DEFINE_XARRAY(vmap_blocks);
 
 /*
  * We should probably have a fallback mechanism to allocate virtual memory
@@ -1575,13 +1539,6 @@ static void *new_vmap_block(unsigned int order, gfp_t gfp_mask)
 		return ERR_CAST(va);
 	}
 
-	err = radix_tree_preload(gfp_mask);
-	if (unlikely(err)) {
-		kfree(vb);
-		free_vmap_area(va);
-		return ERR_PTR(err);
-	}
-
 	vaddr = vmap_block_vaddr(va->va_start, 0);
 	spin_lock_init(&vb->lock);
 	vb->va = va;
@@ -1594,11 +1551,12 @@ static void *new_vmap_block(unsigned int order, gfp_t gfp_mask)
 	INIT_LIST_HEAD(&vb->free_list);
 
 	vb_idx = addr_to_vb_idx(va->va_start);
-	spin_lock(&vmap_block_tree_lock);
-	err = radix_tree_insert(&vmap_block_tree, vb_idx, vb);
-	spin_unlock(&vmap_block_tree_lock);
-	BUG_ON(err);
-	radix_tree_preload_end();
+	err = xa_insert(&vmap_blocks, vb_idx, vb, gfp_mask);
+	if (err) {
+		kfree(vb);
+		free_vmap_area(va);
+		return ERR_PTR(err);
+	}
 
 	vbq = &get_cpu_var(vmap_block_queue);
 	spin_lock(&vbq->lock);
@@ -1612,12 +1570,8 @@ static void *new_vmap_block(unsigned int order, gfp_t gfp_mask)
 static void free_vmap_block(struct vmap_block *vb)
 {
 	struct vmap_block *tmp;
-	unsigned long vb_idx;
 
-	vb_idx = addr_to_vb_idx(vb->va->va_start);
-	spin_lock(&vmap_block_tree_lock);
-	tmp = radix_tree_delete(&vmap_block_tree, vb_idx);
-	spin_unlock(&vmap_block_tree_lock);
+	tmp = xa_erase(&vmap_blocks, addr_to_vb_idx(vb->va->va_start));
 	BUG_ON(tmp != vb);
 
 	free_vmap_area_noflush(vb->va);
@@ -1723,7 +1677,6 @@ static void *vb_alloc(unsigned long size, gfp_t gfp_mask)
 static void vb_free(unsigned long addr, unsigned long size)
 {
 	unsigned long offset;
-	unsigned long vb_idx;
 	unsigned int order;
 	struct vmap_block *vb;
 
@@ -1733,14 +1686,8 @@ static void vb_free(unsigned long addr, unsigned long size)
 	flush_cache_vunmap(addr, addr + size);
 
 	order = get_order(size);
-
 	offset = (addr & (VMAP_BLOCK_SIZE - 1)) >> PAGE_SHIFT;
-
-	vb_idx = addr_to_vb_idx(addr);
-	rcu_read_lock();
-	vb = radix_tree_lookup(&vmap_block_tree, vb_idx);
-	rcu_read_unlock();
-	BUG_ON(!vb);
+	vb = xa_load(&vmap_blocks, addr_to_vb_idx(addr));
 
 	unmap_kernel_range_noflush(addr, size);
 
@@ -2695,26 +2642,6 @@ void *vzalloc_node(unsigned long size, int node)
 				__builtin_return_address(0));
 }
 EXPORT_SYMBOL(vzalloc_node);
-
-/**
- * vmalloc_exec - allocate virtually contiguous, executable memory
- * @size:	  allocation size
- *
- * Kernel-internal function to allocate enough pages to cover @size
- * the page level allocator and map them into contiguous and
- * executable kernel virtual space.
- *
- * For tight control over page level allocator and protection flags
- * use __vmalloc() instead.
- *
- * Return: pointer to the allocated memory or %NULL on error
- */
-void *vmalloc_exec(unsigned long size)
-{
-	return __vmalloc_node_range(size, 1, VMALLOC_START, VMALLOC_END,
-			GFP_KERNEL, PAGE_KERNEL_EXEC, VM_FLUSH_RESET_PERMS,
-			NUMA_NO_NODE, __builtin_return_address(0));
-}
 
 #if defined(CONFIG_64BIT) && defined(CONFIG_ZONE_DMA32)
 #define GFP_VMALLOC32 (GFP_DMA32 | GFP_KERNEL)

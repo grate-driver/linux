@@ -229,7 +229,7 @@ static void cc_cipher_exit(struct crypto_tfm *tfm)
 		&ctx_p->user.key_dma_addr);
 
 	/* Free key buffer in context */
-	kzfree(ctx_p->user.key);
+	kfree_sensitive(ctx_p->user.key);
 	dev_dbg(dev, "Free key buffer in context. key=@%p\n", ctx_p->user.key);
 }
 
@@ -825,7 +825,7 @@ static void cc_cipher_complete(struct device *dev, void *cc_req, int err)
 		/* Not a BACKLOG notification */
 		cc_unmap_cipher_request(dev, req_ctx, ivsize, src, dst);
 		memcpy(req->iv, req_ctx->iv, ivsize);
-		kzfree(req_ctx->iv);
+		kfree_sensitive(req_ctx->iv);
 	}
 
 	skcipher_request_complete(req, err);
@@ -927,7 +927,7 @@ static int cc_cipher_process(struct skcipher_request *req,
 
 exit_process:
 	if (rc != -EINPROGRESS && rc != -EBUSY) {
-		kzfree(req_ctx->iv);
+		kfree_sensitive(req_ctx->iv);
 	}
 
 	return rc;

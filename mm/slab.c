@@ -1239,7 +1239,6 @@ void __init kmem_cache_init(void)
 				  nr_node_ids * sizeof(struct kmem_cache_node *),
 				  SLAB_HWCACHE_ALIGN, 0, 0);
 	list_add(&kmem_cache->list, &slab_caches);
-	memcg_link_cache(kmem_cache, NULL);
 	slab_state = PARTIAL;
 
 	/*
@@ -1370,11 +1369,7 @@ static struct page *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,
 		return NULL;
 	}
 
-	if (charge_slab_page(page, flags, cachep->gfporder, cachep)) {
-		__free_pages(page, cachep->gfporder);
-		return NULL;
-	}
-
+	charge_slab_page(page, flags, cachep->gfporder, cachep);
 	__SetPageSlab(page);
 	/* Record if ALLOC_NO_WATERMARKS was set when allocating the slab */
 	if (sk_memalloc_socks() && page_is_pfmemalloc(page))
@@ -2242,17 +2237,6 @@ int __kmem_cache_shrink(struct kmem_cache *cachep)
 	}
 	return (ret ? 1 : 0);
 }
-
-#ifdef CONFIG_MEMCG
-void __kmemcg_cache_deactivate(struct kmem_cache *cachep)
-{
-	__kmem_cache_shrink(cachep);
-}
-
-void __kmemcg_cache_deactivate_after_rcu(struct kmem_cache *s)
-{
-}
-#endif
 
 int __kmem_cache_shutdown(struct kmem_cache *cachep)
 {
@@ -3222,9 +3206,10 @@ slab_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid,
 	unsigned long save_flags;
 	void *ptr;
 	int slab_node = numa_mem_id();
+	struct obj_cgroup *objcg = NULL;
 
 	flags &= gfp_allowed_mask;
-	cachep = slab_pre_alloc_hook(cachep, flags);
+	cachep = slab_pre_alloc_hook(cachep, &objcg, 1, flags);
 	if (unlikely(!cachep))
 		return NULL;
 
@@ -3260,7 +3245,7 @@ slab_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid,
 	if (unlikely(slab_want_init_on_alloc(flags, cachep)) && ptr)
 		memset(ptr, 0, cachep->object_size);
 
-	slab_post_alloc_hook(cachep, flags, 1, &ptr);
+	slab_post_alloc_hook(cachep, objcg, flags, 1, &ptr);
 	return ptr;
 }
 
@@ -3301,9 +3286,10 @@ slab_alloc(struct kmem_cache *cachep, gfp_t flags, unsigned long caller)
 {
 	unsigned long save_flags;
 	void *objp;
+	struct obj_cgroup *objcg = NULL;
 
 	flags &= gfp_allowed_mask;
-	cachep = slab_pre_alloc_hook(cachep, flags);
+	cachep = slab_pre_alloc_hook(cachep, &objcg, 1, flags);
 	if (unlikely(!cachep))
 		return NULL;
 
@@ -3317,7 +3303,7 @@ slab_alloc(struct kmem_cache *cachep, gfp_t flags, unsigned long caller)
 	if (unlikely(slab_want_init_on_alloc(flags, cachep)) && objp)
 		memset(objp, 0, cachep->object_size);
 
-	slab_post_alloc_hook(cachep, flags, 1, &objp);
+	slab_post_alloc_hook(cachep, objcg, flags, 1, &objp);
 	return objp;
 }
 
@@ -3426,6 +3412,10 @@ static __always_inline void __cache_free(struct kmem_cache *cachep, void *objp,
 	if (kasan_slab_free(cachep, objp, _RET_IP_))
 		return;
 
+	/* Use KCSAN to help debug racy use-after-free. */
+	__kcsan_check_access(objp, cachep->object_size,
+			     KCSAN_ACCESS_WRITE | KCSAN_ACCESS_ASSERT);
+
 	___cache_free(cachep, objp, caller);
 }
 
@@ -3439,6 +3429,7 @@ void ___cache_free(struct kmem_cache *cachep, void *objp,
 		memset(objp, 0, cachep->object_size);
 	kmemleak_free_recursive(objp, cachep->flags);
 	objp = cache_free_debugcheck(cachep, objp, caller);
+	memcg_slab_free_hook(cachep, virt_to_head_page(objp), objp);
 
 	/*
 	 * Skip calling cache_free_alien() when the platform is not numa.
@@ -3504,8 +3495,9 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
 			  void **p)
 {
 	size_t i;
+	struct obj_cgroup *objcg = NULL;
 
-	s = slab_pre_alloc_hook(s, flags);
+	s = slab_pre_alloc_hook(s, &objcg, size, flags);
 	if (!s)
 		return 0;
 
@@ -3528,13 +3520,13 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
 		for (i = 0; i < size; i++)
 			memset(p[i], 0, s->object_size);
 
-	slab_post_alloc_hook(s, flags, size, p);
+	slab_post_alloc_hook(s, objcg, flags, size, p);
 	/* FIXME: Trace call missing. Christoph would like a bulk variant */
 	return size;
 error:
 	local_irq_enable();
 	cache_alloc_debugcheck_after_bulk(s, flags, i, p, _RET_IP_);
-	slab_post_alloc_hook(s, flags, i, p);
+	slab_post_alloc_hook(s, objcg, flags, i, p);
 	__kmem_cache_free_bulk(s, i, p);
 	return 0;
 }
@@ -3796,8 +3788,8 @@ fail:
 }
 
 /* Always called with the slab_mutex held */
-static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
-				int batchcount, int shared, gfp_t gfp)
+static int do_tune_cpucache(struct kmem_cache *cachep, int limit,
+			    int batchcount, int shared, gfp_t gfp)
 {
 	struct array_cache __percpu *cpu_cache, *prev;
 	int cpu;
@@ -3842,29 +3834,6 @@ setup_node:
 	return setup_kmem_cache_nodes(cachep, gfp);
 }
 
-static int do_tune_cpucache(struct kmem_cache *cachep, int limit,
-				int batchcount, int shared, gfp_t gfp)
-{
-	int ret;
-	struct kmem_cache *c;
-
-	ret = __do_tune_cpucache(cachep, limit, batchcount, shared, gfp);
-
-	if (slab_state < FULL)
-		return ret;
-
-	if ((ret < 0) || !is_root_cache(cachep))
-		return ret;
-
-	lockdep_assert_held(&slab_mutex);
-	for_each_memcg_cache(c, cachep) {
-		/* return value determined by the root cache only */
-		__do_tune_cpucache(c, limit, batchcount, shared, gfp);
-	}
-
-	return ret;
-}
-
 /* Called with slab_mutex held always */
 static int enable_cpucache(struct kmem_cache *cachep, gfp_t gfp)
 {
@@ -3876,13 +3845,6 @@ static int enable_cpucache(struct kmem_cache *cachep, gfp_t gfp)
 	err = cache_random_seq_create(cachep, cachep->num, gfp);
 	if (err)
 		goto end;
-
-	if (!is_root_cache(cachep)) {
-		struct kmem_cache *root = memcg_root_cache(cachep);
-		limit = root->limit;
-		shared = root->shared;
-		batchcount = root->batchcount;
-	}
 
 	if (limit && shared && batchcount)
 		goto skip_setup;

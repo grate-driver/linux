@@ -341,6 +341,11 @@ void __mod_node_page_state(struct pglist_data *pgdat, enum node_stat_item item,
 	long x;
 	long t;
 
+	if (vmstat_item_in_bytes(item)) {
+		VM_WARN_ON_ONCE(delta & (PAGE_SIZE - 1));
+		delta >>= PAGE_SHIFT;
+	}
+
 	x = delta + __this_cpu_read(*p);
 
 	t = __this_cpu_read(pcp->stat_threshold);
@@ -398,6 +403,8 @@ void __inc_node_state(struct pglist_data *pgdat, enum node_stat_item item)
 	s8 __percpu *p = pcp->vm_node_stat_diff + item;
 	s8 v, t;
 
+	VM_WARN_ON_ONCE(vmstat_item_in_bytes(item));
+
 	v = __this_cpu_inc_return(*p);
 	t = __this_cpu_read(pcp->stat_threshold);
 	if (unlikely(v > t)) {
@@ -441,6 +448,8 @@ void __dec_node_state(struct pglist_data *pgdat, enum node_stat_item item)
 	struct per_cpu_nodestat __percpu *pcp = pgdat->per_cpu_nodestats;
 	s8 __percpu *p = pcp->vm_node_stat_diff + item;
 	s8 v, t;
+
+	VM_WARN_ON_ONCE(vmstat_item_in_bytes(item));
 
 	v = __this_cpu_dec_return(*p);
 	t = __this_cpu_read(pcp->stat_threshold);
@@ -540,6 +549,11 @@ static inline void mod_node_state(struct pglist_data *pgdat,
 	struct per_cpu_nodestat __percpu *pcp = pgdat->per_cpu_nodestats;
 	s8 __percpu *p = pcp->vm_node_stat_diff + item;
 	long o, n, t, z;
+
+	if (vmstat_item_in_bytes(item)) {
+		VM_WARN_ON_ONCE(delta & (PAGE_SIZE - 1));
+		delta >>= PAGE_SHIFT;
+	}
 
 	do {
 		z = 0;  /* overflow to node counters */
@@ -989,8 +1003,8 @@ unsigned long sum_zone_numa_state(int node,
 /*
  * Determine the per node value of a stat item.
  */
-unsigned long node_page_state(struct pglist_data *pgdat,
-				enum node_stat_item item)
+unsigned long node_page_state_pages(struct pglist_data *pgdat,
+				    enum node_stat_item item)
 {
 	long x = atomic_long_read(&pgdat->vm_stat[item]);
 #ifdef CONFIG_SMP
@@ -998,6 +1012,14 @@ unsigned long node_page_state(struct pglist_data *pgdat,
 		x = 0;
 #endif
 	return x;
+}
+
+unsigned long node_page_state(struct pglist_data *pgdat,
+			      enum node_stat_item item)
+{
+	VM_WARN_ON_ONCE(vmstat_item_in_bytes(item));
+
+	return node_page_state_pages(pgdat, item);
 }
 #endif
 
@@ -1072,6 +1094,24 @@ static int __fragmentation_index(unsigned int order, struct contig_page_info *in
 	 * 1 => allocation would fail due to fragmentation
 	 */
 	return 1000 - div_u64( (1000+(div_u64(info->free_pages * 1000ULL, requested))), info->free_blocks_total);
+}
+
+/*
+ * Calculates external fragmentation within a zone wrt the given order.
+ * It is defined as the percentage of pages found in blocks of size
+ * less than 1 << order. It returns values in range [0, 100].
+ */
+unsigned int extfrag_for_order(struct zone *zone, unsigned int order)
+{
+	struct contig_page_info info;
+
+	fill_contig_page_info(zone, order, &info);
+	if (info.free_pages == 0)
+		return 0;
+
+	return div_u64((info.free_pages -
+			(info.free_blocks_suitable << order)) * 100,
+			info.free_pages);
 }
 
 /* Same as __fragmentation index but allocs contig_page_info on stack */
@@ -1280,6 +1320,10 @@ const char * const vmstat_text[] = {
 	"thp_zero_page_alloc_failed",
 	"thp_swpout",
 	"thp_swpout_fallback",
+#ifdef CONFIG_ARCH_ENABLE_THP_MIGRATION
+	"thp_pmd_migration_success",
+	"thp_pmd_migration_failure",
+#endif
 #endif
 #ifdef CONFIG_MEMORY_BALLOON
 	"balloon_inflate",
@@ -1577,7 +1621,7 @@ static void zoneinfo_show_print(struct seq_file *m, pg_data_t *pgdat,
 		seq_printf(m, "\n  per-node stats");
 		for (i = 0; i < NR_VM_NODE_STAT_ITEMS; i++) {
 			seq_printf(m, "\n      %-12s %lu", node_stat_name(i),
-				   node_page_state(pgdat, i));
+				   node_page_state_pages(pgdat, i));
 		}
 	}
 	seq_printf(m,
@@ -1698,7 +1742,7 @@ static void *vmstat_start(struct seq_file *m, loff_t *pos)
 #endif
 
 	for (i = 0; i < NR_VM_NODE_STAT_ITEMS; i++)
-		v[i] = global_node_page_state(i);
+		v[i] = global_node_page_state_pages(i);
 	v += NR_VM_NODE_STAT_ITEMS;
 
 	global_dirty_limits(v + NR_DIRTY_BG_THRESHOLD,

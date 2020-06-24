@@ -218,8 +218,8 @@ static inline void ap_init_message(struct ap_message *ap_msg)
  */
 static inline void ap_release_message(struct ap_message *ap_msg)
 {
-	kzfree(ap_msg->message);
-	kzfree(ap_msg->private);
+	kfree_sensitive(ap_msg->message);
+	kfree_sensitive(ap_msg->private);
 }
 
 /*

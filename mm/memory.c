@@ -1098,7 +1098,7 @@ again:
 		}
 
 		entry = pte_to_swp_entry(ptent);
-		if (non_swap_entry(entry) && is_device_private_entry(entry)) {
+		if (is_device_private_entry(entry)) {
 			struct page *page = device_private_entry_to_page(entry);
 
 			if (unlikely(details && details->check_mapping)) {
@@ -1498,7 +1498,7 @@ out:
 }
 
 #ifdef pte_index
-static int insert_page_in_batch_locked(struct mm_struct *mm, pmd_t *pmd,
+static int insert_page_in_batch_locked(struct mm_struct *mm, pte_t *pte,
 			unsigned long addr, struct page *page, pgprot_t prot)
 {
 	int err;
@@ -1506,8 +1506,9 @@ static int insert_page_in_batch_locked(struct mm_struct *mm, pmd_t *pmd,
 	if (!page_count(page))
 		return -EINVAL;
 	err = validate_page_before_insert(page);
-	return err ? err : insert_page_into_pte_locked(
-		mm, pte_offset_map(pmd, addr), addr, page, prot);
+	if (err)
+		return err;
+	return insert_page_into_pte_locked(mm, pte, addr, page, prot);
 }
 
 /* insert_pages() amortizes the cost of spinlock operations
@@ -1517,7 +1518,8 @@ static int insert_pages(struct vm_area_struct *vma, unsigned long addr,
 			struct page **pages, unsigned long *num, pgprot_t prot)
 {
 	pmd_t *pmd = NULL;
-	spinlock_t *pte_lock = NULL;
+	pte_t *start_pte, *pte;
+	spinlock_t *pte_lock;
 	struct mm_struct *const mm = vma->vm_mm;
 	unsigned long curr_page_idx = 0;
 	unsigned long remaining_pages_total = *num;
@@ -1536,18 +1538,17 @@ more:
 	ret = -ENOMEM;
 	if (pte_alloc(mm, pmd))
 		goto out;
-	pte_lock = pte_lockptr(mm, pmd);
 
 	while (pages_to_write_in_pmd) {
 		int pte_idx = 0;
 		const int batch_size = min_t(int, pages_to_write_in_pmd, 8);
 
-		spin_lock(pte_lock);
-		for (; pte_idx < batch_size; ++pte_idx) {
-			int err = insert_page_in_batch_locked(mm, pmd,
+		start_pte = pte_offset_map_lock(mm, pmd, addr, &pte_lock);
+		for (pte = start_pte; pte_idx < batch_size; ++pte, ++pte_idx) {
+			int err = insert_page_in_batch_locked(mm, pte,
 				addr, pages[curr_page_idx], prot);
 			if (unlikely(err)) {
-				spin_unlock(pte_lock);
+				pte_unmap_unlock(start_pte, pte_lock);
 				ret = err;
 				remaining_pages_total -= pte_idx;
 				goto out;
@@ -1555,7 +1556,7 @@ more:
 			addr += PAGE_SIZE;
 			++curr_page_idx;
 		}
-		spin_unlock(pte_lock);
+		pte_unmap_unlock(start_pte, pte_lock);
 		pages_to_write_in_pmd -= batch_size;
 		remaining_pages_total -= batch_size;
 	}
@@ -2081,7 +2082,7 @@ static inline int remap_p4d_range(struct mm_struct *mm, pgd_t *pgd,
 /**
  * remap_pfn_range - remap kernel memory to userspace
  * @vma: user vma to map to
- * @addr: target user address to start at
+ * @addr: target page aligned user address to start at
  * @pfn: page frame number of kernel physical memory address
  * @size: size of mapping area
  * @prot: page protection flags for this mapping
@@ -2099,6 +2100,9 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 	struct mm_struct *mm = vma->vm_mm;
 	unsigned long remap_pfn = pfn;
 	int err;
+
+	if (WARN_ON_ONCE(!PAGE_ALIGNED(addr)))
+		return -EINVAL;
 
 	/*
 	 * Physically remapped pages are special. Tell the
@@ -3140,8 +3144,18 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 				err = mem_cgroup_charge(page, vma->vm_mm,
 							GFP_KERNEL);
 				ClearPageSwapCache(page);
-				if (err)
+				if (err) {
+					ret = VM_FAULT_OOM;
 					goto out_page;
+				}
+
+				/*
+				 * XXX: Move to lru_cache_add() when it
+				 * supports new vs putback
+				 */
+				spin_lock_irq(&page_pgdat(page)->lru_lock);
+				lru_note_cost_page(page);
+				spin_unlock_irq(&page_pgdat(page)->lru_lock);
 
 				lru_cache_add(page);
 				swap_readpage(page, true);

@@ -64,6 +64,8 @@ ALL_TESTS="$ALL_TESTS 0009:150:1"
 ALL_TESTS="$ALL_TESTS 0010:1:1"
 ALL_TESTS="$ALL_TESTS 0011:1:1"
 
+MODULE_NOT_FOUND="FAILURE"
+
 # Kselftest framework requirement - SKIP code is 4.
 ksft_skip=4
 
@@ -155,14 +157,19 @@ test_finish()
 	echo "Test completed"
 }
 
+# OLD_FAILURE is just because the old kernel umh never wrapped
+# the error with WEXITSTATUS(). Now that it does it, we get the
+# appropriate actual value from userspace observed in-kernel.
+
+# We keep the old mapping to ensure this script keeps working
+# with older kernels.
 errno_name_to_val()
 {
 	case "$1" in
-	# kmod calls modprobe and upon of a module not found
-	# modprobe returns just 1... However in the kernel we
-	# *sometimes* see 256...
-	MODULE_NOT_FOUND)
+	OLD_FAILURE)
 		echo 256;;
+	FAILURE)
+		echo 1;;
 	SUCCESS)
 		echo 0;;
 	-EPERM)
@@ -181,7 +188,9 @@ errno_name_to_val()
 errno_val_to_name()
 	case "$1" in
 	256)
-		echo MODULE_NOT_FOUND;;
+		echo OLD_FAILURE;;
+	1)
+		echo FAILURE;;
 	0)
 		echo SUCCESS;;
 	-1)
@@ -335,15 +344,37 @@ kmod_defaults_fs()
 	config_set_test_case_fs
 }
 
+check_umh()
+{
+	NAME=''
+
+	kmod_defaults_driver
+	config_num_threads 1
+	printf '\0' >"$DIR"/config_test_driver
+	config_trigger ${FUNCNAME[0]}
+	RC=$(config_get_test_result)
+	if [[ "$RC" == "256" ]]; then
+		MODULE_NOT_FOUND="OLD_FAILURE"
+		echo "check_umh: you have and old umh which didn't wrap errors"
+		echo "           with WEXITSTATUS(). This is OK!"
+	elif [[ "$RC" != "1" ]]; then
+		echo "check_umh: Unexpected return value with no modprobe argument: $RC"
+		exit
+	else
+		echo "check_umh: You have a new umh which wraps erros with"
+		echo "           WEXITSTATUS(). This is OK!"
+	fi
+}
+
 kmod_test_0001_driver()
 {
 	NAME='\000'
 
 	kmod_defaults_driver
 	config_num_threads 1
-	printf '\000' >"$DIR"/config_test_driver
+	printf $NAME >"$DIR"/config_test_driver
 	config_trigger ${FUNCNAME[0]}
-	config_expect_result ${FUNCNAME[0]} MODULE_NOT_FOUND
+	config_expect_result ${FUNCNAME[0]} $MODULE_NOT_FOUND
 }
 
 kmod_test_0001_fs()
@@ -352,7 +383,7 @@ kmod_test_0001_fs()
 
 	kmod_defaults_fs
 	config_num_threads 1
-	printf '\000' >"$DIR"/config_test_fs
+	printf $NAME >"$DIR"/config_test_fs
 	config_trigger ${FUNCNAME[0]}
 	config_expect_result ${FUNCNAME[0]} -EINVAL
 }
@@ -371,7 +402,7 @@ kmod_test_0002_driver()
 	config_set_driver $NAME
 	config_num_threads 1
 	config_trigger ${FUNCNAME[0]}
-	config_expect_result ${FUNCNAME[0]} MODULE_NOT_FOUND
+	config_expect_result ${FUNCNAME[0]} $MODULE_NOT_FOUND
 }
 
 kmod_test_0002_fs()
@@ -648,6 +679,7 @@ load_req_mod
 MODPROBE=$(</proc/sys/kernel/modprobe)
 trap "test_finish" EXIT
 
+check_umh
 parse_args $@
 
 exit 0

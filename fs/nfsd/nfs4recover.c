@@ -1820,7 +1820,7 @@ nfsd4_umh_cltrack_upcall(char *cmd, char *arg, char *env0, char *env1)
 
 	ret = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
 	/*
-	 * Disable the upcall mechanism if we're getting an ENOENT or EACCES
+	 * Disable the upcall mechanism if we're getting an -ENOENT or -EACCES
 	 * error. The admin can re-enable it on the fly by using sysfs
 	 * once the problem has been fixed.
 	 */

@@ -154,8 +154,8 @@ static void call_usermodehelper_exec_sync(struct subprocess_info *sub_info)
 		 * the real error code is already in sub_info->retval or
 		 * sub_info->retval is 0 anyway, so don't mess with it then.
 		 */
-		if (ret)
-			sub_info->retval = ret;
+		if (KWIFEXITED(ret))
+			sub_info->retval = KWEXITSTATUS(ret);
 	}
 
 	/* Restore default kernel sig handler */

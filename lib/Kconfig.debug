@@ -874,7 +874,7 @@ config PANIC_TIMEOUT
 	int "panic timeout"
 	default 0
 	help
-	  Set the timeout value (in seconds) until a reboot occurs when the
+	  Set the timeout value (in seconds) until a reboot occurs when
 	  the kernel panics. If n = 0, then we wait forever. A timeout
 	  value n > 0 will wait n seconds before rebooting, while a timeout
 	  value n < 0 will reboot immediately.
@@ -1612,6 +1612,12 @@ config IO_STRICT_DEVMEM
 
 menu "$(SRCARCH) Debugging"
 
+config DEBUG_AID_FOR_SYZBOT
+       bool "Additional debug code for syzbot"
+       default n
+       help
+         This option is intended for testing by syzbot.
+
 source "arch/$(SRCARCH)/Kconfig.debug"
 
 endmenu
@@ -2180,6 +2186,17 @@ config LINEAR_RANGES_TEST
 	help
 	  This builds the linear_ranges unit test, which runs on boot.
 	  Tests the linear_ranges logic correctness.
+	  For more information on KUnit and unit tests in general please refer
+	  to the KUnit documentation in Documentation/dev-tools/kunit/.
+
+	  If unsure, say N.
+
+config BITS_TEST
+	tristate "KUnit test for bits.h"
+	depends on KUNIT
+	help
+	  This builds the bits unit test.
+	  Tests the logic of macros defined in bits.h.
 	  For more information on KUnit and unit tests in general please refer
 	  to the KUnit documentation in Documentation/dev-tools/kunit/.
 
