@@ -11,6 +11,7 @@
 #include <linux/export.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/net.h>
 #include <linux/sched/signal.h>
 #include <linux/slab.h>
 #include <linux/file.h>
@@ -18,6 +19,8 @@
 #include <linux/bitops.h>
 #include <linux/spinlock.h>
 #include <linux/rcupdate.h>
+#include <net/cls_cgroup.h>
+#include <net/netprio_cgroup.h>
 
 unsigned int sysctl_nr_open __read_mostly = 1024*1024;
 unsigned int sysctl_nr_open_min = BITS_PER_LONG;
@@ -929,6 +932,68 @@ int replace_fd(unsigned fd, struct file *file, unsigned flags)
 out_unlock:
 	spin_unlock(&files->file_lock);
 	return err;
+}
+
+/**
+ * __fd_install_received() - Install received file into file descriptor table
+ *
+ * @fd: fd to install into (if negative, a new fd will be allocated)
+ * @file: struct file that was received from another process
+ * @ufd: __user pointer to write new fd number to
+ * @o_flags: the O_* flags to apply to the new fd entry
+ *
+ * Installs a received file into the file descriptor table, with appropriate
+ * checks and count updates. Optionally writes the fd number to userspace, if
+ * @ufd is non-NULL.
+ *
+ * Returns newly install fd or -ve on error.
+ */
+int __fd_install_received(int fd, struct file *file, int __user *ufd,
+			  unsigned int o_flags)
+{
+	struct socket *sock;
+	int new_fd;
+	int error;
+
+	error = security_file_receive(file);
+	if (error)
+		return error;
+
+	if (fd < 0) {
+		new_fd = get_unused_fd_flags(o_flags);
+		if (new_fd < 0)
+			return new_fd;
+	} else
+		new_fd = fd;
+
+	if (ufd) {
+		error = put_user(new_fd, ufd);
+		if (error) {
+			if (fd < 0)
+				put_unused_fd(new_fd);
+			return error;
+		}
+	}
+
+	if (fd < 0)
+		fd_install(new_fd, get_file(file));
+	else {
+		error = replace_fd(new_fd, file, o_flags);
+		if (error)
+			return error;
+	}
+
+	/*
+	 * Bump the usage count and install the file. The resulting value of
+	 * "error" is ignored here since we only need to take action when
+	 * the file is a socket and testing "sock" for NULL is sufficient.
+	 */
+	sock = sock_from_file(file, &error);
+	if (sock) {
+		sock_update_netprioidx(&sock->sk->sk_cgrp_data);
+		sock_update_classid(&sock->sk->sk_cgrp_data);
+	}
+	return new_fd;
 }
 
 static int ksys_dup3(unsigned int oldfd, unsigned int newfd, int flags)
