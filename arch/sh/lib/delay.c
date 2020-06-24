@@ -42,6 +42,7 @@ inline void __const_udelay(unsigned long xloops)
 		: "macl", "mach");
 	__delay(++xloops);
 }
+EXPORT_SYMBOL(__delay);
 
 void __udelay(unsigned long usecs)
 {
