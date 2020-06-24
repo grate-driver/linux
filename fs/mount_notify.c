@@ -93,6 +93,8 @@ void notify_mount(struct mount *trigger,
 	n.watch.info	= info_flags | watch_sizeof(n);
 	n.triggered_on	= trigger->mnt_id;
 
+	smp_wmb(); /* See fsinfo_generic_mount_info(). */
+
 	switch (subtype) {
 	case NOTIFY_MOUNT_EXPIRY:
 	case NOTIFY_MOUNT_READONLY:

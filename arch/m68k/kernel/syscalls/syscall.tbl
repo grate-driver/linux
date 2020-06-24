@@ -441,3 +441,4 @@
 439	common	faccessat2			sys_faccessat2
 440	common	watch_mount			sys_watch_mount
 441	common	watch_sb			sys_watch_sb
+442	common	fsinfo				sys_fsinfo

@@ -16,6 +16,7 @@ struct mnt_namespace {
 	 * - taking namespace_sem for read AND taking .ns_lock.
 	 */
 	struct list_head	list;
+	struct hlist_head	mounts_safe;	/* RCU-safe mount list; mount->mnt_safe_link */
 	spinlock_t		ns_lock;
 	struct user_namespace	*user_ns;
 	struct ucounts		*ucounts;
@@ -53,6 +54,7 @@ struct mount {
 	int mnt_count;
 	int mnt_writers;
 #endif
+	struct hlist_node mnt_safe_link; /* Link in mnt_ns->mounts_safe */
 	struct list_head mnt_mounts;	/* list of children, anchored here */
 	struct list_head mnt_child;	/* and going through their mnt_child */
 	struct list_head mnt_instance;	/* mount instance on sb->s_mounts */
@@ -75,10 +77,14 @@ struct mount {
 	__u32 mnt_fsnotify_mask;
 #endif
 	int mnt_id;			/* mount identifier */
+	int mnt_parent_id;		/* Current parent mount identifier */
 	int mnt_group_id;		/* peer group identifier */
 	int mnt_expiry_mark;		/* true if marked for expiry */
 	struct hlist_head mnt_pins;
 	struct hlist_head mnt_stuck_children;
+#ifdef CONFIG_FSINFO
+	u64	mnt_unique_id;		/* ID unique over lifetime of kernel */
+#endif
 #ifdef CONFIG_MOUNT_NOTIFICATIONS
 	atomic_t mnt_topology_changes;	/* Number of topology changes applied */
 	atomic_t mnt_attr_changes;	/* Number of attribute changes applied */
