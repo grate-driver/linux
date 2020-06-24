@@ -45,9 +45,6 @@ static void exfat_put_super(struct super_block *sb)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	mutex_lock(&sbi->s_lock);
-	if (test_and_clear_bit(EXFAT_SB_DIRTY, &sbi->s_state))
-		sync_blockdev(sb->s_bdev);
-	exfat_set_vol_flags(sb, VOL_CLEAN);
 	exfat_free_bitmap(sbi);
 	brelse(sbi->boot_bh);
 	mutex_unlock(&sbi->s_lock);
@@ -60,13 +57,14 @@ static int exfat_sync_fs(struct super_block *sb, int wait)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	int err = 0;
 
+	if (!wait)
+		return 0;
+
 	/* If there are some dirty buffers in the bdev inode */
 	mutex_lock(&sbi->s_lock);
-	if (test_and_clear_bit(EXFAT_SB_DIRTY, &sbi->s_state)) {
-		sync_blockdev(sb->s_bdev);
-		if (exfat_set_vol_flags(sb, VOL_CLEAN))
-			err = -EIO;
-	}
+	sync_blockdev(sb->s_bdev);
+	if (exfat_set_vol_flags(sb, VOL_CLEAN))
+		err = -EIO;
 	mutex_unlock(&sbi->s_lock);
 	return err;
 }
@@ -693,10 +691,20 @@ static void exfat_free(struct fs_context *fc)
 	}
 }
 
+static int exfat_reconfigure(struct fs_context *fc)
+{
+	fc->sb_flags |= SB_NODIRATIME;
+
+	/* volume flag will be updated in exfat_sync_fs */
+	sync_filesystem(fc->root->d_sb);
+	return 0;
+}
+
 static const struct fs_context_operations exfat_context_ops = {
 	.parse_param	= exfat_parse_param,
 	.get_tree	= exfat_get_tree,
 	.free		= exfat_free,
+	.reconfigure	= exfat_reconfigure,
 };
 
 static int exfat_init_fs_context(struct fs_context *fc)
