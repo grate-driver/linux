@@ -53,6 +53,12 @@ enum vmd_features {
 	 * vendor-specific capability space
 	 */
 	VMD_FEAT_HAS_MEMBAR_SHADOW_VSCAP	= (1 << 2),
+
+	/*
+	 * Device remaps MSI/X transactions into its MSI/X table and requires
+	 * VMD MSI domain for child device interrupt handling
+	 */
+	VMD_FEAT_REMAPS_MSI			= (1 << 3),
 };
 
 /*
@@ -298,6 +304,15 @@ static struct msi_domain_info vmd_msi_domain_info = {
 	.chip		= &vmd_msi_controller,
 };
 
+static void vmd_enable_msi_remapping(struct vmd_dev *vmd, bool enable)
+{
+	u16 reg;
+
+	pci_read_config_word(vmd->dev, PCI_REG_VMCONFIG, &reg);
+	reg = enable ? (reg & ~0x2) : (reg | 0x2);
+	pci_write_config_word(vmd->dev, PCI_REG_VMCONFIG, reg);
+}
+
 static int vmd_create_irq_domain(struct vmd_dev *vmd)
 {
 	struct fwnode_handle *fn;
@@ -318,6 +333,13 @@ static int vmd_create_irq_domain(struct vmd_dev *vmd)
 
 static void vmd_remove_irq_domain(struct vmd_dev *vmd)
 {
+	/*
+	 * Some production BIOS won't enable remapping between soft reboots.
+	 * Ensure remapping is restored before unloading the driver
+	 */
+	if (!vmd->msix_count)
+		vmd_enable_msi_remapping(vmd, true);
+
 	if (vmd->irq_domain) {
 		struct fwnode_handle *fn = vmd->irq_domain->fwnode;
 
@@ -607,6 +629,27 @@ static int vmd_enable_domain(struct vmd_dev *vmd, unsigned long features)
 	}
 
 	/*
+	 * Currently MSI remapping must be enabled in guest passthrough mode
+	 * due to some missing interrupt remapping plumbing. This is probably
+	 * acceptable because the guest is usually CPU-limited and MSI
+	 * remapping doesn't become a performance bottleneck.
+	 */
+	if (features & VMD_FEAT_REMAPS_MSI || offset[0] || offset[1]) {
+		ret = vmd_alloc_irqs(vmd);
+		if (ret)
+			return ret;
+	}
+
+	/*
+	 * Disable remapping for performance if possible based on if VMD IRQs
+	 * had been allocated.
+	 */
+	if (vmd->msix_count)
+		vmd_enable_msi_remapping(vmd, true);
+	else
+		vmd_enable_msi_remapping(vmd, false);
+
+	/*
 	 * Certain VMD devices may have a root port configuration option which
 	 * limits the bus range to between 0-127, 128-255, or 224-255
 	 */
@@ -674,9 +717,11 @@ static int vmd_enable_domain(struct vmd_dev *vmd, unsigned long features)
 
 	sd->node = pcibus_to_node(vmd->dev->bus);
 
-	ret = vmd_create_irq_domain(vmd);
-	if (ret)
-		return ret;
+	if (vmd->msix_count) {
+		ret = vmd_create_irq_domain(vmd);
+		if (ret)
+			return ret;
+	}
 
 	pci_add_resource(&resources, &vmd->resources[0]);
 	pci_add_resource_offset(&resources, &vmd->resources[1], offset[0]);
@@ -737,10 +782,6 @@ static int vmd_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (dma_set_mask_and_coherent(&dev->dev, DMA_BIT_MASK(64)) &&
 	    dma_set_mask_and_coherent(&dev->dev, DMA_BIT_MASK(32)))
 		return -ENODEV;
-
-	err = vmd_alloc_irqs(vmd);
-	if (err)
-		return err;
 
 	spin_lock_init(&vmd->cfg_lock);
 	pci_set_drvdata(dev, vmd);
@@ -809,7 +850,8 @@ static SIMPLE_DEV_PM_OPS(vmd_dev_pm_ops, vmd_suspend, vmd_resume);
 
 static const struct pci_device_id vmd_ids[] = {
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_VMD_201D),
-		.driver_data = VMD_FEAT_HAS_MEMBAR_SHADOW_VSCAP,},
+		.driver_data = VMD_FEAT_HAS_MEMBAR_SHADOW_VSCAP |
+				VMD_FEAT_REMAPS_MSI,},
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_VMD_28C0),
 		.driver_data = VMD_FEAT_HAS_MEMBAR_SHADOW |
 				VMD_FEAT_HAS_BUS_RESTRICTIONS,},
