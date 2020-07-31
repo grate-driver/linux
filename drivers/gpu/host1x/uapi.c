@@ -11,8 +11,10 @@
 #include <linux/fs.h>
 #include <linux/host1x.h>
 #include <linux/nospec.h>
+#include <linux/sync_file.h>
 
 #include "dev.h"
+#include "fence.h"
 #include "syncpt.h"
 #include "uapi.h"
 
@@ -195,6 +197,99 @@ free_syncpt:
 	return err;
 }
 
+static int dev_file_ioctl_create_fence(struct host1x *host1x, void __user *data)
+{
+	struct host1x_create_fence args;
+	unsigned long copy_err;
+	int fd;
+
+	copy_err = copy_from_user(&args, data, sizeof(args));
+	if (copy_err)
+		return -EFAULT;
+
+	if (args.reserved[0])
+		return -EINVAL;
+
+	if (args.id >= host1x_syncpt_nb_pts(host1x))
+		return -EINVAL;
+
+	args.id = array_index_nospec(args.id, host1x_syncpt_nb_pts(host1x));
+
+	fd = host1x_fence_create_fd(&host1x->syncpt[args.id], args.threshold);
+	if (fd < 0)
+		return fd;
+
+	args.fence_fd = fd;
+
+	copy_err = copy_to_user(data, &args, sizeof(args));
+	if (copy_err)
+		return -EFAULT;
+
+	return 0;
+}
+
+static int dev_file_ioctl_fence_extract(struct host1x *host1x, void __user *data)
+{
+	struct host1x_fence_extract_fence __user *fences_user_ptr;
+	struct dma_fence *fence, **fences;
+	struct host1x_fence_extract args;
+	struct dma_fence_array *array;
+	unsigned int num_fences, i;
+	unsigned long copy_err;
+	int err;
+
+	copy_err = copy_from_user(&args, data, sizeof(args));
+	if (copy_err)
+		return -EFAULT;
+
+	fences_user_ptr = u64_to_user_ptr(args.fences_ptr);
+
+	if (args.reserved[0] || args.reserved[1])
+		return -EINVAL;
+
+	fence = sync_file_get_fence(args.fence_fd);
+	if (!fence)
+		return -EINVAL;
+
+	array = to_dma_fence_array(fence);
+	if (array) {
+		fences = array->fences;
+		num_fences = array->num_fences;
+	} else {
+		fences = &fence;
+		num_fences = 1;
+	}
+
+	for (i = 0; i < min(num_fences, args.num_fences); i++) {
+		struct host1x_fence_extract_fence f;
+
+		err = host1x_fence_extract(fences[i], &f.id, &f.threshold);
+		if (err)
+			goto put_fence;
+
+		copy_err = copy_to_user(fences_user_ptr + i, &f, sizeof(f));
+		if (copy_err) {
+			err = -EFAULT;
+			goto put_fence;
+		}
+	}
+
+	args.num_fences = i+1;
+
+	copy_err = copy_to_user(data, &args, sizeof(args));
+	if (copy_err) {
+		err = -EFAULT;
+		goto put_fence;
+	}
+
+	return 0;
+
+put_fence:
+	dma_fence_put(fence);
+
+	return err;
+}
+
 static long dev_file_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long arg)
 {
@@ -208,6 +303,14 @@ static long dev_file_ioctl(struct file *file, unsigned int cmd,
 
 	case HOST1X_IOCTL_ALLOCATE_SYNCPOINT:
 		err = dev_file_ioctl_alloc_syncpoint(file->private_data, data);
+		break;
+
+	case HOST1X_IOCTL_CREATE_FENCE:
+		err = dev_file_ioctl_create_fence(file->private_data, data);
+		break;
+
+	case HOST1X_IOCTL_FENCE_EXTRACT:
+		err = dev_file_ioctl_fence_extract(file->private_data, data);
 		break;
 
 	default:
