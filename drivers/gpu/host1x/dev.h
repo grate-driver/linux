@@ -17,6 +17,7 @@
 #include "intr.h"
 #include "job.h"
 #include "syncpt.h"
+#include "uapi.h"
 
 struct host1x_syncpt;
 struct host1x_syncpt_base;
@@ -143,6 +144,8 @@ struct host1x {
 	struct list_head list;
 
 	struct device_dma_parameters dma_parms;
+
+	struct host1x_uapi uapi;
 };
 
 void host1x_hypervisor_writel(struct host1x *host1x, u32 r, u32 v);
