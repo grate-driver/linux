@@ -8,9 +8,18 @@ number of places.
 
 This document therefore describes a number of places to start reading
 the documentation in this directory, depending on what you know and what
-you would like to learn:
+you would like to learn.  These are cumulative, that is, understanding
+of the documents earlier in this list is required by the documents later
+in this list.
 
 o	You are new to Linux-kernel concurrency: simple.txt
+
+o	You have some background in Linux-kernel concurrency, and would
+	like an overview of the types of low-level concurrency primitives
+	that are provided:  ordering.txt
+
+	Here, "low level" means atomic operations to single locations in
+	memory.
 
 o	You are familiar with the concurrency facilities that you
 	need, and just want to get started with LKMM litmus tests:
@@ -19,6 +28,9 @@ o	You are familiar with the concurrency facilities that you
 o	You are familiar with Linux-kernel concurrency, and would
 	like a detailed intuitive understanding of LKMM, including
 	situations involving more than two threads: recipes.txt
+
+o	You would like a detailed understanding of what your compiler can
+	and cannot do to control dependencies: control-dependencies.txt
 
 o	You are familiar with Linux-kernel concurrency and the
 	use of LKMM, and would like a cheat sheet to remind you
@@ -37,11 +49,15 @@ o	You are interested in the publications related to LKMM, including
 DESCRIPTION OF FILES
 ====================
 
-Documentation/README
+README
 	This file.
 
 Documentation/cheatsheet.txt
 	Quick-reference guide to the Linux-kernel memory model.
+
+Documentation/control-dependencies.txt
+	A guide to preventing compiler optimizations from destroying
+	your control dependencies.
 
 Documentation/explanation.txt
 	Describes the memory model in detail.
@@ -49,6 +65,10 @@ Documentation/explanation.txt
 Documentation/litmus-tests.txt
 	Describes the format, features, capabilities, and limitations
 	of the litmus tests that LKMM can evaluate.
+
+Documentation/ordering.txt
+	Describes the Linux kernel's low-level memory-ordering primitives
+	by category.
 
 Documentation/recipes.txt
 	Lists common memory-ordering patterns.
