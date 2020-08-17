@@ -125,10 +125,6 @@ static void __init fixaddr_user_init( void)
 {
 #ifdef CONFIG_ARCH_REUSE_HOST_VSYSCALL_AREA
 	long size = FIXADDR_USER_END - FIXADDR_USER_START;
-	pgd_t *pgd;
-	p4d_t *p4d;
-	pud_t *pud;
-	pmd_t *pmd;
 	pte_t *pte;
 	phys_t p;
 	unsigned long v, vaddr = FIXADDR_USER_START;
@@ -146,11 +142,7 @@ static void __init fixaddr_user_init( void)
 	p = __pa(v);
 	for ( ; size > 0; size -= PAGE_SIZE, vaddr += PAGE_SIZE,
 		      p += PAGE_SIZE) {
-		pgd = swapper_pg_dir + pgd_index(vaddr);
-		p4d = p4d_offset(pgd, vaddr);
-		pud = pud_offset(p4d, vaddr);
-		pmd = pmd_offset(pud, vaddr);
-		pte = pte_offset_kernel(pmd, vaddr);
+		pte = virt_to_kpte(vaddr);
 		pte_set_val(*pte, p, PAGE_READONLY);
 	}
 #endif
@@ -203,23 +195,6 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	}
 	return pgd;
 }
-
-void pgd_free(struct mm_struct *mm, pgd_t *pgd)
-{
-	free_page((unsigned long) pgd);
-}
-
-#ifdef CONFIG_3_LEVEL_PGTABLES
-pmd_t *pmd_alloc_one(struct mm_struct *mm, unsigned long address)
-{
-	pmd_t *pmd = (pmd_t *) __get_free_page(GFP_KERNEL);
-
-	if (pmd)
-		memset(pmd, 0, PAGE_SIZE);
-
-	return pmd;
-}
-#endif
 
 void *uml_kmalloc(int size, int flags)
 {

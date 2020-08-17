@@ -80,8 +80,8 @@ int rl6231_calc_dmic_clk(int rate)
 	for (i = 0; i < ARRAY_SIZE(div); i++) {
 		if ((div[i] % 3) == 0)
 			continue;
-		/* find divider that gives DMIC frequency below 3.072MHz */
-		if (3072000 * div[i] >= rate)
+		/* find divider that gives DMIC frequency below 1.536MHz */
+		if (1536000 * div[i] >= rate)
 			return i;
 	}
 
@@ -103,7 +103,9 @@ struct pll_calc_map {
 static const struct pll_calc_map pll_preset_table[] = {
 	{19200000,  4096000,  23, 14, 1, false, false},
 	{19200000,  24576000,  3, 30, 3, false, false},
+	{48000000,  3840000,  23,  2, 0, false, false},
 	{3840000,   24576000,  3, 30, 0, true, false},
+	{3840000,   22579200,  3,  5, 0, true, false},
 };
 
 static unsigned int find_best_div(unsigned int in,
