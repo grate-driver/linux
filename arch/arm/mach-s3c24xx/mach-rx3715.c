@@ -35,7 +35,6 @@
 #include <asm/mach-types.h>
 
 #include <mach/fb.h>
-#include <mach/hardware.h>
 #include <mach/regs-gpio.h>
 #include <mach/regs-lcd.h>
 #include <mach/gpio-samsung.h>
@@ -43,7 +42,6 @@
 #include <plat/cpu.h>
 #include <plat/devs.h>
 #include <plat/pm.h>
-#include <plat/samsung-time.h>
 
 #include "common.h"
 #include "h1940.h"

@@ -22,8 +22,6 @@ void s3c64xx_init_io(struct map_desc *mach_desc, int size);
 void s3c64xx_restart(enum reboot_mode mode, const char *cmd);
 
 struct device_node;
-void s3c64xx_clk_init(struct device_node *np, unsigned long xtal_f,
-	unsigned long xusbxti_f, bool is_s3c6400, void __iomem *reg_base);
 void s3c64xx_set_xtal_freq(unsigned long freq);
 void s3c64xx_set_xusbxti_freq(unsigned long freq);
 
@@ -53,5 +51,18 @@ extern void s3c6410_map_io(void);
 extern struct pl08x_platform_data s3c64xx_dma0_plat_data;
 extern struct pl08x_platform_data s3c64xx_dma1_plat_data;
 #endif
+
+/* Samsung HR-Timer Clock mode */
+enum samsung_timer_mode {
+	SAMSUNG_PWM0,
+	SAMSUNG_PWM1,
+	SAMSUNG_PWM2,
+	SAMSUNG_PWM3,
+	SAMSUNG_PWM4,
+};
+
+extern void __init samsung_set_timer_source(enum samsung_timer_mode event,
+					    enum samsung_timer_mode source);
+extern void __init samsung_timer_init(void);
 
 #endif /* __ARCH_ARM_MACH_S3C64XX_COMMON_H */

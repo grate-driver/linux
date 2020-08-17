@@ -24,7 +24,6 @@
 #include <asm/mach/map.h>
 #include <asm/mach/irq.h>
 
-#include <mach/hardware.h>
 #include <asm/setup.h>
 #include <asm/irq.h>
 #include <asm/mach-types.h>
@@ -39,7 +38,6 @@
 
 #include <plat/devs.h>
 #include <plat/cpu.h>
-#include <plat/samsung-time.h>
 
 #include "common.h"
 

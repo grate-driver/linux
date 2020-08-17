@@ -41,7 +41,6 @@
 #include <asm/mach-types.h>
 
 #include <mach/fb.h>
-#include <mach/hardware.h>
 #include <mach/regs-gpio.h>
 #include <mach/regs-lcd.h>
 #include <mach/gpio-samsung.h>
@@ -50,7 +49,6 @@
 #include <plat/cpu-freq.h>
 #include <plat/devs.h>
 #include <plat/gpio-cfg.h>
-#include <plat/samsung-time.h>
 
 #include "bast.h"
 #include "common.h"

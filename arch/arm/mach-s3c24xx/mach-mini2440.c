@@ -30,7 +30,6 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 
-#include <mach/hardware.h>
 #include <mach/fb.h>
 #include <asm/mach-types.h>
 
@@ -52,7 +51,6 @@
 #include <plat/gpio-cfg.h>
 #include <plat/devs.h>
 #include <plat/cpu.h>
-#include <plat/samsung-time.h>
 
 #include <sound/s3c24xx_uda134x.h>
 

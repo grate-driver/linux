@@ -26,7 +26,6 @@
 #include <asm/mach/irq.h>
 #include <asm/mach/flash.h>
 
-#include <mach/hardware.h>
 #include <asm/irq.h>
 #include <asm/mach-types.h>
 #include <mach/fb.h>
@@ -44,8 +43,6 @@
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/map.h>
 #include <linux/mtd/physmap.h>
-
-#include <plat/samsung-time.h>
 
 #include "common.h"
 

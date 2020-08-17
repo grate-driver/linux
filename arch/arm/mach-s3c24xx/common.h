@@ -108,19 +108,16 @@ extern struct platform_device s3c2443_device_dma;
 
 extern struct platform_device s3c2410_device_dclk;
 
-#ifdef CONFIG_S3C2410_COMMON_CLK
-void __init s3c2410_common_clk_init(struct device_node *np, unsigned long xti_f,
-				    int current_soc,
-				    void __iomem *reg_base);
-#endif
-#ifdef CONFIG_S3C2412_COMMON_CLK
-void __init s3c2412_common_clk_init(struct device_node *np, unsigned long xti_f,
-				unsigned long ext_f, void __iomem *reg_base);
-#endif
-#ifdef CONFIG_S3C2443_COMMON_CLK
-void __init s3c2443_common_clk_init(struct device_node *np, unsigned long xti_f,
-				    int current_soc,
-				    void __iomem *reg_base);
-#endif
+enum samsung_timer_mode {
+	SAMSUNG_PWM0,
+	SAMSUNG_PWM1,
+	SAMSUNG_PWM2,
+	SAMSUNG_PWM3,
+	SAMSUNG_PWM4,
+};
+
+extern void __init samsung_set_timer_source(enum samsung_timer_mode event,
+					    enum samsung_timer_mode source);
+extern void __init samsung_timer_init(void);
 
 #endif /* __ARCH_ARM_MACH_S3C24XX_COMMON_H */
