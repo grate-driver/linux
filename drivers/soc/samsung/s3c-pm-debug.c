@@ -15,17 +15,7 @@
 
 #include <asm/mach/map.h>
 
-#include <plat/cpu.h>
-#include <plat/pm-common.h>
-
-#ifdef CONFIG_SAMSUNG_ATAGS
-#include <plat/pm.h>
-#include <mach/pm-core.h>
-#else
-static inline void s3c_pm_debug_init_uart(void) {}
-static inline void s3c_pm_arch_update_uart(void __iomem *regs,
-					   struct pm_uart_save *save) {}
-#endif
+#include <linux/soc/samsung/s3c-pm.h>
 
 static struct pm_uart_save uart_save;
 
@@ -43,12 +33,6 @@ void s3c_pm_dbg(const char *fmt, ...)
 	printascii(buff);
 }
 
-void s3c_pm_debug_init(void)
-{
-	/* restart uart clocks so we can use them to output */
-	s3c_pm_debug_init_uart();
-}
-
 static inline void __iomem *s3c_pm_uart_base(void)
 {
 	unsigned long paddr;
@@ -59,7 +43,7 @@ static inline void __iomem *s3c_pm_uart_base(void)
 	return (void __iomem *)vaddr;
 }
 
-void s3c_pm_save_uarts(void)
+void s3c_pm_save_uarts(bool is_s3c2410)
 {
 	void __iomem *regs = s3c_pm_uart_base();
 	struct pm_uart_save *save = &uart_save;
@@ -70,14 +54,14 @@ void s3c_pm_save_uarts(void)
 	save->umcon = __raw_readl(regs + S3C2410_UMCON);
 	save->ubrdiv = __raw_readl(regs + S3C2410_UBRDIV);
 
-	if (!soc_is_s3c2410())
+	if (!is_s3c2410)
 		save->udivslot = __raw_readl(regs + S3C2443_DIVSLOT);
 
 	S3C_PMDBG("UART[%p]: ULCON=%04x, UCON=%04x, UFCON=%04x, UBRDIV=%04x\n",
 		  regs, save->ulcon, save->ucon, save->ufcon, save->ubrdiv);
 }
 
-void s3c_pm_restore_uarts(void)
+void s3c_pm_restore_uarts(bool is_s3c2410)
 {
 	void __iomem *regs = s3c_pm_uart_base();
 	struct pm_uart_save *save = &uart_save;
@@ -90,6 +74,6 @@ void s3c_pm_restore_uarts(void)
 	__raw_writel(save->umcon, regs + S3C2410_UMCON);
 	__raw_writel(save->ubrdiv, regs + S3C2410_UBRDIV);
 
-	if (!soc_is_s3c2410())
+	if (!is_s3c2410)
 		__raw_writel(save->udivslot, regs + S3C2443_DIVSLOT);
 }

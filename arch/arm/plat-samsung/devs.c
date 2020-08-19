@@ -40,9 +40,13 @@
 #include <mach/irqs.h>
 #include <mach/map.h>
 
+#ifdef CONFIG_PLAT_S3C24XX
+#include <mach/regs-s3c2443-clock.h>
+#endif /* CONFIG_PLAT_S3C24XX */
+
 #include <plat/cpu.h>
 #include <plat/devs.h>
-#include <plat/adc.h>
+#include <linux/soc/samsung/s3c-adc.h>
 #include <linux/platform_data/ata-samsung_cf.h>
 #include <plat/fb.h>
 #include <plat/fb-s3c2410.h>
@@ -57,7 +61,6 @@
 #include <linux/platform_data/usb-s3c2410_udc.h>
 #include <linux/platform_data/usb-ohci-s3c2410.h>
 #include <plat/usb-phy.h>
-#include <plat/regs-spi.h>
 #include <linux/platform_data/asoc-s3c.h>
 #include <linux/platform_data/spi-s3c64xx.h>
 
@@ -1037,6 +1040,8 @@ struct platform_device s3c_device_usb_hsudc = {
 void __init s3c24xx_hsudc_set_platdata(struct s3c24xx_hsudc_platdata *pd)
 {
 	s3c_set_platdata(pd, sizeof(*pd), &s3c_device_usb_hsudc);
+	pd->phy_init = s3c_hsudc_init_phy;
+	pd->phy_uninit = s3c_hsudc_uninit_phy;
 }
 #endif /* CONFIG_PLAT_S3C24XX */
 

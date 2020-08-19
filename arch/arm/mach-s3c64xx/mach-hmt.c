@@ -25,7 +25,6 @@
 #include <asm/mach/irq.h>
 
 #include <video/samsung_fimd.h>
-#include <mach/hardware.h>
 #include <mach/map.h>
 #include <mach/irqs.h>
 
@@ -280,5 +279,4 @@ MACHINE_START(HMT, "Airgoo-HMT")
 	.map_io		= hmt_map_io,
 	.init_machine	= hmt_machine_init,
 	.init_time	= samsung_timer_init,
-	.restart	= s3c64xx_restart,
 MACHINE_END

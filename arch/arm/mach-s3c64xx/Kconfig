@@ -13,15 +13,15 @@ menuconfig ARCH_S3C64XX
 	select GPIO_SAMSUNG if ATAGS
 	select GPIOLIB
 	select HAVE_S3C2410_I2C if I2C
-	select HAVE_S3C2410_WATCHDOG if WATCHDOG
 	select HAVE_TCM
 	select PLAT_SAMSUNG
 	select PM_GENERIC_DOMAINS if PM
 	select S3C_DEV_NAND if ATAGS
 	select S3C_GPIO_TRACK if ATAGS
+	select S3C2410_WATCHDOG
 	select SAMSUNG_ATAGS if ATAGS
 	select SAMSUNG_WAKEMASK if PM
-	select SAMSUNG_WDT_RESET
+	select WATCHDOG
 	help
 	  Samsung S3C64XX series based systems
 
@@ -165,7 +165,6 @@ config MACH_SMDK6410
 	bool "SMDK6410"
 	depends on ATAGS
 	select CPU_S3C6410
-	select HAVE_S3C2410_WATCHDOG if WATCHDOG
 	select S3C64XX_SETUP_FB_24BPP
 	select S3C64XX_SETUP_I2C1
 	select S3C64XX_SETUP_IDE

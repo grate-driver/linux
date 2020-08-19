@@ -44,7 +44,6 @@
 #include <asm/mach-types.h>
 
 #include <video/samsung_fimd.h>
-#include <mach/hardware.h>
 #include <mach/map.h>
 #include <mach/regs-gpio.h>
 #include <mach/gpio-samsung.h>
@@ -58,7 +57,7 @@
 #include <plat/keypad.h>
 #include <plat/devs.h>
 #include <plat/cpu.h>
-#include <plat/adc.h>
+#include <linux/soc/samsung/s3c-adc.h>
 #include <linux/platform_data/i2c-s3c2410.h>
 #include <plat/pm.h>
 
@@ -877,5 +876,4 @@ MACHINE_START(WLF_CRAGG_6410, "Wolfson Cragganmore 6410")
 	.map_io		= crag6410_map_io,
 	.init_machine	= crag6410_machine_init,
 	.init_time	= samsung_timer_init,
-	.restart	= s3c64xx_restart,
 MACHINE_END
