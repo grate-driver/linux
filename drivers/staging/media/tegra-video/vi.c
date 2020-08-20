@@ -1131,8 +1131,8 @@ static void tegra_channel_host1x_syncpts_free(struct tegra_vi_channel *chan)
 	int i;
 
 	for (i = 0; i < chan->numgangports; i++) {
-		host1x_syncpt_free(chan->mw_ack_sp[i]);
-		host1x_syncpt_free(chan->frame_start_sp[i]);
+		host1x_syncpt_put(chan->mw_ack_sp[i]);
+		host1x_syncpt_put(chan->frame_start_sp[i]);
 	}
 }
 
