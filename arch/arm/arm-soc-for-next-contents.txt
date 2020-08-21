@@ -1,0 +1,12 @@
+arm/soc
+
+arm/dt
+
+arm/drivers
+
+arm/defconfig
+
+arm/late
+
+arm/fixes
+
