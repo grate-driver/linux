@@ -15,4 +15,6 @@ arm/fixes
 		ARM: configs: Update Integrator defconfig
 		arm64: defconfig: Enable USB gadget with configfs
 		arm64: defconfig: Enable ptn5150 extcon driver
+	<no branch> (8d53ecfbf23135381d2ebbd1b261a7c7f18a7294)
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.9
 
