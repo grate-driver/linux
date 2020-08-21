@@ -9,4 +9,10 @@ arm/defconfig
 arm/late
 
 arm/fixes
+	<no branch> (0ff5a4812be4ebd4782bbb555d369636eea164f7)
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_fix_for_v5.9
+	patch
+		ARM: configs: Update Integrator defconfig
+		arm64: defconfig: Enable USB gadget with configfs
+		arm64: defconfig: Enable ptn5150 extcon driver
 
