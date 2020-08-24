@@ -21,4 +21,6 @@ arm/fixes
 		arm64: defconfig: Enable ptn5150 extcon driver
 	<no branch> (8d53ecfbf23135381d2ebbd1b261a7c7f18a7294)
 		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.9
+	<no branch> (5cbb80d5236b47b149da292b86d5fc99a680894b)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.9
 
