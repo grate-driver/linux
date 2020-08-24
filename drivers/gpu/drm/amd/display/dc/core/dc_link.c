@@ -1540,6 +1540,9 @@ static bool dc_link_construct(struct dc_link *link,
 		}
 	}
 
+	if (bios->funcs->get_atom_dc_golden_table)
+		bios->funcs->get_atom_dc_golden_table(bios);
+
 	/*
 	 * TODO check if GPIO programmed correctly
 	 *
@@ -3102,6 +3105,9 @@ void core_link_enable_stream(
 	struct dc *dc = pipe_ctx->stream->ctx->dc;
 	struct dc_stream_state *stream = pipe_ctx->stream;
 	enum dc_status status;
+#if defined(CONFIG_DRM_AMD_DC_DCN3_0)
+	enum otg_out_mux_dest otg_out_dest = OUT_MUX_DIO;
+#endif
 	DC_LOGGER_INIT(pipe_ctx->stream->ctx->logger);
 
 	if (!IS_DIAG_DC(dc->ctx->dce_environment) &&
@@ -3136,8 +3142,8 @@ void core_link_enable_stream(
 	pipe_ctx->stream->link->link_state_valid = true;
 
 #if defined(CONFIG_DRM_AMD_DC_DCN3_0)
-		if (pipe_ctx->stream_res.tg->funcs->set_out_mux)
-					pipe_ctx->stream_res.tg->funcs->set_out_mux(pipe_ctx->stream_res.tg, OUT_MUX_DIO);
+	if (pipe_ctx->stream_res.tg->funcs->set_out_mux)
+		pipe_ctx->stream_res.tg->funcs->set_out_mux(pipe_ctx->stream_res.tg, otg_out_dest);
 #endif
 
 	if (dc_is_dvi_signal(pipe_ctx->stream->signal))
@@ -3276,15 +3282,14 @@ void core_link_disable_stream(struct pipe_ctx *pipe_ctx)
 			dc_is_virtual_signal(pipe_ctx->stream->signal))
 		return;
 
-	if (pipe_ctx->stream->signal == SIGNAL_TYPE_HDMI_TYPE_A) {
+	if (dc_is_hdmi_signal(pipe_ctx->stream->signal)) {
 		core_link_set_avmute(pipe_ctx, true);
 	}
 
+	dc->hwss.blank_stream(pipe_ctx);
 #if defined(CONFIG_DRM_AMD_DC_HDCP)
 	update_psp_stream_config(pipe_ctx, true);
 #endif
-
-	dc->hwss.blank_stream(pipe_ctx);
 
 	if (pipe_ctx->stream->signal == SIGNAL_TYPE_DISPLAY_PORT_MST)
 		deallocate_mst_payload(pipe_ctx);

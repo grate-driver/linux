@@ -1496,7 +1496,7 @@ ARM SMC WATCHDOG DRIVER
 M:	Julius Werner <jwerner@chromium.org>
 R:	Evan Benn <evanbenn@chromium.org>
 S:	Maintained
-F:	devicetree/bindings/watchdog/arm-smc-wdt.yaml
+F:	Documentation/devicetree/bindings/watchdog/arm-smc-wdt.yaml
 F:	drivers/watchdog/arm_smc_wdt.c
 
 ARM SMMU DRIVERS
@@ -1505,7 +1505,7 @@ R:	Robin Murphy <robin.murphy@arm.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 F:	Documentation/devicetree/bindings/iommu/arm,smmu*
-F:	drivers/iommu/arm-smmu*
+F:	drivers/iommu/arm/
 F:	drivers/iommu/io-pgtable-arm-v7s.c
 F:	drivers/iommu/io-pgtable-arm.c
 
@@ -1540,6 +1540,7 @@ F:	drivers/mmc/host/owl-mmc.c
 F:	drivers/pinctrl/actions/*
 F:	drivers/soc/actions/
 F:	include/dt-bindings/power/owl-*
+F:	include/dt-bindings/reset/actions,*
 F:	include/linux/soc/actions/
 N:	owl
 
@@ -5049,7 +5050,7 @@ F:	include/linux/dm-*.h
 F:	include/uapi/linux/dm-*.h
 
 DEVLINK
-M:	Jiri Pirko <jiri@mellanox.com>
+M:	Jiri Pirko <jiri@nvidia.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 F:	Documentation/networking/devlink
@@ -6080,7 +6081,7 @@ F:	include/linux/dynamic_debug.h
 F:	lib/dynamic_debug.c
 
 DYNAMIC INTERRUPT MODERATION
-M:	Tal Gilboa <talgi@mellanox.com>
+M:	Tal Gilboa <talgi@nvidia.com>
 S:	Maintained
 F:	Documentation/networking/net_dim.rst
 F:	include/linux/dim.h
@@ -6160,7 +6161,7 @@ F:	Documentation/devicetree/bindings/edac/aspeed-sdram-edac.txt
 F:	drivers/edac/aspeed_edac.c
 
 EDAC-BLUEFIELD
-M:	Shravan Kumar Ramani <sramani@mellanox.com>
+M:	Shravan Kumar Ramani <sramani@nvidia.com>
 S:	Supported
 F:	drivers/edac/bluefield_edac.c
 
@@ -6482,8 +6483,8 @@ S:	Odd Fixes
 F:	drivers/net/ethernet/agere/
 
 ETHERNET BRIDGE
-M:	Roopa Prabhu <roopa@cumulusnetworks.com>
-M:	Nikolay Aleksandrov <nikolay@cumulusnetworks.com>
+M:	Roopa Prabhu <roopa@nvidia.com>
+M:	Nikolay Aleksandrov <nikolay@nvidia.com>
 L:	bridge@lists.linux-foundation.org (moderated for non-subscribers)
 L:	netdev@vger.kernel.org
 S:	Maintained
@@ -6598,7 +6599,7 @@ F:	drivers/iommu/exynos-iommu.c
 
 EZchip NPS platform support
 M:	Vineet Gupta <vgupta@synopsys.com>
-M:	Ofer Levi <oferle@mellanox.com>
+M:	Ofer Levi <oferle@nvidia.com>
 S:	Supported
 F:	arch/arc/boot/dts/eznps.dts
 F:	arch/arc/plat-eznps
@@ -8409,8 +8410,9 @@ W:	https://github.com/o2genum/ideapad-slidebar
 F:	drivers/input/misc/ideapad_slidebar.c
 
 IDT VersaClock 5 CLOCK DRIVER
-M:	Marek Vasut <marek.vasut@gmail.com>
+M:	Luca Ceresoli <luca@lucaceresoli.net>
 S:	Maintained
+F:	Documentation/devicetree/bindings/clock/idt,versaclock5.yaml
 F:	drivers/clk/clk-versaclock5.c
 
 IEEE 802.15.4 SUBSYSTEM
@@ -8561,7 +8563,7 @@ F:	drivers/iio/pressure/dps310.c
 
 INFINIBAND SUBSYSTEM
 M:	Doug Ledford <dledford@redhat.com>
-M:	Jason Gunthorpe <jgg@mellanox.com>
+M:	Jason Gunthorpe <jgg@nvidia.com>
 L:	linux-rdma@vger.kernel.org
 S:	Supported
 W:	https://github.com/linux-rdma/rdma-core
@@ -9102,6 +9104,7 @@ F:	drivers/iommu/
 F:	include/linux/iommu.h
 F:	include/linux/iova.h
 F:	include/linux/of_iommu.h
+F:	include/uapi/linux/iommu.h
 
 IO_URING
 M:	Jens Axboe <axboe@kernel.dk>
@@ -9223,7 +9226,7 @@ F:	drivers/firmware/iscsi_ibft*
 
 ISCSI EXTENSIONS FOR RDMA (ISER) INITIATOR
 M:	Sagi Grimberg <sagi@grimberg.me>
-M:	Max Gurtovoy <maxg@mellanox.com>
+M:	Max Gurtovoy <maxg@nvidia.com>
 L:	linux-rdma@vger.kernel.org
 S:	Supported
 W:	http://www.openfabrics.org
@@ -9674,6 +9677,15 @@ F:	drivers/tty/serial/kgdboc.c
 F:	include/linux/kdb.h
 F:	include/linux/kgdb.h
 F:	kernel/debug/
+
+KHADAS MCU MFD DRIVER
+M:	Neil Armstrong <narmstrong@baylibre.com>
+L:	linux-amlogic@lists.infradead.org
+S:	Maintained
+F:	Documentation/devicetree/bindings/mfd/khadas,mcu.yaml
+F:	drivers/mfd/khadas-mcu.c
+F:	include/linux/mfd/khadas-mcu.h
+F:	drivers/thermal/khadas_mcu_fan.c
 
 KMEMLEAK
 M:	Catalin Marinas <catalin.marinas@arm.com>
@@ -11060,7 +11072,7 @@ F:	Documentation/devicetree/bindings/input/touchscreen/melfas_mip4.txt
 F:	drivers/input/touchscreen/melfas_mip4.c
 
 MELLANOX ETHERNET DRIVER (mlx4_en)
-M:	Tariq Toukan <tariqt@mellanox.com>
+M:	Tariq Toukan <tariqt@nvidia.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 W:	http://www.mellanox.com
@@ -11068,7 +11080,7 @@ Q:	http://patchwork.ozlabs.org/project/netdev/list/
 F:	drivers/net/ethernet/mellanox/mlx4/en_*
 
 MELLANOX ETHERNET DRIVER (mlx5e)
-M:	Saeed Mahameed <saeedm@mellanox.com>
+M:	Saeed Mahameed <saeedm@nvidia.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 W:	http://www.mellanox.com
@@ -11076,7 +11088,7 @@ Q:	http://patchwork.ozlabs.org/project/netdev/list/
 F:	drivers/net/ethernet/mellanox/mlx5/core/en_*
 
 MELLANOX ETHERNET INNOVA DRIVERS
-R:	Boris Pismenny <borisp@mellanox.com>
+R:	Boris Pismenny <borisp@nvidia.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 W:	http://www.mellanox.com
@@ -11087,8 +11099,8 @@ F:	drivers/net/ethernet/mellanox/mlx5/core/fpga/*
 F:	include/linux/mlx5/mlx5_ifc_fpga.h
 
 MELLANOX ETHERNET SWITCH DRIVERS
-M:	Jiri Pirko <jiri@mellanox.com>
-M:	Ido Schimmel <idosch@mellanox.com>
+M:	Jiri Pirko <jiri@nvidia.com>
+M:	Ido Schimmel <idosch@nvidia.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 W:	http://www.mellanox.com
@@ -11097,7 +11109,7 @@ F:	drivers/net/ethernet/mellanox/mlxsw/
 F:	tools/testing/selftests/drivers/net/mlxsw/
 
 MELLANOX FIRMWARE FLASH LIBRARY (mlxfw)
-M:	mlxsw@mellanox.com
+M:	mlxsw@nvidia.com
 L:	netdev@vger.kernel.org
 S:	Supported
 W:	http://www.mellanox.com
@@ -11107,7 +11119,7 @@ F:	drivers/net/ethernet/mellanox/mlxfw/
 MELLANOX HARDWARE PLATFORM SUPPORT
 M:	Andy Shevchenko <andy@infradead.org>
 M:	Darren Hart <dvhart@infradead.org>
-M:	Vadim Pasternak <vadimp@mellanox.com>
+M:	Vadim Pasternak <vadimp@nvidia.com>
 L:	platform-driver-x86@vger.kernel.org
 S:	Supported
 F:	Documentation/ABI/testing/sysfs-platform-mellanox-bootctl
@@ -11115,7 +11127,7 @@ F:	drivers/platform/mellanox/
 F:	include/linux/platform_data/mlxreg.h
 
 MELLANOX MLX4 core VPI driver
-M:	Tariq Toukan <tariqt@mellanox.com>
+M:	Tariq Toukan <tariqt@nvidia.com>
 L:	netdev@vger.kernel.org
 L:	linux-rdma@vger.kernel.org
 S:	Supported
@@ -11125,7 +11137,7 @@ F:	drivers/net/ethernet/mellanox/mlx4/
 F:	include/linux/mlx4/
 
 MELLANOX MLX4 IB driver
-M:	Yishai Hadas <yishaih@mellanox.com>
+M:	Yishai Hadas <yishaih@nvidia.com>
 L:	linux-rdma@vger.kernel.org
 S:	Supported
 W:	http://www.mellanox.com
@@ -11135,8 +11147,8 @@ F:	include/linux/mlx4/
 F:	include/uapi/rdma/mlx4-abi.h
 
 MELLANOX MLX5 core VPI driver
-M:	Saeed Mahameed <saeedm@mellanox.com>
-M:	Leon Romanovsky <leonro@mellanox.com>
+M:	Saeed Mahameed <saeedm@nvidia.com>
+M:	Leon Romanovsky <leonro@nvidia.com>
 L:	netdev@vger.kernel.org
 L:	linux-rdma@vger.kernel.org
 S:	Supported
@@ -11147,7 +11159,7 @@ F:	drivers/net/ethernet/mellanox/mlx5/core/
 F:	include/linux/mlx5/
 
 MELLANOX MLX5 IB driver
-M:	Leon Romanovsky <leonro@mellanox.com>
+M:	Leon Romanovsky <leonro@nvidia.com>
 L:	linux-rdma@vger.kernel.org
 S:	Supported
 W:	http://www.mellanox.com
@@ -11157,8 +11169,8 @@ F:	include/linux/mlx5/
 F:	include/uapi/rdma/mlx5-abi.h
 
 MELLANOX MLXCPLD I2C AND MUX DRIVER
-M:	Vadim Pasternak <vadimp@mellanox.com>
-M:	Michael Shych <michaelsh@mellanox.com>
+M:	Vadim Pasternak <vadimp@nvidia.com>
+M:	Michael Shych <michaelsh@nvidia.com>
 L:	linux-i2c@vger.kernel.org
 S:	Supported
 F:	Documentation/i2c/busses/i2c-mlxcpld.rst
@@ -11166,7 +11178,7 @@ F:	drivers/i2c/busses/i2c-mlxcpld.c
 F:	drivers/i2c/muxes/i2c-mux-mlxcpld.c
 
 MELLANOX MLXCPLD LED DRIVER
-M:	Vadim Pasternak <vadimp@mellanox.com>
+M:	Vadim Pasternak <vadimp@nvidia.com>
 L:	linux-leds@vger.kernel.org
 S:	Supported
 F:	Documentation/leds/leds-mlxcpld.rst
@@ -11174,7 +11186,7 @@ F:	drivers/leds/leds-mlxcpld.c
 F:	drivers/leds/leds-mlxreg.c
 
 MELLANOX PLATFORM DRIVER
-M:	Vadim Pasternak <vadimp@mellanox.com>
+M:	Vadim Pasternak <vadimp@nvidia.com>
 L:	platform-driver-x86@vger.kernel.org
 S:	Supported
 F:	drivers/platform/x86/mlx-platform.c
@@ -11983,7 +11995,8 @@ F:	include/uapi/linux/netrom.h
 F:	net/netrom/
 
 NETRONOME ETHERNET DRIVERS
-M:	Jakub Kicinski <kuba@kernel.org>
+M:	Simon Horman <simon.horman@netronome.com>
+R:	Jakub Kicinski <kuba@kernel.org>
 L:	oss-drivers@netronome.com
 S:	Maintained
 F:	drivers/net/ethernet/netronome/
@@ -12154,8 +12167,8 @@ F:	net/ipv6/syncookies.c
 F:	net/ipv6/tcp*.c
 
 NETWORKING [TLS]
-M:	Boris Pismenny <borisp@mellanox.com>
-M:	Aviad Yehezkel <aviadye@mellanox.com>
+M:	Boris Pismenny <borisp@nvidia.com>
+M:	Aviad Yehezkel <aviadye@nvidia.com>
 M:	John Fastabend <john.fastabend@gmail.com>
 M:	Daniel Borkmann <daniel@iogearbox.net>
 M:	Jakub Kicinski <kuba@kernel.org>
@@ -12455,7 +12468,7 @@ S:	Supported
 F:	drivers/nfc/nxp-nci
 
 OBJAGG
-M:	Jiri Pirko <jiri@mellanox.com>
+M:	Jiri Pirko <jiri@nvidia.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 F:	include/linux/objagg.h
@@ -13097,7 +13110,7 @@ F:	drivers/video/logo/logo_parisc*
 F:	include/linux/hp_sdc.h
 
 PARMAN
-M:	Jiri Pirko <jiri@mellanox.com>
+M:	Jiri Pirko <jiri@nvidia.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 F:	include/linux/parman.h
@@ -13295,12 +13308,14 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/pci/designware-pcie.txt
 F:	drivers/pci/controller/dwc/*designware*
 
-PCI DRIVER FOR TI DRA7XX
+PCI DRIVER FOR TI DRA7XX/J721E
 M:	Kishon Vijay Abraham I <kishon@ti.com>
 L:	linux-omap@vger.kernel.org
 L:	linux-pci@vger.kernel.org
+L:	linux-arm-kernel@lists.infradead.org
 S:	Supported
 F:	Documentation/devicetree/bindings/pci/ti-pci.txt
+F:	drivers/pci/controller/cadence/pci-j721e.c
 F:	drivers/pci/controller/dwc/pci-dra7xx.c
 
 PCI DRIVER FOR TI KEYSTONE
@@ -13551,6 +13566,7 @@ F:	arch/*/kernel/perf_event*.c
 F:	include/linux/perf_event.h
 F:	include/uapi/linux/perf_event.h
 F:	kernel/events/*
+F:	tools/lib/perf/
 F:	tools/perf/
 
 PERFORMANCE EVENTS SUBSYSTEM ARM64 PMU EVENTS
@@ -14881,6 +14897,13 @@ L:	linux-serial@vger.kernel.org
 S:	Odd Fixes
 F:	drivers/tty/serial/rp2.*
 
+ROHM BD99954 CHARGER IC
+R:	Matti Vaittinen <matti.vaittinen@fi.rohmeurope.com>
+L:	linux-power@fi.rohmeurope.com
+S:	Supported
+F:	drivers/power/supply/bd99954-charger.c
+F:	drivers/power/supply/bd99954-charger.h
+
 ROHM BH1750 AMBIENT LIGHT SENSOR DRIVER
 M:	Tomasz Duszynski <tduszyns@gmail.com>
 S:	Maintained
@@ -14897,6 +14920,31 @@ F:	drivers/gpio/gpio-bd9571mwv.c
 F:	drivers/mfd/bd9571mwv.c
 F:	drivers/regulator/bd9571mwv-regulator.c
 F:	include/linux/mfd/bd9571mwv.h
+
+ROHM POWER MANAGEMENT IC DEVICE DRIVERS
+R:	Matti Vaittinen <matti.vaittinen@fi.rohmeurope.com>
+L:	linux-power@fi.rohmeurope.com
+S:	Supported
+F:	Documentation/devicetree/bindings/mfd/rohm,bd70528-pmic.txt
+F:	Documentation/devicetree/bindings/regulator/rohm,bd70528-regulator.txt
+F:	drivers/clk/clk-bd718x7.c
+F:	drivers/gpio/gpio-bd70528.c
+F:	drivers/gpio/gpio-bd71828.c
+F:	drivers/mfd/rohm-bd70528.c
+F:	drivers/mfd/rohm-bd71828.c
+F:	drivers/mfd/rohm-bd718x7.c
+F:	drivers/power/supply/bd70528-charger.c
+F:	drivers/regulator/bd70528-regulator.c
+F:	drivers/regulator/bd71828-regulator.c
+F:	drivers/regulator/bd718x7-regulator.c
+F:	drivers/regulator/rohm-regulator.c
+F:	drivers/rtc/rtc-bd70528.c
+F:	drivers/watchdog/bd70528_wdt.c
+F:	include/linux/mfd/rohm-bd70528.h
+F:	include/linux/mfd/rohm-bd71828.h
+F:	include/linux/mfd/rohm-bd718x7.h
+F:	include/linux/mfd/rohm-generic.h
+F:	include/linux/mfd/rohm-shared.h
 
 ROSE NETWORK LAYER
 M:	Ralf Baechle <ralf@linux-mips.org>
@@ -15986,7 +16034,7 @@ F:	drivers/infiniband/sw/siw/
 F:	include/uapi/rdma/siw-abi.h
 
 SOFT-ROCE DRIVER (rxe)
-M:	Zhu Yanjun <yanjunz@mellanox.com>
+M:	Zhu Yanjun <yanjunz@nvidia.com>
 L:	linux-rdma@vger.kernel.org
 S:	Supported
 F:	drivers/infiniband/sw/rxe/
@@ -16971,8 +17019,10 @@ F:	drivers/i2c/busses/i2c-tegra.c
 
 TEGRA IOMMU DRIVERS
 M:	Thierry Reding <thierry.reding@gmail.com>
+R:	Krishna Reddy <vdumpa@nvidia.com>
 L:	linux-tegra@vger.kernel.org
 S:	Supported
+F:	drivers/iommu/arm/arm-smmu/arm-smmu-nvidia.c
 F:	drivers/iommu/tegra*
 
 TEGRA KBC DRIVER
@@ -17063,6 +17113,7 @@ M:	Tero Kristo <t-kristo@ti.com>
 M:	Santosh Shilimkar <ssantosh@kernel.org>
 L:	linux-arm-kernel@lists.infradead.org
 S:	Maintained
+F:	Documentation/devicetree/bindings/arm/keystone/ti,k3-sci-common.yaml
 F:	Documentation/devicetree/bindings/arm/keystone/ti,sci.txt
 F:	Documentation/devicetree/bindings/clock/ti,sci-clk.txt
 F:	Documentation/devicetree/bindings/interrupt-controller/ti,sci-inta.txt

@@ -1116,7 +1116,8 @@ void hash__early_init_mmu_secondary(void)
 		tlbiel_all();
 
 #ifdef CONFIG_PPC_MEM_KEYS
-	mtspr(SPRN_UAMOR, default_uamor);
+	if (mmu_has_feature(MMU_FTR_PKEY))
+		mtspr(SPRN_UAMOR, default_uamor);
 #endif
 }
 #endif /* CONFIG_SMP */
