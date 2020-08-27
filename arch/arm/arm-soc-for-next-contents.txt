@@ -7,6 +7,8 @@ arm/drivers
 		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-i2c-for-v5.10
 	tee/memref-null
 		git://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-memref-null-for-v5.10
+	tee/get-user-pages
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-pin-user-pages-for-5.10
 
 arm/defconfig
 
