@@ -6573,6 +6573,18 @@ static inline void io_ring_clear_wakeup_flag(struct io_ring_ctx *ctx)
 	spin_unlock_irq(&ctx->completion_lock);
 }
 
+static int io_sq_wake_function(struct wait_queue_entry *wqe, unsigned mode,
+			       int sync, void *key)
+{
+	struct io_ring_ctx *ctx = container_of(wqe, struct io_ring_ctx, sqo_wait_entry);
+	int ret;
+
+	ret = autoremove_wake_function(wqe, mode, sync, key);
+	if (ret)
+		io_ring_clear_wakeup_flag(ctx);
+	return ret;
+}
+
 static int io_sq_thread(void *data)
 {
 	struct io_ring_ctx *ctx = data;
@@ -6581,6 +6593,7 @@ static int io_sq_thread(void *data)
 	int ret = 0;
 
 	init_wait(&ctx->sqo_wait_entry);
+	ctx->sqo_wait_entry.func = io_sq_wake_function;
 
 	complete(&ctx->sq_thread_comp);
 
@@ -6667,7 +6680,6 @@ static int io_sq_thread(void *data)
 				schedule();
 				finish_wait(ctx->sqo_wait, &ctx->sqo_wait_entry);
 
-				io_ring_clear_wakeup_flag(ctx);
 				ret = 0;
 				continue;
 			}
