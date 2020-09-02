@@ -280,6 +280,13 @@ struct io_ring_ctx {
 	wait_queue_head_t	sqo_wait;
 
 	/*
+	 * For SQPOLL usage - no reference is held to this file table, we
+	 * rely on fops->flush() and our callback there waiting for the users
+	 * to finish.
+	 */
+	struct files_struct	*sqo_files;
+
+	/*
 	 * If used, fixed file set. Writers must ensure that ->refs is dead,
 	 * readers must ensure that ->refs is alive as long as the file* is
 	 * used. Only updated through io_uring_register(2).
@@ -6008,13 +6015,7 @@ static int io_file_get(struct io_submit_state *state, struct io_kiocb *req,
 static int io_req_set_file(struct io_submit_state *state, struct io_kiocb *req,
 			   int fd)
 {
-	bool fixed;
-
-	fixed = (req->flags & REQ_F_FIXED_FILE) != 0;
-	if (unlikely(!fixed && io_async_submit(req->ctx)))
-		return -EBADF;
-
-	return io_file_get(state, req, fd, &req->file, fixed);
+	return io_file_get(state, req, fd, &req->file, req->flags & REQ_F_FIXED_FILE);
 }
 
 static int io_grab_files(struct io_kiocb *req)
@@ -6581,6 +6582,10 @@ static int io_sq_thread(void *data)
 
 	old_cred = override_creds(ctx->creds);
 
+	task_lock(current);
+	current->files = ctx->sqo_files;
+	task_unlock(current);
+
 	timeout = jiffies + ctx->sq_thread_idle;
 	while (!kthread_should_park()) {
 		unsigned int to_submit;
@@ -6679,6 +6684,9 @@ static int io_sq_thread(void *data)
 	io_run_task_work();
 
 	io_sq_thread_drop_mm();
+	task_lock(current);
+	current->files = NULL;
+	task_unlock(current);
 	revert_creds(old_cred);
 
 	kthread_parkme();
@@ -7510,6 +7518,13 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 		if (!capable(CAP_SYS_ADMIN))
 			goto err;
 
+		/*
+		 * We will exit the sqthread before current exits, so we can
+		 * avoid taking a reference here and introducing weird
+		 * circular dependencies on the files table.
+		 */
+		ctx->sqo_files = current->files;
+
 		ctx->sq_thread_idle = msecs_to_jiffies(p->sq_thread_idle);
 		if (!ctx->sq_thread_idle)
 			ctx->sq_thread_idle = HZ;
@@ -7547,6 +7562,7 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 
 	return 0;
 err:
+	ctx->sqo_files = NULL;
 	io_finish_async(ctx);
 	return ret;
 }
@@ -8248,8 +8264,10 @@ static int io_uring_flush(struct file *file, void *data)
 	/*
 	 * If the task is going away, cancel work it may have pending
 	 */
-	if (fatal_signal_pending(current) || (current->flags & PF_EXITING))
+	if (fatal_signal_pending(current) || (current->flags & PF_EXITING)) {
+		io_sq_thread_stop(ctx);
 		io_wq_cancel_cb(ctx->io_wq, io_cancel_task_cb, current, true);
+	}
 
 	return 0;
 }
@@ -8699,7 +8717,7 @@ static int io_uring_create(unsigned entries, struct io_uring_params *p,
 	p->features = IORING_FEAT_SINGLE_MMAP | IORING_FEAT_NODROP |
 			IORING_FEAT_SUBMIT_STABLE | IORING_FEAT_RW_CUR_POS |
 			IORING_FEAT_CUR_PERSONALITY | IORING_FEAT_FAST_POLL |
-			IORING_FEAT_POLL_32BITS;
+			IORING_FEAT_POLL_32BITS | IORING_FEAT_SQPOLL_NONFIXED;
 
 	if (copy_to_user(params, p, sizeof(*p))) {
 		ret = -EFAULT;
@@ -8717,6 +8735,12 @@ static int io_uring_create(unsigned entries, struct io_uring_params *p,
 	trace_io_uring_create(ret, ctx, p->sq_entries, p->cq_entries, p->flags);
 	return ret;
 err:
+	/*
+	 * Our wait-and-kill does do this, but we need it done before we
+	 * exit as the SQPOLL thread could already be active and the current
+	 * files could be done as soon as we exit here.
+	 */
+	io_finish_async(ctx);
 	io_ring_ctx_wait_and_kill(ctx);
 	return ret;
 }
