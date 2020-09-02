@@ -7513,7 +7513,7 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 
 	if (ctx->flags & IORING_SETUP_SQPOLL) {
 		ret = -EPERM;
-		if (!capable(CAP_SYS_ADMIN))
+		if (!capable(CAP_SYS_ADMIN) && !capable(CAP_SYS_NICE))
 			goto err;
 
 		/*
