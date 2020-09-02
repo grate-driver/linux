@@ -229,6 +229,12 @@ struct io_restriction {
 	bool registered;
 };
 
+struct io_sq_data {
+	refcount_t		refs;
+	struct task_struct	*thread;
+	struct wait_queue_head	wait;
+};
+
 struct io_ring_ctx {
 	struct {
 		struct percpu_ref	refs;
@@ -275,19 +281,17 @@ struct io_ring_ctx {
 
 	/* IO offload */
 	struct io_wq		*io_wq;
-	struct task_struct	*sqo_thread;	/* if using sq thread polling */
 	struct mm_struct	*sqo_mm;
-	struct wait_queue_head	*sqo_wait;
-	struct wait_queue_head	__sqo_wait;
-	struct wait_queue_entry	sqo_wait_entry;
-
-
 	/*
 	 * For SQPOLL usage - no reference is held to this file table, we
 	 * rely on fops->flush() and our callback there waiting for the users
 	 * to finish.
 	 */
 	struct files_struct	*sqo_files;
+
+	struct wait_queue_entry	sqo_wait_entry;
+
+	struct io_sq_data	*sq_data;	/* if using sq thread polling */
 
 	/*
 	 * If used, fixed file set. Writers must ensure that ->refs is dead,
@@ -1076,8 +1080,6 @@ static struct io_ring_ctx *io_ring_ctx_alloc(struct io_uring_params *p)
 		goto err;
 
 	ctx->flags = p->flags;
-	init_waitqueue_head(&ctx->__sqo_wait);
-	ctx->sqo_wait = &ctx->__sqo_wait;
 	init_waitqueue_head(&ctx->cq_wait);
 	INIT_LIST_HEAD(&ctx->cq_overflow_list);
 	init_completion(&ctx->ref_comp);
@@ -1340,8 +1342,8 @@ static void io_cqring_ev_posted(struct io_ring_ctx *ctx)
 {
 	if (waitqueue_active(&ctx->wait))
 		wake_up(&ctx->wait);
-	if (waitqueue_active(ctx->sqo_wait))
-		wake_up(ctx->sqo_wait);
+	if (ctx->sq_data && waitqueue_active(&ctx->sq_data->wait))
+		wake_up(&ctx->sq_data->wait);
 	if (io_should_trigger_evfd(ctx))
 		eventfd_signal(ctx->cq_ev_fd, 1);
 }
@@ -2408,8 +2410,9 @@ static void io_iopoll_req_issued(struct io_kiocb *req)
 	else
 		list_add_tail(&req->inflight_entry, &ctx->iopoll_list);
 
-	if ((ctx->flags & IORING_SETUP_SQPOLL) && wq_has_sleeper(ctx->sqo_wait))
-		wake_up(ctx->sqo_wait);
+	if ((ctx->flags & IORING_SETUP_SQPOLL) &&
+	    wq_has_sleeper(&ctx->sq_data->wait))
+		wake_up(&ctx->sq_data->wait);
 }
 
 static void __io_state_file_put(struct io_submit_state *state)
@@ -6595,6 +6598,7 @@ static enum sq_ret __io_sq_thread(struct io_ring_ctx *ctx,
 				  unsigned long start_jiffies)
 {
 	unsigned long timeout = start_jiffies + ctx->sq_thread_idle;
+	struct io_sq_data *sqd = ctx->sq_data;
 	unsigned int to_submit;
 	int ret = 0;
 
@@ -6635,7 +6639,7 @@ again:
 		    !percpu_ref_is_dying(&ctx->refs)))
 			return SQT_SPIN;
 
-		prepare_to_wait(ctx->sqo_wait, &ctx->sqo_wait_entry,
+		prepare_to_wait(&sqd->wait, &ctx->sqo_wait_entry,
 					TASK_INTERRUPTIBLE);
 
 		/*
@@ -6647,7 +6651,7 @@ again:
 		 */
 		if ((ctx->flags & IORING_SETUP_IOPOLL) &&
 		    !list_empty_careful(&ctx->iopoll_list)) {
-			finish_wait(ctx->sqo_wait, &ctx->sqo_wait_entry);
+			finish_wait(&sqd->wait, &ctx->sqo_wait_entry);
 			goto again;
 		}
 
@@ -6657,7 +6661,7 @@ again:
 		if (!to_submit || ret == -EBUSY)
 			return SQT_IDLE;
 
-		finish_wait(ctx->sqo_wait, &ctx->sqo_wait_entry);
+		finish_wait(&sqd->wait, &ctx->sqo_wait_entry);
 		io_ring_clear_wakeup_flag(ctx);
 	}
 
@@ -6885,18 +6889,46 @@ static int io_sqe_files_unregister(struct io_ring_ctx *ctx)
 	return 0;
 }
 
-static void io_sq_thread_stop(struct io_ring_ctx *ctx)
+static void io_put_sq_data(struct io_sq_data *sqd)
 {
-	if (ctx->sqo_thread) {
-		wait_for_completion(&ctx->sq_thread_comp);
+	if (refcount_dec_and_test(&sqd->refs)) {
 		/*
 		 * The park is a bit of a work-around, without it we get
 		 * warning spews on shutdown with SQPOLL set and affinity
 		 * set to a single CPU.
 		 */
-		kthread_park(ctx->sqo_thread);
-		kthread_stop(ctx->sqo_thread);
-		ctx->sqo_thread = NULL;
+		if (sqd->thread) {
+			kthread_park(sqd->thread);
+			kthread_stop(sqd->thread);
+		}
+
+		kfree(sqd);
+	}
+}
+
+static struct io_sq_data *io_get_sq_data(struct io_uring_params *p)
+{
+	struct io_sq_data *sqd;
+
+	sqd = kzalloc(sizeof(*sqd), GFP_KERNEL);
+	if (!sqd)
+		return ERR_PTR(-ENOMEM);
+
+	refcount_set(&sqd->refs, 1);
+	init_waitqueue_head(&sqd->wait);
+	return sqd;
+}
+
+static void io_sq_thread_stop(struct io_ring_ctx *ctx)
+{
+	struct io_sq_data *sqd = ctx->sq_data;
+
+	if (sqd) {
+		if (sqd->thread)
+			wait_for_completion(&ctx->sq_thread_comp);
+
+		io_put_sq_data(sqd);
+		ctx->sq_data = NULL;
 	}
 }
 
@@ -7537,9 +7569,18 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 	int ret;
 
 	if (ctx->flags & IORING_SETUP_SQPOLL) {
+		struct io_sq_data *sqd;
+
 		ret = -EPERM;
 		if (!capable(CAP_SYS_ADMIN) && !capable(CAP_SYS_NICE))
 			goto err;
+
+		sqd = io_get_sq_data(p);
+		if (IS_ERR(sqd)) {
+			ret = PTR_ERR(sqd);
+			goto err;
+		}
+		ctx->sq_data = sqd;
 
 		/*
 		 * We will exit the sqthread before current exits, so we can
@@ -7561,16 +7602,15 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 			if (!cpu_online(cpu))
 				goto err;
 
-			ctx->sqo_thread = kthread_create_on_cpu(io_sq_thread,
-							ctx, cpu,
-							"io_uring-sq");
+			sqd->thread = kthread_create_on_cpu(io_sq_thread, ctx,
+							cpu, "io_uring-sq");
 		} else {
-			ctx->sqo_thread = kthread_create(io_sq_thread, ctx,
+			sqd->thread = kthread_create(io_sq_thread, ctx,
 							"io_uring-sq");
 		}
-		if (IS_ERR(ctx->sqo_thread)) {
-			ret = PTR_ERR(ctx->sqo_thread);
-			ctx->sqo_thread = NULL;
+		if (IS_ERR(sqd->thread)) {
+			ret = PTR_ERR(sqd->thread);
+			sqd->thread = NULL;
 			goto err;
 		}
 	} else if (p->flags & IORING_SETUP_SQ_AFF) {
@@ -7592,8 +7632,10 @@ err:
 
 static void io_sq_offload_start(struct io_ring_ctx *ctx)
 {
-	if ((ctx->flags & IORING_SETUP_SQPOLL) && ctx->sqo_thread)
-		wake_up_process(ctx->sqo_thread);
+	struct io_sq_data *sqd = ctx->sq_data;
+
+	if ((ctx->flags & IORING_SETUP_SQPOLL) && sqd->thread)
+		wake_up_process(sqd->thread);
 }
 
 static inline void __io_unaccount_mem(struct user_struct *user,
@@ -8405,7 +8447,7 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 		if (!list_empty_careful(&ctx->cq_overflow_list))
 			io_cqring_overflow_flush(ctx, false);
 		if (flags & IORING_ENTER_SQ_WAKEUP)
-			wake_up(ctx->sqo_wait);
+			wake_up(&ctx->sq_data->wait);
 		submitted = to_submit;
 	} else if (to_submit) {
 		mutex_lock(&ctx->uring_lock);
