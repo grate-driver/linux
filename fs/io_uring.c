@@ -6996,8 +6996,17 @@ static void io_sq_thread_stop(struct io_ring_ctx *ctx)
 	struct io_sq_data *sqd = ctx->sq_data;
 
 	if (sqd) {
-		if (sqd->thread)
+		if (sqd->thread) {
+			/*
+			 * We may arrive here from the error branch in
+			 * io_sq_offload_create() where the kthread is created
+			 * without being waked up, thus wake it up now to make
+			 * sure the wait will complete.
+			 */
+			wake_up_process(sqd->thread);
+
 			wait_for_completion(&ctx->sq_thread_comp);
+		}
 
 		mutex_lock(&sqd->ctx_lock);
 		list_del(&ctx->sqd_list);
