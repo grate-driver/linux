@@ -8676,7 +8676,7 @@ static int io_allocate_scq_urings(struct io_ring_ctx *ctx,
  * fd to gain access to the SQ/CQ ring details. If UNIX sockets are enabled,
  * we have to tie this fd to a socket for file garbage collection purposes.
  */
-static int io_uring_get_fd(struct io_ring_ctx *ctx)
+static int io_uring_get_fd(struct io_ring_ctx *ctx, struct file **fptr)
 {
 	struct file *file;
 	int ret;
@@ -8703,7 +8703,7 @@ static int io_uring_get_fd(struct io_ring_ctx *ctx)
 #if defined(CONFIG_UNIX)
 	ctx->ring_sock->file = file;
 #endif
-	fd_install(ret, file);
+	*fptr = file;
 	return ret;
 err:
 #if defined(CONFIG_UNIX)
@@ -8718,8 +8718,9 @@ static int io_uring_create(unsigned entries, struct io_uring_params *p,
 {
 	struct user_struct *user = NULL;
 	struct io_ring_ctx *ctx;
+	struct file *file;
 	bool limit_mem;
-	int ret;
+	int ret, fd = -1;
 
 	if (!entries)
 		return -EINVAL;
@@ -8797,6 +8798,13 @@ static int io_uring_create(unsigned entries, struct io_uring_params *p,
 	if (ret)
 		goto err;
 
+	/* Only gets the ring fd, doesn't install it in the file table */
+	fd = io_uring_get_fd(ctx, &file);
+	if (fd < 0) {
+		ret = fd;
+		goto err;
+	}
+
 	ret = io_sq_offload_create(ctx, p);
 	if (ret)
 		goto err;
@@ -8832,16 +8840,9 @@ static int io_uring_create(unsigned entries, struct io_uring_params *p,
 		goto err;
 	}
 
-	/*
-	 * Install ring fd as the very last thing, so we don't risk someone
-	 * having closed it before we finish setup
-	 */
-	ret = io_uring_get_fd(ctx);
-	if (ret < 0)
-		goto err;
-
 	trace_io_uring_create(ret, ctx, p->sq_entries, p->cq_entries, p->flags);
-	return ret;
+	fd_install(fd, file);
+	return fd;
 err:
 	/*
 	 * Our wait-and-kill does do this, but we need it done before we
@@ -8849,7 +8850,18 @@ err:
 	 * files could be done as soon as we exit here.
 	 */
 	io_finish_async(ctx);
-	io_ring_ctx_wait_and_kill(ctx);
+
+	/*
+	 * Final fput() will call release and free everything, so if we're
+	 * failing beyond having gotten a file and fd, just let normal
+	 * release off fput() free things.
+	 */
+	if (fd >= 0) {
+		fput(file);
+		put_unused_fd(fd);
+	} else {
+		io_ring_ctx_wait_and_kill(ctx);
+	}
 	return ret;
 }
 
