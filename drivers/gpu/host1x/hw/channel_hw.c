@@ -55,31 +55,46 @@ static void submit_gathers(struct host1x_job *job)
 #endif
 	unsigned int i;
 
-	for (i = 0; i < job->num_gathers; i++) {
-		struct host1x_job_gather *g = &job->gathers[i];
-		dma_addr_t addr = g->base + g->offset;
-		u32 op2, op3;
+	for (i = 0; i < job->num_cmds; i++) {
+		struct host1x_job_cmd *cmd = &job->cmds[i];
 
-		op2 = lower_32_bits(addr);
-		op3 = upper_32_bits(addr);
-
-		trace_write_gather(cdma, g->bo, g->offset, g->words);
-
-		if (op3 != 0) {
-#if HOST1X_HW >= 6
-			u32 op1 = host1x_opcode_gather_wide(g->words);
-			u32 op4 = HOST1X_OPCODE_NOP;
-
-			host1x_cdma_push_wide(cdma, op1, op2, op3, op4);
-#else
-			dev_err(dev, "invalid gather for push buffer %pad\n",
-				&addr);
-			continue;
-#endif
+		if (cmd->is_wait) {
+			/* TODO use modern wait */
+			host1x_cdma_push(cdma,
+				 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+					host1x_uclass_wait_syncpt_r(), 1),
+				 host1x_class_host_wait_syncpt(cmd->wait.id,
+					cmd->wait.threshold));
+			host1x_cdma_push(
+				cdma, host1x_opcode_setclass(job->class, 0, 0),
+				HOST1X_OPCODE_NOP);
 		} else {
-			u32 op1 = host1x_opcode_gather(g->words);
+			struct host1x_job_gather *g = &cmd->gather;
 
-			host1x_cdma_push(cdma, op1, op2);
+			dma_addr_t addr = g->base + g->offset;
+			u32 op2, op3;
+
+			op2 = lower_32_bits(addr);
+			op3 = upper_32_bits(addr);
+
+			trace_write_gather(cdma, g->bo, g->offset, g->words);
+
+			if (op3 != 0) {
+#if HOST1X_HW >= 6
+				u32 op1 = host1x_opcode_gather_wide(g->words);
+				u32 op4 = HOST1X_OPCODE_NOP;
+
+				host1x_cdma_push_wide(cdma, op1, op2, op3, op4);
+#else
+				dev_err(dev, "invalid gather for push buffer %pad\n",
+					&addr);
+				continue;
+#endif
+			} else {
+				u32 op1 = host1x_opcode_gather(g->words);
+
+				host1x_cdma_push(cdma, op1, op2);
+			}
 		}
 	}
 }
@@ -147,7 +162,7 @@ static int channel_submit(struct host1x_job *job)
 	struct host1x *host = dev_get_drvdata(ch->dev->parent);
 
 	trace_host1x_channel_submit(dev_name(ch->dev),
-				    job->num_gathers, job->num_relocs,
+				    job->num_cmds, job->num_relocs,
 				    job->syncpt->id, job->syncpt_incrs);
 
 	/* before error checks, return current max */
