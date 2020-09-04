@@ -384,6 +384,7 @@ static void syncpt_release(struct kref *ref)
 {
 	struct host1x_syncpt *sp = container_of(ref, struct host1x_syncpt, ref);
 
+	atomic_set(&sp->max_val, host1x_syncpt_read(sp));
 	sp->locked = false;
 
 	mutex_lock(&sp->host->syncpt_mutex);
