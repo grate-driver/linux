@@ -2983,7 +2983,7 @@ static void io_req_map_rw(struct io_kiocb *req, const struct iovec *iovec,
 	struct io_async_rw *rw = &req->io->rw;
 
 	memcpy(&rw->iter, iter, sizeof(*iter));
-	rw->free_iovec = NULL;
+	rw->free_iovec = iovec;
 	rw->bytes_done = 0;
 	/* can only be fixed buffers, no need to do anything */
 	if (iter->type == ITER_BVEC)
@@ -3000,7 +3000,6 @@ static void io_req_map_rw(struct io_kiocb *req, const struct iovec *iovec,
 			memcpy(rw->fast_iov + iov_off, fast_iov + iov_off,
 			       sizeof(struct iovec) * iter->nr_segs);
 	} else {
-		rw->free_iovec = iovec;
 		req->flags |= REQ_F_NEED_CLEANUP;
 	}
 }
