@@ -232,10 +232,6 @@ struct io_restriction {
 struct io_sq_data {
 	refcount_t		refs;
 
-	/* global sqd lookup */
-	struct list_head	all_sqd_list;
-	int			attach_fd;
-
 	/* ctx's that are using this sqd */
 	struct list_head	ctx_list;
 	struct list_head	ctx_new_list;
@@ -244,9 +240,6 @@ struct io_sq_data {
 	struct task_struct	*thread;
 	struct wait_queue_head	wait;
 };
-
-static LIST_HEAD(sqd_list);
-static DEFINE_MUTEX(sqd_lock);
 
 struct io_ring_ctx {
 	struct {
@@ -7034,32 +7027,37 @@ static void io_put_sq_data(struct io_sq_data *sqd)
 			kthread_stop(sqd->thread);
 		}
 
-		mutex_lock(&sqd_lock);
-		list_del(&sqd->all_sqd_list);
-		mutex_unlock(&sqd_lock);
-
 		kfree(sqd);
 	}
 }
 
 static struct io_sq_data *io_attach_sq_data(struct io_uring_params *p)
 {
-	struct io_sq_data *sqd, *ret = ERR_PTR(-ENXIO);
+	struct io_ring_ctx *ctx_attach;
+	struct io_sq_data *sqd;
+	struct fd f;
 
-	mutex_lock(&sqd_lock);
-	list_for_each_entry(sqd, &sqd_list, all_sqd_list) {
-		if (sqd->attach_fd == p->wq_fd) {
-			refcount_inc(&sqd->refs);
-			ret = sqd;
-			break;
-		}
+	f = fdget(p->wq_fd);
+	if (!f.file)
+		return ERR_PTR(-ENXIO);
+	if (f.file->f_op != &io_uring_fops) {
+		fdput(f);
+		return ERR_PTR(-EINVAL);
 	}
-	mutex_unlock(&sqd_lock);
 
-	return ret;
+	ctx_attach = f.file->private_data;
+	sqd = ctx_attach->sq_data;
+	if (!sqd) {
+		fdput(f);
+		return ERR_PTR(-EINVAL);
+	}
+
+	refcount_inc(&sqd->refs);
+	fdput(f);
+	return sqd;
 }
 
-static struct io_sq_data *io_get_sq_data(struct io_uring_params *p, int ring_fd)
+static struct io_sq_data *io_get_sq_data(struct io_uring_params *p)
 {
 	struct io_sq_data *sqd;
 
@@ -7071,15 +7069,11 @@ static struct io_sq_data *io_get_sq_data(struct io_uring_params *p, int ring_fd)
 		return ERR_PTR(-ENOMEM);
 
 	refcount_set(&sqd->refs, 1);
-	sqd->attach_fd = ring_fd;
 	INIT_LIST_HEAD(&sqd->ctx_list);
 	INIT_LIST_HEAD(&sqd->ctx_new_list);
 	mutex_init(&sqd->ctx_lock);
 	init_waitqueue_head(&sqd->wait);
 
-	mutex_lock(&sqd_lock);
-	list_add_tail(&sqd->all_sqd_list, &sqd_list);
-	mutex_unlock(&sqd_lock);
 	return sqd;
 }
 
@@ -7746,7 +7740,7 @@ out_fput:
 }
 
 static int io_sq_offload_create(struct io_ring_ctx *ctx,
-				struct io_uring_params *p, int ring_fd)
+				struct io_uring_params *p)
 {
 	int ret;
 
@@ -7757,7 +7751,7 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 		if (!capable(CAP_SYS_ADMIN) && !capable(CAP_SYS_NICE))
 			goto err;
 
-		sqd = io_get_sq_data(p, ring_fd);
+		sqd = io_get_sq_data(p);
 		if (IS_ERR(sqd)) {
 			ret = PTR_ERR(sqd);
 			goto err;
@@ -8972,7 +8966,7 @@ static int io_uring_create(unsigned entries, struct io_uring_params *p,
 		goto err;
 	}
 
-	ret = io_sq_offload_create(ctx, p, fd);
+	ret = io_sq_offload_create(ctx, p);
 	if (ret)
 		goto err;
 
