@@ -6683,7 +6683,7 @@ enum sq_ret {
 };
 
 static enum sq_ret __io_sq_thread(struct io_ring_ctx *ctx,
-				  unsigned long start_jiffies)
+				  unsigned long start_jiffies, bool cap_entries)
 {
 	unsigned long timeout = start_jiffies + ctx->sq_thread_idle;
 	struct io_sq_data *sqd = ctx->sq_data;
@@ -6758,6 +6758,10 @@ again:
 		io_ring_clear_wakeup_flag(ctx);
 	}
 
+	/* if we're handling multiple rings, cap submit size for fairness */
+	if (cap_entries && to_submit > 8)
+		to_submit = 8;
+
 	mutex_lock(&ctx->uring_lock);
 	if (likely(!percpu_ref_is_dying(&ctx->refs)))
 		ret = io_submit_sqes(ctx, to_submit);
@@ -6792,6 +6796,7 @@ static int io_sq_thread(void *data)
 	start_jiffies = jiffies;
 	while (!kthread_should_stop()) {
 		enum sq_ret ret = 0;
+		bool cap_entries;
 
 		/*
 		 * Any changes to the sqd lists are synchronized through the
@@ -6803,6 +6808,8 @@ static int io_sq_thread(void *data)
 
 		if (unlikely(!list_empty(&sqd->ctx_new_list)))
 			io_sqd_init_new(sqd);
+
+		cap_entries = !list_is_singular(&sqd->ctx_list);
 
 		list_for_each_entry(ctx, &sqd->ctx_list, sqd_list) {
 			if (current->cred != ctx->creds) {
@@ -6817,7 +6824,7 @@ static int io_sq_thread(void *data)
 				task_unlock(current);
 			}
 
-			ret |= __io_sq_thread(ctx, start_jiffies);
+			ret |= __io_sq_thread(ctx, start_jiffies, cap_entries);
 
 			io_sq_thread_drop_mm();
 		}
