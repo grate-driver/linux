@@ -6577,8 +6577,7 @@ static int io_init_req(struct io_ring_ctx *ctx, struct io_kiocb *req,
 	return io_req_set_file(state, req, READ_ONCE(sqe->fd));
 }
 
-static int io_submit_sqes(struct io_ring_ctx *ctx, unsigned int nr,
-			  struct file *ring_file, int ring_fd)
+static int io_submit_sqes(struct io_ring_ctx *ctx, unsigned int nr)
 {
 	struct io_submit_state state;
 	struct io_kiocb *link = NULL;
@@ -6598,9 +6597,6 @@ static int io_submit_sqes(struct io_ring_ctx *ctx, unsigned int nr,
 		return -EAGAIN;
 
 	io_submit_state_start(&state, ctx, nr);
-
-	ctx->ring_fd = ring_fd;
-	ctx->ring_file = ring_file;
 
 	for (i = 0; i < nr; i++) {
 		const struct io_uring_sqe *sqe;
@@ -6704,7 +6700,14 @@ again:
 		mutex_unlock(&ctx->uring_lock);
 	}
 
-	to_submit = io_sqring_entries(ctx);
+	/*
+	 * If ->ring_file is NULL, we're waiting on new fd/file assigment.
+	 * Don't submit anything new until that happens.
+	 */
+	if (ctx->ring_file)
+		to_submit = io_sqring_entries(ctx);
+	else
+		to_submit = 0;
 
 	/*
 	 * If submit got -EBUSY, flag us as needing the application
@@ -6748,7 +6751,7 @@ again:
 		}
 
 		to_submit = io_sqring_entries(ctx);
-		if (!to_submit || ret == -EBUSY)
+		if (!to_submit || ret == -EBUSY || !ctx->ring_file)
 			return SQT_IDLE;
 
 		finish_wait(&sqd->wait, &ctx->sqo_wait_entry);
@@ -6757,7 +6760,7 @@ again:
 
 	mutex_lock(&ctx->uring_lock);
 	if (likely(!percpu_ref_is_dying(&ctx->refs)))
-		ret = io_submit_sqes(ctx, to_submit, NULL, -1);
+		ret = io_submit_sqes(ctx, to_submit);
 	mutex_unlock(&ctx->uring_lock);
 
 	if (!io_sqring_full(ctx) && wq_has_sleeper(&ctx->sqo_sq_wait))
@@ -8514,6 +8517,19 @@ static int io_uring_flush(struct file *file, void *data)
 	if (fatal_signal_pending(current) || (current->flags & PF_EXITING)) {
 		io_sq_thread_stop(ctx);
 		io_wq_cancel_cb(ctx->io_wq, io_cancel_task_cb, current, true);
+	} else if (ctx->flags & IORING_SETUP_SQPOLL) {
+		struct io_sq_data *sqd = ctx->sq_data;
+
+		/* Ring is being closed, mark us as neding new assignment */
+		if (sqd->thread)
+			kthread_park(sqd->thread);
+		mutex_lock(&ctx->uring_lock);
+		ctx->ring_fd = -1;
+		ctx->ring_file = NULL;
+		mutex_unlock(&ctx->uring_lock);
+		io_ring_set_wakeup_flag(ctx);
+		if (sqd->thread)
+			kthread_unpark(sqd->thread);
 	}
 
 	return 0;
@@ -8648,6 +8664,20 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 	if (ctx->flags & IORING_SETUP_SQPOLL) {
 		if (!list_empty_careful(&ctx->cq_overflow_list))
 			io_cqring_overflow_flush(ctx, false);
+		if (fd != ctx->ring_fd) {
+			struct io_sq_data *sqd = ctx->sq_data;
+
+			if (sqd->thread)
+				kthread_park(sqd->thread);
+
+			mutex_lock(&ctx->uring_lock);
+			ctx->ring_fd = fd;
+			ctx->ring_file = f.file;
+			mutex_unlock(&ctx->uring_lock);
+
+			if (sqd->thread)
+				kthread_unpark(sqd->thread);
+		}
 		if (flags & IORING_ENTER_SQ_WAKEUP)
 			wake_up(&ctx->sq_data->wait);
 		if (flags & IORING_ENTER_SQ_WAIT)
@@ -8655,7 +8685,9 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 		submitted = to_submit;
 	} else if (to_submit) {
 		mutex_lock(&ctx->uring_lock);
-		submitted = io_submit_sqes(ctx, to_submit, f.file, fd);
+		ctx->ring_fd = fd;
+		ctx->ring_file = f.file;
+		submitted = io_submit_sqes(ctx, to_submit);
 		mutex_unlock(&ctx->uring_lock);
 
 		if (submitted != to_submit)
