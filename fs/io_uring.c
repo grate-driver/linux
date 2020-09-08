@@ -8659,6 +8659,7 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 	if (!percpu_ref_tryget(&ctx->refs))
 		goto out_fput;
 
+	ret = -EBADFD;
 	if (ctx->flags & IORING_SETUP_R_DISABLED)
 		goto out_fput;
 
@@ -9170,7 +9171,7 @@ static int io_register_restrictions(struct io_ring_ctx *ctx, void __user *arg,
 
 	/* Restrictions allowed only if rings started disabled */
 	if (!(ctx->flags & IORING_SETUP_R_DISABLED))
-		return -EINVAL;
+		return -EBADFD;
 
 	/* We allow only a single restrictions registration */
 	if (ctx->restrictions.registered)
@@ -9234,7 +9235,7 @@ out:
 static int io_register_enable_rings(struct io_ring_ctx *ctx)
 {
 	if (!(ctx->flags & IORING_SETUP_R_DISABLED))
-		return -EINVAL;
+		return -EBADFD;
 
 	if (ctx->restrictions.registered)
 		ctx->restricted = 1;
