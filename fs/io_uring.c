@@ -8681,7 +8681,7 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 
 	ret = -EBADFD;
 	if (ctx->flags & IORING_SETUP_R_DISABLED)
-		goto out_fput;
+		goto out;
 
 	/*
 	 * For SQ polling, the thread will do all submissions and completions.
