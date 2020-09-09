@@ -231,6 +231,7 @@ struct io_restriction {
 
 struct io_sq_data {
 	refcount_t		refs;
+	struct mutex		lock;
 
 	/* ctx's that are using this sqd */
 	struct list_head	ctx_list;
@@ -7082,9 +7083,28 @@ static struct io_sq_data *io_get_sq_data(struct io_uring_params *p)
 	INIT_LIST_HEAD(&sqd->ctx_list);
 	INIT_LIST_HEAD(&sqd->ctx_new_list);
 	mutex_init(&sqd->ctx_lock);
+	mutex_init(&sqd->lock);
 	init_waitqueue_head(&sqd->wait);
 
 	return sqd;
+}
+
+static void io_sq_thread_unpark(struct io_sq_data *sqd)
+	__releases(&sqd->lock)
+{
+	if (!sqd->thread)
+		return;
+	kthread_unpark(sqd->thread);
+	mutex_unlock(&sqd->lock);
+}
+
+static void io_sq_thread_park(struct io_sq_data *sqd)
+	__acquires(&sqd->lock)
+{
+	if (!sqd->thread)
+		return;
+	mutex_lock(&sqd->lock);
+	kthread_park(sqd->thread);
 }
 
 static void io_sq_thread_stop(struct io_ring_ctx *ctx)
@@ -7103,7 +7123,7 @@ static void io_sq_thread_stop(struct io_ring_ctx *ctx)
 
 			wait_for_completion(&ctx->sq_thread_comp);
 
-			kthread_park(sqd->thread);
+			io_sq_thread_park(sqd);
 		}
 
 		mutex_lock(&sqd->ctx_lock);
@@ -7111,8 +7131,7 @@ static void io_sq_thread_stop(struct io_ring_ctx *ctx)
 		mutex_unlock(&sqd->ctx_lock);
 
 		if (sqd->thread)
-			kthread_unpark(sqd->thread);
-
+			io_sq_thread_unpark(sqd);
 		io_put_sq_data(sqd);
 		ctx->sq_data = NULL;
 	}
@@ -7766,10 +7785,13 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 			ret = PTR_ERR(sqd);
 			goto err;
 		}
+
+		io_sq_thread_park(sqd);
 		ctx->sq_data = sqd;
 		mutex_lock(&sqd->ctx_lock);
 		list_add(&ctx->sqd_list, &sqd->ctx_new_list);
 		mutex_unlock(&sqd->ctx_lock);
+		io_sq_thread_unpark(sqd);
 
 		/*
 		 * We will exit the sqthread before current exits, so we can
@@ -8528,15 +8550,13 @@ static int io_uring_flush(struct file *file, void *data)
 		struct io_sq_data *sqd = ctx->sq_data;
 
 		/* Ring is being closed, mark us as neding new assignment */
-		if (sqd->thread)
-			kthread_park(sqd->thread);
+		io_sq_thread_park(sqd);
 		mutex_lock(&ctx->uring_lock);
 		ctx->ring_fd = -1;
 		ctx->ring_file = NULL;
 		mutex_unlock(&ctx->uring_lock);
 		io_ring_set_wakeup_flag(ctx);
-		if (sqd->thread)
-			kthread_unpark(sqd->thread);
+		io_sq_thread_unpark(sqd);
 	}
 
 	return 0;
@@ -8675,16 +8695,14 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 		if (fd != ctx->ring_fd) {
 			struct io_sq_data *sqd = ctx->sq_data;
 
-			if (sqd->thread)
-				kthread_park(sqd->thread);
+			io_sq_thread_park(sqd);
 
 			mutex_lock(&ctx->uring_lock);
 			ctx->ring_fd = fd;
 			ctx->ring_file = f.file;
 			mutex_unlock(&ctx->uring_lock);
 
-			if (sqd->thread)
-				kthread_unpark(sqd->thread);
+			io_sq_thread_unpark(sqd);
 		}
 		if (flags & IORING_ENTER_SQ_WAKEUP)
 			wake_up(&ctx->sq_data->wait);
