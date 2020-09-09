@@ -6836,6 +6836,8 @@ static int io_sq_thread(void *data)
 		} else if (ret == SQT_IDLE) {
 			list_for_each_entry(ctx, &sqd->ctx_list, sqd_list)
 				io_ring_set_wakeup_flag(ctx);
+			if (kthread_should_park())
+				continue;
 			schedule();
 			start_jiffies = jiffies;
 		}
