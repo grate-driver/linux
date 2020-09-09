@@ -19,6 +19,7 @@
 #include <linux/err.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/i2c.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -145,9 +146,6 @@ struct rcar_i2c_priv {
 #define rcar_i2c_priv_to_dev(p)		((p)->adap.dev.parent)
 #define rcar_i2c_is_recv(p)		((p)->msg->flags & I2C_M_RD)
 
-#define LOOP_TIMEOUT	1024
-
-
 static void rcar_i2c_write(struct rcar_i2c_priv *priv, int reg, u32 val)
 {
 	writel(val, priv->io + reg);
@@ -221,18 +219,18 @@ static void rcar_i2c_init(struct rcar_i2c_priv *priv)
 
 static int rcar_i2c_bus_barrier(struct rcar_i2c_priv *priv)
 {
-	int i;
+	int ret;
+	u32 val;
 
-	for (i = 0; i < LOOP_TIMEOUT; i++) {
-		/* make sure that bus is not busy */
-		if (!(rcar_i2c_read(priv, ICMCR) & FSDA))
-			return 0;
-		udelay(1);
+	ret = readl_poll_timeout(priv->io + ICMCR, val, !(val & FSDA), 10,
+				 priv->adap.timeout);
+	if (ret) {
+		/* Waiting did not help, try to recover */
+		priv->recovery_icmcr = MDBS | OBPC | FSDA | FSCL;
+		ret = i2c_recover_bus(&priv->adap);
 	}
 
-	/* Waiting did not help, try to recover */
-	priv->recovery_icmcr = MDBS | OBPC | FSDA | FSCL;
-	return i2c_recover_bus(&priv->adap);
+	return ret;
 }
 
 static int rcar_i2c_clock_calculate(struct rcar_i2c_priv *priv)
@@ -760,20 +758,14 @@ static void rcar_i2c_release_dma(struct rcar_i2c_priv *priv)
 /* I2C is a special case, we need to poll the status of a reset */
 static int rcar_i2c_do_reset(struct rcar_i2c_priv *priv)
 {
-	int i, ret;
+	int ret;
 
 	ret = reset_control_reset(priv->rstc);
 	if (ret)
 		return ret;
 
-	for (i = 0; i < LOOP_TIMEOUT; i++) {
-		ret = reset_control_status(priv->rstc);
-		if (ret == 0)
-			return 0;
-		udelay(1);
-	}
-
-	return -ETIMEDOUT;
+	return read_poll_timeout_atomic(reset_control_status, ret, ret == 0, 1,
+					100, false, priv->rstc);
 }
 
 static int rcar_i2c_master_xfer(struct i2c_adapter *adap,
