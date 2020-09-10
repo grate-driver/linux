@@ -6672,8 +6672,13 @@ static int io_sq_wake_function(struct wait_queue_entry *wqe, unsigned mode,
 	int ret;
 
 	ret = autoremove_wake_function(wqe, mode, sync, key);
-	if (ret)
-		io_ring_clear_wakeup_flag(ctx);
+	if (ret) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&ctx->completion_lock, flags);
+		ctx->rings->sq_flags &= ~IORING_SQ_NEED_WAKEUP;
+		spin_unlock_irqrestore(&ctx->completion_lock, flags);
+	}
 	return ret;
 }
 
