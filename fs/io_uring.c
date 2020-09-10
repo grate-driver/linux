@@ -7137,8 +7137,11 @@ static void io_sq_thread_stop(struct io_ring_ctx *ctx)
 		list_del(&ctx->sqd_list);
 		mutex_unlock(&sqd->ctx_lock);
 
-		if (sqd->thread)
+		if (sqd->thread) {
+			finish_wait(&sqd->wait, &ctx->sqo_wait_entry);
 			io_sq_thread_unpark(sqd);
+		}
+
 		io_put_sq_data(sqd);
 		ctx->sq_data = NULL;
 	}
