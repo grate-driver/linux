@@ -8564,6 +8564,7 @@ static int io_uring_flush(struct file *file, void *data)
 		mutex_lock(&ctx->uring_lock);
 		ctx->ring_fd = -1;
 		ctx->ring_file = NULL;
+		ctx->sqo_files = NULL;
 		mutex_unlock(&ctx->uring_lock);
 		io_ring_set_wakeup_flag(ctx);
 		io_sq_thread_unpark(sqd);
@@ -8710,6 +8711,7 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 			mutex_lock(&ctx->uring_lock);
 			ctx->ring_fd = fd;
 			ctx->ring_file = f.file;
+			ctx->sqo_files = current->files;
 			mutex_unlock(&ctx->uring_lock);
 
 			io_sq_thread_unpark(sqd);
