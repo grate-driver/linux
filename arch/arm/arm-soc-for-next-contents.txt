@@ -1,6 +1,38 @@
 arm/soc
+	samsung/s3c-cleanup
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-s3c-5.10
+	versatile/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/versatile-soc-v5.10-1
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.10/soc-signed
+	omap/pdata
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.10/ti-sysc-drop-pdata-signed
+	brcm/maintainers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/maintainers
+	brcm/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/soc
 
 arm/dt
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.10/dt-signed
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.10-tag1
+	samsung/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.10
+	samsung/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-5.10
+	juno/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/juno-updates-5.10
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.10-devicetree
+	cleanup/alpine-dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/dt64-schema-5.10
+	cleanup/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/dt-schema-5.10
+	brcm/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/devicetree
+	brcm/dt64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/devicetree-arm64
 
 arm/drivers
 	tee/i2c
@@ -9,8 +41,23 @@ arm/drivers
 		git://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-memref-null-for-v5.10
 	tee/get-user-pages
 		git://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-pin-user-pages-for-5.10
+	tee/i2c-fix
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/optee-i2c-fix-for-v5.10
+	renesas/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.10-tag1
+	memory/cleanups
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.10
+	brcm/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/drivers
 
 arm/defconfig
+	patch
+		ARM: configs: Update Versatile defconfig
+		ARM: configs: Update Realview defconfig
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v5.10-tag1
+	aspeed/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.10-defconfig
 
 arm/late
 
@@ -25,4 +72,10 @@ arm/fixes
 		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.9
 	<no branch> (5cbb80d5236b47b149da292b86d5fc99a680894b)
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.9
+	<no branch> (6542e2b613c2b1952e83973dc434831332ce8e27)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.9/fixes-rc3
+	<no branch> (3ee99f6a2379eca87ab11122b7e9abd68f3441e2)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.9-2
+	<no branch> (686e0a0c8c61e0e3f55321d0181fece3efd92777)
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.9/devicetree-fixes
 
