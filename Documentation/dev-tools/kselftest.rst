@@ -151,6 +151,14 @@ note some tests will require root privileges::
    $ cd kselftest
    $ ./run_kselftest.sh
 
+Or you can run some specific test cases in the installed Kselftests by::
+
+   $ ./run_kselftest.sh -t "bpf size timers"
+
+You can view the available tests to run with::
+
+   $ ./run_kselftest.sh -l
+
 Packaging selftests
 ===================
 
