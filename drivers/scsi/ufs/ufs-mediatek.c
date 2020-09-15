@@ -13,6 +13,7 @@
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
+#include <linux/reset.h>
 #include <linux/soc/mediatek/mtk_sip_svc.h>
 
 #include "ufshcd.h"
@@ -91,16 +92,57 @@ static void ufs_mtk_crypto_enable(struct ufs_hba *hba)
 	}
 }
 
+static void ufs_mtk_host_reset(struct ufs_hba *hba)
+{
+	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
+
+	reset_control_assert(host->hci_reset);
+	reset_control_assert(host->crypto_reset);
+	reset_control_assert(host->unipro_reset);
+
+	usleep_range(100, 110);
+
+	reset_control_deassert(host->unipro_reset);
+	reset_control_deassert(host->crypto_reset);
+	reset_control_deassert(host->hci_reset);
+}
+
+static void ufs_mtk_init_reset_control(struct ufs_hba *hba,
+				       struct reset_control **rc,
+				       char *str)
+{
+	*rc = devm_reset_control_get(hba->dev, str);
+	if (IS_ERR(*rc)) {
+		dev_info(hba->dev, "Failed to get reset control %s: %ld\n",
+			 str, PTR_ERR(*rc));
+		*rc = NULL;
+	}
+}
+
+static void ufs_mtk_init_reset(struct ufs_hba *hba)
+{
+	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
+
+	ufs_mtk_init_reset_control(hba, &host->hci_reset,
+				   "hci_rst");
+	ufs_mtk_init_reset_control(hba, &host->unipro_reset,
+				   "unipro_rst");
+	ufs_mtk_init_reset_control(hba, &host->crypto_reset,
+				   "crypto_rst");
+}
+
 static int ufs_mtk_hce_enable_notify(struct ufs_hba *hba,
 				     enum ufs_notify_change_status status)
 {
 	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
 
 	if (status == PRE_CHANGE) {
-		if (host->unipro_lpm)
+		if (host->unipro_lpm) {
 			hba->vps->hba_enable_delay_us = 0;
-		else
+		} else {
 			hba->vps->hba_enable_delay_us = 600;
+			ufs_mtk_host_reset(hba);
+		}
 
 		if (hba->caps & UFSHCD_CAP_CRYPTO)
 			ufs_mtk_crypto_enable(hba);
@@ -129,7 +171,10 @@ static int ufs_mtk_bind_mphy(struct ufs_hba *hba)
 			__func__, err);
 	} else if (IS_ERR(host->mphy)) {
 		err = PTR_ERR(host->mphy);
-		dev_info(dev, "%s: PHY get failed %d\n", __func__, err);
+		if (err != -ENODEV) {
+			dev_info(dev, "%s: PHY get failed %d\n", __func__,
+				 err);
+		}
 	}
 
 	if (err)
@@ -332,6 +377,8 @@ static int ufs_mtk_init(struct ufs_hba *hba)
 	if (err)
 		goto out_variant_clear;
 
+	ufs_mtk_init_reset(hba);
+
 	/* Enable runtime autosuspend */
 	hba->caps |= UFSHCD_CAP_RPM_AUTOSUSPEND;
 
@@ -416,7 +463,7 @@ static int ufs_mtk_pwr_change_notify(struct ufs_hba *hba,
 	return ret;
 }
 
-static int ufs_mtk_unipro_set_pm(struct ufs_hba *hba, u32 lpm)
+static int ufs_mtk_unipro_set_pm(struct ufs_hba *hba, bool lpm)
 {
 	int ret;
 	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
@@ -424,8 +471,14 @@ static int ufs_mtk_unipro_set_pm(struct ufs_hba *hba, u32 lpm)
 	ret = ufshcd_dme_set(hba,
 			     UIC_ARG_MIB_SEL(VS_UNIPROPOWERDOWNCONTROL, 0),
 			     lpm);
-	if (!ret)
+	if (!ret || !lpm) {
+		/*
+		 * Forcibly set as non-LPM mode if UIC commands is failed
+		 * to use default hba_enable_delay_us value for re-enabling
+		 * the host.
+		 */
 		host->unipro_lpm = lpm;
+	}
 
 	return ret;
 }
@@ -435,7 +488,9 @@ static int ufs_mtk_pre_link(struct ufs_hba *hba)
 	int ret;
 	u32 tmp;
 
-	ufs_mtk_unipro_set_pm(hba, 0);
+	ret = ufs_mtk_unipro_set_pm(hba, false);
+	if (ret)
+		return ret;
 
 	/*
 	 * Setting PA_Local_TX_LCC_Enable to 0 before link startup
@@ -543,7 +598,7 @@ static int ufs_mtk_link_set_hpm(struct ufs_hba *hba)
 	if (err)
 		return err;
 
-	err = ufs_mtk_unipro_set_pm(hba, 0);
+	err = ufs_mtk_unipro_set_pm(hba, false);
 	if (err)
 		return err;
 
@@ -564,10 +619,10 @@ static int ufs_mtk_link_set_lpm(struct ufs_hba *hba)
 {
 	int err;
 
-	err = ufs_mtk_unipro_set_pm(hba, 1);
+	err = ufs_mtk_unipro_set_pm(hba, true);
 	if (err) {
 		/* Resume UniPro state for following error recovery */
-		ufs_mtk_unipro_set_pm(hba, 0);
+		ufs_mtk_unipro_set_pm(hba, false);
 		return err;
 	}
 
@@ -669,22 +724,16 @@ static int ufs_mtk_apply_dev_quirks(struct ufs_hba *hba)
 
 static void ufs_mtk_fixup_dev_quirks(struct ufs_hba *hba)
 {
-	struct ufs_dev_info *dev_info = &hba->dev_info;
-	u16 mid = dev_info->wmanufacturerid;
-
 	ufshcd_fixup_dev_quirks(hba, ufs_mtk_dev_fixups);
-
-	if (mid == UFS_VENDOR_SAMSUNG)
-		hba->dev_quirks &= ~UFS_DEVICE_QUIRK_HOST_PA_TACTIVATE;
 }
 
-/**
+/*
  * struct ufs_hba_mtk_vops - UFS MTK specific variant operations
  *
  * The variant operations configure the necessary controller and PHY
  * handshake during initialization.
  */
-static struct ufs_hba_variant_ops ufs_hba_mtk_vops = {
+static const struct ufs_hba_variant_ops ufs_hba_mtk_vops = {
 	.name                = "mediatek.ufshci",
 	.init                = ufs_mtk_init,
 	.setup_clocks        = ufs_mtk_setup_clocks,

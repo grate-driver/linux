@@ -124,6 +124,9 @@ enum ibmvfc_mad_types {
 	IBMVFC_PASSTHRU		= 0x0200,
 	IBMVFC_TMF_MAD		= 0x0100,
 	IBMVFC_NPIV_LOGOUT	= 0x0800,
+	IBMVFC_CHANNEL_ENQUIRY	= 0x1000,
+	IBMVFC_CHANNEL_SETUP	= 0x2000,
+	IBMVFC_CONNECTION_INFO	= 0x4000,
 };
 
 struct ibmvfc_mad_common {
@@ -133,16 +136,16 @@ struct ibmvfc_mad_common {
 	__be16 status;
 	__be16 length;
 	__be64 tag;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_npiv_login_mad {
 	struct ibmvfc_mad_common common;
 	struct srp_direct_buf buffer;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_npiv_logout_mad {
 	struct ibmvfc_mad_common common;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 #define IBMVFC_MAX_NAME 256
 
@@ -162,13 +165,15 @@ struct ibmvfc_npiv_login {
 	__be32 max_cmds;
 	__be64 capabilities;
 #define IBMVFC_CAN_MIGRATE		0x01
+#define IBMVFC_CAN_USE_CHANNELS		0x02
+#define IBMVFC_CAN_HANDLE_FPIN		0x04
 	__be64 node_name;
 	struct srp_direct_buf async;
 	u8 partition_name[IBMVFC_MAX_NAME];
 	u8 device_name[IBMVFC_MAX_NAME];
 	u8 drc_name[IBMVFC_MAX_NAME];
 	__be64 reserved2[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_common_svc_parms {
 	__be16 fcph_version;
@@ -177,7 +182,7 @@ struct ibmvfc_common_svc_parms {
 	__be16 bb_rcv_sz; /* upper nibble is BB_SC_N */
 	__be32 ratov;
 	__be32 edtov;
-}__attribute__((packed, aligned (4)));
+} __packed __aligned(4);
 
 struct ibmvfc_service_parms {
 	struct ibmvfc_common_svc_parms common;
@@ -192,7 +197,7 @@ struct ibmvfc_service_parms {
 	__be32 ext_len;
 	__be32 reserved[30];
 	__be32 clk_sync_qos[2];
-}__attribute__((packed, aligned (4)));
+} __packed __aligned(4);
 
 struct ibmvfc_npiv_login_resp {
 	__be32 version;
@@ -204,6 +209,7 @@ struct ibmvfc_npiv_login_resp {
 	__be64 capabilities;
 #define IBMVFC_CAN_FLUSH_ON_HALT	0x08
 #define IBMVFC_CAN_SUPPRESS_ABTS	0x10
+#define IBMVFC_CAN_SUPPORT_CHANNELS	0x20
 	__be32 max_cmds;
 	__be32 scsi_id_sz;
 	__be64 max_dma_len;
@@ -217,12 +223,12 @@ struct ibmvfc_npiv_login_resp {
 	u8 drc_name[IBMVFC_MAX_NAME];
 	struct ibmvfc_service_parms service_parms;
 	__be64 reserved2;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 union ibmvfc_npiv_login_data {
 	struct ibmvfc_npiv_login login;
 	struct ibmvfc_npiv_login_resp resp;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_discover_targets_buf {
 	__be32 scsi_id[1];
@@ -239,7 +245,7 @@ struct ibmvfc_discover_targets {
 	__be32 num_avail;
 	__be32 num_written;
 	__be64 reserved[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 enum ibmvfc_fc_reason {
 	IBMVFC_INVALID_ELS_CMD_CODE	= 0x01,
@@ -283,7 +289,7 @@ struct ibmvfc_port_login {
 	struct ibmvfc_service_parms service_parms;
 	struct ibmvfc_service_parms service_parms_change;
 	__be64 reserved3[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_prli_svc_parms {
 	u8 type;
@@ -303,7 +309,7 @@ struct ibmvfc_prli_svc_parms {
 #define IBMVFC_PRLI_TARGET_FUNC			0x00000010
 #define IBMVFC_PRLI_READ_FCP_XFER_RDY_DISABLED	0x00000002
 #define IBMVFC_PRLI_WR_FCP_XFER_RDY_DISABLED	0x00000001
-}__attribute__((packed, aligned (4)));
+} __packed __aligned(4);
 
 struct ibmvfc_process_login {
 	struct ibmvfc_mad_common common;
@@ -314,7 +320,7 @@ struct ibmvfc_process_login {
 	__be16 error;			/* also fc_reason */
 	__be32 reserved2;
 	__be64 reserved3[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_query_tgt {
 	struct ibmvfc_mad_common common;
@@ -325,13 +331,13 @@ struct ibmvfc_query_tgt {
 	__be16 fc_explain;
 	__be16 fc_type;
 	__be64 reserved[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_implicit_logout {
 	struct ibmvfc_mad_common common;
 	__be64 old_scsi_id;
 	__be64 reserved[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_tmf {
 	struct ibmvfc_mad_common common;
@@ -348,7 +354,7 @@ struct ibmvfc_tmf {
 	__be32 my_cancel_key;
 	__be32 pad;
 	__be64 reserved[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 enum ibmvfc_fcp_rsp_info_codes {
 	RSP_NO_FAILURE		= 0x00,
@@ -361,7 +367,7 @@ struct ibmvfc_fcp_rsp_info {
 	u8 reserved[3];
 	u8 rsp_code;
 	u8 reserved2[4];
-}__attribute__((packed, aligned (2)));
+} __packed __aligned(2);
 
 enum ibmvfc_fcp_rsp_flags {
 	FCP_BIDI_RSP			= 0x80,
@@ -377,7 +383,7 @@ enum ibmvfc_fcp_rsp_flags {
 union ibmvfc_fcp_rsp_data {
 	struct ibmvfc_fcp_rsp_info info;
 	u8 sense[SCSI_SENSE_BUFFERSIZE + sizeof(struct ibmvfc_fcp_rsp_info)];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_fcp_rsp {
 	__be64 reserved;
@@ -388,7 +394,7 @@ struct ibmvfc_fcp_rsp {
 	__be32 fcp_sense_len;
 	__be32 fcp_rsp_len;
 	union ibmvfc_fcp_rsp_data data;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 enum ibmvfc_cmd_flags {
 	IBMVFC_SCATTERLIST	= 0x0001,
@@ -422,7 +428,7 @@ struct ibmvfc_fcp_cmd_iu {
 #define IBMVFC_WRDATA		0x01
 	u8 cdb[IBMVFC_MAX_CDB_LEN];
 	__be32 xfer_len;
-}__attribute__((packed, aligned (4)));
+} __packed __aligned(4);
 
 struct ibmvfc_cmd {
 	__be64 task_tag;
@@ -446,7 +452,7 @@ struct ibmvfc_cmd {
 	__be64 reserved3[2];
 	struct ibmvfc_fcp_cmd_iu iu;
 	struct ibmvfc_fcp_rsp rsp;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_passthru_fc_iu {
 	__be32 payload[7];
@@ -473,18 +479,64 @@ struct ibmvfc_passthru_iu {
 	__be64 scsi_id;
 	__be64 tag;
 	__be64 reserved2[2];
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_passthru_mad {
 	struct ibmvfc_mad_common common;
 	struct srp_direct_buf cmd_ioba;
 	struct ibmvfc_passthru_iu iu;
 	struct ibmvfc_passthru_fc_iu fc_iu;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
+
+struct ibmvfc_channel_enquiry {
+	struct ibmvfc_mad_common common;
+	__be32 flags;
+#define IBMVFC_NO_CHANNELS_TO_CRQ_SUPPORT	0x01
+#define IBMVFC_SUPPORT_VARIABLE_SUBQ_MSG	0x02
+#define IBMVFC_NO_N_TO_M_CHANNELS_SUPPORT	0x04
+	__be32 num_scsi_subq_channels;
+	__be32 num_nvmeof_subq_channels;
+	__be32 num_scsi_vas_channels;
+	__be32 num_nvmeof_vas_channels;
+} __packed __aligned(8);
+
+struct ibmvfc_channel_setup_mad {
+	struct ibmvfc_mad_common common;
+	struct srp_direct_buf buffer;
+} __packed __aligned(8);
+
+#define IBMVFC_MAX_CHANNELS	502
+
+struct ibmvfc_channel_setup {
+	__be32 flags;
+#define IBMVFC_CANCEL_CHANNELS		0x01
+#define IBMVFC_USE_BUFFER		0x02
+#define IBMVFC_CHANNELS_CANCELED	0x04
+	__be32 reserved;
+	__be32 num_scsi_subq_channels;
+	__be32 num_nvmeof_subq_channels;
+	__be32 num_scsi_vas_channels;
+	__be32 num_nvmeof_vas_channels;
+	struct srp_direct_buf buffer;
+	__be64 reserved2[5];
+	__be64 channel_handles[IBMVFC_MAX_CHANNELS];
+} __packed __aligned(8);
+
+struct ibmvfc_connection_info {
+	struct ibmvfc_mad_common common;
+	__be64 information_bits;
+#define IBMVFC_NO_FC_IO_CHANNEL		0x01
+#define IBMVFC_NO_PHYP_VAS		0x02
+#define IBMVFC_NO_PHYP_SUBQ		0x04
+#define IBMVFC_PHYP_DEPRECATED_SUBQ	0x08
+#define IBMVFC_PHYP_PRESERVED_SUBQ	0x10
+#define IBMVFC_PHYP_FULL_SUBQ		0x20
+	__be64 reserved[16];
+} __packed __aligned(8);
 
 struct ibmvfc_trace_start_entry {
 	u32 xfer_len;
-}__attribute__((packed));
+} __packed;
 
 struct ibmvfc_trace_end_entry {
 	u16 status;
@@ -493,7 +545,7 @@ struct ibmvfc_trace_end_entry {
 	u8 rsp_code;
 	u8 scsi_status;
 	u8 reserved;
-}__attribute__((packed));
+} __packed;
 
 struct ibmvfc_trace_entry {
 	struct ibmvfc_event *evt;
@@ -510,7 +562,7 @@ struct ibmvfc_trace_entry {
 		struct ibmvfc_trace_start_entry start;
 		struct ibmvfc_trace_end_entry end;
 	} u;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 enum ibmvfc_crq_formats {
 	IBMVFC_CMD_FORMAT		= 0x01,
@@ -532,6 +584,7 @@ enum ibmvfc_async_event {
 	IBMVFC_AE_HALT			= 0x0400,
 	IBMVFC_AE_RESUME			= 0x0800,
 	IBMVFC_AE_ADAPTER_FAILED	= 0x1000,
+	IBMVFC_AE_FPIN			= 0x2000,
 };
 
 struct ibmvfc_async_desc {
@@ -545,7 +598,7 @@ struct ibmvfc_crq {
 	volatile u8 format;
 	u8 reserved[6];
 	volatile __be64 ioba;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_crq_queue {
 	struct ibmvfc_crq *msgs;
@@ -560,17 +613,25 @@ enum ibmvfc_ae_link_state {
 	IBMVFC_AE_LS_LINK_DEAD		= 0x08,
 };
 
+enum ibmvfc_ae_fpin_status {
+	IBMVFC_AE_FPIN_LINK_CONGESTED	= 0x1,
+	IBMVFC_AE_FPIN_PORT_CONGESTED	= 0x2,
+	IBMVFC_AE_FPIN_PORT_CLEARED	= 0x3,
+	IBMVFC_AE_FPIN_PORT_DEGRADED	= 0x4,
+};
+
 struct ibmvfc_async_crq {
 	volatile u8 valid;
 	u8 link_state;
-	u8 pad[2];
+	u8 fpin_status;
+	u8 pad;
 	__be32 pad2;
 	volatile __be64 event;
 	volatile __be64 scsi_id;
 	volatile __be64 wwpn;
 	volatile __be64 node_name;
 	__be64 reserved;
-}__attribute__((packed, aligned (8)));
+} __packed __aligned(8);
 
 struct ibmvfc_async_crq_queue {
 	struct ibmvfc_async_crq *msgs;
@@ -590,7 +651,10 @@ union ibmvfc_iu {
 	struct ibmvfc_tmf tmf;
 	struct ibmvfc_cmd cmd;
 	struct ibmvfc_passthru_mad passthru;
-}__attribute__((packed, aligned (8)));
+	struct ibmvfc_channel_enquiry channel_enquiry;
+	struct ibmvfc_channel_setup_mad channel_setup;
+	struct ibmvfc_connection_info connection_info;
+} __packed __aligned(8);
 
 enum ibmvfc_target_action {
 	IBMVFC_TGT_ACTION_NONE = 0,
