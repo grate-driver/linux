@@ -49,6 +49,8 @@ arm/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.10
 	brcm/drivers
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/drivers
+	drivers/scmi-updates
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.10
 
 arm/defconfig
 	patch
