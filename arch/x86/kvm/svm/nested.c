@@ -1094,7 +1094,8 @@ static int svm_set_nested_state(struct kvm_vcpu *vcpu,
 
 	if (!(kvm_state->flags & KVM_STATE_NESTED_GUEST_MODE)) {
 		svm_leave_nested(svm);
-		goto out_set_gif;
+		svm_set_gif(svm, !!(kvm_state->flags & KVM_STATE_NESTED_GIF_SET));
+		return 0;
 	}
 
 	if (!page_address_valid(vcpu, kvm_state->hdr.svm.vmcb_pa))
@@ -1150,7 +1151,6 @@ static int svm_set_nested_state(struct kvm_vcpu *vcpu,
 	if (!nested_svm_vmrun_msrpm(svm))
 		return -EINVAL;
 
-out_set_gif:
 	svm_set_gif(svm, !!(kvm_state->flags & KVM_STATE_NESTED_GIF_SET));
 
 	ret = 0;
