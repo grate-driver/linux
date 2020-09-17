@@ -434,6 +434,7 @@ SYSCALL_DEFINE4(osf_mount, unsigned long, typenr, const char __user *, path,
 	struct osf_mount_args tmp;
 	struct filename *devname;
 	const char *fstype;
+	struct path path;
 	int retval;
 
 	if (copy_from_user(&tmp, args, sizeof(tmp)))
@@ -467,7 +468,11 @@ SYSCALL_DEFINE4(osf_mount, unsigned long, typenr, const char __user *, path,
 
 	if (IS_ERR(devname))
 		return PTR_ERR(devname);
-	retval = do_mount(devname.name, dirname, fstype, flags, NULL);
+	retval = user_path_at(AT_FDCWD, dirname, LOOKUP_FOLLOW, &path);
+	if (!retval) {
+		ret = path_mount(devname.name, &path, fstype, flags, NULL);
+		path_put(&path);
+	}
 	putname(devname);
 	return retval;
 }
