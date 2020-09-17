@@ -47,6 +47,7 @@
 #include "tests/btrfs-tests.h"
 #include "block-group.h"
 #include "discard.h"
+#include "free-space-tree.h"
 
 #include "qgroup.h"
 #define CREATE_TRACE_POINTS
@@ -1838,6 +1839,7 @@ static int btrfs_remount(struct super_block *sb, int *flags, char *data)
 	u64 old_max_inline = fs_info->max_inline;
 	u32 old_thread_pool_size = fs_info->thread_pool_size;
 	u32 old_metadata_ratio = fs_info->metadata_ratio;
+	bool create_fst = false;
 	int ret;
 
 	sync_filesystem(sb);
@@ -1861,6 +1863,16 @@ static int btrfs_remount(struct super_block *sb, int *flags, char *data)
 	btrfs_remount_begin(fs_info, old_opts, *flags);
 	btrfs_resize_thread_pool(fs_info,
 		fs_info->thread_pool_size, old_thread_pool_size);
+
+	if (btrfs_test_opt(fs_info, FREE_SPACE_TREE) &&
+	    !btrfs_fs_compat_ro(fs_info, FREE_SPACE_TREE)) {
+		create_fst = true;
+		if (!sb_rdonly(sb) || *flags & SB_RDONLY) {
+			btrfs_warn(fs_info,
+				   "Remounting with free space tree only supported from read-only to read-write");
+			create_fst = false;
+		}
+	}
 
 	if ((bool)(*flags & SB_RDONLY) == sb_rdonly(sb))
 		goto out;
@@ -1923,6 +1935,21 @@ static int btrfs_remount(struct super_block *sb, int *flags, char *data)
 			ret = -EINVAL;
 			goto restore;
 		}
+
+		/*
+		 * NOTE: when remounting with a change that does writes, don't
+		 * put it anywhere above this point, as we are not sure to be
+		 * safe to write until we pass the above checks.
+		 */
+		if (create_fst) {
+			ret = btrfs_create_free_space_tree(fs_info);
+			if (ret) {
+				btrfs_warn(fs_info,
+					   "failed to create free space tree: %d", ret);
+				goto restore;
+			}
+		}
+
 
 		ret = btrfs_cleanup_fs_roots(fs_info);
 		if (ret)
