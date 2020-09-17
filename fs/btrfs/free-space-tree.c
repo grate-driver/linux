@@ -1167,6 +1167,9 @@ int btrfs_create_free_space_tree(struct btrfs_fs_info *fs_info)
 		ret = populate_free_space_tree(trans, block_group);
 		if (ret)
 			goto abort;
+		ret = btrfs_remove_free_space_inode(trans, NULL, block_group);
+		if (ret)
+			goto abort;
 		node = rb_next(node);
 	}
 

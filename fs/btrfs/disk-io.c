@@ -3278,6 +3278,15 @@ int __cold open_ctree(struct super_block *sb, struct btrfs_fs_devices *fs_device
 			close_ctree(fs_info);
 			return ret;
 		}
+		/*
+		 * Creating the free space tree creates inode orphan items and
+		 * delayed iputs when it deletes the free space inodes. Later in
+		 * open_ctree, we run btrfs_orphan_cleanup which tries to clean
+		 * up the orphan items. However, the outstanding references on
+		 * the inodes from the delayed iputs causes the cleanup to fail.
+		 * To fix it, force going through the delayed iputs here.
+		 */
+		btrfs_run_delayed_iputs(fs_info);
 	}
 
 	if ((bool)btrfs_test_opt(fs_info, SPACE_CACHE) !=
