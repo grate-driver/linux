@@ -3280,6 +3280,17 @@ int __cold open_ctree(struct super_block *sb, struct btrfs_fs_devices *fs_device
 		}
 	}
 
+	if ((bool)btrfs_test_opt(fs_info, SPACE_CACHE) !=
+	    btrfs_free_space_cache_v1_active(fs_info)) {
+		ret = btrfs_update_free_space_cache_v1_active(fs_info);
+		if (ret) {
+			btrfs_warn(fs_info,
+				   "failed to update free space cache status: %d", ret);
+			close_ctree(fs_info);
+			return ret;
+		}
+	}
+
 	down_read(&fs_info->cleanup_work_sem);
 	if ((ret = btrfs_orphan_cleanup(fs_info->fs_root)) ||
 	    (ret = btrfs_orphan_cleanup(fs_info->tree_root))) {

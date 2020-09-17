@@ -512,7 +512,6 @@ int btrfs_parse_options(struct btrfs_fs_info *info, char *options,
 {
 	substring_t args[MAX_OPT_ARGS];
 	char *p, *num;
-	u64 cache_gen;
 	int intarg;
 	int ret = 0;
 	char *compress_type;
@@ -522,10 +521,9 @@ int btrfs_parse_options(struct btrfs_fs_info *info, char *options,
 	bool saved_compress_force;
 	int no_compress = 0;
 
-	cache_gen = btrfs_super_cache_generation(info->super_copy);
 	if (btrfs_fs_compat_ro(info, FREE_SPACE_TREE))
 		btrfs_set_opt(info->mount_opt, FREE_SPACE_TREE);
-	else if (cache_gen)
+	else if (btrfs_free_space_cache_v1_active(info))
 		btrfs_set_opt(info->mount_opt, SPACE_CACHE);
 
 	/*
@@ -1430,9 +1428,9 @@ static int btrfs_show_options(struct seq_file *seq, struct dentry *dentry)
 		seq_puts(seq, ",discard=async");
 	if (!(info->sb->s_flags & SB_POSIXACL))
 		seq_puts(seq, ",noacl");
-	if (btrfs_test_opt(info, SPACE_CACHE))
+	if (btrfs_free_space_cache_v1_active(info))
 		seq_puts(seq, ",space_cache");
-	else if (btrfs_test_opt(info, FREE_SPACE_TREE))
+	else if (btrfs_fs_compat_ro(info, FREE_SPACE_TREE))
 		seq_puts(seq, ",space_cache=v2");
 	else
 		seq_puts(seq, ",nospace_cache");
@@ -1870,6 +1868,13 @@ static int btrfs_remount(struct super_block *sb, int *flags, char *data)
 		if (!sb_rdonly(sb) || *flags & SB_RDONLY) {
 			btrfs_warn(fs_info,
 				   "Remounting with free space tree only supported from read-only to read-write");
+			/*
+			 * if we aren't building the free space tree, reset
+			 * the space cache options to what they were before
+			 */
+			btrfs_clear_opt(fs_info->mount_opt, FREE_SPACE_TREE);
+			if (btrfs_free_space_cache_v1_active(fs_info))
+				btrfs_set_opt(fs_info->mount_opt, SPACE_CACHE);
 			create_fst = false;
 		}
 	}
