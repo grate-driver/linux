@@ -477,7 +477,7 @@ static ssize_t dimmdev_location_show(struct device *dev,
 	ssize_t count;
 
 	count = edac_dimm_info_location(dimm, data, PAGE_SIZE);
-	count += snprintf(data + count, PAGE_SIZE - count, "\n");
+	count += scnprintf(data + count, PAGE_SIZE - count, "\n");
 
 	return count;
 }
@@ -822,18 +822,17 @@ static ssize_t mci_max_location_show(struct device *dev,
 	int i, n;
 
 	for (i = 0; i < mci->n_layers; i++) {
-		n = snprintf(p, len, "%s %d ",
-			     edac_layer_name[mci->layers[i].type],
-			     mci->layers[i].size - 1);
-
+		n = scnprintf(p, len, "%s %d ",
+			      edac_layer_name[mci->layers[i].type],
+			      mci->layers[i].size - 1);
 		len -= n;
-		if (len < 0)
+		if (len <= 0)
 			goto out;
 
 		p += n;
 	}
 
-	p += snprintf(p, len, "\n");
+	p += scnprintf(p, len, "\n");
 out:
 	return p - data;
 }
