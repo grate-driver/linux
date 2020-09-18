@@ -3409,6 +3409,10 @@ kvfree_call_rcu_add_ptr_to_bulk(struct kfree_rcu_cpu *krcp, void *ptr)
 	if (!krcp->bkvhead[idx] ||
 			krcp->bkvhead[idx]->nr_records == KVFREE_BULK_MAX_ENTR) {
 		bnode = get_cached_bnode(krcp);
+		if (!bnode)
+			bnode = (struct kvfree_rcu_bulk_data *)
+				__rcu_alloc_page_lockless();
+
 		/* Switch to emergency path. */
 		if (!bnode)
 			return false;
