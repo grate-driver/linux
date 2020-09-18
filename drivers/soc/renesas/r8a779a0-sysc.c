@@ -96,7 +96,7 @@ static struct r8a779a0_sysc_area r8a779a0_areas[] __initdata = {
 	{ "a1dsp1",	R8A779A0_PD_A1DSP1, R8A779A0_PD_A2CN1 },
 };
 
-const struct r8a779a0_sysc_info r8a779a0_sysc_info __initconst = {
+static const struct r8a779a0_sysc_info r8a779a0_sysc_info __initconst = {
 	.areas = r8a779a0_areas,
 	.num_areas = ARRAY_SIZE(r8a779a0_areas),
 };
