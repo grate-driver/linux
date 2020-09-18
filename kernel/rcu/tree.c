@@ -3108,7 +3108,7 @@ struct kfree_rcu_cpu {
 	 * lockless an access has to be protected by the
 	 * per-cpu lock.
 	 */
-	struct work_struct page_cache_work;
+	struct delayed_work page_cache_work;
 	atomic_t work_in_progress;
 	struct llist_head bkvcache;
 	int nr_bkv_objs;
@@ -3362,7 +3362,7 @@ static void fill_page_cache_func(struct work_struct *work)
 	struct kvfree_rcu_bulk_data *bnode;
 	struct kfree_rcu_cpu *krcp =
 		container_of(work, struct kfree_rcu_cpu,
-			page_cache_work);
+			page_cache_work.work);
 	unsigned long flags;
 	bool pushed;
 	int i;
@@ -3448,7 +3448,6 @@ void kvfree_call_rcu(struct rcu_head *head, rcu_callback_t func)
 {
 	unsigned long flags;
 	struct kfree_rcu_cpu *krcp;
-	bool irq_disabled = irqs_disabled();
 	bool success;
 	void *ptr;
 
@@ -3481,9 +3480,10 @@ void kvfree_call_rcu(struct rcu_head *head, rcu_callback_t func)
 
 	success = kvfree_call_rcu_add_ptr_to_bulk(krcp, ptr);
 	if (!success) {
-		// TODO: schedule the work from the hrtimer.
-		if (!irq_disabled && !atomic_xchg(&krcp->work_in_progress, 1))
-			queue_work(system_highpri_wq, &krcp->page_cache_work);
+		// Use delayed work, so we do not deadlock with rq->lock.
+		if (rcu_scheduler_active == RCU_SCHEDULER_RUNNING &&
+		    !atomic_xchg(&krcp->work_in_progress, 1))
+			schedule_delayed_work(&krcp->page_cache_work, 1);
 
 		if (head == NULL)
 			// Inline if kvfree_rcu(one_arg) call.
@@ -4483,7 +4483,7 @@ static void __init kfree_rcu_batch_init(void)
 		}
 
 		INIT_DELAYED_WORK(&krcp->monitor_work, kfree_rcu_monitor);
-		INIT_WORK(&krcp->page_cache_work, fill_page_cache_func);
+		INIT_DELAYED_WORK(&krcp->page_cache_work, fill_page_cache_func);
 		krcp->initialized = true;
 	}
 	if (register_shrinker(&kfree_rcu_shrinker))
