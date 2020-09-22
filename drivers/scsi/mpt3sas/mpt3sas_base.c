@@ -1626,7 +1626,7 @@ _base_process_reply_queue(struct adapter_reply_queue *reply_q)
 		 * So that FW can find enough entries to post the Reply
 		 * Descriptors in the reply descriptor post queue.
 		 */
-		if (!base_mod64(completed_cmds, ioc->thresh_hold)) {
+		if (completed_cmds >= ioc->thresh_hold) {
 			if (ioc->combined_reply_queue) {
 				writel(reply_q->reply_post_host_index |
 						((msix_index  & 7) <<
@@ -1809,18 +1809,22 @@ mpt3sas_base_sync_reply_irqs(struct MPT3SAS_ADAPTER *ioc, u8 poll)
 		/* TMs are on msix_index == 0 */
 		if (reply_q->msix_index == 0)
 			continue;
+		synchronize_irq(pci_irq_vector(ioc->pdev, reply_q->msix_index));
 		if (reply_q->irq_poll_scheduled) {
 			/* Calling irq_poll_disable will wait for any pending
 			 * callbacks to have completed.
 			 */
 			irq_poll_disable(&reply_q->irqpoll);
 			irq_poll_enable(&reply_q->irqpoll);
-			reply_q->irq_poll_scheduled = false;
-			reply_q->irq_line_enable = true;
-			enable_irq(reply_q->os_irq);
-			continue;
+			/* check how the scheduled poll has ended,
+			 * clean up only if necessary
+			 */
+			if (reply_q->irq_poll_scheduled) {
+				reply_q->irq_poll_scheduled = false;
+				reply_q->irq_line_enable = true;
+				enable_irq(reply_q->os_irq);
+			}
 		}
-		synchronize_irq(pci_irq_vector(ioc->pdev, reply_q->msix_index));
 	}
 	if (poll)
 		_base_process_reply_queue(reply_q);
