@@ -76,13 +76,10 @@ typedef blk_status_t (extent_submit_bio_start_t)(void *private_data,
 
 struct extent_io_ops {
 	/*
-	 * The following callbacks must be always defined, the function
+	 * The following callback must be always defined, the function
 	 * pointer will be called unconditionally.
 	 */
 	submit_bio_hook_t *submit_bio_hook;
-	int (*readpage_end_io_hook)(struct btrfs_io_bio *io_bio, u64 phy_offset,
-				    struct page *page, u64 start, u64 end,
-				    int mirror);
 };
 
 
@@ -102,7 +99,7 @@ struct extent_buffer {
 
 	int blocking_writers;
 	atomic_t blocking_readers;
-	bool lock_nested;
+	bool lock_recursed;
 	/* >= 0 if eb belongs to a log tree, -1 otherwise */
 	short log_index;
 
@@ -193,8 +190,11 @@ typedef struct extent_map *(get_extent_t)(struct btrfs_inode *inode,
 int try_release_extent_mapping(struct page *page, gfp_t mask);
 int try_release_extent_buffer(struct page *page);
 
-int extent_read_full_page(struct page *page, get_extent_t *get_extent,
-			  int mirror_num);
+int __must_check submit_one_bio(struct bio *bio, int mirror_num,
+				unsigned long bio_flags);
+int btrfs_do_readpage(struct page *page, struct extent_map **em_cached,
+		      struct bio **bio, unsigned long *bio_flags,
+		      unsigned int read_flags, u64 *prev_em_start);
 int extent_write_full_page(struct page *page, struct writeback_control *wbc);
 int extent_write_locked_range(struct inode *inode, u64 start, u64 end,
 			      int mode);
@@ -203,7 +203,7 @@ int extent_writepages(struct address_space *mapping,
 int btree_write_cache_pages(struct address_space *mapping,
 			    struct writeback_control *wbc);
 void extent_readahead(struct readahead_control *rac);
-int extent_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
+int extent_fiemap(struct btrfs_inode *inode, struct fiemap_extent_info *fieinfo,
 		  u64 start, u64 len);
 void set_page_extent_mapped(struct page *page);
 

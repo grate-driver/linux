@@ -25,6 +25,11 @@ enum {
 	BTRFS_INODE_DUMMY,
 	BTRFS_INODE_IN_DEFRAG,
 	BTRFS_INODE_HAS_ASYNC_EXTENT,
+	 /*
+	  * Always set under the VFS' inode lock, otherwise it can cause races
+	  * during fsync (we start as a fast fsync and then end up in a full
+	  * fsync racing with ordered extent completion).
+	  */
 	BTRFS_INODE_NEEDS_FULL_SYNC,
 	BTRFS_INODE_COPY_EVERYTHING,
 	BTRFS_INODE_IN_DELALLOC_LIST,
@@ -211,6 +216,11 @@ struct btrfs_inode {
 
 	struct inode vfs_inode;
 };
+
+static inline u32 btrfs_inode_sectorsize(const struct btrfs_inode *inode)
+{
+	return inode->root->fs_info->sectorsize;
+}
 
 static inline struct btrfs_inode *BTRFS_I(const struct inode *inode)
 {
