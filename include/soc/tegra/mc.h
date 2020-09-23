@@ -142,6 +142,12 @@ struct tegra_mc_reset_ops {
 			    const struct tegra_mc_reset *rst);
 };
 
+struct tegra_mc_latency_ops {
+	int (*set_client_bandwidth)(struct tegra_mc *mc,
+				    const struct tegra_mc_client *client,
+				    unsigned int bandwidth_mbytes_sec);
+};
+
 struct tegra_mc_soc {
 	const struct tegra_mc_client *clients;
 	unsigned int num_clients;
@@ -158,6 +164,7 @@ struct tegra_mc_soc {
 
 	u32 intmask;
 
+	const struct tegra_mc_latency_ops *latency_ops;
 	const struct tegra_mc_reset_ops *reset_ops;
 	const struct tegra_mc_reset *resets;
 	unsigned int num_resets;

@@ -633,12 +633,35 @@ static __maybe_unused irqreturn_t tegra20_mc_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static struct tegra_mc *icc_to_tegra_mc(struct icc_provider *provider)
+{
+	return container_of(provider, struct tegra_mc, provider);
+}
+
 static int tegra_mc_icc_set(struct icc_node *src, struct icc_node *dst)
 {
+	struct tegra_mc *mc = icc_to_tegra_mc(src->provider);
+	const struct tegra_mc_client *client = &mc->soc->clients[src->id];
+	const struct tegra_mc_latency_ops *latency_ops = mc->soc->latency_ops;
+	u64 bandwidth = icc_units_to_bps(src->peak_bw);
+	int err;
+
 	/*
-	 * The plan is to populate this function with a latency allowness
-	 * programming sometime later, for now this a dummy callback.
+	 * Skip pre-initialization that is done by icc_node_add() and
+	 * bail out if latency configuration isn't supported by the driver.
 	 */
+	if (src == dst || !latency_ops)
+		return 0;
+
+	/* convert bytes/sec to megabytes/sec */
+	do_div(bandwidth, 1000 * 1000);
+
+	if (latency_ops->set_client_bandwidth) {
+		err = latency_ops->set_client_bandwidth(mc, client, bandwidth);
+		if (err)
+			return err;
+	}
+
 	return 0;
 }
 
