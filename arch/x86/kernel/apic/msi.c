@@ -189,7 +189,7 @@ int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 
 	init_irq_alloc_info(&info, NULL);
 	info.type = X86_IRQ_ALLOC_TYPE_MSI;
-	info.msi_dev = dev;
+	info.msi_dev = pci_real_dma_dev(dev);
 
 	domain = irq_remapping_get_irq_domain(&info);
 	if (domain == NULL)
