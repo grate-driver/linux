@@ -879,8 +879,6 @@ static int tegra_mc_probe(struct platform_device *pdev)
 
 	WARN(!mc->soc->client_id_mask, "missing client ID mask for this SoC\n");
 
-	mc_writel(mc, mc->soc->intmask, MC_INTMASK);
-
 	err = devm_request_irq(&pdev->dev, mc->irq, isr, 0,
 			       dev_name(&pdev->dev), mc);
 	if (err < 0) {
