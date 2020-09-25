@@ -198,6 +198,7 @@ enum t100_type {
 #define MXT_CRC_TIMEOUT		1000	/* msec */
 #define MXT_FW_RESET_TIME	3000	/* msec */
 #define MXT_FW_CHG_TIMEOUT	300	/* msec */
+#define MXT_WAKEUP_TIME		25	/* msec */
 
 /* Command to unlock bootloader */
 #define MXT_UNLOCK_CMD_MSB	0xaa
@@ -340,6 +341,9 @@ struct mxt_data {
 	unsigned int t19_num_keys;
 
 	enum mxt_suspend_mode suspend_mode;
+
+	/* Indicates whether retry is needed when i2c transfer fails */
+	bool retry_i2c_transfers;
 };
 
 struct mxt_vb2_buffer {
@@ -627,7 +631,9 @@ static int mxt_send_bootloader_cmd(struct mxt_data *data, bool unlock)
 static int __mxt_read_reg(struct i2c_client *client,
 			       u16 reg, u16 len, void *val)
 {
+	struct mxt_data *data = i2c_get_clientdata(client);
 	struct i2c_msg xfer[2];
+	bool retried = false;
 	u8 buf[2];
 	int ret;
 
@@ -646,22 +652,30 @@ static int __mxt_read_reg(struct i2c_client *client,
 	xfer[1].len = len;
 	xfer[1].buf = val;
 
-	ret = i2c_transfer(client->adapter, xfer, 2);
-	if (ret == 2) {
-		ret = 0;
-	} else {
-		if (ret >= 0)
-			ret = -EIO;
+retry_read:
+	ret = i2c_transfer(client->adapter, xfer, ARRAY_SIZE(xfer));
+	if (ret != ARRAY_SIZE(xfer)) {
+		if (data->retry_i2c_transfers && !retried) {
+			dev_dbg(&client->dev, "i2c retry\n");
+			/* TODO: add WAKE-GPIO support */
+			msleep(MXT_WAKEUP_TIME);
+			retried = true;
+			goto retry_read;
+		}
+		ret = ret < 0 ? ret : -EIO;
 		dev_err(&client->dev, "%s: i2c transfer failed (%d)\n",
 			__func__, ret);
+		return ret;
 	}
 
-	return ret;
+	return 0;
 }
 
 static int __mxt_write_reg(struct i2c_client *client, u16 reg, u16 len,
 			   const void *val)
 {
+	struct mxt_data *data = i2c_get_clientdata(client);
+	bool retried = false;
 	u8 *buf;
 	size_t count;
 	int ret;
@@ -675,14 +689,21 @@ static int __mxt_write_reg(struct i2c_client *client, u16 reg, u16 len,
 	buf[1] = (reg >> 8) & 0xff;
 	memcpy(&buf[2], val, len);
 
+retry_write:
 	ret = i2c_master_send(client, buf, count);
-	if (ret == count) {
-		ret = 0;
-	} else {
-		if (ret >= 0)
-			ret = -EIO;
+	if (ret != count) {
+		if (data->retry_i2c_transfers && !retried) {
+			dev_dbg(&client->dev, "i2c retry\n");
+			/* TODO: add WAKE-GPIO support */
+			msleep(MXT_WAKEUP_TIME);
+			retried = true;
+			goto retry_write;
+		}
+		ret = ret < 0 ? ret : -EIO;
 		dev_err(&client->dev, "%s: i2c send failed (%d)\n",
 			__func__, ret);
+	} else {
+		ret = 0;
 	}
 
 	kfree(buf);
@@ -3084,6 +3105,7 @@ static const struct dmi_system_id chromebook_T9_suspend_dmi[] = {
 
 static int mxt_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
+	struct device_node *np = client->dev.of_node;
 	struct mxt_data *data;
 	int error;
 
@@ -3157,6 +3179,20 @@ static int mxt_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		gpiod_set_value(data->reset_gpio, 1);
 		msleep(MXT_RESET_INVALID_CHG);
 	}
+
+	/*
+	 * The mXT1386 has a dedicated WAKE-line that could be connected to a
+	 * dedicated GPIO, or to the I2C SCL pin, or permanently asserted LOW.
+	 * It's used for waking controller from a deep-sleep and it needs to be
+	 * asserted LOW for 25 milliseconds before issuing I2C transfer if controller
+	 * was in a deep-sleep mode. If WAKE-line is connected to I2C SCL pin, then
+	 * the first I2C transfer will get an instant NAK and transfer needs to be
+	 * retried after 25ms. There are too many places in the code where the wake-up
+	 * needs to be inserted, hence it's much easier to add a retry to the common
+	 * I2C accessors, also given that the WAKE-GPIO is unsupported by the driver.
+	 */
+	if (of_device_is_compatible(np, "atmel,mXT1386"))
+		data->retry_i2c_transfers = true;
 
 	error = mxt_initialize(data);
 	if (error)
@@ -3235,6 +3271,7 @@ static SIMPLE_DEV_PM_OPS(mxt_pm_ops, mxt_suspend, mxt_resume);
 
 static const struct of_device_id mxt_of_match[] = {
 	{ .compatible = "atmel,maxtouch", },
+	{ .compatible = "atmel,mXT1386", },
 	/* Compatibles listed below are deprecated */
 	{ .compatible = "atmel,qt602240_ts", },
 	{ .compatible = "atmel,atmel_mxt_ts", },
@@ -3259,6 +3296,7 @@ static const struct i2c_device_id mxt_id[] = {
 	{ "atmel_mxt_tp", 0 },
 	{ "maxtouch", 0 },
 	{ "mXT224", 0 },
+	{ "mXT1386", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, mxt_id);
