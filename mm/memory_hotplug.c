@@ -1583,9 +1583,10 @@ int __ref offline_pages(unsigned long start_pfn, unsigned long nr_pages)
 		 * because has_unmovable_pages explicitly checks for
 		 * PageBuddy on freed pages on other zones.
 		 */
+		ret = test_pages_isolated(start_pfn, end_pfn, MEMORY_OFFLINE);
 		if (ret)
 			drain_all_pages(zone);
-	} while (test_pages_isolated(start_pfn, end_pfn, MEMORY_OFFLINE));
+	} while (ret);
 
 	/* Mark all sections offline and remove free pages from the buddy. */
 	__offline_isolated_pages(start_pfn, end_pfn);
