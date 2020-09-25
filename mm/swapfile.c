@@ -324,14 +324,15 @@ static inline void cluster_set_null(struct swap_cluster_info *info)
 
 static inline bool cluster_is_huge(struct swap_cluster_info *info)
 {
-	if (IS_ENABLED(CONFIG_THP_SWAP))
+	if (IS_ENABLED(CONFIG_THP_SWAP) && info)
 		return info->flags & CLUSTER_FLAG_HUGE;
 	return false;
 }
 
 static inline void cluster_clear_huge(struct swap_cluster_info *info)
 {
-	info->flags &= ~CLUSTER_FLAG_HUGE;
+	if (IS_ENABLED(CONFIG_THP_SWAP) && info)
+		info->flags &= ~CLUSTER_FLAG_HUGE;
 }
 
 static inline struct swap_cluster_info *lock_cluster(struct swap_info_struct *si,
