@@ -234,6 +234,7 @@ static void force_shm_swapin_readahead(struct vm_area_struct *vma,
 
 		if (!xa_is_value(page))
 			continue;
+		xas_pause(&xas);
 		rcu_read_unlock();
 
 		swap = radix_to_swp_entry(page);
@@ -243,7 +244,6 @@ static void force_shm_swapin_readahead(struct vm_area_struct *vma,
 			put_page(page);
 
 		rcu_read_lock();
-		xas_reset(&xas);
 	}
 	rcu_read_unlock();
 
