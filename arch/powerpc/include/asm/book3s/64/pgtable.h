@@ -820,7 +820,7 @@ static inline void __set_pte_at(struct mm_struct *mm, unsigned long addr,
 	 * Keep the _PAGE_PTE added till we are sure we handle _PAGE_PTE
 	 * in all the callers.
 	 */
-	 pte = __pte_raw(pte_raw(pte) | cpu_to_be64(_PAGE_PTE));
+	pte = __pte_raw(pte_raw(pte) | cpu_to_be64(_PAGE_PTE));
 
 	if (radix_enabled())
 		return radix__set_pte_at(mm, addr, ptep, pte, percpu);
