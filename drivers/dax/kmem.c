@@ -35,7 +35,7 @@ static int dax_kmem_range(struct dev_dax *dev_dax, int i, struct range *r)
 	return 0;
 }
 
-int dev_dax_kmem_probe(struct dev_dax *dev_dax)
+static int dev_dax_kmem_probe(struct dev_dax *dev_dax)
 {
 	int numa_node = dev_dax->target_node;
 	struct device *dev = &dev_dax->dev;
