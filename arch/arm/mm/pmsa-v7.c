@@ -273,7 +273,7 @@ void __init pmsav7_adjust_lowmem_bounds(void)
 				panic("First memory bank must be contiguous from PHYS_OFFSET");
 
 			mem_start = reg_start;
-			mem_end = reg_end
+			mem_end = reg_end;
 			specified_mem_size = mem_end - mem_start;
 		} else {
 			/*
