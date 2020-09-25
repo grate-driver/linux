@@ -1028,6 +1028,13 @@ config HAVE_STATIC_CALL_INLINE
 	bool
 	depends on HAVE_STATIC_CALL
 
+config HAVE_SECRETMEM_UNCACHED
+	bool
+	help
+	  An architecture can select this if its semantics of non-cached
+	  mappings can be used to prevent speculative loads and it is
+	  useful for secret protection.
+
 source "kernel/gcov/Kconfig"
 
 source "scripts/gcc-plugins/Kconfig"
