@@ -3901,7 +3901,7 @@ sub process {
 #ignore lines not being added
 		next if ($line =~ /^[^\+]/);
 
-# check for self assigments used to avoid compiler warnings
+# check for self assignments used to avoid compiler warnings
 # e.g.:	int foo = foo, *bar = NULL;
 #	struct foo bar = *(&(bar));
 		if ($line =~ /^\+\s*(?:$Declare)?([A-Za-z_][A-Za-z\d_]*)\s*=/) {
