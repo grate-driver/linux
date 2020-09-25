@@ -607,13 +607,16 @@ static int alloc_dev_dax_range(struct dev_dax *dev_dax, u64 start,
 		return -ENOMEM;
 
 	alloc = __request_region(res, start, size, dev_name(dev), 0);
-	if (!alloc && !dev_dax->nr_range) {
+	if (!alloc) {
 		/*
-		 * If we adjusted an existing @ranges leave it alone,
-		 * but if this was an empty set of ranges nothing else
+		 * If this was an empty set of ranges nothing else
 		 * will release @ranges, so do it now.
 		 */
-		kfree(ranges);
+		if (!dev_dax->nr_range) {
+			kfree(ranges);
+			ranges = NULL;
+		}
+		dev_dax->ranges = ranges;
 		return -ENOMEM;
 	}
 
