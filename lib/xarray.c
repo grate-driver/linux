@@ -1631,6 +1631,7 @@ unlock:
 
 	return order;
 }
+EXPORT_SYMBOL(xa_get_order);
 #endif /* CONFIG_XARRAY_MULTI */
 
 /**
