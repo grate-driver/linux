@@ -702,6 +702,9 @@ void drop_slab_node(int nid)
 		if (fatal_signal_pending(current))
 			return;
 
+		if (fatal_signal_pending(current))
+			return;
+
 		freed = 0;
 		memcg = mem_cgroup_iter(NULL, NULL, NULL);
 		do {
