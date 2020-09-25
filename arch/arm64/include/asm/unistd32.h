@@ -889,7 +889,7 @@ __SYSCALL(__NR_pidfd_getfd, sys_pidfd_getfd)
 __SYSCALL(__NR_faccessat2, sys_faccessat2)
 #define __NR_watch_mount 440
 __SYSCALL(__NR_watch_mount, sys_watch_mount)
-#define __NR_watch_mount 441
+#define __NR_process_madvise 441
 __SYSCALL(__NR_process_madvise, sys_process_madvise)
 
 /*
