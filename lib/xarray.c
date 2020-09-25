@@ -1025,6 +1025,7 @@ nomem:
 	xas_destroy(xas);
 	xas_set_err(xas, -ENOMEM);
 }
+EXPORT_SYMBOL_GPL(xas_split_alloc);
 
 /**
  * xas_split() - Split a multi-index entry into smaller entries.
