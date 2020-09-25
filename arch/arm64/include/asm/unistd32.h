@@ -891,6 +891,8 @@ __SYSCALL(__NR_faccessat2, sys_faccessat2)
 __SYSCALL(__NR_watch_mount, sys_watch_mount)
 #define __NR_process_madvise 441
 __SYSCALL(__NR_process_madvise, sys_process_madvise)
+#define __NR_memfd_secret 442
+__SYSCALL(__NR_memfd_secret, sys_memfd_secret)
 
 /*
  * Please add new compat syscalls above this comment and update

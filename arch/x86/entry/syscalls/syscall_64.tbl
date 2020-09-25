@@ -363,6 +363,7 @@
 439	common	faccessat2		sys_faccessat2
 440	common	watch_mount		sys_watch_mount
 441	common	process_madvise		sys_process_madvise
+442	common	memfd_secret		sys_memfd_secret
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
