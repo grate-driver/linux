@@ -108,7 +108,6 @@ static vm_fault_t __dev_dax_pmd_fault(struct dev_dax *dev_dax,
 {
 	unsigned long pmd_addr = vmf->address & PMD_MASK;
 	struct device *dev = &dev_dax->dev;
-	struct dax_region *dax_region;
 	phys_addr_t phys;
 	pgoff_t pgoff;
 	unsigned int fault_size = PMD_SIZE;
@@ -116,7 +115,6 @@ static vm_fault_t __dev_dax_pmd_fault(struct dev_dax *dev_dax,
 	if (check_vma(dev_dax, vmf->vma, __func__))
 		return VM_FAULT_SIGBUS;
 
-	dax_region = dev_dax->region;
 	if (dev_dax->align > PMD_SIZE) {
 		dev_dbg(dev, "alignment (%#x) > fault size (%#x)\n",
 			dev_dax->align, fault_size);
@@ -151,7 +149,6 @@ static vm_fault_t __dev_dax_pud_fault(struct dev_dax *dev_dax,
 {
 	unsigned long pud_addr = vmf->address & PUD_MASK;
 	struct device *dev = &dev_dax->dev;
-	struct dax_region *dax_region;
 	phys_addr_t phys;
 	pgoff_t pgoff;
 	unsigned int fault_size = PUD_SIZE;
@@ -160,7 +157,6 @@ static vm_fault_t __dev_dax_pud_fault(struct dev_dax *dev_dax,
 	if (check_vma(dev_dax, vmf->vma, __func__))
 		return VM_FAULT_SIGBUS;
 
-	dax_region = dev_dax->region;
 	if (dev_dax->align > PUD_SIZE) {
 		dev_dbg(dev, "alignment (%#x) > fault size (%#x)\n",
 			dev_dax->align, fault_size);
