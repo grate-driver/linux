@@ -981,7 +981,7 @@ sub git_is_single_file {
 
 	return 0 if ((which("git") eq "") || !(-e "$gitroot"));
 
-	my $output = `${git_command} ls-files -- $filename`;
+	my $output = `${git_command} ls-files -- $filename 2>/dev/null`;
 	my $count = $output =~ tr/\n//;
 	return $count eq 1 && $output =~ m{^${filename}$};
 }
