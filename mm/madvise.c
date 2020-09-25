@@ -1232,7 +1232,7 @@ put_pid:
 	return ret;
 }
 
-static inline int madv_import_iovec(int type, const struct iovec __user *uvec, unsigned int nr_segs,
+static inline int madv_import_iovec(int type, const struct iovec __user *uvec, size_t nr_segs,
 		unsigned int fast_segs, struct iovec **iov, struct iov_iter *i)
 {
 #ifdef CONFIG_COMPAT
@@ -1245,7 +1245,7 @@ static inline int madv_import_iovec(int type, const struct iovec __user *uvec, u
 }
 
 SYSCALL_DEFINE5(process_madvise, int, pidfd, const struct iovec __user *, vec,
-		unsigned long, vlen, int, behavior, unsigned int, flags)
+		size_t, vlen, int, behavior, unsigned int, flags)
 {
 	ssize_t ret;
 	struct iovec iovstack[UIO_FASTIOV];
