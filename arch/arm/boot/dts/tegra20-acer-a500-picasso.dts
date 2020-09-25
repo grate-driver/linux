@@ -461,7 +461,7 @@
 		};
 
 		touchscreen@4c {
-			compatible = "atmel,maxtouch";
+			compatible = "atmel,mXT1386", "atmel,maxtouch";
 			reg = <0x4c>;
 
 			interrupt-parent = <&gpio>;
