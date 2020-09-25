@@ -429,10 +429,12 @@ static unsigned long maximum_alignment(struct elf_phdr *cmds, int nr)
 
 	for (i = 0; i < nr; i++) {
 		if (cmds[i].p_type == PT_LOAD) {
+			unsigned long p_align = cmds[i].p_align;
+
 			/* skip non-power of two alignments */
-			if (!is_power_of_2(cmds[i].p_align))
+			if (!is_power_of_2(p_align))
 				continue;
-			alignment = max(alignment, cmds[i].p_align);
+			alignment = max(alignment, p_align);
 		}
 	}
 
