@@ -432,7 +432,7 @@ struct page *find_get_incore_page(struct address_space *mapping, pgoff_t index)
 	struct page *page = find_get_entry(mapping, index);
 
 	if (!xa_is_value(page))
-		return page;
+		return find_subpage(page, index);
 	if (!shmem_mapping(mapping))
 		return NULL;
 
