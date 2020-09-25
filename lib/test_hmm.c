@@ -487,7 +487,8 @@ static bool dmirror_allocate_chunk(struct dmirror_device *mdevice,
 		goto err_release;
 
 	devmem->pagemap.type = MEMORY_DEVICE_PRIVATE;
-	devmem->pagemap.res = *res;
+	devmem->pagemap.range.start = res->start;
+	devmem->pagemap.range.end = res->end;
 	devmem->pagemap.ops = &dmirror_devmem_ops;
 	devmem->pagemap.owner = mdevice;
 
@@ -496,9 +497,8 @@ static bool dmirror_allocate_chunk(struct dmirror_device *mdevice,
 		goto err_free;
 
 	devmem->mdevice = mdevice;
-	pfn_first = devmem->pagemap.res.start >> PAGE_SHIFT;
-	pfn_last = pfn_first +
-		(resource_size(&devmem->pagemap.res) >> PAGE_SHIFT);
+	pfn_first = devmem->pagemap.range.start >> PAGE_SHIFT;
+	pfn_last = pfn_first + (range_len(&devmem->pagemap.range) >> PAGE_SHIFT);
 	mdevice->devmem_chunks[mdevice->devmem_count++] = devmem;
 
 	mutex_unlock(&mdevice->devmem_lock);
@@ -528,7 +528,7 @@ static bool dmirror_allocate_chunk(struct dmirror_device *mdevice,
 err_free:
 	kfree(devmem);
 err_release:
-	release_mem_region(res->start, resource_size(res));
+	release_mem_region(devmem->pagemap.range.start, range_len(&devmem->pagemap.range));
 err:
 	mutex_unlock(&mdevice->devmem_lock);
 	return false;
@@ -1100,8 +1100,8 @@ static void dmirror_device_remove(struct dmirror_device *mdevice)
 				mdevice->devmem_chunks[i];
 
 			memunmap_pages(&devmem->pagemap);
-			release_mem_region(devmem->pagemap.res.start,
-					   resource_size(&devmem->pagemap.res));
+			release_mem_region(devmem->pagemap.range.start,
+					   range_len(&devmem->pagemap.range));
 			kfree(devmem);
 		}
 		kfree(mdevice->devmem_chunks);
