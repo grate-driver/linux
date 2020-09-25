@@ -89,7 +89,7 @@ static inline struct dax_mapping *to_dax_mapping(struct device *dev)
 phys_addr_t dax_pgoff_to_phys(struct dev_dax *dev_dax, pgoff_t pgoff, unsigned long size);
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-static inline bool dax_align_valid(unsigned int align)
+static inline bool dax_align_valid(unsigned long align)
 {
 	if (align == PUD_SIZE && IS_ENABLED(CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD))
 		return true;
@@ -100,7 +100,7 @@ static inline bool dax_align_valid(unsigned int align)
 	return false;
 }
 #else
-static inline bool dax_align_valid(unsigned int align)
+static inline bool dax_align_valid(unsigned long align)
 {
 	return align == PAGE_SIZE;
 }
