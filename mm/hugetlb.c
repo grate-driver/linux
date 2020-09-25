@@ -1041,7 +1041,7 @@ static struct page *dequeue_huge_page_node_exact(struct hstate *h, int nid)
 			continue;
 
 		if (PageHWPoison(page))
-			break;
+			continue;
 
 		list_move(&page->lru, &h->hugepage_activelist);
 		set_page_refcounted(page);
