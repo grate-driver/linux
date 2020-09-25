@@ -1524,6 +1524,9 @@ static void check_split_1(struct xarray *xa, unsigned long index,
 	}
 	XA_BUG_ON(xa, i != 1 << order);
 
+	xa_set_mark(xa, index, XA_MARK_0);
+	XA_BUG_ON(xa, !xa_get_mark(xa, index, XA_MARK_0));
+
 	xa_destroy(xa);
 }
 

@@ -973,10 +973,11 @@ static void node_set_marks(struct xa_node *node, unsigned int offset,
 	xa_mark_t mark = XA_MARK_0;
 
 	for (;;) {
-		if (marks & (1 << (__force unsigned int)mark))
+		if (marks & (1 << (__force unsigned int)mark)) {
 			node_set_mark(node, offset, mark);
-		if (child)
-			node_mark_all(child, mark);
+			if (child)
+				node_mark_all(child, mark);
+		}
 		if (mark == XA_MARK_MAX)
 			break;
 		mark_inc(mark);
@@ -984,8 +985,18 @@ static void node_set_marks(struct xa_node *node, unsigned int offset,
 }
 
 /**
- * Allocate memory for splitting an entry of @order size into the order
- * stored in the @xas.
+ * xas_split_alloc() - Allocate memory for splitting an entry.
+ * @xas: XArray operation state.
+ * @entry: New entry which will be stored in the array.
+ * @order: New entry order.
+ * @gfp: Memory allocation flags.
+ *
+ * This function should be called before calling xas_split().
+ * If necessary, it will allocate new nodes (and fill them with @entry)
+ * to prepare for the upcoming split of an entry of @order size into
+ * entries of the order stored in the @xas.
+ *
+ * Context: May sleep if @gfp flags permit.
  */
 void xas_split_alloc(struct xa_state *xas, void *entry, unsigned int order,
 		gfp_t gfp)
