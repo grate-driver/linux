@@ -33,6 +33,23 @@ arm/dt
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/devicetree
 	brcm/dt64
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/devicetree-arm64
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-5.10
+	hisi/dt
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm32-dt-for-5.10
+	sparx5/dt
+		https://github.com/microchip-ung/linux-upstream tags/sparx5-dt-5.10
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-dts-for-v5.10
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_update_for_v5.10
+	at91/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-dt-5.10
+	patch
+		ARM: dts: picoxcell: build DTBs with make dtbs
+		ARM: dts: picoxcell: drop unused reg-io-width from DW APB GPIO controller
+		arm64: dts: apm: drop unused reg-io-width from DW APB GPIO controller
+		arm64: dts: apm: add required gpio-cells to DW APB GPIO controller port
 
 arm/drivers
 	tee/i2c
@@ -64,20 +81,4 @@ arm/defconfig
 arm/late
 
 arm/fixes
-	<no branch> (0ff5a4812be4ebd4782bbb555d369636eea164f7)
-		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_fix_for_v5.9
-	patch
-		ARM: configs: Update Integrator defconfig
-		arm64: defconfig: Enable USB gadget with configfs
-		arm64: defconfig: Enable ptn5150 extcon driver
-	<no branch> (8d53ecfbf23135381d2ebbd1b261a7c7f18a7294)
-		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.9
-	<no branch> (5cbb80d5236b47b149da292b86d5fc99a680894b)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.9
-	<no branch> (6542e2b613c2b1952e83973dc434831332ce8e27)
-		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.9/fixes-rc3
-	<no branch> (3ee99f6a2379eca87ab11122b7e9abd68f3441e2)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.9-2
-	<no branch> (686e0a0c8c61e0e3f55321d0181fece3efd92777)
-		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.9/devicetree-fixes
 
