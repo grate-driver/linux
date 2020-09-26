@@ -43,6 +43,7 @@ dtb-$(CONFIG_SOC_AT91SAM9) += \
 	at91-smartkiz.dtb \
 	at91-wb45n.dtb \
 	at91sam9g15ek.dtb \
+	at91sam9g25-gardena-smart-gateway.dtb \
 	at91sam9g25ek.dtb \
 	at91sam9g35ek.dtb \
 	at91sam9x25ek.dtb \
@@ -870,6 +871,9 @@ dtb-$(CONFIG_ARCH_ACTIONS) += \
 	owl-s500-cubieboard6.dtb \
 	owl-s500-guitar-bb-rev-b.dtb \
 	owl-s500-sparky.dtb
+dtb-$(CONFIG_ARCH_PICOXCELL) += \
+	picoxcell-pc7302-pc3x2.dtb \
+	picoxcell-pc7302-pc3x3.dtb
 dtb-$(CONFIG_ARCH_PRIMA2) += \
 	prima2-evb.dtb
 dtb-$(CONFIG_ARCH_PXA) += \
