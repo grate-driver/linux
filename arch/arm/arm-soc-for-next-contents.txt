@@ -11,6 +11,12 @@ arm/soc
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/maintainers
 	brcm/soc
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/soc
+	at91/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-soc-5.10
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v5.10-tag1
+	samsung/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-5.10
 
 arm/dt
 	omap/dt
@@ -62,7 +68,7 @@ arm/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.10-2
 	samsung/dt64-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-5.10-2
-	ti-k3/dt
+	ti/k3-dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-dt-for-v5.10
 	imx/dt-bindings
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-5.10
@@ -84,6 +90,8 @@ arm/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.9-next-dts64
 	mediatek/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.9-next-dts32
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-arm-dt
 
 arm/drivers
 	tee/i2c
@@ -102,6 +110,16 @@ arm/drivers
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.10/drivers
 	drivers/scmi-updates
 		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.10
+	renesas/drivers2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.10-tag2
+	tee/cleanup
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-dev-cleanup-for-v5.10
+	tegra/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-soc
+	tegra/firmware
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-firmware
+	ti/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/drivers_soc_for_5.10
 
 arm/defconfig
 	patch
@@ -111,6 +129,10 @@ arm/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v5.10-tag1
 	aspeed/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.10-defconfig
+	tegra/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-arm64-defconfig
+	samsung/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-defconfig-5.10
 
 arm/late
 
