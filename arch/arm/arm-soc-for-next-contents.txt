@@ -50,6 +50,40 @@ arm/dt
 		ARM: dts: picoxcell: drop unused reg-io-width from DW APB GPIO controller
 		arm64: dts: apm: drop unused reg-io-width from DW APB GPIO controller
 		arm64: dts: apm: add required gpio-cells to DW APB GPIO controller port
+	renesas/dt2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.10-tag2
+	renesas/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.10-tag1
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-dt-bindings
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-arm64-dt
+	samsung/dt2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.10-2
+	samsung/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-5.10-2
+	ti-k3/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-dt-for-v5.10
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-5.10
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-5.10
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-5.10
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.10-rockchip-dts64-1
+	qualcomm/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-5.10
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.10-1
+	amlogic/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt
+	amlogic/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64
+	mediatek/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.9-next-dts64
+	mediatek/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.9-next-dts32
 
 arm/drivers
 	tee/i2c
@@ -81,4 +115,14 @@ arm/defconfig
 arm/late
 
 arm/fixes
+	<no branch> (c65176fd49f45bd5a5ffaa1790109745d1fa462c)
+		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-dt-fixes-for-v5.9
+	<no branch> (2933bf3528007f834fb7f5eab033f9c5b0683f91)
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-5.9-1
+	<no branch> (7a366707bb6a93baeb1a9ef46c4b9c875e0132d6)
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-fixes-for-5.9
+	<no branch> (22f5adc75a8d60080e489b0f90f0a55104488464)
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-fixes-for-5.9
+	<no branch> (bc38325703ebd0a00fecfb965020c255ffc582fe)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mani/linux-actions tags/actions-drivers-fixes-for-v5.9
 
