@@ -31,9 +31,6 @@ static __always_inline bool dma_alloc_need_uncached(struct device *dev,
 		return false;
 	if (attrs & DMA_ATTR_NO_KERNEL_MAPPING)
 		return false;
-	if (IS_ENABLED(CONFIG_DMA_NONCOHERENT_CACHE_SYNC) &&
-	    (attrs & DMA_ATTR_NON_CONSISTENT))
-		return false;
 	return true;
 }
 
@@ -61,16 +58,6 @@ static inline pgprot_t dma_pgprot(struct device *dev, pgprot_t prot,
 	return prot;	/* no protection bits supported without page tables */
 }
 #endif /* CONFIG_MMU */
-
-#ifdef CONFIG_DMA_NONCOHERENT_CACHE_SYNC
-void arch_dma_cache_sync(struct device *dev, void *vaddr, size_t size,
-		enum dma_data_direction direction);
-#else
-static inline void arch_dma_cache_sync(struct device *dev, void *vaddr,
-		size_t size, enum dma_data_direction direction)
-{
-}
-#endif /* CONFIG_DMA_NONCOHERENT_CACHE_SYNC */
 
 #ifdef CONFIG_ARCH_HAS_SYNC_DMA_FOR_DEVICE
 void arch_sync_dma_for_device(phys_addr_t paddr, size_t size,
@@ -107,6 +94,14 @@ static inline void arch_dma_prep_coherent(struct page *page, size_t size)
 {
 }
 #endif /* CONFIG_ARCH_HAS_DMA_PREP_COHERENT */
+
+#ifdef CONFIG_ARCH_HAS_DMA_MARK_CLEAN
+void arch_dma_mark_clean(phys_addr_t paddr, size_t size);
+#else
+static inline void arch_dma_mark_clean(phys_addr_t paddr, size_t size)
+{
+}
+#endif /* ARCH_HAS_DMA_MARK_CLEAN */
 
 void *arch_dma_set_uncached(void *addr, size_t size);
 void arch_dma_clear_uncached(void *addr, size_t size);
