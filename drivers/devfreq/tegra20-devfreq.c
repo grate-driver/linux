@@ -97,28 +97,6 @@ static struct devfreq_dev_profile tegra_devfreq_profile = {
 	.get_dev_status	= tegra_devfreq_get_dev_status,
 };
 
-static struct tegra_mc *tegra_get_memory_controller(void)
-{
-	struct platform_device *pdev;
-	struct device_node *np;
-	struct tegra_mc *mc;
-
-	np = of_find_compatible_node(NULL, NULL, "nvidia,tegra20-mc-gart");
-	if (!np)
-		return ERR_PTR(-ENOENT);
-
-	pdev = of_find_device_by_node(np);
-	of_node_put(np);
-	if (!pdev)
-		return ERR_PTR(-ENODEV);
-
-	mc = platform_get_drvdata(pdev);
-	if (!mc)
-		return ERR_PTR(-EPROBE_DEFER);
-
-	return mc;
-}
-
 static int tegra_devfreq_probe(struct platform_device *pdev)
 {
 	struct tegra_devfreq *tegra;
@@ -127,7 +105,7 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 	unsigned long rate;
 	int err;
 
-	mc = tegra_get_memory_controller();
+	mc = devm_tegra_get_memory_controller(&pdev->dev);
 	if (IS_ERR(mc)) {
 		err = PTR_ERR(mc);
 		dev_err(&pdev->dev, "failed to get memory controller: %d\n",
