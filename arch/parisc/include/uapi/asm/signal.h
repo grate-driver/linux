@@ -35,11 +35,11 @@
 #define SIGURG		29
 #define SIGXFSZ		30
 #define SIGUNUSED	31
-#define SIGSYS		31 /* Linux doesn't use this */
+#define SIGSYS		31
 
 /* These should not be considered constants from userland.  */
 #define SIGRTMIN	32
-#define SIGRTMAX	_NSIG /* it's 44 under HP/UX */
+#define SIGRTMAX	_NSIG
 
 /*
  * SA_FLAGS values:
@@ -61,7 +61,6 @@
 #define SA_NODEFER	0x00000020
 #define SA_RESTART	0x00000040
 #define SA_NOCLDWAIT	0x00000080
-#define _SA_SIGGFAULT	0x00000100 /* HPUX */
 
 #define SA_NOMASK	SA_NODEFER
 #define SA_ONESHOT	SA_RESETHAND
@@ -86,16 +85,8 @@
 struct siginfo;
 
 /* Type of a signal handler.  */
-#if defined(__LP64__)
-/* function pointers on 64-bit parisc are pointers to little structs and the
- * compiler doesn't support code which changes or tests the address of
- * the function in the little struct.  This is really ugly -PB
- */
-typedef char __user *__sighandler_t;
-#else
 typedef void __signalfn_t(int);
 typedef __signalfn_t __user *__sighandler_t;
-#endif
 
 typedef struct sigaltstack {
 	void __user *ss_sp;

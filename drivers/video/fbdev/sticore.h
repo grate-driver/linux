@@ -4,12 +4,6 @@
 
 /* generic STI structures & functions */
 
-#if 0
-#define DPRINTK(x)	printk x
-#else
-#define DPRINTK(x) 
-#endif
-
 #define MAX_STI_ROMS 4		/* max no. of ROMs which this driver handles */
 
 #define STI_REGION_MAX 8	/* hardcoded STI constants */
