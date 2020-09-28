@@ -664,9 +664,9 @@ static void hmat_register_target_device(struct memory_target *target,
 		goto out_pdev;
 	}
 
-	pdev->dev.numa_node = acpi_map_pxm_to_online_node(target->memory_pxm);
+	pdev->dev.numa_node = pxm_to_online_node(target->memory_pxm);
 	info = (struct memregion_info) {
-		.target_node = acpi_map_pxm_to_node(target->memory_pxm),
+		.target_node = pxm_to_node(target->memory_pxm),
 	};
 	rc = platform_device_add_data(pdev, &info, sizeof(info));
 	if (rc < 0) {
