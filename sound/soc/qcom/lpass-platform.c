@@ -50,6 +50,36 @@ static const struct snd_pcm_hardware lpass_platform_pcm_hardware = {
 	.fifo_size		=	0,
 };
 
+static int lpass_platform_alloc_dmactl_fields(struct device *dev,
+					 struct regmap *map)
+{
+	struct lpass_data *drvdata = dev_get_drvdata(dev);
+	struct lpass_variant *v = drvdata->variant;
+	struct lpaif_dmactl *rd_dmactl, *wr_dmactl;
+	int rval;
+
+	drvdata->rd_dmactl = devm_kzalloc(dev, sizeof(struct lpaif_dmactl),
+					  GFP_KERNEL);
+	if (drvdata->rd_dmactl == NULL)
+		return -ENOMEM;
+
+	drvdata->wr_dmactl = devm_kzalloc(dev, sizeof(struct lpaif_dmactl),
+					  GFP_KERNEL);
+	if (drvdata->wr_dmactl == NULL)
+		return -ENOMEM;
+
+	rd_dmactl = drvdata->rd_dmactl;
+	wr_dmactl = drvdata->wr_dmactl;
+
+	rval = devm_regmap_field_bulk_alloc(dev, map, &rd_dmactl->bursten,
+					    &v->rdma_bursten, 6);
+	if (rval)
+		return rval;
+
+	return devm_regmap_field_bulk_alloc(dev, map, &wr_dmactl->bursten,
+					    &v->wrdma_bursten, 6);
+}
+
 static int lpass_platform_pcmops_open(struct snd_soc_component *component,
 				      struct snd_pcm_substream *substream)
 {
@@ -61,7 +91,7 @@ static int lpass_platform_pcmops_open(struct snd_soc_component *component,
 	int ret, dma_ch, dir = substream->stream;
 	struct lpass_pcm_data *data;
 
-	data = devm_kzalloc(soc_runtime->dev, sizeof(*data), GFP_KERNEL);
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
@@ -118,6 +148,7 @@ static int lpass_platform_pcmops_close(struct snd_soc_component *component,
 	if (v->free_dma_channel)
 		v->free_dma_channel(drvdata, data->dma_ch);
 
+	kfree(data);
 	return 0;
 }
 
@@ -133,11 +164,18 @@ static int lpass_platform_pcmops_hw_params(struct snd_soc_component *component,
 	snd_pcm_format_t format = params_format(params);
 	unsigned int channels = params_channels(params);
 	unsigned int regval;
-	int ch, dir = substream->stream;
+	struct lpaif_dmactl *dmactl;
+	int id, dir = substream->stream;
 	int bitwidth;
 	int ret, dma_port = pcm_data->i2s_port + v->dmactl_audif_start;
 
-	ch = pcm_data->dma_ch;
+	if (dir ==  SNDRV_PCM_STREAM_PLAYBACK) {
+		dmactl = drvdata->rd_dmactl;
+		id = pcm_data->dma_ch;
+	} else {
+		dmactl = drvdata->wr_dmactl;
+		id = pcm_data->dma_ch - v->wrdma_channel_start;
+	}
 
 	bitwidth = snd_pcm_format_width(format);
 	if (bitwidth < 0) {
@@ -146,25 +184,39 @@ static int lpass_platform_pcmops_hw_params(struct snd_soc_component *component,
 		return bitwidth;
 	}
 
-	regval = LPAIF_DMACTL_BURSTEN_INCR4 |
-			LPAIF_DMACTL_AUDINTF(dma_port) |
-			LPAIF_DMACTL_FIFOWM_8;
+	ret = regmap_fields_write(dmactl->bursten, id, LPAIF_DMACTL_BURSTEN_INCR4);
+	if (ret) {
+		dev_err(soc_runtime->dev, "error updating bursten field: %d\n", ret);
+		return ret;
+	}
+
+	regmap_fields_write(dmactl->fifowm, id, LPAIF_DMACTL_FIFOWM_8);
+	if (ret) {
+		dev_err(soc_runtime->dev, "error updating fifowm field: %d\n", ret);
+		return ret;
+	}
+
+	regmap_fields_write(dmactl->intf, id, LPAIF_DMACTL_AUDINTF(dma_port));
+	if (ret) {
+		dev_err(soc_runtime->dev, "error updating audintf field: %d\n", ret);
+		return ret;
+	}
 
 	switch (bitwidth) {
 	case 16:
 		switch (channels) {
 		case 1:
 		case 2:
-			regval |= LPAIF_DMACTL_WPSCNT_ONE;
+			regval = LPAIF_DMACTL_WPSCNT_ONE;
 			break;
 		case 4:
-			regval |= LPAIF_DMACTL_WPSCNT_TWO;
+			regval = LPAIF_DMACTL_WPSCNT_TWO;
 			break;
 		case 6:
-			regval |= LPAIF_DMACTL_WPSCNT_THREE;
+			regval = LPAIF_DMACTL_WPSCNT_THREE;
 			break;
 		case 8:
-			regval |= LPAIF_DMACTL_WPSCNT_FOUR;
+			regval = LPAIF_DMACTL_WPSCNT_FOUR;
 			break;
 		default:
 			dev_err(soc_runtime->dev,
@@ -177,19 +229,19 @@ static int lpass_platform_pcmops_hw_params(struct snd_soc_component *component,
 	case 32:
 		switch (channels) {
 		case 1:
-			regval |= LPAIF_DMACTL_WPSCNT_ONE;
+			regval = LPAIF_DMACTL_WPSCNT_ONE;
 			break;
 		case 2:
-			regval |= LPAIF_DMACTL_WPSCNT_TWO;
+			regval = LPAIF_DMACTL_WPSCNT_TWO;
 			break;
 		case 4:
-			regval |= LPAIF_DMACTL_WPSCNT_FOUR;
+			regval = LPAIF_DMACTL_WPSCNT_FOUR;
 			break;
 		case 6:
-			regval |= LPAIF_DMACTL_WPSCNT_SIX;
+			regval = LPAIF_DMACTL_WPSCNT_SIX;
 			break;
 		case 8:
-			regval |= LPAIF_DMACTL_WPSCNT_EIGHT;
+			regval = LPAIF_DMACTL_WPSCNT_EIGHT;
 			break;
 		default:
 			dev_err(soc_runtime->dev,
@@ -204,10 +256,9 @@ static int lpass_platform_pcmops_hw_params(struct snd_soc_component *component,
 		return -EINVAL;
 	}
 
-	ret = regmap_write(drvdata->lpaif_map,
-			LPAIF_DMACTL_REG(v, ch, dir), regval);
+	ret = regmap_fields_write(dmactl->wpscnt, id, regval);
 	if (ret) {
-		dev_err(soc_runtime->dev, "error writing to rdmactl reg: %d\n",
+		dev_err(soc_runtime->dev, "error writing to dmactl reg: %d\n",
 			ret);
 		return ret;
 	}
@@ -244,9 +295,17 @@ static int lpass_platform_pcmops_prepare(struct snd_soc_component *component,
 	struct snd_pcm_runtime *rt = substream->runtime;
 	struct lpass_pcm_data *pcm_data = rt->private_data;
 	struct lpass_variant *v = drvdata->variant;
-	int ret, ch, dir = substream->stream;
+	struct lpaif_dmactl *dmactl;
+	int ret, id, ch, dir = substream->stream;
 
 	ch = pcm_data->dma_ch;
+	if (dir ==  SNDRV_PCM_STREAM_PLAYBACK) {
+		dmactl = drvdata->rd_dmactl;
+		id = pcm_data->dma_ch;
+	} else {
+		dmactl = drvdata->wr_dmactl;
+		id = pcm_data->dma_ch - v->wrdma_channel_start;
+	}
 
 	ret = regmap_write(drvdata->lpaif_map,
 			LPAIF_DMABASE_REG(v, ch, dir),
@@ -275,9 +334,7 @@ static int lpass_platform_pcmops_prepare(struct snd_soc_component *component,
 		return ret;
 	}
 
-	ret = regmap_update_bits(drvdata->lpaif_map,
-			LPAIF_DMACTL_REG(v, ch, dir),
-			LPAIF_DMACTL_ENABLE_MASK, LPAIF_DMACTL_ENABLE_ON);
+	ret = regmap_fields_write(dmactl->enable, id, LPAIF_DMACTL_ENABLE_ON);
 	if (ret) {
 		dev_err(soc_runtime->dev, "error writing to rdmactl reg: %d\n",
 			ret);
@@ -296,9 +353,18 @@ static int lpass_platform_pcmops_trigger(struct snd_soc_component *component,
 	struct snd_pcm_runtime *rt = substream->runtime;
 	struct lpass_pcm_data *pcm_data = rt->private_data;
 	struct lpass_variant *v = drvdata->variant;
-	int ret, ch, dir = substream->stream;
+	struct lpaif_dmactl *dmactl;
+	int ret, ch, id;
+	int dir = substream->stream;
 
 	ch = pcm_data->dma_ch;
+	if (dir ==  SNDRV_PCM_STREAM_PLAYBACK) {
+		dmactl = drvdata->rd_dmactl;
+		id = pcm_data->dma_ch;
+	} else {
+		dmactl = drvdata->wr_dmactl;
+		id = pcm_data->dma_ch - v->wrdma_channel_start;
+	}
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
@@ -324,10 +390,8 @@ static int lpass_platform_pcmops_trigger(struct snd_soc_component *component,
 			return ret;
 		}
 
-		ret = regmap_update_bits(drvdata->lpaif_map,
-				LPAIF_DMACTL_REG(v, ch, dir),
-				LPAIF_DMACTL_ENABLE_MASK,
-				LPAIF_DMACTL_ENABLE_ON);
+		ret = regmap_fields_write(dmactl->enable, id,
+					 LPAIF_DMACTL_ENABLE_ON);
 		if (ret) {
 			dev_err(soc_runtime->dev,
 				"error writing to rdmactl reg: %d\n", ret);
@@ -337,10 +401,8 @@ static int lpass_platform_pcmops_trigger(struct snd_soc_component *component,
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		ret = regmap_update_bits(drvdata->lpaif_map,
-				LPAIF_DMACTL_REG(v, ch, dir),
-				LPAIF_DMACTL_ENABLE_MASK,
-				LPAIF_DMACTL_ENABLE_OFF);
+		ret = regmap_fields_write(dmactl->enable, id,
+					 LPAIF_DMACTL_ENABLE_OFF);
 		if (ret) {
 			dev_err(soc_runtime->dev,
 				"error writing to rdmactl reg: %d\n", ret);
@@ -400,9 +462,8 @@ static int lpass_platform_pcmops_mmap(struct snd_soc_component *component,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 
-	return dma_mmap_coherent(substream->pcm->card->dev, vma,
-			runtime->dma_area, runtime->dma_addr,
-			runtime->dma_bytes);
+	return dma_mmap_coherent(component->dev, vma, runtime->dma_area,
+				 runtime->dma_addr, runtime->dma_bytes);
 }
 
 static irqreturn_t lpass_dma_interrupt_handler(
@@ -560,7 +621,7 @@ int asoc_qcom_lpass_platform_register(struct platform_device *pdev)
 	struct lpass_variant *v = drvdata->variant;
 	int ret;
 
-	drvdata->lpaif_irq = platform_get_irq_byname(pdev, "lpass-irq-lpaif");
+	drvdata->lpaif_irq = platform_get_irq(pdev, 0);
 	if (drvdata->lpaif_irq < 0)
 		return -ENODEV;
 
@@ -580,6 +641,13 @@ int asoc_qcom_lpass_platform_register(struct platform_device *pdev)
 		return ret;
 	}
 
+	ret = lpass_platform_alloc_dmactl_fields(&pdev->dev,
+						 drvdata->lpaif_map);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"error initializing dmactl fields: %d\n", ret);
+		return ret;
+	}
 
 	return devm_snd_soc_register_component(&pdev->dev,
 			&lpass_component_driver, NULL, 0);
