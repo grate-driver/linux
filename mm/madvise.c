@@ -7,7 +7,6 @@
  */
 
 #include <linux/mman.h>
-#include <linux/compat.h>
 #include <linux/pagemap.h>
 #include <linux/syscalls.h>
 #include <linux/mempolicy.h>
@@ -1189,15 +1188,7 @@ SYSCALL_DEFINE5(process_madvise, int, pidfd, const struct iovec __user *, vec,
 		goto out;
 	}
 
-#ifdef CONFIG_COMPAT
-	if (in_compat_syscall())
-		ret = compat_import_iovec(READ,
-				(struct compat_iovec __user *)vec, vlen,
-				ARRAY_SIZE(iovstack), &iov, &iter);
-	else
-#endif
-		ret = import_iovec(READ, vec, vlen, ARRAY_SIZE(iovstack),
-				&iov, &iter);
+	ret = import_iovec(READ, vec, vlen, ARRAY_SIZE(iovstack), &iov, &iter);
 	if (ret < 0)
 		goto out;
 
