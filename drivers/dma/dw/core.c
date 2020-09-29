@@ -723,7 +723,7 @@ slave_sg_fromdev_fill_desc:
 			lli_write(desc, sar, reg);
 			lli_write(desc, dar, mem);
 			lli_write(desc, ctlhi, ctlhi);
-			mem_width = __ffs(data_width | mem | dlen);
+			mem_width = __ffs(data_width | mem);
 			lli_write(desc, ctllo, ctllo | DWC_CTLL_DST_WIDTH(mem_width));
 			desc->len = dlen;
 
@@ -770,6 +770,10 @@ bool dw_dma_filter(struct dma_chan *chan, void *param)
 	struct dw_dma_slave *dws = param;
 
 	if (dws->dma_dev != chan->device->dev)
+		return false;
+
+	/* permit channels in accordance with the channels mask */
+	if (dws->channels && !(dws->channels & dwc->mask))
 		return false;
 
 	/* We have to copy data since dws can be temporary storage */
