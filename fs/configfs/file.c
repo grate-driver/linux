@@ -466,9 +466,28 @@ static int configfs_open_bin_file(struct inode *inode, struct file *filp)
 	return __configfs_open_file(inode, filp, CONFIGFS_ITEM_BIN_ATTR);
 }
 
-static int configfs_release_bin_file(struct inode *inode, struct file *file)
+/**
+ *	configfs_flush_bin_file - flush a binary attribute.
+ *	@file:	file pointer
+ *	@id:	pointer to files_struct
+ *
+ *	Flush is called during close and commits the buffered binary
+ *	writes when there are no more shared references to this file
+ *	struct.
+ *
+ *	Any error returned from the flush will be reflected in the
+ *	return value from the close.
+ */
+
+static int configfs_flush_bin_file(struct file *file, fl_owner_t id)
 {
 	struct configfs_buffer *buffer = file->private_data;
+	ssize_t len;
+	int ret = 0;
+
+	/* Only commit the data if no more shared refs to file */
+	if (file_count(file) > 1)
+		return 0;
 
 	buffer->read_in_progress = false;
 
@@ -478,10 +497,11 @@ static int configfs_release_bin_file(struct inode *inode, struct file *file)
 
 		down_read(&frag->frag_sem);
 		if (!frag->frag_dead) {
-			/* result of ->release() is ignored */
-			buffer->bin_attr->write(buffer->item,
+			len = buffer->bin_attr->write(buffer->item,
 					buffer->bin_buffer,
 					buffer->bin_buffer_size);
+			if (len < 0)
+				ret = len;
 		}
 		up_read(&frag->frag_sem);
 		/* vfree on NULL is safe */
@@ -491,8 +511,7 @@ static int configfs_release_bin_file(struct inode *inode, struct file *file)
 		buffer->needs_read_fill = 1;
 	}
 
-	configfs_release(inode, file);
-	return 0;
+	return ret;
 }
 
 
@@ -509,7 +528,8 @@ const struct file_operations configfs_bin_file_operations = {
 	.write		= configfs_write_bin_file,
 	.llseek		= NULL,		/* bin file is not seekable */
 	.open		= configfs_open_bin_file,
-	.release	= configfs_release_bin_file,
+	.flush		= configfs_flush_bin_file,
+	.release	= configfs_release,
 };
 
 /**
