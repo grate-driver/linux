@@ -4913,6 +4913,88 @@ out:
 }
 EXPORT_SYMBOL(__alloc_pages_nodemask);
 
+static struct page *__rmqueue_lockless(struct zone *zone, struct per_cpu_pages *pcp)
+{
+	struct list_head *list;
+	struct page *page;
+	int migratetype;
+
+	for (migratetype = 0; migratetype < MIGRATE_PCPTYPES; migratetype++) {
+		list = &pcp->lists[migratetype];
+		page = list_first_entry_or_null(list, struct page, lru);
+		if (page && !check_new_pcp(page)) {
+			list_del(&page->lru);
+			pcp->count--;
+			return page;
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * Semantic of this function illustrates that a page
+ * is obtained in lock-free maneer. Instead of going
+ * deeper in the page allocator, it uses the pcplists
+ * only. Such way provides lock-less allocation method.
+ *
+ * Some notes are below:
+ * - intended to use for RCU code only;
+ * - it does not use any atomic reserves.
+ */
+unsigned long __rcu_alloc_page_lockless(void)
+{
+	struct zonelist *zonelist =
+		node_zonelist(numa_node_id(), GFP_KERNEL);
+	struct zoneref *z, *preferred_zoneref;
+	struct per_cpu_pages *pcp;
+	struct page *page;
+	unsigned long flags;
+	struct zone *zone;
+
+	/*
+	 * If DEBUG_PAGEALLOC is enabled, the post_alloc_hook()
+	 * in the prep_new_page() function also does some extra
+	 * page mappings via __kernel_map_pages(), what is arch
+	 * specific. It is for debug purpose only.
+	 *
+	 * For example, powerpc variant of __kernel_map_pages()
+	 * uses sleep-able locks. Thus a lock-less access can
+	 * not be provided if debug option is activated. In that
+	 * case it is fine to revert and return NULL, since RCU
+	 * code has a fallback mechanism. It is OK if it is used
+	 * for debug kernel.
+	 */
+	if (IS_ENABLED(CONFIG_DEBUG_PAGEALLOC))
+		return 0;
+
+	/*
+	 * Preferred zone is a first one in the zonelist.
+	 */
+	preferred_zoneref = NULL;
+
+	for_each_zone_zonelist(zone, z, zonelist, ZONE_NORMAL) {
+		if (!preferred_zoneref)
+			preferred_zoneref = z;
+
+		local_irq_save(flags);
+		pcp = &this_cpu_ptr(zone->pageset)->pcp;
+		page = __rmqueue_lockless(zone, pcp);
+		if (page) {
+			__count_zid_vm_events(PGALLOC, page_zonenum(page), 1);
+			zone_statistics(preferred_zoneref->zone, zone);
+		}
+		local_irq_restore(flags);
+
+		if (page) {
+			prep_new_page(page, 0, 0, 0);
+			return (unsigned long) page_address(page);
+		}
+	}
+
+	return 0;
+}
+
 /*
  * Common helper functions. Never use with __GFP_HIGHMEM because the returned
  * address cannot represent highmem pages. Use alloc_pages and then kmap if
