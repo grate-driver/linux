@@ -1328,7 +1328,8 @@ static int exynos5_performance_counters_init(struct exynos5_dmc *dmc)
 	int counters_size;
 	int ret, i;
 
-	dmc->num_counters = devfreq_event_get_edev_count(dmc->dev);
+	dmc->num_counters = devfreq_event_get_edev_count(dmc->dev,
+							"devfreq-events");
 	if (dmc->num_counters < 0) {
 		dev_err(dmc->dev, "could not get devfreq-event counters\n");
 		return dmc->num_counters;
@@ -1341,7 +1342,8 @@ static int exynos5_performance_counters_init(struct exynos5_dmc *dmc)
 
 	for (i = 0; i < dmc->num_counters; i++) {
 		dmc->counter[i] =
-			devfreq_event_get_edev_by_phandle(dmc->dev, i);
+			devfreq_event_get_edev_by_phandle(dmc->dev,
+						"devfreq-events", i);
 		if (IS_ERR_OR_NULL(dmc->counter[i]))
 			return -EPROBE_DEFER;
 	}
