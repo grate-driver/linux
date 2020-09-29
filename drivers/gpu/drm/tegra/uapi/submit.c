@@ -224,7 +224,8 @@ static int submit_job_add_gather(struct host1x_job *job,
 				 struct tegra_drm_channel_ctx *ctx,
 				 struct drm_tegra_submit_cmd_gather_uptr *cmd,
 				 struct gather_bo *bo, u32 *offset,
-				 struct tegra_drm_submit_data *job_data)
+				 struct tegra_drm_submit_data *job_data,
+				 u32 *class)
 {
 	u32 next_offset;
 
@@ -241,6 +242,10 @@ static int submit_job_add_gather(struct host1x_job *job,
 	if (next_offset > bo->gather_data_words)
 		return -EINVAL;
 
+	if (tegra_drm_fw_validate(ctx->client, bo->gather_data, *offset,
+				  cmd->words, job_data, class))
+		return -EINVAL;
+
 	host1x_job_add_gather(job, &bo->base, cmd->words, *offset * 4);
 
 	*offset = next_offset;
@@ -255,9 +260,12 @@ static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 			     struct tegra_drm_submit_data *job_data)
 {
 	struct drm_tegra_submit_cmd *cmds;
-	u32 i, gather_offset = 0;
+	u32 i, gather_offset = 0, class;
 	struct host1x_job *job;
 	int err;
+
+	/* Set initial class for firewall. */
+	class = ctx->client->base.class;
 
 	cmds = alloc_copy_user_array(u64_to_user_ptr(args->cmds_ptr),
 				     args->num_cmds, sizeof(*cmds));
@@ -284,7 +292,7 @@ static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 		if (cmd->type == DRM_TEGRA_SUBMIT_CMD_GATHER_UPTR) {
 			err = submit_job_add_gather(job, ctx, &cmd->gather_uptr,
 						    bo, &gather_offset,
-						    job_data);
+						    job_data, &class);
 			if (err)
 				goto free_job;
 		} else if (cmd->type == DRM_TEGRA_SUBMIT_CMD_WAIT_SYNCPT) {
