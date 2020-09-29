@@ -62,6 +62,16 @@ void qla2x00_sp_free(srb_t *sp)
 	qla2x00_rel_sp(sp);
 }
 
+void qla2xxx_rel_done_warning(srb_t *sp, int res)
+{
+	WARN_ONCE(1, "Calling done() of an already freed srb %p object\n", sp);
+}
+
+void qla2xxx_rel_free_warning(srb_t *sp)
+{
+	WARN_ONCE(1, "Calling free() of an already freed srb %p object\n", sp);
+}
+
 /* Asynchronous Login/Logout Routines -------------------------------------- */
 
 unsigned long
@@ -7108,10 +7118,9 @@ qla24xx_reset_adapter(scsi_qla_host_t *vha)
 	unsigned long flags = 0;
 	struct qla_hw_data *ha = vha->hw;
 	struct device_reg_24xx __iomem *reg = &ha->iobase->isp24;
-	int rval = QLA_SUCCESS;
 
 	if (IS_P3P_TYPE(ha))
-		return rval;
+		return QLA_SUCCESS;
 
 	vha->flags.online = 0;
 	ha->isp_ops->disable_intrs(ha);
@@ -7126,7 +7135,7 @@ qla24xx_reset_adapter(scsi_qla_host_t *vha)
 	if (IS_NOPOLLING_TYPE(ha))
 		ha->isp_ops->enable_intrs(ha);
 
-	return rval;
+	return QLA_SUCCESS;
 }
 
 /* On sparc systems, obtain port and node WWN from firmware

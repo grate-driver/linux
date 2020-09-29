@@ -274,6 +274,10 @@ struct qedi_ctx {
 	spinlock_t ll2_lock;	/* Light L2 lock */
 	spinlock_t hba_lock;	/* per port lock */
 	struct task_struct *ll2_recv_thread;
+	unsigned long qedi_err_flags;
+#define QEDI_ERR_ATTN_CLR_EN	0
+#define QEDI_ERR_IS_RECOVERABLE	2
+#define QEDI_ERR_OVERRIDE_EN	31
 	unsigned long flags;
 #define UIO_DEV_OPENED		1
 #define QEDI_IOTHREAD_WAKE	2
@@ -305,6 +309,7 @@ struct qedi_ctx {
 	u32 max_sqes;
 	u8 num_queues;
 	u32 max_active_conns;
+	s32 msix_count;
 
 	struct iscsi_cid_queue cid_que;
 	struct qedi_endpoint **ep_tbl;

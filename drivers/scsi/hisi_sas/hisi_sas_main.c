@@ -229,17 +229,18 @@ void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba, struct sas_task *task,
 		task->lldd_task = NULL;
 
 		if (!sas_protocol_ata(task->task_proto)) {
-			struct sas_ssp_task *ssp_task = &task->ssp_task;
-			struct scsi_cmnd *scsi_cmnd = ssp_task->cmd;
-
 			if (slot->n_elem)
 				dma_unmap_sg(dev, task->scatter,
 					     task->num_scatter,
 					     task->data_dir);
-			if (slot->n_elem_dif)
+			if (slot->n_elem_dif) {
+				struct sas_ssp_task *ssp_task = &task->ssp_task;
+				struct scsi_cmnd *scsi_cmnd = ssp_task->cmd;
+
 				dma_unmap_sg(dev, scsi_prot_sglist(scsi_cmnd),
 					     scsi_prot_sg_count(scsi_cmnd),
 					     task->data_dir);
+			}
 		}
 	}
 
@@ -334,7 +335,7 @@ static int hisi_sas_dma_map(struct hisi_hba *hisi_hba,
 	}
 
 	if (*n_elem > HISI_SAS_SGE_PAGE_CNT) {
-		dev_err(dev, "task prep: n_elem(%d) > HISI_SAS_SGE_PAGE_CNT",
+		dev_err(dev, "task prep: n_elem(%d) > HISI_SAS_SGE_PAGE_CNT\n",
 			*n_elem);
 		rc = -EINVAL;
 		goto err_out_dma_unmap;
@@ -1429,7 +1430,6 @@ static void hisi_sas_rescan_topology(struct hisi_hba *hisi_hba, u32 state)
 		} else {
 			hisi_sas_phy_down(hisi_hba, phy_no, 0);
 		}
-
 	}
 }
 
@@ -3333,21 +3333,6 @@ enum {
 	HISI_SAS_BIST_LOOPBACK_MODE_REMOTE,
 };
 
-enum {
-	HISI_SAS_BIST_CODE_MODE_PRBS7 = 0,
-	HISI_SAS_BIST_CODE_MODE_PRBS23,
-	HISI_SAS_BIST_CODE_MODE_PRBS31,
-	HISI_SAS_BIST_CODE_MODE_JTPAT,
-	HISI_SAS_BIST_CODE_MODE_CJTPAT,
-	HISI_SAS_BIST_CODE_MODE_SCRAMBED_0,
-	HISI_SAS_BIST_CODE_MODE_TRAIN,
-	HISI_SAS_BIST_CODE_MODE_TRAIN_DONE,
-	HISI_SAS_BIST_CODE_MODE_HFTP,
-	HISI_SAS_BIST_CODE_MODE_MFTP,
-	HISI_SAS_BIST_CODE_MODE_LFTP,
-	HISI_SAS_BIST_CODE_MODE_FIXED_DATA,
-};
-
 static const struct {
 	int		value;
 	char		*name;
@@ -3703,6 +3688,58 @@ static const struct file_operations hisi_sas_debugfs_bist_enable_ops = {
 	.owner = THIS_MODULE,
 };
 
+static const struct {
+	char *name;
+} hisi_sas_debugfs_ffe_name[FFE_CFG_MAX] = {
+	{ "SAS_1_5_GBPS" },
+	{ "SAS_3_0_GBPS" },
+	{ "SAS_6_0_GBPS" },
+	{ "SAS_12_0_GBPS" },
+	{ "FFE_RESV" },
+	{ "SATA_1_5_GBPS" },
+	{ "SATA_3_0_GBPS" },
+	{ "SATA_6_0_GBPS" },
+};
+
+static ssize_t hisi_sas_debugfs_write(struct file *filp,
+				      const char __user *buf,
+				      size_t count, loff_t *ppos)
+{
+	struct seq_file *m = filp->private_data;
+	u32 *val = m->private;
+	int res;
+
+	res = kstrtouint_from_user(buf, count, 0, val);
+	if (res)
+		return res;
+
+	return count;
+}
+
+static int hisi_sas_debugfs_show(struct seq_file *s, void *p)
+{
+	u32 *val = s->private;
+
+	seq_printf(s, "0x%x\n", *val);
+
+	return 0;
+}
+
+static int hisi_sas_debugfs_open(struct inode *inode, struct file *filp)
+{
+	return single_open(filp, hisi_sas_debugfs_show,
+			   inode->i_private);
+}
+
+static const struct file_operations hisi_sas_debugfs_ops = {
+	.open = hisi_sas_debugfs_open,
+	.read = seq_read,
+	.write = hisi_sas_debugfs_write,
+	.llseek = seq_lseek,
+	.release = single_release,
+	.owner = THIS_MODULE,
+};
+
 static ssize_t hisi_sas_debugfs_phy_down_cnt_write(struct file *filp,
 						   const char __user *buf,
 						   size_t count, loff_t *ppos)
@@ -3900,6 +3937,9 @@ static void hisi_sas_debugfs_phy_down_cnt_init(struct hisi_hba *hisi_hba)
 
 static void hisi_sas_debugfs_bist_init(struct hisi_hba *hisi_hba)
 {
+	struct dentry *ports_dentry;
+	int phy_no;
+
 	hisi_hba->debugfs_bist_dentry =
 			debugfs_create_dir("bist", hisi_hba->debugfs_dir);
 	debugfs_create_file("link_rate", 0600,
@@ -3909,6 +3949,16 @@ static void hisi_sas_debugfs_bist_init(struct hisi_hba *hisi_hba)
 	debugfs_create_file("code_mode", 0600,
 			    hisi_hba->debugfs_bist_dentry, hisi_hba,
 			    &hisi_sas_debugfs_bist_code_mode_ops);
+
+	debugfs_create_file("fixed_code", 0600,
+			    hisi_hba->debugfs_bist_dentry,
+			    &hisi_hba->debugfs_bist_fixed_code[0],
+			    &hisi_sas_debugfs_ops);
+
+	debugfs_create_file("fixed_code_1", 0600,
+			    hisi_hba->debugfs_bist_dentry,
+			    &hisi_hba->debugfs_bist_fixed_code[1],
+			    &hisi_sas_debugfs_ops);
 
 	debugfs_create_file("phy_id", 0600, hisi_hba->debugfs_bist_dentry,
 			    hisi_hba, &hisi_sas_debugfs_bist_phy_ops);
@@ -3922,6 +3972,27 @@ static void hisi_sas_debugfs_bist_init(struct hisi_hba *hisi_hba)
 
 	debugfs_create_file("enable", 0600, hisi_hba->debugfs_bist_dentry,
 			    hisi_hba, &hisi_sas_debugfs_bist_enable_ops);
+
+	ports_dentry = debugfs_create_dir("port", hisi_hba->debugfs_bist_dentry);
+
+	for (phy_no = 0; phy_no < hisi_hba->n_phy; phy_no++) {
+		struct dentry *port_dentry;
+		struct dentry *ffe_dentry;
+		char name[256];
+		int i;
+
+		snprintf(name, 256, "%d", phy_no);
+		port_dentry = debugfs_create_dir(name, ports_dentry);
+		ffe_dentry = debugfs_create_dir("ffe", port_dentry);
+		for (i = 0; i < FFE_CFG_MAX; i++) {
+			if (i == FFE_RESV)
+				continue;
+			debugfs_create_file(hisi_sas_debugfs_ffe_name[i].name,
+					    0600, ffe_dentry,
+					    &hisi_hba->debugfs_bist_ffe[phy_no][i],
+					    &hisi_sas_debugfs_ops);
+		}
+	}
 
 	hisi_hba->debugfs_bist_linkrate = SAS_LINK_RATE_1_5_GBPS;
 }

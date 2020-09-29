@@ -33,8 +33,8 @@
 /*
  * Vendor specific pre-defined parameters
  */
-#define UFS_MTK_LIMIT_NUM_LANES_RX  1
-#define UFS_MTK_LIMIT_NUM_LANES_TX  1
+#define UFS_MTK_LIMIT_NUM_LANES_RX  2
+#define UFS_MTK_LIMIT_NUM_LANES_TX  2
 #define UFS_MTK_LIMIT_HSGEAR_RX     UFS_HS_G3
 #define UFS_MTK_LIMIT_HSGEAR_TX     UFS_HS_G3
 #define UFS_MTK_LIMIT_PWMGEAR_RX    UFS_PWM_G4
@@ -92,6 +92,9 @@ enum {
 struct ufs_mtk_host {
 	struct ufs_hba *hba;
 	struct phy *mphy;
+	struct reset_control *hci_reset;
+	struct reset_control *unipro_reset;
+	struct reset_control *crypto_reset;
 	bool mphy_powered_on;
 	bool unipro_lpm;
 	bool ref_clk_enabled;
