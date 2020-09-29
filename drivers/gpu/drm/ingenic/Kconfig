@@ -4,6 +4,7 @@ config DRM_INGENIC
 	depends on DRM
 	depends on CMA
 	depends on OF
+	depends on BROKEN
 	select DRM_BRIDGE
 	select DRM_PANEL_BRIDGE
 	select DRM_KMS_HELPER
