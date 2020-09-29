@@ -10,6 +10,7 @@
 #include <linux/filter.h>
 #include <linux/perf_event.h>
 #include <uapi/linux/btf.h>
+#include <linux/rcupdate_trace.h>
 
 #include "map_in_map.h"
 
@@ -487,6 +488,13 @@ static int array_map_mmap(struct bpf_map *map, struct vm_area_struct *vma)
 				   vma->vm_pgoff + pgoff);
 }
 
+static bool array_map_meta_equal(const struct bpf_map *meta0,
+				 const struct bpf_map *meta1)
+{
+	return meta0->max_entries == meta1->max_entries &&
+		bpf_map_meta_equal(meta0, meta1);
+}
+
 struct bpf_iter_seq_array_map_info {
 	struct bpf_map *map;
 	void *percpu_value_buf;
@@ -625,6 +633,7 @@ static const struct bpf_iter_seq_info iter_seq_info = {
 
 static int array_map_btf_id;
 const struct bpf_map_ops array_map_ops = {
+	.map_meta_equal = array_map_meta_equal,
 	.map_alloc_check = array_map_alloc_check,
 	.map_alloc = array_map_alloc,
 	.map_free = array_map_free,
@@ -647,6 +656,7 @@ const struct bpf_map_ops array_map_ops = {
 
 static int percpu_array_map_btf_id;
 const struct bpf_map_ops percpu_array_map_ops = {
+	.map_meta_equal = bpf_map_meta_equal,
 	.map_alloc_check = array_map_alloc_check,
 	.map_alloc = array_map_alloc,
 	.map_free = array_map_free,
@@ -888,6 +898,7 @@ static void prog_array_map_poke_run(struct bpf_map *map, u32 key,
 				    struct bpf_prog *old,
 				    struct bpf_prog *new)
 {
+	u8 *old_addr, *new_addr, *old_bypass_addr;
 	struct prog_poke_elem *elem;
 	struct bpf_array_aux *aux;
 
@@ -908,12 +919,13 @@ static void prog_array_map_poke_run(struct bpf_map *map, u32 key,
 			 *    there could be danger of use after free otherwise.
 			 * 2) Initially when we start tracking aux, the program
 			 *    is not JITed yet and also does not have a kallsyms
-			 *    entry. We skip these as poke->ip_stable is not
-			 *    active yet. The JIT will do the final fixup before
-			 *    setting it stable. The various poke->ip_stable are
-			 *    successively activated, so tail call updates can
-			 *    arrive from here while JIT is still finishing its
-			 *    final fixup for non-activated poke entries.
+			 *    entry. We skip these as poke->tailcall_target_stable
+			 *    is not active yet. The JIT will do the final fixup
+			 *    before setting it stable. The various
+			 *    poke->tailcall_target_stable are successively
+			 *    activated, so tail call updates can arrive from here
+			 *    while JIT is still finishing its final fixup for
+			 *    non-activated poke entries.
 			 * 3) On program teardown, the program's kallsym entry gets
 			 *    removed out of RCU callback, but we can only untrack
 			 *    from sleepable context, therefore bpf_arch_text_poke()
@@ -930,7 +942,7 @@ static void prog_array_map_poke_run(struct bpf_map *map, u32 key,
 			 * 5) Any other error happening below from bpf_arch_text_poke()
 			 *    is a unexpected bug.
 			 */
-			if (!READ_ONCE(poke->ip_stable))
+			if (!READ_ONCE(poke->tailcall_target_stable))
 				continue;
 			if (poke->reason != BPF_POKE_REASON_TAIL_CALL)
 				continue;
@@ -938,12 +950,39 @@ static void prog_array_map_poke_run(struct bpf_map *map, u32 key,
 			    poke->tail_call.key != key)
 				continue;
 
-			ret = bpf_arch_text_poke(poke->ip, BPF_MOD_JUMP,
-						 old ? (u8 *)old->bpf_func +
-						 poke->adj_off : NULL,
-						 new ? (u8 *)new->bpf_func +
-						 poke->adj_off : NULL);
-			BUG_ON(ret < 0 && ret != -EINVAL);
+			old_bypass_addr = old ? NULL : poke->bypass_addr;
+			old_addr = old ? (u8 *)old->bpf_func + poke->adj_off : NULL;
+			new_addr = new ? (u8 *)new->bpf_func + poke->adj_off : NULL;
+
+			if (new) {
+				ret = bpf_arch_text_poke(poke->tailcall_target,
+							 BPF_MOD_JUMP,
+							 old_addr, new_addr);
+				BUG_ON(ret < 0 && ret != -EINVAL);
+				if (!old) {
+					ret = bpf_arch_text_poke(poke->tailcall_bypass,
+								 BPF_MOD_JUMP,
+								 poke->bypass_addr,
+								 NULL);
+					BUG_ON(ret < 0 && ret != -EINVAL);
+				}
+			} else {
+				ret = bpf_arch_text_poke(poke->tailcall_bypass,
+							 BPF_MOD_JUMP,
+							 old_bypass_addr,
+							 poke->bypass_addr);
+				BUG_ON(ret < 0 && ret != -EINVAL);
+				/* let other CPUs finish the execution of program
+				 * so that it will not possible to expose them
+				 * to invalid nop, stack unwind, nop state
+				 */
+				if (!ret)
+					synchronize_rcu();
+				ret = bpf_arch_text_poke(poke->tailcall_target,
+							 BPF_MOD_JUMP,
+							 old_addr, NULL);
+				BUG_ON(ret < 0 && ret != -EINVAL);
+			}
 		}
 	}
 }
@@ -1003,6 +1042,11 @@ static void prog_array_map_free(struct bpf_map *map)
 	fd_array_map_free(map);
 }
 
+/* prog_array->aux->{type,jited} is a runtime binding.
+ * Doing static check alone in the verifier is not enough.
+ * Thus, prog_array_map cannot be used as an inner_map
+ * and map_meta_equal is not implemented.
+ */
 static int prog_array_map_btf_id;
 const struct bpf_map_ops prog_array_map_ops = {
 	.map_alloc_check = fd_array_map_alloc_check,
@@ -1101,6 +1145,7 @@ static void perf_event_fd_array_release(struct bpf_map *map,
 
 static int perf_event_array_map_btf_id;
 const struct bpf_map_ops perf_event_array_map_ops = {
+	.map_meta_equal = bpf_map_meta_equal,
 	.map_alloc_check = fd_array_map_alloc_check,
 	.map_alloc = array_map_alloc,
 	.map_free = fd_array_map_free,
@@ -1137,6 +1182,7 @@ static void cgroup_fd_array_free(struct bpf_map *map)
 
 static int cgroup_array_map_btf_id;
 const struct bpf_map_ops cgroup_array_map_ops = {
+	.map_meta_equal = bpf_map_meta_equal,
 	.map_alloc_check = fd_array_map_alloc_check,
 	.map_alloc = array_map_alloc,
 	.map_free = cgroup_fd_array_free,
