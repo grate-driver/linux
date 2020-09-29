@@ -421,109 +421,59 @@ SYSCALL_DEFINE3(osf_fstatfs64, unsigned long, fd,
  *
  * Although to be frank, neither are the native Linux/i386 ones..
  */
-struct ufs_args {
+struct osf_mount_args {
 	char __user *devname;
 	int flags;
 	uid_t exroot;
+	/* this has lots more here for cdfs at least, but we don't bother */
 };
-
-struct cdfs_args {
-	char __user *devname;
-	int flags;
-	uid_t exroot;
-
-	/* This has lots more here, which Linux handles with the option block
-	   but I'm too lazy to do the translation into ASCII.  */
-};
-
-struct procfs_args {
-	char __user *devname;
-	int flags;
-	uid_t exroot;
-};
-
-/*
- * We can't actually handle ufs yet, so we translate UFS mounts to
- * ext2fs mounts. I wouldn't mind a UFS filesystem, but the UFS
- * layout is so braindead it's a major headache doing it.
- *
- * Just how long ago was it written? OTOH our UFS driver may be still
- * unhappy with OSF UFS. [CHECKME]
- */
-static int
-osf_ufs_mount(const char __user *dirname,
-	      struct ufs_args __user *args, int flags)
-{
-	int retval;
-	struct cdfs_args tmp;
-	struct filename *devname;
-
-	retval = -EFAULT;
-	if (copy_from_user(&tmp, args, sizeof(tmp)))
-		goto out;
-	devname = getname(tmp.devname);
-	retval = PTR_ERR(devname);
-	if (IS_ERR(devname))
-		goto out;
-	retval = do_mount(devname->name, dirname, "ext2", flags, NULL);
-	putname(devname);
- out:
-	return retval;
-}
-
-static int
-osf_cdfs_mount(const char __user *dirname,
-	       struct cdfs_args __user *args, int flags)
-{
-	int retval;
-	struct cdfs_args tmp;
-	struct filename *devname;
-
-	retval = -EFAULT;
-	if (copy_from_user(&tmp, args, sizeof(tmp)))
-		goto out;
-	devname = getname(tmp.devname);
-	retval = PTR_ERR(devname);
-	if (IS_ERR(devname))
-		goto out;
-	retval = do_mount(devname->name, dirname, "iso9660", flags, NULL);
-	putname(devname);
- out:
-	return retval;
-}
-
-static int
-osf_procfs_mount(const char __user *dirname,
-		 struct procfs_args __user *args, int flags)
-{
-	struct procfs_args tmp;
-
-	if (copy_from_user(&tmp, args, sizeof(tmp)))
-		return -EFAULT;
-
-	return do_mount("", dirname, "proc", flags, NULL);
-}
 
 SYSCALL_DEFINE4(osf_mount, unsigned long, typenr, const char __user *, path,
 		int, flag, void __user *, data)
 {
+	struct osf_mount_args tmp;
+	struct filename *devname;
+	const char *fstype;
+	struct path path;
 	int retval;
 
+	if (copy_from_user(&tmp, args, sizeof(tmp)))
+		return -EFAULT;
+
 	switch (typenr) {
-	case 1:
-		retval = osf_ufs_mount(path, data, flag);
+	case 1: /* ufs */
+		/*
+		 * We can't actually handle ufs yet, so we translate UFS mounts
+		 * to ext2 mounts. I wouldn't mind a UFS filesystem, but the UFS
+		 * layout is so braindead it's a major headache doing it.
+		 *
+		 * Just how long ago was it written? OTOH our UFS driver may be
+		 * still unhappy with OSF UFS. [CHECKME]
+		 */
+		fstype = "ext2";
+		devname = getname(tmp.devname);
 		break;
-	case 6:
-		retval = osf_cdfs_mount(path, data, flag);
+	case 6: /* cdfs */
+		fstype = "iso9660";
+		devname = getname(tmp.devname);
 		break;
-	case 9:
-		retval = osf_procfs_mount(path, data, flag);
+	case 9: /* procfs */
+		fstype = "proc";
+		devname = getname_kernel("");
 		break;
 	default:
-		retval = -EINVAL;
 		printk("osf_mount(%ld, %x)\n", typenr, flag);
+		return -EINVAL;
 	}
 
+	if (IS_ERR(devname))
+		return PTR_ERR(devname);
+	retval = user_path_at(AT_FDCWD, dirname, LOOKUP_FOLLOW, &path);
+	if (!retval) {
+		ret = path_mount(devname.name, &path, fstype, flags, NULL);
+		path_put(&path);
+	}
+	putname(devname);
 	return retval;
 }
 
