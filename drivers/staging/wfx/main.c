@@ -30,7 +30,6 @@
 #include "scan.h"
 #include "debug.h"
 #include "data_tx.h"
-#include "secure_link.h"
 #include "hif_tx_mib.h"
 #include "hif_api_cmd.h"
 
@@ -143,7 +142,6 @@ static const struct ieee80211_ops wfx_ops = {
 	.set_rts_threshold	= wfx_set_rts_threshold,
 	.set_default_unicast_key = wfx_set_default_unicast_key,
 	.bss_info_changed	= wfx_bss_info_changed,
-	.prepare_multicast	= wfx_prepare_multicast,
 	.configure_filter	= wfx_configure_filter,
 	.ampdu_action		= wfx_ampdu_action,
 	.flush			= wfx_flush,
@@ -271,8 +269,7 @@ struct wfx_dev *wfx_init_common(struct device *dev,
 	hw->queues = 4;
 	hw->max_rates = 8;
 	hw->max_rate_tries = 8;
-	hw->extra_tx_headroom = sizeof(struct hif_sl_msg_hdr) +
-				sizeof(struct hif_msg)
+	hw->extra_tx_headroom = sizeof(struct hif_msg)
 				+ sizeof(struct hif_req_tx)
 				+ 4 /* alignment */ + 8 /* TKIP IV */;
 	hw->wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION) |
@@ -282,9 +279,9 @@ struct wfx_dev *wfx_init_common(struct device *dev,
 					NL80211_PROBE_RESP_OFFLOAD_SUPPORT_WPS2 |
 					NL80211_PROBE_RESP_OFFLOAD_SUPPORT_P2P |
 					NL80211_PROBE_RESP_OFFLOAD_SUPPORT_80211U;
+	hw->wiphy->features |= NL80211_FEATURE_AP_SCAN;
 	hw->wiphy->flags |= WIPHY_FLAG_AP_PROBE_RESP_OFFLOAD;
 	hw->wiphy->flags |= WIPHY_FLAG_AP_UAPSD;
-	hw->wiphy->flags &= ~WIPHY_FLAG_PS_ON_BY_DEFAULT;
 	hw->wiphy->max_ap_assoc_sta = HIF_LINK_ID_MAX;
 	hw->wiphy->max_scan_ssids = 2;
 	hw->wiphy->max_scan_ie_len = IEEE80211_MAX_DATA_LEN;
@@ -309,7 +306,6 @@ struct wfx_dev *wfx_init_common(struct device *dev,
 		return ERR_CAST(wdev->pdata.gpio_wakeup);
 	if (wdev->pdata.gpio_wakeup)
 		gpiod_set_consumer_name(wdev->pdata.gpio_wakeup, "wfx wakeup");
-	wfx_sl_fill_pdata(dev, &wdev->pdata);
 
 	mutex_init(&wdev->conf_mutex);
 	mutex_init(&wdev->rx_stats_lock);
@@ -363,9 +359,8 @@ int wfx_probe(struct wfx_dev *wdev)
 	dev_info(wdev->dev, "started firmware %d.%d.%d \"%s\" (API: %d.%d, keyset: %02X, caps: 0x%.8X)\n",
 		 wdev->hw_caps.firmware_major, wdev->hw_caps.firmware_minor,
 		 wdev->hw_caps.firmware_build, wdev->hw_caps.firmware_label,
-		 wdev->hw_caps.api_version_major,
-		 wdev->hw_caps.api_version_minor,
-		 wdev->keyset, *((u32 *)&wdev->hw_caps.capabilities));
+		 wdev->hw_caps.api_version_major, wdev->hw_caps.api_version_minor,
+		 wdev->keyset, wdev->hw_caps.link_mode);
 	snprintf(wdev->hw->wiphy->fw_version,
 		 sizeof(wdev->hw->wiphy->fw_version),
 		 "%d.%d.%d",
@@ -381,14 +376,13 @@ int wfx_probe(struct wfx_dev *wdev)
 		goto err0;
 	}
 
-	err = wfx_sl_init(wdev);
-	if (err && wdev->hw_caps.capabilities.link_mode == SEC_LINK_ENFORCED) {
+	if (wdev->hw_caps.link_mode == SEC_LINK_ENFORCED) {
 		dev_err(wdev->dev,
-			"chip require secure_link, but can't negociate it\n");
+			"chip require secure_link, but can't negotiate it\n");
 		goto err0;
 	}
 
-	if (wdev->hw_caps.regul_sel_mode_info.region_sel_mode) {
+	if (wdev->hw_caps.region_sel_mode) {
 		wdev->hw->wiphy->bands[NL80211_BAND_2GHZ]->channels[11].flags |= IEEE80211_CHAN_NO_IR;
 		wdev->hw->wiphy->bands[NL80211_BAND_2GHZ]->channels[12].flags |= IEEE80211_CHAN_NO_IR;
 		wdev->hw->wiphy->bands[NL80211_BAND_2GHZ]->channels[13].flags |= IEEE80211_CHAN_DISABLED;
@@ -466,7 +460,6 @@ void wfx_release(struct wfx_dev *wdev)
 	hif_shutdown(wdev);
 	wdev->hwbus_ops->irq_unsubscribe(wdev->hwbus_priv);
 	wfx_bh_unregister(wdev);
-	wfx_sl_deinit(wdev);
 }
 
 static int __init wfx_core_init(void)
