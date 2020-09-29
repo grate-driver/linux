@@ -844,7 +844,7 @@ qla_get_exlogin_status(scsi_qla_host_t *vha, uint16_t *buf_sz,
  * Context:
  *	Kernel context.
  */
-#define CONFIG_XLOGINS_MEM	0x3
+#define CONFIG_XLOGINS_MEM	0x9
 int
 qla_set_exlogin_mem_cfg(scsi_qla_host_t *vha, dma_addr_t phys_addr)
 {
@@ -871,8 +871,9 @@ qla_set_exlogin_mem_cfg(scsi_qla_host_t *vha, dma_addr_t phys_addr)
 	mcp->flags = 0;
 	rval = qla2x00_mailbox_command(vha, mcp);
 	if (rval != QLA_SUCCESS) {
-		/*EMPTY*/
-		ql_dbg(ql_dbg_mbx, vha, 0x111b, "Failed=%x.\n", rval);
+		ql_dbg(ql_dbg_mbx, vha, 0x111b,
+		       "EXlogin Failed=%x. MB0=%x MB11=%x\n",
+		       rval, mcp->mb[0], mcp->mb[11]);
 	} else {
 		ql_dbg(ql_dbg_mbx + ql_dbg_verbose, vha, 0x118c,
 		    "Done %s.\n", __func__);
@@ -1091,6 +1092,14 @@ qla2x00_get_fw_version(scsi_qla_host_t *vha)
 			    "%s: FC-NVMe is Enabled (0x%x)\n",
 			     __func__, ha->fw_attributes_h);
 		}
+
+		/* BIT_13 of Extended FW Attributes informs about NVMe2 support */
+		if (ha->fw_attributes_ext[0] & FW_ATTR_EXT0_NVME2) {
+			ql_log(ql_log_info, vha, 0xd302,
+			       "Firmware supports NVMe2 0x%x\n",
+			       ha->fw_attributes_ext[0]);
+			vha->flags.nvme2_enabled = 1;
+		}
 	}
 
 	if (IS_QLA27XX(ha) || IS_QLA28XX(ha)) {
@@ -1120,12 +1129,18 @@ qla2x00_get_fw_version(scsi_qla_host_t *vha)
 		if (ha->flags.scm_supported_a &&
 		    (ha->fw_attributes_ext[0] & FW_ATTR_EXT0_SCM_SUPPORTED)) {
 			ha->flags.scm_supported_f = 1;
-			memset(ha->sf_init_cb, 0, sizeof(struct init_sf_cb));
 			ha->sf_init_cb->flags |= BIT_13;
 		}
 		ql_log(ql_log_info, vha, 0x11a3, "SCM in FW: %s\n",
 		       (ha->flags.scm_supported_f) ? "Supported" :
 		       "Not Supported");
+
+		if (vha->flags.nvme2_enabled) {
+			/* set BIT_15 of special feature control block for SLER */
+			ha->sf_init_cb->flags |= BIT_15;
+			/* set BIT_14 of special feature control block for PI CTRL*/
+			ha->sf_init_cb->flags |= BIT_14;
+		}
 	}
 
 failed:
@@ -1821,7 +1836,7 @@ qla2x00_init_firmware(scsi_qla_host_t *vha, uint16_t size)
 		mcp->out_mb |= MBX_14|MBX_13|MBX_12|MBX_11|MBX_10;
 	}
 
-	if (ha->flags.scm_supported_f) {
+	if (ha->flags.scm_supported_f || vha->flags.nvme2_enabled) {
 		mcp->mb[1] |= BIT_1;
 		mcp->mb[16] = MSW(ha->sf_init_cb_dma);
 		mcp->mb[17] = LSW(ha->sf_init_cb_dma);

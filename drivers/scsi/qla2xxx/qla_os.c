@@ -39,6 +39,11 @@ module_param(ql2xfulldump_on_mpifail, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(ql2xfulldump_on_mpifail,
 		 "Set this to take full dump on MPI hang.");
 
+int ql2xenforce_iocb_limit = 1;
+module_param(ql2xenforce_iocb_limit, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(ql2xenforce_iocb_limit,
+		 "Enforce IOCB throttling, to avoid FW congestion. (default: 0)");
+
 /*
  * CT6 CTX allocation cache
  */
@@ -3315,6 +3320,7 @@ qla2x00_probe_one(struct pci_dev *pdev, const struct pci_device_id *id)
 		for (i = 0; i < ha->max_qpairs; i++)
 			qla2xxx_create_qpair(base_vha, 5, 0, startit);
 	}
+	qla_init_iocb_limit(base_vha);
 
 	if (ha->flags.running_gold_fw)
 		goto skip_dpc;
@@ -4224,6 +4230,7 @@ qla2x00_mem_alloc(struct qla_hw_data *ha, uint16_t req_len, uint16_t rsp_len,
 						&ha->sf_init_cb_dma);
 		if (!ha->sf_init_cb)
 			goto fail_sf_init_cb;
+		memset(ha->sf_init_cb, 0, sizeof(struct init_sf_cb));
 		ql_dbg_pci(ql_dbg_init, ha->pdev, 0x0199,
 			   "sf_init_cb=%p.\n", ha->sf_init_cb);
 	}
@@ -4378,11 +4385,12 @@ int
 qla2x00_set_exlogins_buffer(scsi_qla_host_t *vha)
 {
 	int rval;
-	uint16_t	size, max_cnt, temp;
+	uint16_t	size, max_cnt;
+	uint32_t temp;
 	struct qla_hw_data *ha = vha->hw;
 
 	/* Return if we don't need to alloacate any extended logins */
-	if (!ql2xexlogins)
+	if (ql2xexlogins <= MAX_FIBRE_DEVICES_2400)
 		return QLA_SUCCESS;
 
 	if (!IS_EXLOGIN_OFFLD_CAPABLE(ha))
@@ -5809,98 +5817,6 @@ qla25xx_rdp_rsp_reduce_size(struct scsi_qla_host *vha,
 	return true;
 }
 
-static uint
-qla25xx_rdp_port_speed_capability(struct qla_hw_data *ha)
-{
-	if (IS_CNA_CAPABLE(ha))
-		return RDP_PORT_SPEED_10GB;
-
-	if (IS_QLA27XX(ha) || IS_QLA28XX(ha)) {
-		unsigned int speeds = 0;
-
-		if (ha->max_supported_speed == 2) {
-			if (ha->min_supported_speed <= 6)
-				speeds |= RDP_PORT_SPEED_64GB;
-		}
-
-		if (ha->max_supported_speed == 2 ||
-		    ha->max_supported_speed == 1) {
-			if (ha->min_supported_speed <= 5)
-				speeds |= RDP_PORT_SPEED_32GB;
-		}
-
-		if (ha->max_supported_speed == 2 ||
-		    ha->max_supported_speed == 1 ||
-		    ha->max_supported_speed == 0) {
-			if (ha->min_supported_speed <= 4)
-				speeds |= RDP_PORT_SPEED_16GB;
-		}
-
-		if (ha->max_supported_speed == 1 ||
-		    ha->max_supported_speed == 0) {
-			if (ha->min_supported_speed <= 3)
-				speeds |= RDP_PORT_SPEED_8GB;
-		}
-
-		if (ha->max_supported_speed == 0) {
-			if (ha->min_supported_speed <= 2)
-				speeds |= RDP_PORT_SPEED_4GB;
-		}
-
-		return speeds;
-	}
-
-	if (IS_QLA2031(ha))
-		return RDP_PORT_SPEED_16GB|RDP_PORT_SPEED_8GB|
-		       RDP_PORT_SPEED_4GB;
-
-	if (IS_QLA25XX(ha))
-		return RDP_PORT_SPEED_8GB|RDP_PORT_SPEED_4GB|
-		       RDP_PORT_SPEED_2GB|RDP_PORT_SPEED_1GB;
-
-	if (IS_QLA24XX_TYPE(ha))
-		return RDP_PORT_SPEED_4GB|RDP_PORT_SPEED_2GB|
-		       RDP_PORT_SPEED_1GB;
-
-	if (IS_QLA23XX(ha))
-		return RDP_PORT_SPEED_2GB|RDP_PORT_SPEED_1GB;
-
-	return RDP_PORT_SPEED_1GB;
-}
-
-static uint
-qla25xx_rdp_port_speed_currently(struct qla_hw_data *ha)
-{
-	switch (ha->link_data_rate) {
-	case PORT_SPEED_1GB:
-		return RDP_PORT_SPEED_1GB;
-
-	case PORT_SPEED_2GB:
-		return RDP_PORT_SPEED_2GB;
-
-	case PORT_SPEED_4GB:
-		return RDP_PORT_SPEED_4GB;
-
-	case PORT_SPEED_8GB:
-		return RDP_PORT_SPEED_8GB;
-
-	case PORT_SPEED_10GB:
-		return RDP_PORT_SPEED_10GB;
-
-	case PORT_SPEED_16GB:
-		return RDP_PORT_SPEED_16GB;
-
-	case PORT_SPEED_32GB:
-		return RDP_PORT_SPEED_32GB;
-
-	case PORT_SPEED_64GB:
-		return RDP_PORT_SPEED_64GB;
-
-	default:
-		return RDP_PORT_SPEED_UNKNOWN;
-	}
-}
-
 /*
  * Function Name: qla24xx_process_purex_iocb
  *
@@ -6067,9 +5983,9 @@ void qla24xx_process_purex_rdp(struct scsi_qla_host *vha,
 	rsp_payload->port_speed_desc.desc_len =
 	    cpu_to_be32(RDP_DESC_LEN(rsp_payload->port_speed_desc));
 	rsp_payload->port_speed_desc.speed_capab = cpu_to_be16(
-	    qla25xx_rdp_port_speed_capability(ha));
+	    qla25xx_fdmi_port_speed_capability(ha));
 	rsp_payload->port_speed_desc.operating_speed = cpu_to_be16(
-	    qla25xx_rdp_port_speed_currently(ha));
+	    qla25xx_fdmi_port_speed_currently(ha));
 
 	/* Link Error Status Descriptor */
 	rsp_payload->ls_err_desc.desc_tag = cpu_to_be32(0x10002);
@@ -7288,8 +7204,10 @@ qla2x00_timer(struct timer_list *t)
 	 * FC-NVME
 	 * see if the active AEN count has changed from what was last reported.
 	 */
+	index = atomic_read(&ha->nvme_active_aen_cnt);
 	if (!vha->vp_idx &&
-	    (atomic_read(&ha->nvme_active_aen_cnt) != ha->nvme_last_rptd_aen) &&
+	    (index != ha->nvme_last_rptd_aen) &&
+	    (index >= DEFAULT_ZIO_THRESHOLD) &&
 	    ha->zio_mode == QLA_ZIO_MODE_6 &&
 	    !ha->flags.host_shutting_down) {
 		ql_log(ql_log_info, vha, 0x3002,
@@ -7301,9 +7219,8 @@ qla2x00_timer(struct timer_list *t)
 	}
 
 	if (!vha->vp_idx &&
-	    (atomic_read(&ha->zio_threshold) != ha->last_zio_threshold) &&
-	    (ha->zio_mode == QLA_ZIO_MODE_6) &&
-	    (IS_QLA83XX(ha) || IS_QLA27XX(ha) || IS_QLA28XX(ha))) {
+	    atomic_read(&ha->zio_threshold) != ha->last_zio_threshold &&
+	    IS_ZIO_THRESHOLD_CAPABLE(ha)) {
 		ql_log(ql_log_info, vha, 0x3002,
 		    "Sched: Set ZIO exchange threshold to %d.\n",
 		    ha->last_zio_threshold);
@@ -8043,7 +7960,6 @@ module_exit(qla2x00_module_exit);
 MODULE_AUTHOR("QLogic Corporation");
 MODULE_DESCRIPTION("QLogic Fibre Channel HBA Driver");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(QLA2XXX_VERSION);
 MODULE_FIRMWARE(FW_FILE_ISP21XX);
 MODULE_FIRMWARE(FW_FILE_ISP22XX);
 MODULE_FIRMWARE(FW_FILE_ISP2300);

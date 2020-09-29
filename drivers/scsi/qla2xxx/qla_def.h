@@ -623,6 +623,12 @@ enum {
 	TYPE_TGT_TMCMD,		/* task management */
 };
 
+struct iocb_resource {
+	u8 res_type;
+	u8 pad;
+	u16 iocb_cnt;
+};
+
 typedef struct srb {
 	/*
 	 * Do not move cmd_type field, it needs to
@@ -630,6 +636,7 @@ typedef struct srb {
 	 */
 	uint8_t cmd_type;
 	uint8_t pad[3];
+	struct iocb_resource iores;
 	struct kref cmd_kref;	/* need to migrate ref_count over to this */
 	void *priv;
 	wait_queue_head_t nvme_ls_waitq;
@@ -2442,12 +2449,6 @@ typedef struct fc_port {
 	struct list_head list;
 	struct scsi_qla_host *vha;
 
-	uint8_t node_name[WWN_SIZE];
-	uint8_t port_name[WWN_SIZE];
-	port_id_t d_id;
-	uint16_t loop_id;
-	uint16_t old_loop_id;
-
 	unsigned int conf_compl_supported:1;
 	unsigned int deleted:2;
 	unsigned int free_pending:1;
@@ -2464,15 +2465,24 @@ typedef struct fc_port {
 	unsigned int n2n_flag:1;
 	unsigned int explicit_logout:1;
 	unsigned int prli_pend_timer:1;
+	uint8_t nvme_flag;
+
+	uint8_t node_name[WWN_SIZE];
+	uint8_t port_name[WWN_SIZE];
+	port_id_t d_id;
+	uint16_t loop_id;
+	uint16_t old_loop_id;
 
 	struct completion nvme_del_done;
 	uint32_t nvme_prli_service_param;
+#define NVME_PRLI_SP_PI_CTRL	BIT_9
+#define NVME_PRLI_SP_SLER	BIT_8
 #define NVME_PRLI_SP_CONF       BIT_7
 #define NVME_PRLI_SP_INITIATOR  BIT_5
 #define NVME_PRLI_SP_TARGET     BIT_4
 #define NVME_PRLI_SP_DISCOVERY  BIT_3
 #define NVME_PRLI_SP_FIRST_BURST	BIT_0
-	uint8_t nvme_flag;
+
 	uint32_t nvme_first_burst_size;
 #define NVME_FLAG_REGISTERED 4
 #define NVME_FLAG_DELETING 2
@@ -2543,6 +2553,8 @@ typedef struct fc_port {
 	u8 last_login_state;
 	u16 n2n_link_reset_cnt;
 	u16 n2n_chip_reset;
+
+	struct dentry *dfs_rport_dir;
 } fc_port_t;
 
 enum {
@@ -3507,6 +3519,14 @@ struct qla_tgt_counters {
 	uint64_t num_term_xchg_sent;
 };
 
+struct qla_counters {
+	uint64_t input_bytes;
+	uint64_t input_requests;
+	uint64_t output_bytes;
+	uint64_t output_requests;
+
+};
+
 struct qla_qpair;
 
 /* Response queue data structure */
@@ -3565,6 +3585,15 @@ struct req_que {
 	uint8_t req_pkt[REQUEST_ENTRY_SIZE];
 };
 
+struct qla_fw_resources {
+	u16 iocbs_total;
+	u16 iocbs_limit;
+	u16 iocbs_qp_limit;
+	u16 iocbs_used;
+};
+
+#define QLA_IOCB_PCT_LIMIT 95
+
 /*Queue pair data structure */
 struct qla_qpair {
 	spinlock_t qp_lock;
@@ -3591,6 +3620,7 @@ struct qla_qpair {
 	uint32_t enable_class_2:1;
 	uint32_t enable_explicit_conf:1;
 	uint32_t use_shadow_reg:1;
+	uint32_t rcv_intr:1;
 
 	uint16_t id;			/* qp number used with FW */
 	uint16_t vp_idx;		/* vport ID */
@@ -3606,13 +3636,17 @@ struct qla_qpair {
 	struct qla_msix_entry *msix; /* point to &ha->msix_entries[x] */
 	struct qla_hw_data *hw;
 	struct work_struct q_work;
+	struct qla_counters counters;
+
 	struct list_head qp_list_elem; /* vha->qp_list */
 	struct list_head hints_list;
-	uint16_t cpuid;
+
 	uint16_t retry_term_cnt;
 	__le32	retry_term_exchg_addr;
 	uint64_t retry_term_jiff;
 	struct qla_tgt_counters tgt_counters;
+	uint16_t cpuid;
+	struct qla_fw_resources fwres ____cacheline_aligned;
 };
 
 /* Place holder for FW buffer parameters */
@@ -4126,6 +4160,10 @@ struct qla_hw_data {
 #define USE_ASYNC_SCAN(ha) (IS_QLA25XX(ha) || IS_QLA81XX(ha) ||\
 	IS_QLA83XX(ha) || IS_QLA27XX(ha) || IS_QLA28XX(ha))
 
+#define IS_ZIO_THRESHOLD_CAPABLE(ha) \
+	((IS_QLA83XX(ha) || IS_QLA27XX(ha) || IS_QLA28XX(ha)) &&\
+	 (ha->zio_mode == QLA_ZIO_MODE_6))
+
 	/* HBA serial number */
 	uint8_t		serial0;
 	uint8_t		serial1;
@@ -4213,7 +4251,7 @@ struct qla_hw_data {
 	/* Extended Logins  */
 	void		*exlogin_buf;
 	dma_addr_t	exlogin_buf_dma;
-	int		exlogin_size;
+	uint32_t	exlogin_size;
 
 #define ENABLE_EXCHANGE_OFFLD	BIT_2
 
@@ -4272,6 +4310,7 @@ struct qla_hw_data {
 #define FW_ATTR_EXT0_SCM_BROCADE	0x00001000
 	/* Cisco fabric attached */
 #define FW_ATTR_EXT0_SCM_CISCO		0x00002000
+#define FW_ATTR_EXT0_NVME2	BIT_13
 	uint16_t	fw_attributes_ext[2];
 	uint32_t	fw_memory_size;
 	uint32_t	fw_transfer_size;
@@ -4621,6 +4660,7 @@ typedef struct scsi_qla_host {
 		uint32_t	qpairs_rsp_created:1;
 		uint32_t	nvme_enabled:1;
 		uint32_t        nvme_first_burst:1;
+		uint32_t        nvme2_enabled:1;
 	} flags;
 
 	atomic_t	loop_state;
@@ -4778,6 +4818,8 @@ typedef struct scsi_qla_host {
 	uint16_t qlini_mode;
 	uint16_t ql2xexchoffld;
 	uint16_t ql2xiniexchg;
+
+	struct dentry *dfs_rport_root;
 
 	struct purex_list {
 		struct list_head head;

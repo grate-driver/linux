@@ -3631,6 +3631,31 @@ out:
 	return ha->flags.lr_detected;
 }
 
+void qla_init_iocb_limit(scsi_qla_host_t *vha)
+{
+	u16 i, num_qps;
+	u32 limit;
+	struct qla_hw_data *ha = vha->hw;
+
+	num_qps = ha->num_qpairs + 1;
+	limit = (ha->orig_fw_iocb_count * QLA_IOCB_PCT_LIMIT) / 100;
+
+	ha->base_qpair->fwres.iocbs_total = ha->orig_fw_iocb_count;
+	ha->base_qpair->fwres.iocbs_limit = limit;
+	ha->base_qpair->fwres.iocbs_qp_limit = limit / num_qps;
+	ha->base_qpair->fwres.iocbs_used = 0;
+	for (i = 0; i < ha->max_qpairs; i++) {
+		if (ha->queue_pair_map[i])  {
+			ha->queue_pair_map[i]->fwres.iocbs_total =
+				ha->orig_fw_iocb_count;
+			ha->queue_pair_map[i]->fwres.iocbs_limit = limit;
+			ha->queue_pair_map[i]->fwres.iocbs_qp_limit =
+				limit / num_qps;
+			ha->queue_pair_map[i]->fwres.iocbs_used = 0;
+		}
+	}
+}
+
 /**
  * qla2x00_setup_chip() - Load and start RISC firmware.
  * @vha: HA context
@@ -3699,9 +3724,7 @@ execute_fw_with_lr:
 					goto execute_fw_with_lr;
 				}
 
-				if ((IS_QLA83XX(ha) || IS_QLA27XX(ha) ||
-				    IS_QLA28XX(ha)) &&
-				    (ha->zio_mode == QLA_ZIO_MODE_6))
+				if (IS_ZIO_THRESHOLD_CAPABLE(ha))
 					qla27xx_set_zio_threshold(vha,
 					    ha->last_zio_threshold);
 
@@ -3732,6 +3755,7 @@ enable_82xx_npiv:
 						    MIN_MULTI_ID_FABRIC - 1;
 				}
 				qla2x00_get_resource_cnts(vha);
+				qla_init_iocb_limit(vha);
 
 				/*
 				 * Allocate the array of outstanding commands
@@ -5494,6 +5518,8 @@ qla2x00_update_fcport(scsi_qla_host_t *vha, fc_port_t *fcport)
 	}
 
 	qla2x00_iidma_fcport(vha, fcport);
+
+	qla2x00_dfs_create_rport(vha, fcport);
 
 	if (NVME_TARGET(vha->hw, fcport)) {
 		qla_nvme_register_remote(vha, fcport);
