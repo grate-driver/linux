@@ -535,17 +535,18 @@ struct hns_roce_raq_table {
 };
 
 struct hns_roce_av {
-	u8          port;
-	u8          gid_index;
-	u8          stat_rate;
-	u8          hop_limit;
-	u32         flowlabel;
-	u8          sl;
-	u8          tclass;
-	u8          dgid[HNS_ROCE_GID_SIZE];
-	u8          mac[ETH_ALEN];
-	u16         vlan_id;
-	bool	    vlan_en;
+	u8 port;
+	u8 gid_index;
+	u8 stat_rate;
+	u8 hop_limit;
+	u32 flowlabel;
+	u16 udp_sport;
+	u8 sl;
+	u8 tclass;
+	u8 dgid[HNS_ROCE_GID_SIZE];
+	u8 mac[ETH_ALEN];
+	u16 vlan_id;
+	bool vlan_en;
 };
 
 struct hns_roce_ah {
@@ -930,7 +931,7 @@ struct hns_roce_hw {
 	int (*poll_cq)(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc);
 	int (*dereg_mr)(struct hns_roce_dev *hr_dev, struct hns_roce_mr *mr,
 			struct ib_udata *udata);
-	void (*destroy_cq)(struct ib_cq *ibcq, struct ib_udata *udata);
+	int (*destroy_cq)(struct ib_cq *ibcq, struct ib_udata *udata);
 	int (*modify_cq)(struct ib_cq *cq, u16 cq_count, u16 cq_period);
 	int (*init_eq)(struct hns_roce_dev *hr_dev);
 	void (*cleanup_eq)(struct hns_roce_dev *hr_dev);
@@ -1178,10 +1179,13 @@ void hns_roce_bitmap_free_range(struct hns_roce_bitmap *bitmap,
 int hns_roce_create_ah(struct ib_ah *ah, struct rdma_ah_init_attr *init_attr,
 		       struct ib_udata *udata);
 int hns_roce_query_ah(struct ib_ah *ibah, struct rdma_ah_attr *ah_attr);
-void hns_roce_destroy_ah(struct ib_ah *ah, u32 flags);
+static inline int hns_roce_destroy_ah(struct ib_ah *ah, u32 flags)
+{
+	return 0;
+}
 
 int hns_roce_alloc_pd(struct ib_pd *pd, struct ib_udata *udata);
-void hns_roce_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata);
+int hns_roce_dealloc_pd(struct ib_pd *pd, struct ib_udata *udata);
 
 struct ib_mr *hns_roce_get_dma_mr(struct ib_pd *pd, int acc);
 struct ib_mr *hns_roce_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
@@ -1200,8 +1204,7 @@ int hns_roce_hw_destroy_mpt(struct hns_roce_dev *hr_dev,
 			    unsigned long mpt_index);
 unsigned long key_to_hw_index(u32 key);
 
-struct ib_mw *hns_roce_alloc_mw(struct ib_pd *pd, enum ib_mw_type,
-				struct ib_udata *udata);
+int hns_roce_alloc_mw(struct ib_mw *mw, struct ib_udata *udata);
 int hns_roce_dealloc_mw(struct ib_mw *ibmw);
 
 void hns_roce_buf_free(struct hns_roce_dev *hr_dev, struct hns_roce_buf *buf);
@@ -1220,7 +1223,7 @@ int hns_roce_create_srq(struct ib_srq *srq,
 int hns_roce_modify_srq(struct ib_srq *ibsrq, struct ib_srq_attr *srq_attr,
 			enum ib_srq_attr_mask srq_attr_mask,
 			struct ib_udata *udata);
-void hns_roce_destroy_srq(struct ib_srq *ibsrq, struct ib_udata *udata);
+int hns_roce_destroy_srq(struct ib_srq *ibsrq, struct ib_udata *udata);
 
 struct ib_qp *hns_roce_create_qp(struct ib_pd *ib_pd,
 				 struct ib_qp_init_attr *init_attr,
@@ -1247,7 +1250,7 @@ int to_hr_qp_type(int qp_type);
 int hns_roce_create_cq(struct ib_cq *ib_cq, const struct ib_cq_init_attr *attr,
 		       struct ib_udata *udata);
 
-void hns_roce_destroy_cq(struct ib_cq *ib_cq, struct ib_udata *udata);
+int hns_roce_destroy_cq(struct ib_cq *ib_cq, struct ib_udata *udata);
 int hns_roce_db_map_user(struct hns_roce_ucontext *context,
 			 struct ib_udata *udata, unsigned long virt,
 			 struct hns_roce_db *db);

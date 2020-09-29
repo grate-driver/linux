@@ -39,6 +39,7 @@
 #include <linux/export.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
+#include <linux/count_zeros.h>
 #include <rdma/ib_umem_odp.h>
 
 #include "uverbs.h"
@@ -146,18 +147,28 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
 				     unsigned long virt)
 {
 	struct scatterlist *sg;
-	unsigned int best_pg_bit;
 	unsigned long va, pgoff;
 	dma_addr_t mask;
 	int i;
+
+	/* rdma_for_each_block() has a bug if the page size is smaller than the
+	 * page size used to build the umem. For now prevent smaller page sizes
+	 * from being returned.
+	 */
+	pgsz_bitmap &= GENMASK(BITS_PER_LONG - 1, PAGE_SHIFT);
 
 	/* At minimum, drivers must support PAGE_SIZE or smaller */
 	if (WARN_ON(!(pgsz_bitmap & GENMASK(PAGE_SHIFT, 0))))
 		return 0;
 
-	va = virt;
-	/* max page size not to exceed MR length */
-	mask = roundup_pow_of_two(umem->length);
+	umem->iova = va = virt;
+	/* The best result is the smallest page size that results in the minimum
+	 * number of required pages. Compute the largest page size that could
+	 * work based on VA address bits that don't change.
+	 */
+	mask = pgsz_bitmap &
+	       GENMASK(BITS_PER_LONG - 1,
+		       bits_per((umem->length - 1 + virt) ^ virt));
 	/* offset into first SGL */
 	pgoff = umem->address & ~PAGE_MASK;
 
@@ -175,9 +186,14 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
 			mask |= va;
 		pgoff = 0;
 	}
-	best_pg_bit = rdma_find_pg_bit(mask, pgsz_bitmap);
 
-	return BIT_ULL(best_pg_bit);
+	/* The mask accumulates 1's in each position where the VA and physical
+	 * address differ, thus the length of trailing 0 is the largest page
+	 * size that can pass the VA through to the physical.
+	 */
+	if (mask)
+		pgsz_bitmap &= GENMASK(count_trailing_zeros(mask), 0);
+	return rounddown_pow_of_two(pgsz_bitmap);
 }
 EXPORT_SYMBOL(ib_umem_find_best_pgsz);
 
@@ -224,6 +240,11 @@ struct ib_umem *ib_umem_get(struct ib_device *device, unsigned long addr,
 	umem->ibdev      = device;
 	umem->length     = size;
 	umem->address    = addr;
+	/*
+	 * Drivers should call ib_umem_find_best_pgsz() to set the iova
+	 * correctly.
+	 */
+	umem->iova = addr;
 	umem->writable   = ib_access_writable(access);
 	umem->owning_mm = mm = current->mm;
 	mmgrab(mm);
@@ -328,18 +349,6 @@ void ib_umem_release(struct ib_umem *umem)
 	kfree(umem);
 }
 EXPORT_SYMBOL(ib_umem_release);
-
-int ib_umem_page_count(struct ib_umem *umem)
-{
-	int i, n = 0;
-	struct scatterlist *sg;
-
-	for_each_sg(umem->sg_head.sgl, sg, umem->nmap, i)
-		n += sg_dma_len(sg) >> PAGE_SHIFT;
-
-	return n;
-}
-EXPORT_SYMBOL(ib_umem_page_count);
 
 /*
  * Copy from the given ib_umem's pages to the given buffer.
