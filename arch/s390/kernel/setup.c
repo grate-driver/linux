@@ -119,6 +119,7 @@ EXPORT_SYMBOL(VMALLOC_END);
 
 struct page *vmemmap;
 EXPORT_SYMBOL(vmemmap);
+unsigned long vmemmap_size;
 
 unsigned long MODULES_VADDR;
 unsigned long MODULES_END;
@@ -126,6 +127,12 @@ unsigned long MODULES_END;
 /* An array with a pointer to the lowcore of every CPU. */
 struct lowcore *lowcore_ptr[NR_CPUS];
 EXPORT_SYMBOL(lowcore_ptr);
+
+/*
+ * The Write Back bit position in the physaddr is given by the SLPC PCI.
+ * Leaving the mask zero always uses write through which is safe
+ */
+unsigned long mio_wb_bit_mask __ro_after_init;
 
 /*
  * This is set up by the setup-routine at boot-time
@@ -300,7 +307,7 @@ void machine_power_off(void)
 void (*pm_power_off)(void) = machine_power_off;
 EXPORT_SYMBOL_GPL(pm_power_off);
 
-void *restart_stack __section(.data);
+void *restart_stack;
 
 unsigned long stack_alloc(void)
 {
@@ -402,7 +409,6 @@ static void __init setup_lowcore_dat_off(void)
 	memcpy(lc->alt_stfle_fac_list, S390_lowcore.alt_stfle_fac_list,
 	       sizeof(lc->alt_stfle_fac_list));
 	nmi_alloc_boot_cpu(lc);
-	vdso_alloc_boot_cpu(lc);
 	lc->sync_enter_timer = S390_lowcore.sync_enter_timer;
 	lc->async_enter_timer = S390_lowcore.async_enter_timer;
 	lc->exit_timer = S390_lowcore.exit_timer;
@@ -546,22 +552,17 @@ static void __init setup_memory_end(void)
 	unsigned long vmax, tmp;
 
 	/* Choose kernel address space layout: 3 or 4 levels. */
-	if (IS_ENABLED(CONFIG_KASAN)) {
-		vmax = IS_ENABLED(CONFIG_KASAN_S390_4_LEVEL_PAGING)
-			   ? _REGION1_SIZE
-			   : _REGION2_SIZE;
-	} else {
-		tmp = (memory_end ?: max_physmem_end) / PAGE_SIZE;
-		tmp = tmp * (sizeof(struct page) + PAGE_SIZE);
-		if (tmp + vmalloc_size + MODULES_LEN <= _REGION2_SIZE)
-			vmax = _REGION2_SIZE; /* 3-level kernel page table */
-		else
-			vmax = _REGION1_SIZE; /* 4-level kernel page table */
-	}
-
+	tmp = (memory_end ?: max_physmem_end) / PAGE_SIZE;
+	tmp = tmp * (sizeof(struct page) + PAGE_SIZE);
+	if (tmp + vmalloc_size + MODULES_LEN <= _REGION2_SIZE)
+		vmax = _REGION2_SIZE; /* 3-level kernel page table */
+	else
+		vmax = _REGION1_SIZE; /* 4-level kernel page table */
 	if (is_prot_virt_host())
 		adjust_to_uv_max(&vmax);
-
+#ifdef CONFIG_KASAN
+	vmax = kasan_vmax;
+#endif
 	/* module area is at the end of the kernel address space. */
 	MODULES_END = vmax;
 	MODULES_VADDR = MODULES_END - MODULES_LEN;
@@ -580,9 +581,14 @@ static void __init setup_memory_end(void)
 	/* Take care that memory_end is set and <= vmemmap */
 	memory_end = min(memory_end ?: max_physmem_end, (unsigned long)vmemmap);
 #ifdef CONFIG_KASAN
-	/* fit in kasan shadow memory region between 1:1 and vmemmap */
 	memory_end = min(memory_end, KASAN_SHADOW_START);
-	vmemmap = max(vmemmap, (struct page *)KASAN_SHADOW_END);
+#endif
+	vmemmap_size = SECTION_ALIGN_UP(memory_end / PAGE_SIZE) * sizeof(struct page);
+#ifdef CONFIG_KASAN
+	/* move vmemmap above kasan shadow only if stands in a way */
+	if (KASAN_SHADOW_END > (unsigned long)vmemmap &&
+	    (unsigned long)vmemmap + vmemmap_size > KASAN_SHADOW_START)
+		vmemmap = max(vmemmap, (struct page *)KASAN_SHADOW_END);
 #endif
 	max_pfn = max_low_pfn = PFN_DOWN(memory_end);
 	memblock_remove(memory_end, ULONG_MAX);
@@ -1126,8 +1132,7 @@ void __init setup_arch(char **cmdline_p)
 	free_mem_detect_info();
 	remove_oldmem();
 
-	if (is_prot_virt_host())
-		setup_uv();
+	setup_uv();
 	setup_memory_end();
 	setup_memory();
 	dma_contiguous_reserve(memory_end);
