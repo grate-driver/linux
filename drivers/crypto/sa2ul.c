@@ -1148,12 +1148,10 @@ static int sa_run(struct sa_req *req)
 			ret = sg_split(req->dst, mapped_dst_nents, 0, 1,
 				       &split_size, &dst, &dst_nents,
 				       gfp_flags);
-			if (ret) {
-				dst_nents = dst_nents;
+			if (ret)
 				dst = req->dst;
-			} else {
+			else
 				rxd->split_dst_sg = dst;
-			}
 		}
 	}
 
@@ -1482,8 +1480,8 @@ static int sa_sha_init(struct ahash_request *req)
 	struct sa_sha_req_ctx *rctx = ahash_request_ctx(req);
 	struct sa_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
 
-	dev_dbg(sa_k3_dev, "init: digest size: %d, rctx=%llx\n",
-		crypto_ahash_digestsize(tfm), (u64)rctx);
+	dev_dbg(sa_k3_dev, "init: digest size: %u, rctx=%p\n",
+		crypto_ahash_digestsize(tfm), rctx);
 
 	ahash_request_set_tfm(&rctx->fallback_req, ctx->fallback.ahash);
 	rctx->fallback_req.base.flags =
@@ -2243,25 +2241,21 @@ static int sa_dma_init(struct sa_crypto_data *dd)
 		return ret;
 
 	dd->dma_rx1 = dma_request_chan(dd->dev, "rx1");
-	if (IS_ERR(dd->dma_rx1)) {
-		if (PTR_ERR(dd->dma_rx1) != -EPROBE_DEFER)
-			dev_err(dd->dev, "Unable to request rx1 DMA channel\n");
-		return PTR_ERR(dd->dma_rx1);
-	}
+	if (IS_ERR(dd->dma_rx1))
+		return dev_err_probe(dd->dev, PTR_ERR(dd->dma_rx1),
+				     "Unable to request rx1 DMA channel\n");
 
 	dd->dma_rx2 = dma_request_chan(dd->dev, "rx2");
 	if (IS_ERR(dd->dma_rx2)) {
 		dma_release_channel(dd->dma_rx1);
-		if (PTR_ERR(dd->dma_rx2) != -EPROBE_DEFER)
-			dev_err(dd->dev, "Unable to request rx2 DMA channel\n");
-		return PTR_ERR(dd->dma_rx2);
+		return dev_err_probe(dd->dev, PTR_ERR(dd->dma_rx2),
+				     "Unable to request rx2 DMA channel\n");
 	}
 
 	dd->dma_tx = dma_request_chan(dd->dev, "tx");
 	if (IS_ERR(dd->dma_tx)) {
-		if (PTR_ERR(dd->dma_tx) != -EPROBE_DEFER)
-			dev_err(dd->dev, "Unable to request tx DMA channel\n");
-		ret = PTR_ERR(dd->dma_tx);
+		ret = dev_err_probe(dd->dev, PTR_ERR(dd->dma_tx),
+				    "Unable to request tx DMA channel\n");
 		goto err_dma_tx;
 	}
 
@@ -2333,7 +2327,7 @@ static int sa_ul_probe(struct platform_device *pdev)
 
 	pm_runtime_enable(dev);
 	ret = pm_runtime_get_sync(dev);
-	if (ret) {
+	if (ret < 0) {
 		dev_err(&pdev->dev, "%s: failed to get sync: %d\n", __func__,
 			ret);
 		return ret;
