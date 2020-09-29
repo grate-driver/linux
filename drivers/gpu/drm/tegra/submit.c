@@ -246,7 +246,8 @@ static int submit_job_add_gather(struct host1x_job *job,
 				 struct tegra_drm_context *ctx,
 				 struct drm_tegra_submit_cmd_gather_uptr *cmd,
 				 struct gather_bo *bo, u32 *offset,
-				 struct tegra_drm_submit_data *job_data)
+				 struct tegra_drm_submit_data *job_data,
+				 u32 *class)
 {
 	u32 next_offset;
 
@@ -268,6 +269,12 @@ static int submit_job_add_gather(struct host1x_job *job,
 
 	if (next_offset > bo->gather_data_words) {
 		SUBMIT_ERR(ctx, "GATHER_UPTR command overflows gather data");
+		return -EINVAL;
+	}
+
+	if (tegra_drm_fw_validate(ctx->client, bo->gather_data, *offset,
+				  cmd->words, job_data, class)) {
+		SUBMIT_ERR(ctx, "job was rejected by firewall");
 		return -EINVAL;
 	}
 
@@ -327,7 +334,8 @@ static int submit_create_job(struct host1x_job **pjob,
 		if (cmd->type == DRM_TEGRA_SUBMIT_CMD_GATHER_UPTR) {
 			err = submit_job_add_gather(job, ctx,
 						    &cmd->gather_uptr, bo,
-						    &gather_offset, job_data);
+						    &gather_offset, job_data,
+						    &class);
 			if (err)
 				goto free_job;
 		} else if (cmd->type == DRM_TEGRA_SUBMIT_CMD_WAIT_SYNCPT) {
