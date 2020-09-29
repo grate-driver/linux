@@ -18,53 +18,16 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include <linux/atomic.h>
+#include <linux/lcm.h>
 #include <linux/blk-mq.h>
 #include <linux/mount.h>
 #include <linux/dax.h>
 
 #define DM_MSG_PREFIX "table"
 
-#define MAX_DEPTH 16
 #define NODE_SIZE L1_CACHE_BYTES
 #define KEYS_PER_NODE (NODE_SIZE / sizeof(sector_t))
 #define CHILDREN_PER_NODE (KEYS_PER_NODE + 1)
-
-struct dm_table {
-	struct mapped_device *md;
-	enum dm_queue_mode type;
-
-	/* btree table */
-	unsigned int depth;
-	unsigned int counts[MAX_DEPTH];	/* in nodes */
-	sector_t *index[MAX_DEPTH];
-
-	unsigned int num_targets;
-	unsigned int num_allocated;
-	sector_t *highs;
-	struct dm_target *targets;
-
-	struct target_type *immutable_target_type;
-
-	bool integrity_supported:1;
-	bool singleton:1;
-	unsigned integrity_added:1;
-
-	/*
-	 * Indicates the rw permissions for the new logical
-	 * device.  This should be a combination of FMODE_READ
-	 * and FMODE_WRITE.
-	 */
-	fmode_t mode;
-
-	/* a list of devices used by this table */
-	struct list_head devices;
-
-	/* events get handed up using this callback */
-	void (*event_fn)(void *);
-	void *event_context;
-
-	struct dm_md_mempools *mempools;
-};
 
 /*
  * Similar to ceiling(log_size(n))
@@ -1506,6 +1469,10 @@ int dm_calculate_queue_limits(struct dm_table *table,
 			zone_sectors = ti_limits.chunk_sectors;
 		}
 
+		/* Stack chunk_sectors if target-specific splitting is required */
+		if (ti->max_io_len)
+			ti_limits.chunk_sectors = lcm_not_zero(ti->max_io_len,
+							       ti_limits.chunk_sectors);
 		/* Set I/O hints portion of queue limits */
 		if (ti->type->io_hints)
 			ti->type->io_hints(ti, &ti_limits);
@@ -2080,16 +2047,11 @@ EXPORT_SYMBOL_GPL(dm_table_device_name);
 
 void dm_table_run_md_queue_async(struct dm_table *t)
 {
-	struct mapped_device *md;
-	struct request_queue *queue;
-
 	if (!dm_table_request_based(t))
 		return;
 
-	md = dm_table_get_md(t);
-	queue = dm_get_md_queue(md);
-	if (queue)
-		blk_mq_run_hw_queues(queue, true);
+	if (t->md->queue)
+		blk_mq_run_hw_queues(t->md->queue, true);
 }
 EXPORT_SYMBOL(dm_table_run_md_queue_async);
 

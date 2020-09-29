@@ -422,21 +422,6 @@ static void do_deferred_remove(struct work_struct *w)
 	dm_deferred_remove();
 }
 
-sector_t dm_get_size(struct mapped_device *md)
-{
-	return get_capacity(md->disk);
-}
-
-struct request_queue *dm_get_md_queue(struct mapped_device *md)
-{
-	return md->queue;
-}
-
-struct dm_stats *dm_get_stats(struct mapped_device *md)
-{
-	return &md->stats;
-}
-
 static int dm_blk_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 {
 	struct mapped_device *md = bdev->bd_disk->private_data;
@@ -591,7 +576,44 @@ out:
 	return r;
 }
 
-static void start_io_acct(struct dm_io *io);
+u64 dm_start_time_ns_from_clone(struct bio *bio)
+{
+	struct dm_target_io *tio = container_of(bio, struct dm_target_io, clone);
+	struct dm_io *io = tio->io;
+
+	return jiffies_to_nsecs(io->start_time);
+}
+EXPORT_SYMBOL_GPL(dm_start_time_ns_from_clone);
+
+static void start_io_acct(struct dm_io *io)
+{
+	struct mapped_device *md = io->md;
+	struct bio *bio = io->orig_bio;
+
+	io->start_time = bio_start_io_acct(bio);
+	if (unlikely(dm_stats_used(&md->stats)))
+		dm_stats_account_io(&md->stats, bio_data_dir(bio),
+				    bio->bi_iter.bi_sector, bio_sectors(bio),
+				    false, 0, &io->stats_aux);
+}
+
+static void end_io_acct(struct dm_io *io)
+{
+	struct mapped_device *md = io->md;
+	struct bio *bio = io->orig_bio;
+	unsigned long duration = jiffies - io->start_time;
+
+	bio_end_io_acct(bio, io->start_time);
+
+	if (unlikely(dm_stats_used(&md->stats)))
+		dm_stats_account_io(&md->stats, bio_data_dir(bio),
+				    bio->bi_iter.bi_sector, bio_sectors(bio),
+				    true, duration, &io->stats_aux);
+
+	/* nudge anyone waiting on suspend queue */
+	if (unlikely(wq_has_sleeper(&md->wait)))
+		wake_up(&md->wait);
+}
 
 static struct dm_io *alloc_io(struct mapped_device *md, struct bio *bio)
 {
@@ -655,45 +677,6 @@ static void free_tio(struct dm_target_io *tio)
 	if (tio->inside_dm_io)
 		return;
 	bio_put(&tio->clone);
-}
-
-u64 dm_start_time_ns_from_clone(struct bio *bio)
-{
-	struct dm_target_io *tio = container_of(bio, struct dm_target_io, clone);
-	struct dm_io *io = tio->io;
-
-	return jiffies_to_nsecs(io->start_time);
-}
-EXPORT_SYMBOL_GPL(dm_start_time_ns_from_clone);
-
-static void start_io_acct(struct dm_io *io)
-{
-	struct mapped_device *md = io->md;
-	struct bio *bio = io->orig_bio;
-
-	io->start_time = bio_start_io_acct(bio);
-	if (unlikely(dm_stats_used(&md->stats)))
-		dm_stats_account_io(&md->stats, bio_data_dir(bio),
-				    bio->bi_iter.bi_sector, bio_sectors(bio),
-				    false, 0, &io->stats_aux);
-}
-
-static void end_io_acct(struct dm_io *io)
-{
-	struct mapped_device *md = io->md;
-	struct bio *bio = io->orig_bio;
-	unsigned long duration = jiffies - io->start_time;
-
-	bio_end_io_acct(bio, io->start_time);
-
-	if (unlikely(dm_stats_used(&md->stats)))
-		dm_stats_account_io(&md->stats, bio_data_dir(bio),
-				    bio->bi_iter.bi_sector, bio_sectors(bio),
-				    true, duration, &io->stats_aux);
-
-	/* nudge anyone waiting on suspend queue */
-	if (unlikely(wq_has_sleeper(&md->wait)))
-		wake_up(&md->wait);
 }
 
 /*
@@ -1041,32 +1024,28 @@ static void clone_endio(struct bio *bio)
  * Return maximum size of I/O possible at the supplied sector up to the current
  * target boundary.
  */
-static sector_t max_io_len_target_boundary(sector_t sector, struct dm_target *ti)
+static inline sector_t max_io_len_target_boundary(struct dm_target *ti,
+						  sector_t target_offset)
 {
-	sector_t target_offset = dm_target_offset(ti, sector);
-
 	return ti->len - target_offset;
 }
 
-static sector_t max_io_len(sector_t sector, struct dm_target *ti)
+static sector_t max_io_len(struct dm_target *ti, sector_t sector)
 {
-	sector_t len = max_io_len_target_boundary(sector, ti);
-	sector_t offset, max_len;
+	sector_t target_offset = dm_target_offset(ti, sector);
+	sector_t len = max_io_len_target_boundary(ti, target_offset);
+	sector_t max_len;
 
 	/*
 	 * Does the target need to split even further?
+	 * - q->limits.chunk_sectors reflects ti->max_io_len so
+	 *   blk_max_size_offset() provides required splitting.
+	 * - blk_max_size_offset() also respects q->limits.max_sectors
 	 */
-	if (ti->max_io_len) {
-		offset = dm_target_offset(ti, sector);
-		if (unlikely(ti->max_io_len & (ti->max_io_len - 1)))
-			max_len = sector_div(offset, ti->max_io_len);
-		else
-			max_len = offset & (ti->max_io_len - 1);
-		max_len = ti->max_io_len - max_len;
-
-		if (len > max_len)
-			len = max_len;
-	}
+	max_len = blk_max_size_offset(ti->table->md->queue,
+				      target_offset);
+	if (len > max_len)
+		len = max_len;
 
 	return len;
 }
@@ -1119,7 +1098,7 @@ static long dm_dax_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
 		goto out;
 	if (!ti->type->direct_access)
 		goto out;
-	len = max_io_len(sector, ti) / PAGE_SECTORS;
+	len = max_io_len(ti, sector) / PAGE_SECTORS;
 	if (len < 1)
 		goto out;
 	nr_pages = min(len, nr_pages);
@@ -1430,6 +1409,17 @@ static int __send_empty_flush(struct clone_info *ci)
 {
 	unsigned target_nr = 0;
 	struct dm_target *ti;
+	struct bio flush_bio;
+
+	/*
+	 * Use an on-stack bio for this, it's safe since we don't
+	 * need to reference it after submit. It's just used as
+	 * the basis for the clone(s).
+	 */
+	bio_init(&flush_bio, NULL, 0);
+	flush_bio.bi_opf = REQ_OP_WRITE | REQ_PREFLUSH | REQ_SYNC;
+	ci->bio = &flush_bio;
+	ci->sector_count = 0;
 
 	/*
 	 * Empty flush uses a statically initialized bio, as the base for
@@ -1443,6 +1433,8 @@ static int __send_empty_flush(struct clone_info *ci)
 	BUG_ON(bio_has_data(ci->bio));
 	while ((ti = dm_table_get_target(ci->map, target_nr++)))
 		__send_duplicate_bios(ci, ti, ti->num_flush_bios, NULL);
+
+	bio_uninit(ci->bio);
 	return 0;
 }
 
@@ -1465,28 +1457,6 @@ static int __clone_and_map_data_bio(struct clone_info *ci, struct dm_target *ti,
 	return 0;
 }
 
-typedef unsigned (*get_num_bios_fn)(struct dm_target *ti);
-
-static unsigned get_num_discard_bios(struct dm_target *ti)
-{
-	return ti->num_discard_bios;
-}
-
-static unsigned get_num_secure_erase_bios(struct dm_target *ti)
-{
-	return ti->num_secure_erase_bios;
-}
-
-static unsigned get_num_write_same_bios(struct dm_target *ti)
-{
-	return ti->num_write_same_bios;
-}
-
-static unsigned get_num_write_zeroes_bios(struct dm_target *ti)
-{
-	return ti->num_write_zeroes_bios;
-}
-
 static int __send_changing_extent_only(struct clone_info *ci, struct dm_target *ti,
 				       unsigned num_bios)
 {
@@ -1501,7 +1471,8 @@ static int __send_changing_extent_only(struct clone_info *ci, struct dm_target *
 	if (!num_bios)
 		return -EOPNOTSUPP;
 
-	len = min((sector_t)ci->sector_count, max_io_len_target_boundary(ci->sector, ti));
+	len = min_t(sector_t, ci->sector_count,
+		    max_io_len_target_boundary(ti, dm_target_offset(ti, ci->sector)));
 
 	__send_duplicate_bios(ci, ti, num_bios, &len);
 
@@ -1509,26 +1480,6 @@ static int __send_changing_extent_only(struct clone_info *ci, struct dm_target *
 	ci->sector_count -= len;
 
 	return 0;
-}
-
-static int __send_discard(struct clone_info *ci, struct dm_target *ti)
-{
-	return __send_changing_extent_only(ci, ti, get_num_discard_bios(ti));
-}
-
-static int __send_secure_erase(struct clone_info *ci, struct dm_target *ti)
-{
-	return __send_changing_extent_only(ci, ti, get_num_secure_erase_bios(ti));
-}
-
-static int __send_write_same(struct clone_info *ci, struct dm_target *ti)
-{
-	return __send_changing_extent_only(ci, ti, get_num_write_same_bios(ti));
-}
-
-static int __send_write_zeroes(struct clone_info *ci, struct dm_target *ti)
-{
-	return __send_changing_extent_only(ci, ti, get_num_write_zeroes_bios(ti));
 }
 
 static bool is_abnormal_io(struct bio *bio)
@@ -1551,18 +1502,26 @@ static bool __process_abnormal_io(struct clone_info *ci, struct dm_target *ti,
 				  int *result)
 {
 	struct bio *bio = ci->bio;
+	unsigned num_bios = 0;
 
-	if (bio_op(bio) == REQ_OP_DISCARD)
-		*result = __send_discard(ci, ti);
-	else if (bio_op(bio) == REQ_OP_SECURE_ERASE)
-		*result = __send_secure_erase(ci, ti);
-	else if (bio_op(bio) == REQ_OP_WRITE_SAME)
-		*result = __send_write_same(ci, ti);
-	else if (bio_op(bio) == REQ_OP_WRITE_ZEROES)
-		*result = __send_write_zeroes(ci, ti);
-	else
+	switch (bio_op(bio)) {
+	case REQ_OP_DISCARD:
+		num_bios = ti->num_discard_bios;
+		break;
+	case REQ_OP_SECURE_ERASE:
+		num_bios = ti->num_secure_erase_bios;
+		break;
+	case REQ_OP_WRITE_SAME:
+		num_bios = ti->num_write_same_bios;
+		break;
+	case REQ_OP_WRITE_ZEROES:
+		num_bios = ti->num_write_zeroes_bios;
+		break;
+	default:
 		return false;
+	}
 
+	*result = __send_changing_extent_only(ci, ti, num_bios);
 	return true;
 }
 
@@ -1582,7 +1541,7 @@ static int __split_and_process_non_flush(struct clone_info *ci)
 	if (__process_abnormal_io(ci, ti, &r))
 		return r;
 
-	len = min_t(sector_t, max_io_len(ci->sector, ti), ci->sector_count);
+	len = min_t(sector_t, max_io_len(ti, ci->sector), ci->sector_count);
 
 	r = __clone_and_map_data_bio(ci, ti, ci->sector, &len);
 	if (r < 0)
@@ -1618,19 +1577,7 @@ static blk_qc_t __split_and_process_bio(struct mapped_device *md,
 	init_clone_info(&ci, md, map, bio);
 
 	if (bio->bi_opf & REQ_PREFLUSH) {
-		struct bio flush_bio;
-
-		/*
-		 * Use an on-stack bio for this, it's safe since we don't
-		 * need to reference it after submit. It's just used as
-		 * the basis for the clone(s).
-		 */
-		bio_init(&flush_bio, NULL, 0);
-		flush_bio.bi_opf = REQ_OP_WRITE | REQ_PREFLUSH | REQ_SYNC;
-		ci.bio = &flush_bio;
-		ci.sector_count = 0;
 		error = __send_empty_flush(&ci);
-		bio_uninit(ci.bio);
 		/* dec_pending submits any data associated with flush */
 	} else if (op_is_zone_mgmt(bio_op(bio))) {
 		ci.bio = bio;
@@ -1684,7 +1631,7 @@ static blk_qc_t __split_and_process_bio(struct mapped_device *md,
  * fact that targets that use it do _not_ have a need to split bios.
  */
 static blk_qc_t __process_bio(struct mapped_device *md, struct dm_table *map,
-			      struct bio *bio, struct dm_target *ti)
+			      struct bio *bio)
 {
 	struct clone_info ci;
 	blk_qc_t ret = BLK_QC_T_NONE;
@@ -1693,22 +1640,16 @@ static blk_qc_t __process_bio(struct mapped_device *md, struct dm_table *map,
 	init_clone_info(&ci, md, map, bio);
 
 	if (bio->bi_opf & REQ_PREFLUSH) {
-		struct bio flush_bio;
-
-		/*
-		 * Use an on-stack bio for this, it's safe since we don't
-		 * need to reference it after submit. It's just used as
-		 * the basis for the clone(s).
-		 */
-		bio_init(&flush_bio, NULL, 0);
-		flush_bio.bi_opf = REQ_OP_WRITE | REQ_PREFLUSH | REQ_SYNC;
-		ci.bio = &flush_bio;
-		ci.sector_count = 0;
 		error = __send_empty_flush(&ci);
-		bio_uninit(ci.bio);
 		/* dec_pending submits any data associated with flush */
 	} else {
 		struct dm_target_io *tio;
+		struct dm_target *ti = md->immutable_target;
+
+		if (WARN_ON_ONCE(!ti)) {
+			error = -EIO;
+			goto out;
+		}
 
 		ci.bio = bio;
 		ci.sector_count = bio_sectors(bio);
@@ -1728,19 +1669,10 @@ static blk_qc_t dm_process_bio(struct mapped_device *md,
 			       struct dm_table *map, struct bio *bio)
 {
 	blk_qc_t ret = BLK_QC_T_NONE;
-	struct dm_target *ti = md->immutable_target;
 
 	if (unlikely(!map)) {
 		bio_io_error(bio);
 		return ret;
-	}
-
-	if (!ti) {
-		ti = dm_table_find_target(map, bio->bi_iter.bi_sector);
-		if (unlikely(!ti)) {
-			bio_io_error(bio);
-			return ret;
-		}
 	}
 
 	/*
@@ -1757,7 +1689,7 @@ static blk_qc_t dm_process_bio(struct mapped_device *md,
 	}
 
 	if (dm_get_md_type(md) == DM_TYPE_NVME_BIO_BASED)
-		return __process_bio(md, map, bio, ti);
+		return __process_bio(md, map, bio);
 	return __split_and_process_bio(md, map, bio);
 }
 
@@ -2124,8 +2056,7 @@ static struct dm_table *__bind(struct mapped_device *md, struct dm_table *t,
 		/*
 		 * Leverage the fact that request-based DM targets and
 		 * NVMe bio based targets are immutable singletons
-		 * - used to optimize both dm_request_fn and dm_mq_queue_rq;
-		 *   and __process_bio.
+		 * - used to optimize both __process_bio and dm_mq_queue_rq
 		 */
 		md->immutable_target = dm_table_get_immutable_target(t);
 	}
@@ -2985,19 +2916,19 @@ int dm_test_deferred_remove_flag(struct mapped_device *md)
 
 int dm_suspended(struct dm_target *ti)
 {
-	return dm_suspended_md(dm_table_get_md(ti->table));
+	return dm_suspended_md(ti->table->md);
 }
 EXPORT_SYMBOL_GPL(dm_suspended);
 
 int dm_post_suspending(struct dm_target *ti)
 {
-	return dm_post_suspending_md(dm_table_get_md(ti->table));
+	return dm_post_suspending_md(ti->table->md);
 }
 EXPORT_SYMBOL_GPL(dm_post_suspending);
 
 int dm_noflush_suspending(struct dm_target *ti)
 {
-	return __noflush_suspending(dm_table_get_md(ti->table));
+	return __noflush_suspending(ti->table->md);
 }
 EXPORT_SYMBOL_GPL(dm_noflush_suspending);
 
