@@ -18,6 +18,7 @@ static unsigned int list_count;
 static int fill_list(unsigned int nr_pages)
 {
 	struct dev_pagemap *pgmap;
+	struct resource res;
 	void *vaddr;
 	unsigned int i, alloc_pages = round_up(nr_pages, PAGES_PER_SECTION);
 	int ret;
@@ -27,10 +28,10 @@ static int fill_list(unsigned int nr_pages)
 		return -ENOMEM;
 
 	pgmap->type = MEMORY_DEVICE_GENERIC;
-	pgmap->res.name = "Xen scratch";
-	pgmap->res.flags = IORESOURCE_MEM | IORESOURCE_BUSY;
+	res.name = "Xen scratch";
+	res.flags = IORESOURCE_MEM | IORESOURCE_BUSY;
 
-	ret = allocate_resource(&iomem_resource, &pgmap->res,
+	ret = allocate_resource(&iomem_resource, &res,
 				alloc_pages * PAGE_SIZE, 0, -1,
 				PAGES_PER_SECTION * PAGE_SIZE, NULL, NULL);
 	if (ret < 0) {
@@ -38,6 +39,8 @@ static int fill_list(unsigned int nr_pages)
 		kfree(pgmap);
 		return ret;
 	}
+	pgmap->range.start = res.start;
+	pgmap->range.end = res.end;
 
 #ifdef CONFIG_XEN_HAVE_PVMMU
         /*
@@ -50,12 +53,12 @@ static int fill_list(unsigned int nr_pages)
          * conflict with any devices.
          */
 	if (!xen_feature(XENFEAT_auto_translated_physmap)) {
-		xen_pfn_t pfn = PFN_DOWN(pgmap->res.start);
+		xen_pfn_t pfn = PFN_DOWN(res.start);
 
 		for (i = 0; i < alloc_pages; i++) {
 			if (!set_phys_to_machine(pfn + i, INVALID_P2M_ENTRY)) {
 				pr_warn("set_phys_to_machine() failed, no memory added\n");
-				release_resource(&pgmap->res);
+				release_resource(&res);
 				kfree(pgmap);
 				return -ENOMEM;
 			}
@@ -66,7 +69,7 @@ static int fill_list(unsigned int nr_pages)
 	vaddr = memremap_pages(pgmap, NUMA_NO_NODE);
 	if (IS_ERR(vaddr)) {
 		pr_err("Cannot remap memory range\n");
-		release_resource(&pgmap->res);
+		release_resource(&res);
 		kfree(pgmap);
 		return PTR_ERR(vaddr);
 	}

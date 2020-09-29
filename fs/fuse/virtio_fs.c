@@ -835,8 +835,7 @@ static int virtio_fs_setup_dax(struct virtio_device *vdev, struct virtio_fs *fs)
 	 * initialize a struct resource from scratch (only the start
 	 * and end fields will be used).
 	 */
-	pgmap->res = (struct resource){
-		.name = "virtio-fs dax window",
+	pgmap->range = (struct range){
 		.start = (phys_addr_t) cache_reg.addr,
 		.end = (phys_addr_t) cache_reg.addr + cache_reg.len - 1,
 	};
