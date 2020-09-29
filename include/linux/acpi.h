@@ -420,28 +420,27 @@ int acpi_map_pxm_to_node(int pxm);
 int acpi_get_node(acpi_handle handle);
 
 /**
- * acpi_map_pxm_to_online_node - Map proximity ID to online node
+ * pxm_to_online_node - Map proximity ID to online node
  * @pxm: ACPI proximity ID
  *
- * This is similar to acpi_map_pxm_to_node(), but always returns an online
+ * This is similar to pxm_to_node(), but always returns an online
  * node.  When the mapped node from a given proximity ID is offline, it
  * looks up the node distance table and returns the nearest online node.
  *
  * ACPI device drivers, which are called after the NUMA initialization has
  * completed in the kernel, can call this interface to obtain their device
  * NUMA topology from ACPI tables.  Such drivers do not have to deal with
- * offline nodes.  A node may be offline when a device proximity ID is
- * unique, SRAT memory entry does not exist, or NUMA is disabled, ex.
- * "numa=off" on x86.
+ * offline nodes.  A node may be offline when SRAT memory entry does not exist,
+ * or NUMA is disabled, ex. "numa=off" on x86.
  */
-static inline int acpi_map_pxm_to_online_node(int pxm)
+static inline int pxm_to_online_node(int pxm)
 {
-	int node = acpi_map_pxm_to_node(pxm);
+	int node = pxm_to_node(pxm);
 
 	return numa_map_to_online_node(node);
 }
 #else
-static inline int acpi_map_pxm_to_online_node(int pxm)
+static inline int pxm_to_online_node(int pxm)
 {
 	return 0;
 }
@@ -977,8 +976,6 @@ int acpi_subsys_runtime_suspend(struct device *dev);
 int acpi_subsys_runtime_resume(struct device *dev);
 int acpi_dev_pm_attach(struct device *dev, bool power_on);
 #else
-static inline int acpi_dev_runtime_suspend(struct device *dev) { return 0; }
-static inline int acpi_dev_runtime_resume(struct device *dev) { return 0; }
 static inline int acpi_subsys_runtime_suspend(struct device *dev) { return 0; }
 static inline int acpi_subsys_runtime_resume(struct device *dev) { return 0; }
 static inline int acpi_dev_pm_attach(struct device *dev, bool power_on)
@@ -1212,13 +1209,6 @@ acpi_node_get_property_reference(const struct fwnode_handle *fwnode,
 static inline int acpi_node_prop_get(const struct fwnode_handle *fwnode,
 				     const char *propname,
 				     void **valptr)
-{
-	return -ENXIO;
-}
-
-static inline int acpi_dev_prop_get(const struct acpi_device *adev,
-				    const char *propname,
-				    void **valptr)
 {
 	return -ENXIO;
 }
