@@ -1214,7 +1214,6 @@ static int smu_hw_fini(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 	struct smu_context *smu = &adev->smu;
-	int ret = 0;
 
 	if (amdgpu_sriov_vf(adev)&& !amdgpu_sriov_is_pp_one_vf(adev))
 		return 0;
@@ -1230,11 +1229,7 @@ static int smu_hw_fini(void *handle)
 
 	adev->pm.dpm_enabled = false;
 
-	ret = smu_smc_hw_cleanup(smu);
-	if (ret)
-		return ret;
-
-	return 0;
+	return smu_smc_hw_cleanup(smu);
 }
 
 int smu_reset(struct smu_context *smu)
@@ -1823,18 +1818,12 @@ int smu_set_watermarks_for_clock_ranges(struct smu_context *smu,
 	if (!smu->pm_enabled || !smu->adev->pm.dpm_enabled)
 		return -EOPNOTSUPP;
 
+	if (smu->disable_watermark)
+		return 0;
+
 	mutex_lock(&smu->mutex);
 
-	if (!smu->disable_watermark &&
-			smu_feature_is_enabled(smu, SMU_FEATURE_DPM_DCEFCLK_BIT) &&
-			smu_feature_is_enabled(smu, SMU_FEATURE_DPM_SOCCLK_BIT)) {
-		ret = smu_set_watermarks_table(smu, clock_ranges);
-
-		if (!(smu->watermarks_bitmap & WATERMARKS_EXIST)) {
-			smu->watermarks_bitmap |= WATERMARKS_EXIST;
-			smu->watermarks_bitmap &= ~WATERMARKS_LOADED;
-		}
-	}
+	ret = smu_set_watermarks_table(smu, clock_ranges);
 
 	mutex_unlock(&smu->mutex);
 
