@@ -494,12 +494,15 @@ static bool cti_add_sysfs_link(struct cti_drvdata *drvdata,
 	return !link_err;
 }
 
-static void cti_remove_sysfs_link(struct cti_trig_con *tc)
+static void cti_remove_sysfs_link(struct cti_drvdata *drvdata,
+				  struct cti_trig_con *tc)
 {
 	struct coresight_sysfs_link link_info;
 
+	link_info.orig = drvdata->csdev;
 	link_info.orig_name = tc->con_dev_name;
 	link_info.target = tc->con_dev;
+	link_info.target_name = dev_name(&drvdata->csdev->dev);
 	coresight_remove_sysfs_link(&link_info);
 }
 
@@ -539,7 +542,7 @@ cti_match_fixup_csdev(struct cti_device *ctidev, const char *node_name,
  * This will set the association if CTI declared before the CS device.
  * (called from coresight_register() with coresight_mutex locked).
  */
-void cti_add_assoc_to_csdev(struct coresight_device *csdev)
+static void cti_add_assoc_to_csdev(struct coresight_device *csdev)
 {
 	struct cti_drvdata *ect_item;
 	struct cti_device *ctidev;
@@ -572,13 +575,12 @@ void cti_add_assoc_to_csdev(struct coresight_device *csdev)
 cti_add_done:
 	mutex_unlock(&ect_mutex);
 }
-EXPORT_SYMBOL_GPL(cti_add_assoc_to_csdev);
 
 /*
  * Removing the associated devices is easier.
  * A CTI will not have a value for csdev->ect_dev.
  */
-void cti_remove_assoc_from_csdev(struct coresight_device *csdev)
+static void cti_remove_assoc_from_csdev(struct coresight_device *csdev)
 {
 	struct cti_drvdata *ctidrv;
 	struct cti_trig_con *tc;
@@ -589,8 +591,8 @@ void cti_remove_assoc_from_csdev(struct coresight_device *csdev)
 		ctidrv = csdev_to_cti_drvdata(csdev->ect_dev);
 		ctidev = &ctidrv->ctidev;
 		list_for_each_entry(tc, &ctidev->trig_cons, node) {
-			if (tc->con_dev == csdev->ect_dev) {
-				cti_remove_sysfs_link(tc);
+			if (tc->con_dev == csdev) {
+				cti_remove_sysfs_link(ctidrv, tc);
 				tc->con_dev = NULL;
 				break;
 			}
@@ -599,7 +601,15 @@ void cti_remove_assoc_from_csdev(struct coresight_device *csdev)
 	}
 	mutex_unlock(&ect_mutex);
 }
-EXPORT_SYMBOL_GPL(cti_remove_assoc_from_csdev);
+
+/*
+ * Operations to add and remove associated CTI.
+ * Register to coresight core driver as call back function.
+ */
+static struct cti_assoc_op cti_assoc_ops = {
+	.add = cti_add_assoc_to_csdev,
+	.remove = cti_remove_assoc_from_csdev
+};
 
 /*
  * Update the cross references where the associated device was found
@@ -634,7 +644,7 @@ static void cti_remove_conn_xrefs(struct cti_drvdata *drvdata)
 		if (tc->con_dev) {
 			coresight_set_assoc_ectdev_mutex(tc->con_dev,
 							 NULL);
-			cti_remove_sysfs_link(tc);
+			cti_remove_sysfs_link(drvdata, tc);
 			tc->con_dev = NULL;
 		}
 	}
@@ -812,7 +822,6 @@ static void cti_device_release(struct device *dev)
 	struct cti_drvdata *ect_item, *ect_tmp;
 
 	mutex_lock(&ect_mutex);
-	cti_remove_conn_xrefs(drvdata);
 	cti_pm_release(drvdata);
 
 	/* remove from the list */
@@ -826,6 +835,18 @@ static void cti_device_release(struct device *dev)
 
 	if (drvdata->csdev_release)
 		drvdata->csdev_release(dev);
+}
+static int __exit cti_remove(struct amba_device *adev)
+{
+	struct cti_drvdata *drvdata = dev_get_drvdata(&adev->dev);
+
+	mutex_lock(&ect_mutex);
+	cti_remove_conn_xrefs(drvdata);
+	mutex_unlock(&ect_mutex);
+
+	coresight_unregister(drvdata->csdev);
+
+	return 0;
 }
 
 static int cti_probe(struct amba_device *adev, const struct amba_id *id)
@@ -947,6 +968,8 @@ static const struct amba_id cti_ids[] = {
 	{ 0, 0},
 };
 
+MODULE_DEVICE_TABLE(amba, cti_ids);
+
 static struct amba_driver cti_driver = {
 	.drv = {
 		.name	= "coresight-cti",
@@ -954,6 +977,30 @@ static struct amba_driver cti_driver = {
 		.suppress_bind_attrs = true,
 	},
 	.probe		= cti_probe,
+	.remove		= cti_remove,
 	.id_table	= cti_ids,
 };
-builtin_amba_driver(cti_driver);
+
+static int __init cti_init(void)
+{
+	int ret;
+
+	ret = amba_driver_register(&cti_driver);
+	if (ret)
+		pr_info("Error registering cti driver\n");
+	coresight_set_cti_ops(&cti_assoc_ops);
+	return ret;
+}
+
+static void __exit cti_exit(void)
+{
+	coresight_remove_cti_ops();
+	amba_driver_unregister(&cti_driver);
+}
+
+module_init(cti_init);
+module_exit(cti_exit);
+
+MODULE_AUTHOR("Mike Leach <mike.leach@linaro.org>");
+MODULE_DESCRIPTION("Arm CoreSight CTI Driver");
+MODULE_LICENSE("GPL v2");
