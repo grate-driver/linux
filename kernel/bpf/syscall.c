@@ -2345,8 +2345,12 @@ void bpf_link_put(struct bpf_link *link)
 	if (!atomic64_dec_and_test(&link->refcnt))
 		return;
 
-	INIT_WORK(&link->work, bpf_link_put_deferred);
-	schedule_work(&link->work);
+	if (in_atomic()) {
+		INIT_WORK(&link->work, bpf_link_put_deferred);
+		schedule_work(&link->work);
+	} else {
+		bpf_link_free(link);
+	}
 }
 
 static int bpf_link_release(struct inode *inode, struct file *filp)
@@ -2975,7 +2979,7 @@ static int bpf_prog_query(const union bpf_attr *attr,
 	}
 }
 
-#define BPF_PROG_TEST_RUN_LAST_FIELD test.ctx_out
+#define BPF_PROG_TEST_RUN_LAST_FIELD test.cpu
 
 static int bpf_prog_test_run(const union bpf_attr *attr,
 			     union bpf_attr __user *uattr)
