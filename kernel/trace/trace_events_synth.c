@@ -1211,7 +1211,7 @@ __synth_event_trace_start(struct trace_event_file *file,
 	 * ENABLED bit is set (which attaches the probe thus allowing
 	 * this code to be called, etc).  Because this is called
 	 * directly by the user, we don't have that but we still need
-	 * to honor not logging when disabled.  For the the iterated
+	 * to honor not logging when disabled.  For the iterated
 	 * trace case, we save the enabed state upon start and just
 	 * ignore the following data calls.
 	 */
@@ -1754,25 +1754,31 @@ static const struct file_operations synth_events_fops = {
 	.release        = seq_release,
 };
 
-static __init int trace_events_synth_init(void)
+/*
+ * Register dynevent at core_initcall. This allows kernel to setup kprobe
+ * events in postcore_initcall without tracefs.
+ */
+static __init int trace_events_synth_init_early(void)
 {
-	struct dentry *entry = NULL;
-	struct dentry *d_tracer;
 	int err = 0;
 
 	err = dyn_event_register(&synth_event_ops);
-	if (err) {
+	if (err)
 		pr_warn("Could not register synth_event_ops\n");
-		return err;
-	}
 
-	d_tracer = tracing_init_dentry();
-	if (IS_ERR(d_tracer)) {
-		err = PTR_ERR(d_tracer);
+	return err;
+}
+core_initcall(trace_events_synth_init_early);
+
+static __init int trace_events_synth_init(void)
+{
+	struct dentry *entry = NULL;
+	int err = 0;
+	err = tracing_init_dentry();
+	if (err)
 		goto err;
-	}
 
-	entry = tracefs_create_file("synthetic_events", 0644, d_tracer,
+	entry = tracefs_create_file("synthetic_events", 0644, NULL,
 				    NULL, &synth_events_fops);
 	if (!entry) {
 		err = -ENODEV;

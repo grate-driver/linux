@@ -40,6 +40,16 @@ trace_boot_set_instance_options(struct trace_array *tr, struct xbc_node *node)
 			pr_err("Failed to set option: %s\n", buf);
 	}
 
+	p = xbc_node_find_value(node, "tracing_on", NULL);
+	if (p && *p != '\0') {
+		if (kstrtoul(p, 10, &v))
+			pr_err("Failed to set tracing on: %s\n", p);
+		if (v)
+			tracer_tracing_on(tr);
+		else
+			tracer_tracing_off(tr);
+	}
+
 	p = xbc_node_find_value(node, "trace_clock", NULL);
 	if (p && *p != '\0') {
 		if (tracing_set_clock(tr, p) < 0)
@@ -330,5 +340,8 @@ static int __init trace_boot_init(void)
 
 	return 0;
 }
-
-fs_initcall(trace_boot_init);
+/*
+ * Start tracing at the end of core-initcall, so that it starts tracing
+ * from the beginning of postcore_initcall.
+ */
+core_initcall_sync(trace_boot_init);
