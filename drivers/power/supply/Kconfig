@@ -164,7 +164,7 @@ config BATTERY_DS2782
 
 config BATTERY_LEGO_EV3
 	tristate "LEGO MINDSTORMS EV3 battery"
-	depends on OF && IIO && GPIOLIB
+	depends on OF && IIO && GPIOLIB && (ARCH_DAVINCI_DA850 || COMPILE_TEST)
 	help
 	  Say Y here to enable support for the LEGO MINDSTORMS EV3 battery.
 
@@ -632,12 +632,12 @@ config CHARGER_BQ25890
 	  Say Y to enable support for the TI BQ25890 battery charger.
 
 config CHARGER_SMB347
-	tristate "Summit Microelectronics SMB347 Battery Charger"
+	tristate "Summit Microelectronics SMB3XX Battery Charger"
 	depends on I2C
 	select REGMAP_I2C
 	help
-	  Say Y to include support for Summit Microelectronics SMB347
-	  Battery Charger.
+	  Say Y to include support for Summit Microelectronics SMB345,
+	  SMB347 or SMB358 Battery Charger.
 
 config CHARGER_TPS65090
 	tristate "TPS65090 battery charger driver"
@@ -751,5 +751,13 @@ config CHARGER_WILCO
 	  by the Embedded Controller on the Chromebook named Wilco. Further
 	  information can be found in
 	  Documentation/ABI/testing/sysfs-class-power-wilco
+
+config RN5T618_POWER
+	tristate "RN5T618 charger/fuel gauge support"
+	depends on MFD_RN5T618
+	help
+	  Say Y here to have support for RN5T618 PMIC family fuel gauge and charger.
+	  This driver can also be built as a module. If so, the module will be
+	  called rn5t618_power.
 
 endif # POWER_SUPPLY
