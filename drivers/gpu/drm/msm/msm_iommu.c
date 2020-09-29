@@ -43,7 +43,7 @@ static int msm_iommu_pagetable_unmap(struct msm_mmu *mmu, u64 iova,
 		size -= 4096;
 	}
 
-	iommu_flush_tlb_all(to_msm_iommu(pagetable->parent)->domain);
+	iommu_flush_iotlb_all(to_msm_iommu(pagetable->parent)->domain);
 
 	return (unmapped == size) ? 0 : -EINVAL;
 }
@@ -199,7 +199,7 @@ struct msm_mmu *msm_iommu_pagetable_create(struct msm_mmu *parent)
 
 	/*
 	 * TODO we would like each set of page tables to have a unique ASID
-	 * to optimize TLB invalidation.  But iommu_flush_tlb_all() will
+	 * to optimize TLB invalidation.  But iommu_flush_iotlb_all() will
 	 * end up flushing the ASID used for TTBR1 pagetables, which is not
 	 * what we want.  So for now just use the same ASID as TTBR1.
 	 */
