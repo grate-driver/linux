@@ -314,6 +314,8 @@
 	memory-controller@7000f400 {
 		nvidia,use-ram-code;
 
+		core-supply = <&core_vdd_reg>;
+
 		emc-tables@0 {
 			nvidia,ram-code = <0x0>;
 			#address-cells = <1>;
@@ -661,4 +663,8 @@
 			operating-points-v2 = <&cpu0_opp_table>;
 		};
 	};
+};
+
+&emc_icc_dvfs_opp_table {
+	/delete-node/ opp@760000000;
 };
