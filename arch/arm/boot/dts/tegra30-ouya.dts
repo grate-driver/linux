@@ -276,11 +276,21 @@
 		nvidia,sys-clock-req-active-high;
 	};
 
+	emc_opp_table0 {
+		/delete-node/ opp@900000000,1350;
+	};
+
+	emc_opp_table1 {
+		/delete-node/ opp@900000000;
+	};
+
 	mc_timings: memory-controller@7000f000 {
 		/* timings located at &mc_timings below */
 	};
 
 	emc_timings: memory-controller@7000f400 {
+		core-supply = <&vdd_core>;
+
 		/* timings located at &emc_timings below */
 	};
 
