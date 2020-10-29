@@ -758,7 +758,7 @@ static inline void clear_page_guard(struct zone *zone, struct page *page,
  * order of appearance. So we need to first gather the full picture of what was
  * enabled, and then make decisions.
  */
-void init_mem_debugging()
+void init_mem_debugging(void)
 {
 	if (_init_on_alloc_enabled_early) {
 		if (page_poisoning_enabled()) {
