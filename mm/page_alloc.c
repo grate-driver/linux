@@ -171,6 +171,8 @@ EXPORT_SYMBOL(init_on_alloc);
 DEFINE_STATIC_KEY_FALSE_RO(init_on_free);
 EXPORT_SYMBOL(init_on_free);
 
+static DEFINE_STATIC_KEY_TRUE_RO(free_pages_not_prezeroed);
+
 static bool _init_on_alloc_enabled_early __read_mostly
 				= IS_ENABLED(CONFIG_INIT_ON_ALLOC_DEFAULT_ON);
 static int __init early_init_on_alloc(char *buf)
@@ -776,6 +778,16 @@ void init_mem_debugging(void)
 			static_branch_enable(&init_on_free);
 		}
 	}
+
+	/*
+	 * We have a special static key that controls whether prep_new_page will
+	 * never need to zero the page. This mode is enabled when page is
+	 * already zeroed by init_on_free or page_poisoning zero mode.
+	 */
+	if (_init_on_free_enabled_early ||
+			(IS_ENABLED(CONFIG_PAGE_POISONING_ZERO)
+				&& page_poisoning_enabled()))
+		static_branch_disable(&free_pages_not_prezeroed);
 
 #ifdef CONFIG_PAGE_POISONING
 	/*
@@ -2216,12 +2228,6 @@ static inline int check_new_page(struct page *page)
 	return 1;
 }
 
-static inline bool free_pages_prezeroed(void)
-{
-	return (IS_ENABLED(CONFIG_PAGE_POISONING_ZERO) &&
-		page_poisoning_enabled_static()) || want_init_on_free();
-}
-
 #ifdef CONFIG_DEBUG_VM
 /*
  * With DEBUG_VM enabled, order-0 pages are checked for expected state when
@@ -2291,7 +2297,8 @@ static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags
 {
 	post_alloc_hook(page, order, gfp_flags);
 
-	if (!free_pages_prezeroed() && want_init_on_alloc(gfp_flags))
+	if (static_branch_likely(&free_pages_not_prezeroed)
+					&& want_init_on_alloc(gfp_flags))
 		kernel_init_free_pages(page, 1 << order);
 
 	if (order && (gfp_flags & __GFP_COMP))
