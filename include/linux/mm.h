@@ -2855,10 +2855,24 @@ extern int apply_to_existing_page_range(struct mm_struct *mm,
 
 extern void init_mem_debugging(void);
 #ifdef CONFIG_PAGE_POISONING
-extern bool page_poisoning_enabled(void);
 extern void kernel_poison_pages(struct page *page, int numpages, int enable);
+extern bool _page_poisoning_enabled_early;
+DECLARE_STATIC_KEY_FALSE(_page_poisoning_enabled);
+static inline bool page_poisoning_enabled(void)
+{
+	return _page_poisoning_enabled_early;
+}
+/*
+ * For use in fast paths after init_mem_debugging() has run, or when a
+ * false negative result is not harmful when called too early.
+ */
+static inline bool page_poisoning_enabled_static(void)
+{
+	return (static_branch_unlikely(&_page_poisoning_enabled));
+}
 #else
 static inline bool page_poisoning_enabled(void) { return false; }
+static inline bool page_poisoning_enabled_static(void) { return false; }
 static inline void kernel_poison_pages(struct page *page, int numpages,
 					int enable) { }
 #endif
