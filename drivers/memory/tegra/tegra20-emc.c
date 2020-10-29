@@ -8,6 +8,7 @@
 #include <linux/clk.h>
 #include <linux/clk/tegra.h>
 #include <linux/debugfs.h>
+#include <linux/devfreq.h>
 #include <linux/err.h>
 #include <linux/interconnect-provider.h>
 #include <linux/interrupt.h>
@@ -102,6 +103,10 @@
 
 #define EMC_FBIO_CFG5_DRAM_WIDTH_X16		BIT(4)
 
+#define EMC_PWR_GATHER_CLEAR			(1 << 8)
+#define EMC_PWR_GATHER_DISABLE			(2 << 8)
+#define EMC_PWR_GATHER_ENABLE			(3 << 8)
+
 static const u16 emc_timing_registers[] = {
 	EMC_RC,
 	EMC_RFC,
@@ -157,6 +162,7 @@ struct emc_timing {
 };
 
 enum emc_rate_request_type {
+	EMC_RATE_DEVFREQ,
 	EMC_RATE_DEBUG,
 	EMC_RATE_ICC,
 	EMC_RATE_TYPE_MAX,
@@ -193,6 +199,9 @@ struct tegra_emc {
 
 	/* protect shared rate-change code path */
 	struct mutex rate_lock;
+
+	struct devfreq_simple_ondemand_data ondemand_data;
+	struct devfreq *devfreq;
 };
 
 static irqreturn_t tegra_emc_isr(int irq, void *data)
@@ -952,6 +961,88 @@ put_table:
 	return err;
 }
 
+static int tegra_emc_devfreq_target(struct device *dev, unsigned long *freq,
+				    u32 flags)
+{
+	struct tegra_emc *emc = dev_get_drvdata(dev);
+	struct dev_pm_opp *opp;
+	unsigned long rate;
+
+	opp = devfreq_recommended_opp(dev, freq, flags);
+	if (IS_ERR(opp)) {
+		dev_err(dev, "failed to find opp for %lu Hz\n", *freq);
+		return PTR_ERR(opp);
+	}
+
+	rate = dev_pm_opp_get_freq(opp);
+	dev_pm_opp_put(opp);
+
+	return emc_set_min_rate(emc, rate, EMC_RATE_DEVFREQ);
+}
+
+static int tegra_emc_devfreq_get_dev_status(struct device *dev,
+					    struct devfreq_dev_status *stat)
+{
+	struct tegra_emc *emc = dev_get_drvdata(dev);
+
+	/* freeze counters */
+	writel_relaxed(EMC_PWR_GATHER_DISABLE, emc->regs + EMC_STAT_CONTROL);
+
+	/*
+	 * busy_time:  number of clocks EMC request was accepted
+	 * total_time: number of clocks PWR_GATHER control was set to ENABLE
+	 */
+	stat->busy_time = readl_relaxed(emc->regs + EMC_STAT_PWR_COUNT);
+	stat->total_time = readl_relaxed(emc->regs + EMC_STAT_PWR_CLOCKS);
+	stat->current_frequency = clk_get_rate(emc->clk);
+
+	/* clear counters and restart */
+	writel_relaxed(EMC_PWR_GATHER_CLEAR, emc->regs + EMC_STAT_CONTROL);
+	writel_relaxed(EMC_PWR_GATHER_ENABLE, emc->regs + EMC_STAT_CONTROL);
+
+	return 0;
+}
+
+static struct devfreq_dev_profile tegra_emc_devfreq_profile = {
+	.polling_ms	= 30,
+	.target		= tegra_emc_devfreq_target,
+	.get_dev_status	= tegra_emc_devfreq_get_dev_status,
+};
+
+static int tegra_emc_devfreq_init(struct tegra_emc *emc)
+{
+	int err;
+
+	/*
+	 * PWR_COUNT is 1/2 of PWR_CLOCKS at max, and thus, the up-threshold
+	 * should be less than 50.  Secondly, multiple active memory clients
+	 * may cause over 20% of lost clock cycles due to stalls caused by
+	 * competing memory accesses.  This means that threshold should be
+	 * set to a less than 30 in order to have a properly working governor.
+	 */
+	emc->ondemand_data.upthreshold = 20;
+
+	/*
+	 * Reset statistic gathers state, select global bandwidth for the
+	 * statistics collection mode and set clocks counter saturation
+	 * limit to maximum.
+	 */
+	writel_relaxed(0x00000000, emc->regs + EMC_STAT_CONTROL);
+	writel_relaxed(0x00000000, emc->regs + EMC_STAT_LLMC_CONTROL);
+	writel_relaxed(0xffffffff, emc->regs + EMC_STAT_PWR_CLOCK_LIMIT);
+
+	emc->devfreq = devfreq_add_device(emc->dev, &tegra_emc_devfreq_profile,
+					  DEVFREQ_GOV_SIMPLE_ONDEMAND,
+					  &emc->ondemand_data);
+	if (IS_ERR(emc->devfreq)) {
+		err = PTR_ERR(emc->devfreq);
+		dev_err(emc->dev, "failed to initialize devfreq: %d", err);
+		return err;
+	}
+
+	return 0;
+}
+
 static int tegra_emc_probe(struct platform_device *pdev)
 {
 	struct device_node *np;
@@ -1019,6 +1110,7 @@ static int tegra_emc_probe(struct platform_device *pdev)
 	tegra_emc_rate_requests_init(emc);
 	tegra_emc_debugfs_init(emc);
 	tegra_emc_interconnect_init(emc);
+	tegra_emc_devfreq_init(emc);
 
 	/*
 	 * Don't allow the kernel module to be unloaded. Unloading adds some
