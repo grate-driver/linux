@@ -13,6 +13,8 @@
 
 #include "drm.h"
 
+struct opp_table;
+struct regulator;
 struct tegra_output;
 
 #define TEGRA_DC_LEGACY_PLANES_NUM	6
@@ -107,6 +109,9 @@ struct tegra_dc {
 	struct drm_info_list *debugfs_files;
 
 	const struct tegra_dc_soc_info *soc;
+
+	struct opp_table *opp_table;
+	struct regulator *core_reg;
 };
 
 static inline struct tegra_dc *

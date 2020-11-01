@@ -11,9 +11,13 @@
 #include <linux/interconnect.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
+#include <linux/regulator/consumer.h>
 #include <linux/reset.h>
 
+#include <soc/tegra/common.h>
+#include <soc/tegra/fuse.h>
 #include <soc/tegra/pmc.h>
 
 #include <drm/drm_atomic.h>
@@ -1699,6 +1703,55 @@ int tegra_dc_state_setup_clock(struct tegra_dc *dc,
 	return 0;
 }
 
+static void tegra_dc_update_voltage_state(struct tegra_dc *dc,
+					  struct tegra_dc_state *state)
+{
+	struct dev_pm_opp *opp;
+	unsigned long rate;
+	int err, min_uV;
+
+	/* OPP usage is optional */
+	if (!dc->opp_table)
+		return;
+
+	/* calculate actual pixel clock rate which depends on internal divider */
+	rate = DIV_ROUND_UP(clk_get_rate(dc->clk) * 2, state->div + 2);
+
+	/* find suitable OPP for the rate */
+	opp = dev_pm_opp_find_freq_ceil(dc->dev, &rate);
+
+	if (opp == ERR_PTR(-ERANGE))
+		opp = dev_pm_opp_find_freq_floor(dc->dev, &rate);
+
+	if (IS_ERR(opp)) {
+		dev_err(dc->dev, "failed to find OPP for %lu Hz: %ld\n",
+			rate, PTR_ERR(opp));
+		return;
+	}
+
+	min_uV = dev_pm_opp_get_voltage(opp);
+	dev_pm_opp_put(opp);
+
+	/*
+	 * Voltage scaling is optional and trying to set voltage for a dummy
+	 * regulator will error out.
+	 */
+	if (!device_property_present(dc->dev, "core-supply"))
+		return;
+
+	/*
+	 * Note that the minimum core voltage depends on the pixel clock
+	 * rate (which depends on internal clock divider of CRTC) and not on
+	 * the rate of the display controller clock. This is why we're not
+	 * using dev_pm_opp_set_rate() API and instead are managing the
+	 * voltage by ourselves.
+	 */
+	err = regulator_set_voltage(dc->core_reg, min_uV, INT_MAX);
+	if (err)
+		dev_err(dc->dev, "failed to set CORE voltage to %duV: %d\n",
+			min_uV, err);
+}
+
 static void tegra_dc_commit_state(struct tegra_dc *dc,
 				  struct tegra_dc_state *state)
 {
@@ -1738,6 +1791,8 @@ static void tegra_dc_commit_state(struct tegra_dc *dc,
 	if (err < 0)
 		dev_err(dc->dev, "failed to set clock %pC to %lu Hz: %d\n",
 			dc->clk, state->pclk, err);
+
+	tegra_dc_update_voltage_state(dc, state);
 }
 
 static void tegra_dc_stop(struct tegra_dc *dc)
@@ -2521,6 +2576,7 @@ static int tegra_dc_runtime_suspend(struct host1x_client *client)
 
 	clk_disable_unprepare(dc->clk);
 	pm_runtime_put_sync(dev);
+	regulator_disable(dc->core_reg);
 
 	return 0;
 }
@@ -2531,10 +2587,16 @@ static int tegra_dc_runtime_resume(struct host1x_client *client)
 	struct device *dev = client->dev;
 	int err;
 
+	err = regulator_enable(dc->core_reg);
+	if (err < 0) {
+		dev_err(dev, "failed to enable CORE regulator: %d\n", err);
+		return err;
+	}
+
 	err = pm_runtime_get_sync(dev);
 	if (err < 0) {
 		dev_err(dev, "failed to get runtime PM: %d\n", err);
-		return err;
+		goto disable_regulator;
 	}
 
 	if (dc->soc->has_powergate) {
@@ -2564,6 +2626,9 @@ disable_clk:
 	clk_disable_unprepare(dc->clk);
 put_rpm:
 	pm_runtime_put_sync(dev);
+disable_regulator:
+	regulator_disable(dc->core_reg);
+
 	return err;
 }
 
@@ -2879,6 +2944,72 @@ static int tegra_dc_couple(struct tegra_dc *dc)
 	return 0;
 }
 
+static void tegra_dc_deinit_opp_table(void *data)
+{
+	struct tegra_dc *dc = data;
+
+	dev_pm_opp_of_remove_table(dc->dev);
+	dev_pm_opp_put_supported_hw(dc->opp_table);
+	dev_pm_opp_put_regulators(dc->opp_table);
+}
+
+static int devm_tegra_dc_opp_table_init(struct tegra_dc *dc)
+{
+	struct opp_table *hw_opp_table;
+	u32 hw_version;
+	int err;
+
+	/* voltage scaling is optional */
+	dc->core_reg = devm_regulator_get(dc->dev, "core");
+	if (IS_ERR(dc->core_reg))
+		return dev_err_probe(dc->dev, PTR_ERR(dc->core_reg),
+				     "failed to get CORE regulator\n");
+
+	/* legacy device-trees don't have OPP table */
+	if (!device_property_present(dc->dev, "operating-points-v2"))
+		return 0;
+
+	dc->opp_table = dev_pm_opp_get_opp_table(dc->dev);
+	if (IS_ERR(dc->opp_table))
+		return dev_err_probe(dc->dev, PTR_ERR(dc->opp_table),
+				     "failed to prepare OPP table\n");
+
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		hw_version = BIT(tegra_sku_info.soc_process_id);
+	else
+		hw_version = BIT(tegra_sku_info.soc_speedo_id);
+
+	hw_opp_table = dev_pm_opp_set_supported_hw(dc->dev, &hw_version, 1);
+	err = PTR_ERR_OR_ZERO(hw_opp_table);
+	if (err) {
+		dev_err(dc->dev, "failed to set supported HW: %d\n", err);
+		goto put_table;
+	}
+
+	err = dev_pm_opp_of_add_table(dc->dev);
+	if (err) {
+		dev_err(dc->dev, "failed to add OPP table: %d\n", err);
+		goto put_hw;
+	}
+
+	err = devm_add_action(dc->dev, tegra_dc_deinit_opp_table, dc);
+	if (err)
+		goto remove_table;
+
+	dev_info(dc->dev, "OPP HW ver. 0x%x\n", hw_version);
+
+	return 0;
+
+remove_table:
+	dev_pm_opp_of_remove_table(dc->dev);
+put_hw:
+	dev_pm_opp_put_supported_hw(dc->opp_table);
+put_table:
+	dev_pm_opp_put_opp_table(dc->opp_table);
+
+	return err;
+}
+
 static int tegra_dc_probe(struct platform_device *pdev)
 {
 	struct tegra_dc *dc;
@@ -2936,6 +3067,10 @@ static int tegra_dc_probe(struct platform_device *pdev)
 
 		tegra_powergate_power_off(dc->powergate);
 	}
+
+	err = devm_tegra_dc_opp_table_init(dc);
+	if (err < 0)
+		return err;
 
 	dc->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(dc->regs))
@@ -3007,6 +3142,7 @@ struct platform_driver tegra_dc_driver = {
 	.driver = {
 		.name = "tegra-dc",
 		.of_match_table = tegra_dc_of_match,
+		.sync_state = tegra_soc_device_sync_state,
 	},
 	.probe = tegra_dc_probe,
 	.remove = tegra_dc_remove,

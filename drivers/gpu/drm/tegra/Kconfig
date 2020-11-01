@@ -12,6 +12,7 @@ config DRM_TEGRA
 	select INTERCONNECT
 	select IOMMU_IOVA
 	select CEC_CORE if CEC_NOTIFIER
+	select PM_OPP
 	help
 	  Choose this option if you have an NVIDIA Tegra SoC.
 
