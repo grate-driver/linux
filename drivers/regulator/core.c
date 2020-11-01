@@ -462,7 +462,8 @@ static int regulator_check_states(suspend_state_t state)
  */
 int regulator_check_consumers(struct regulator_dev *rdev,
 			      int *min_uV, int *max_uV,
-			      suspend_state_t state)
+			      suspend_state_t state,
+			      bool skip_disabled_regulators)
 {
 	struct regulator *regulator;
 	struct regulator_voltage *voltage;
@@ -474,6 +475,9 @@ int regulator_check_consumers(struct regulator_dev *rdev,
 		 * with anything in the constraint range.
 		 */
 		if (!voltage->min_uV && !voltage->max_uV)
+			continue;
+
+		if (skip_disabled_regulators && !regulator->enable_count)
 			continue;
 
 		if (*max_uV > voltage->max_uV)
@@ -3662,7 +3666,7 @@ static int regulator_get_optimal_voltage(struct regulator_dev *rdev,
 
 		ret = regulator_check_consumers(rdev,
 						&desired_min_uV,
-						&desired_max_uV, state);
+						&desired_max_uV, state, false);
 		if (ret < 0)
 			return ret;
 
@@ -3681,7 +3685,7 @@ static int regulator_get_optimal_voltage(struct regulator_dev *rdev,
 
 		ret = regulator_check_consumers(c_rdevs[i],
 						&tmp_min,
-						&tmp_max, state);
+						&tmp_max, state, false);
 		if (ret < 0)
 			return ret;
 
@@ -4119,7 +4123,7 @@ int regulator_sync_voltage(struct regulator *regulator)
 	if (ret < 0)
 		goto out;
 
-	ret = regulator_check_consumers(rdev, &min_uV, &max_uV, 0);
+	ret = regulator_check_consumers(rdev, &min_uV, &max_uV, 0, false);
 	if (ret < 0)
 		goto out;
 

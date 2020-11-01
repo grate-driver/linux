@@ -136,7 +136,7 @@ static int tegra20_core_rtc_update(struct tegra_regulator_coupler *tegra,
 		return err;
 
 	err = regulator_check_consumers(core_rdev, &core_min_uV, &core_max_uV,
-					PM_SUSPEND_ON);
+					PM_SUSPEND_ON, true);
 	if (err)
 		return err;
 
@@ -246,12 +246,12 @@ static int tegra20_cpu_voltage_update(struct tegra_regulator_coupler *tegra,
 		return err;
 
 	err = regulator_check_consumers(cpu_rdev, &cpu_min_uV, &cpu_max_uV,
-					PM_SUSPEND_ON);
+					PM_SUSPEND_ON, false);
 	if (err)
 		return err;
 
 	err = regulator_check_consumers(cpu_rdev, &cpu_min_uV_consumers,
-					&cpu_max_uV, PM_SUSPEND_ON);
+					&cpu_max_uV, PM_SUSPEND_ON, false);
 	if (err)
 		return err;
 

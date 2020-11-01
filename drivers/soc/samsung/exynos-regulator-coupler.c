@@ -41,7 +41,7 @@ static int regulator_get_optimal_voltage(struct regulator_dev *rdev,
 
 		ret = regulator_check_consumers(c_rdevs[i],
 						&tmp_min,
-						&tmp_max, state);
+						&tmp_max, state, false);
 		if (ret < 0)
 			return ret;
 

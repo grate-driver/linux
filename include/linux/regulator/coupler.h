@@ -55,7 +55,8 @@ int regulator_coupler_register(struct regulator_coupler *coupler);
 const char *rdev_get_name(struct regulator_dev *rdev);
 int regulator_check_consumers(struct regulator_dev *rdev,
 			      int *min_uV, int *max_uV,
-			      suspend_state_t state);
+			      suspend_state_t state,
+			      bool skip_disabled_regulators);
 int regulator_check_voltage(struct regulator_dev *rdev,
 			    int *min_uV, int *max_uV);
 int regulator_get_voltage_rdev(struct regulator_dev *rdev);
@@ -75,7 +76,8 @@ static inline const char *rdev_get_name(struct regulator_dev *rdev)
 }
 static inline int regulator_check_consumers(struct regulator_dev *rdev,
 					    int *min_uV, int *max_uV,
-					    suspend_state_t state)
+					    suspend_state_t state,
+					    bool skip_disabled_regulators))
 {
 	return -EINVAL;
 }
