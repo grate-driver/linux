@@ -7,6 +7,11 @@
 #include <linux/iommu.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/pm_opp.h>
+#include <linux/pm_runtime.h>
+#include <linux/reset.h>
+
+#include <soc/tegra/common.h>
 
 #include "drm.h"
 #include "gem.h"
@@ -19,6 +24,8 @@ struct gr2d_soc {
 struct gr2d {
 	struct tegra_drm_client client;
 	struct host1x_channel *channel;
+	struct reset_control *reset_mc;
+	struct reset_control *reset;
 	struct clk *clk;
 
 	const struct gr2d_soc *soc;
@@ -101,16 +108,24 @@ static int gr2d_open_channel(struct tegra_drm_client *client,
 			     struct tegra_drm_context *context)
 {
 	struct gr2d *gr2d = to_gr2d(client);
+	int err;
 
 	context->channel = host1x_channel_get(gr2d->channel);
 	if (!context->channel)
 		return -ENOMEM;
+
+	err = pm_runtime_resume_and_get(client->base.dev);
+	if (err < 0) {
+		host1x_channel_put(context->channel);
+		return err;
+	}
 
 	return 0;
 }
 
 static void gr2d_close_channel(struct tegra_drm_context *context)
 {
+	pm_runtime_put_sync(context->client->base.dev);
 	host1x_channel_put(context->channel);
 }
 
@@ -190,8 +205,26 @@ static const u32 gr2d_addr_regs[] = {
 	GR2D_VA_BASE_ADDR_SB,
 };
 
+static struct reset_control *devm_gr2d_get_reset(struct device *dev)
+{
+	struct reset_control *reset;
+	int err;
+
+	reset = of_reset_control_array_get_exclusive_released(dev->of_node);
+	if (IS_ERR(reset))
+		return reset;
+
+	/* TODO: implement devm_reset_control_array_get_exclusive_released() */
+	err = devm_add_action_or_reset(dev, (void *)reset_control_put, reset);
+	if (err)
+		return ERR_PTR(err);
+
+	return reset;
+}
+
 static int gr2d_probe(struct platform_device *pdev)
 {
+	struct tegra_core_opp_params opp_params = {};
 	struct device *dev = &pdev->dev;
 	struct host1x_syncpt **syncpts;
 	struct gr2d *gr2d;
@@ -201,6 +234,8 @@ static int gr2d_probe(struct platform_device *pdev)
 	gr2d = devm_kzalloc(dev, sizeof(*gr2d), GFP_KERNEL);
 	if (!gr2d)
 		return -ENOMEM;
+
+	platform_set_drvdata(pdev, gr2d);
 
 	gr2d->soc = of_device_get_match_data(dev);
 
@@ -214,10 +249,20 @@ static int gr2d_probe(struct platform_device *pdev)
 		return PTR_ERR(gr2d->clk);
 	}
 
-	err = clk_prepare_enable(gr2d->clk);
-	if (err) {
-		dev_err(dev, "cannot turn on clock\n");
+	err = devm_tegra_core_dev_init_opp_table(dev, &opp_params);
+	if (err && err != -ENODEV)
 		return err;
+
+	gr2d->reset = devm_gr2d_get_reset(dev);
+	if (IS_ERR(gr2d->reset)) {
+		dev_err(dev, "failed to get reset: %pe\n", gr2d->reset);
+		return PTR_ERR(gr2d->reset);
+	}
+
+	gr2d->reset_mc = devm_reset_control_get_optional_exclusive_released(dev, "mc");
+	if (IS_ERR(gr2d->reset_mc)) {
+		dev_err(dev, "failed to get MC reset: %pe\n", gr2d->reset_mc);
+		return PTR_ERR(gr2d->reset_mc);
 	}
 
 	INIT_LIST_HEAD(&gr2d->client.base.list);
@@ -231,20 +276,24 @@ static int gr2d_probe(struct platform_device *pdev)
 	gr2d->client.version = gr2d->soc->version;
 	gr2d->client.ops = &gr2d_ops;
 
+	pm_runtime_enable(dev);
+
 	err = host1x_client_register(&gr2d->client.base);
 	if (err < 0) {
 		dev_err(dev, "failed to register host1x client: %d\n", err);
-		clk_disable_unprepare(gr2d->clk);
-		return err;
+		goto disable_rpm;
 	}
 
 	/* initialize address register map */
 	for (i = 0; i < ARRAY_SIZE(gr2d_addr_regs); i++)
 		set_bit(gr2d_addr_regs[i], gr2d->addr_regs);
 
-	platform_set_drvdata(pdev, gr2d);
-
 	return 0;
+
+disable_rpm:
+	pm_runtime_disable(dev);
+
+	return err;
 }
 
 static int gr2d_remove(struct platform_device *pdev)
@@ -259,15 +308,101 @@ static int gr2d_remove(struct platform_device *pdev)
 		return err;
 	}
 
-	clk_disable_unprepare(gr2d->clk);
+	pm_runtime_disable(&pdev->dev);
 
 	return 0;
 }
+
+static int __maybe_unused gr2d_runtime_suspend(struct device *dev)
+{
+	struct gr2d *gr2d = dev_get_drvdata(dev);
+	int err;
+
+	host1x_channel_stop(gr2d->channel);
+	reset_control_release(gr2d->reset);
+
+	/*
+	 * GR2D module shouldn't be reset while hardware is idling, otherwise
+	 * host1x's cmdproc will stuck on trying to access any G2 register
+	 * after reset. GR2D module could be either hot-reset or reset after
+	 * power-gating of the HEG partition. Hence we will put in reset only
+	 * the memory client part of the module, the HEG GENPD will take care
+	 * of resetting GR2D module across power-gating.
+	 */
+	err = reset_control_acquire(gr2d->reset_mc);
+	if (err) {
+		dev_err(dev, "failed to acquire MC reset: %d\n", err);
+		return err;
+	}
+
+	err = reset_control_assert(gr2d->reset_mc);
+	if (err) {
+		dev_err(dev, "failed to assert MC reset: %d\n", err);
+		return err;
+	}
+
+	clk_disable_unprepare(gr2d->clk);
+
+	/* remove performance vote */
+	err = dev_pm_opp_set_rate(dev, 0);
+	if (err) {
+		dev_err(dev, "failed to set clock rate: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
+static int __maybe_unused gr2d_runtime_resume(struct device *dev)
+{
+	struct gr2d *gr2d = dev_get_drvdata(dev);
+	int err;
+
+	err = dev_pm_opp_set_rate(dev, clk_get_rate(gr2d->clk));
+	if (err) {
+		dev_err(dev, "failed to set clock rate: %d\n", err);
+		return err;
+	}
+
+	reset_control_release(gr2d->reset_mc);
+
+	err = reset_control_acquire(gr2d->reset);
+	if (err) {
+		dev_err(dev, "failed to acquire reset: %d\n", err);
+		return err;
+	}
+
+	err = clk_prepare_enable(gr2d->clk);
+	if (err) {
+		dev_err(dev, "failed to enable clock: %d\n", err);
+		goto release_reset;
+	}
+
+	err = reset_control_deassert(gr2d->reset);
+	if (err) {
+		dev_err(dev, "failed to deassert reset: %d\n", err);
+		return err;
+	}
+
+	return 0;
+
+release_reset:
+	reset_control_release(gr2d->reset);
+
+	return err;
+}
+
+static const struct dev_pm_ops tegra_gr2d_pm = {
+	SET_RUNTIME_PM_OPS(gr2d_runtime_suspend, gr2d_runtime_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 struct platform_driver tegra_gr2d_driver = {
 	.driver = {
 		.name = "tegra-gr2d",
 		.of_match_table = gr2d_match,
+		.pm = &tegra_gr2d_pm,
 	},
 	.probe = gr2d_probe,
 	.remove = gr2d_remove,
