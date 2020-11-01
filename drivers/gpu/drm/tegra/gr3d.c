@@ -5,13 +5,18 @@
  */
 
 #include <linux/clk.h>
+#include <linux/delay.h>
 #include <linux/host1x.h>
 #include <linux/iommu.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_opp.h>
+#include <linux/pm_runtime.h>
 #include <linux/reset.h>
 
+#include <soc/tegra/common.h>
 #include <soc/tegra/pmc.h>
 
 #include "drm.h"
@@ -25,12 +30,14 @@ struct gr3d_soc {
 struct gr3d {
 	struct tegra_drm_client client;
 	struct host1x_channel *channel;
+	struct reset_control *reset;
 	struct clk *clk_secondary;
 	struct clk *clk;
-	struct reset_control *rst_secondary;
-	struct reset_control *rst;
 
 	const struct gr3d_soc *soc;
+	struct clk_bulk_data *clocks;
+	unsigned int nclocks;
+	bool legacy_pd;
 
 	DECLARE_BITMAP(addr_regs, GR3D_NUM_REGS);
 };
@@ -109,16 +116,24 @@ static int gr3d_open_channel(struct tegra_drm_client *client,
 			     struct tegra_drm_context *context)
 {
 	struct gr3d *gr3d = to_gr3d(client);
+	int err;
 
 	context->channel = host1x_channel_get(gr3d->channel);
 	if (!context->channel)
 		return -ENOMEM;
+
+	err = pm_runtime_resume_and_get(client->base.dev);
+	if (err < 0) {
+		host1x_channel_put(context->channel);
+		return err;
+	}
 
 	return 0;
 }
 
 static void gr3d_close_channel(struct tegra_drm_context *context)
 {
+	pm_runtime_put_sync(context->client->base.dev);
 	host1x_channel_put(context->channel);
 }
 
@@ -278,10 +293,125 @@ static const u32 gr3d_addr_regs[] = {
 	GR3D_GLOBAL_SAMP23SURFADDR(15),
 };
 
+static int gr3d_link_power_domain(struct device *dev, struct device *pd_dev)
+{
+	const u32 link_flags = DL_FLAG_STATELESS | DL_FLAG_PM_RUNTIME;
+	struct device_link *link;
+	int err;
+
+	link = device_link_add(dev, pd_dev, link_flags);
+	if (!link) {
+		dev_err(dev, "failed to link to %s\n", dev_name(pd_dev));
+		return -EINVAL;
+	}
+
+	err = devm_add_action_or_reset(dev, (void *)device_link_del, link);
+	if (err)
+		return err;
+
+	return 0;
+}
+
+static int devm_gr3d_init_power(struct device *dev, struct gr3d *gr3d)
+{
+	const char *opp_genpd_names[] = { "3d0", "3d1", NULL };
+	struct device **opp_virt_dev;
+	struct opp_table *opp_table;
+	unsigned int i, num_domains;
+	struct device *pd_dev;
+	int err;
+
+	err = of_count_phandle_with_args(dev->of_node, "power-domains",
+					 "#power-domain-cells");
+	if (err < 0) {
+		if (err != -ENOENT)
+			return err;
+
+		/*
+		 * Older device-trees don't use GENPD. In this case we should
+		 * toggle power domain manually.
+		 */
+		gr3d->legacy_pd = true;
+		goto power_up;
+	}
+
+	num_domains = err;
+
+	/*
+	 * The PM domain core automatically attaches a single power domain,
+	 * otherwise it skips attaching completely. We have a single domain
+	 * on Tegra20 and two domains on Tegra30+.
+	 */
+	if (dev->pm_domain)
+		goto power_up;
+
+	opp_table = devm_pm_opp_attach_genpd(dev, opp_genpd_names, &opp_virt_dev);
+	if (IS_ERR(opp_table))
+		return PTR_ERR(opp_table);
+
+	for (i = 0; opp_genpd_names[i]; i++) {
+		pd_dev = opp_virt_dev[i];
+		if (!pd_dev) {
+			dev_err(dev, "failed to get %s power domain\n",
+				opp_genpd_names[i]);
+			return -EINVAL;
+		}
+
+		err = gr3d_link_power_domain(dev, pd_dev);
+		if (err)
+			return err;
+	}
+
+power_up:
+	pm_runtime_enable(dev);
+
+	err = devm_add_action_or_reset(dev, (void *) pm_runtime_disable, dev);
+	if (err)
+		return err;
+
+	return 0;
+}
+
+static int gr3d_set_opp(struct dev_pm_set_opp_data *data)
+{
+	struct gr3d *gr3d = dev_get_drvdata(data->dev);
+	unsigned int i;
+	int err;
+
+	for (i = 0; i < gr3d->nclocks; i++) {
+		err = clk_set_rate(gr3d->clocks[i].clk, data->new_opp.rate);
+		if (err) {
+			dev_err(data->dev, "failed to set %s rate to %lu: %d\n",
+				gr3d->clocks[i].id, data->new_opp.rate, err);
+			return err;
+		}
+	}
+
+	return 0;
+}
+
+static struct reset_control *devm_gr3d_get_reset(struct device *dev)
+{
+	struct reset_control *reset;
+	int err;
+
+	reset = of_reset_control_array_get_exclusive_released(dev->of_node);
+	if (IS_ERR(reset))
+		return reset;
+
+	/* TODO: implement devm_reset_control_array_get_exclusive_released() */
+	err = devm_add_action_or_reset(dev, (void *)reset_control_put, reset);
+	if (err)
+		return ERR_PTR(err);
+
+	return reset;
+}
+
 static int gr3d_probe(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
+	struct tegra_core_opp_params opp_params = {};
 	struct host1x_syncpt **syncpts;
+	struct opp_table *opp_table;
 	struct gr3d *gr3d;
 	unsigned int i;
 	int err;
@@ -290,56 +420,38 @@ static int gr3d_probe(struct platform_device *pdev)
 	if (!gr3d)
 		return -ENOMEM;
 
+	platform_set_drvdata(pdev, gr3d);
+
 	gr3d->soc = of_device_get_match_data(&pdev->dev);
 
 	syncpts = devm_kzalloc(&pdev->dev, sizeof(*syncpts), GFP_KERNEL);
 	if (!syncpts)
 		return -ENOMEM;
 
-	gr3d->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(gr3d->clk)) {
-		dev_err(&pdev->dev, "cannot get clock\n");
-		return PTR_ERR(gr3d->clk);
-	}
-
-	gr3d->rst = devm_reset_control_get(&pdev->dev, "3d");
-	if (IS_ERR(gr3d->rst)) {
-		dev_err(&pdev->dev, "cannot get reset\n");
-		return PTR_ERR(gr3d->rst);
-	}
-
-	if (of_device_is_compatible(np, "nvidia,tegra30-gr3d")) {
-		gr3d->clk_secondary = devm_clk_get(&pdev->dev, "3d2");
-		if (IS_ERR(gr3d->clk_secondary)) {
-			dev_err(&pdev->dev, "cannot get secondary clock\n");
-			return PTR_ERR(gr3d->clk_secondary);
-		}
-
-		gr3d->rst_secondary = devm_reset_control_get(&pdev->dev,
-								"3d2");
-		if (IS_ERR(gr3d->rst_secondary)) {
-			dev_err(&pdev->dev, "cannot get secondary reset\n");
-			return PTR_ERR(gr3d->rst_secondary);
-		}
-	}
-
-	err = tegra_powergate_sequence_power_up(TEGRA_POWERGATE_3D, gr3d->clk,
-						gr3d->rst);
+	err = devm_clk_bulk_get_all(&pdev->dev, &gr3d->clocks);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to power up 3D unit\n");
+		dev_err(&pdev->dev, "failed to get clock: %d\n", err);
 		return err;
 	}
+	gr3d->nclocks = err;
 
-	if (gr3d->clk_secondary) {
-		err = tegra_powergate_sequence_power_up(TEGRA_POWERGATE_3D1,
-							gr3d->clk_secondary,
-							gr3d->rst_secondary);
-		if (err < 0) {
-			dev_err(&pdev->dev,
-				"failed to power up secondary 3D unit\n");
-			return err;
-		}
+	gr3d->reset = devm_gr3d_get_reset(&pdev->dev);
+	if (IS_ERR(gr3d->reset)) {
+		dev_err(&pdev->dev, "failed to get reset: %pe\n", gr3d->reset);
+		return PTR_ERR(gr3d->reset);
 	}
+
+	err = devm_gr3d_init_power(&pdev->dev, gr3d);
+	if (err)
+		return err;
+
+	opp_table = devm_pm_opp_register_set_opp_helper(&pdev->dev, gr3d_set_opp);
+	if (IS_ERR(opp_table))
+		return PTR_ERR(opp_table);
+
+	err = devm_tegra_core_dev_init_opp_table(&pdev->dev, &opp_params);
+	if (err && err != -ENODEV)
+		return err;
 
 	INIT_LIST_HEAD(&gr3d->client.base.list);
 	gr3d->client.base.ops = &gr3d_client_ops;
@@ -363,8 +475,6 @@ static int gr3d_probe(struct platform_device *pdev)
 	for (i = 0; i < ARRAY_SIZE(gr3d_addr_regs); i++)
 		set_bit(gr3d_addr_regs[i], gr3d->addr_regs);
 
-	platform_set_drvdata(pdev, gr3d);
-
 	return 0;
 }
 
@@ -380,23 +490,165 @@ static int gr3d_remove(struct platform_device *pdev)
 		return err;
 	}
 
-	if (gr3d->clk_secondary) {
-		reset_control_assert(gr3d->rst_secondary);
-		tegra_powergate_power_off(TEGRA_POWERGATE_3D1);
-		clk_disable_unprepare(gr3d->clk_secondary);
+	return 0;
+}
+
+static int gr3d_legacy_domain_power_up(struct device *dev, const char *name,
+				       unsigned int id)
+{
+	struct gr3d *gr3d = dev_get_drvdata(dev);
+	struct reset_control *reset;
+	struct clk *clk;
+	unsigned int i;
+	int err;
+
+	for (i = 0; i < gr3d->nclocks; i++) {
+		if (!strcmp(gr3d->clocks[i].id, name)) {
+			clk = gr3d->clocks[i].clk;
+			break;
+		}
 	}
 
-	reset_control_assert(gr3d->rst);
-	tegra_powergate_power_off(TEGRA_POWERGATE_3D);
-	clk_disable_unprepare(gr3d->clk);
+	if (i == gr3d->nclocks)
+		return 0;
+
+	/*
+	 * We use array of resets, which includes MC resets, and MC
+	 * reset shouldn't be asserted while hardware is gated because
+	 * MC flushing will fail for gated hardware. Hence for legacy
+	 * PD we request the individual reset separately.
+	 */
+	reset = reset_control_get_exclusive_released(dev, name);
+	if (IS_ERR(reset))
+		return PTR_ERR(reset);
+
+	err = reset_control_acquire(reset);
+	if (err) {
+		dev_err(dev, "failed to acquire %s reset: %d\n", name, err);
+	} else {
+		err = tegra_powergate_sequence_power_up(id, clk, reset);
+		reset_control_release(reset);
+	}
+
+	reset_control_put(reset);
+	if (err)
+		return err;
+
+	/*
+	 * tegra_powergate_sequence_power_up() leaves clocks enabled
+	 * while GENPD not, hence keep clock-enable balanced.
+	 */
+	clk_disable_unprepare(clk);
 
 	return 0;
 }
+
+static int gr3d_legacy_power_up(struct device *dev)
+{
+	struct gr3d *gr3d = dev_get_drvdata(dev);
+	int err;
+
+	if (gr3d->legacy_pd) {
+		err = gr3d_legacy_domain_power_up(dev, "3d",
+						  TEGRA_POWERGATE_3D);
+		if (err)
+			return err;
+
+		err = gr3d_legacy_domain_power_up(dev, "3d2",
+						  TEGRA_POWERGATE_3D1);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
+static int __maybe_unused gr3d_runtime_suspend(struct device *dev)
+{
+	struct gr3d *gr3d = dev_get_drvdata(dev);
+	int err;
+
+	host1x_channel_stop(gr3d->channel);
+
+	err = reset_control_assert(gr3d->reset);
+	if (err) {
+		dev_err(dev, "failed to assert reset: %d\n", err);
+		return err;
+	}
+
+	usleep_range(10, 20);
+
+	/*
+	 * Older device-trees don't specify MC resets and power-gating can't
+	 * be done safely in that case. Hence we will keep the power ungated
+	 * for older DTBs. For newer DTBs, GENPD will perform the power-gating.
+	 */
+
+	clk_bulk_disable_unprepare(gr3d->nclocks, gr3d->clocks);
+	reset_control_release(gr3d->reset);
+
+	/* remove performance vote */
+	err = dev_pm_opp_set_rate(dev, 0);
+	if (err) {
+		dev_err(dev, "failed to set clock rate: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
+static int __maybe_unused gr3d_runtime_resume(struct device *dev)
+{
+	struct gr3d *gr3d = dev_get_drvdata(dev);
+	int err;
+
+	err = dev_pm_opp_set_rate(dev, clk_get_rate(gr3d->clocks[0].clk));
+	if (err) {
+		dev_err(dev, "failed to set clock rate: %d\n", err);
+		return err;
+	}
+
+	err = gr3d_legacy_power_up(dev);
+	if (err)
+		goto release_reset;
+
+	err = reset_control_acquire(gr3d->reset);
+	if (err) {
+		dev_err(dev, "failed to acquire reset: %d\n", err);
+		return err;
+	}
+
+	err = clk_bulk_prepare_enable(gr3d->nclocks, gr3d->clocks);
+	if (err) {
+		dev_err(dev, "failed to enable clock: %d\n", err);
+		goto release_reset;
+	}
+
+	err = reset_control_deassert(gr3d->reset);
+	if (err) {
+		dev_err(dev, "failed to deassert reset: %d\n", err);
+		return err;
+	}
+
+	return 0;
+
+release_reset:
+	reset_control_release(gr3d->reset);
+
+	return err;
+}
+
+static const struct dev_pm_ops tegra_gr3d_pm = {
+	SET_RUNTIME_PM_OPS(gr3d_runtime_suspend, gr3d_runtime_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 struct platform_driver tegra_gr3d_driver = {
 	.driver = {
 		.name = "tegra-gr3d",
 		.of_match_table = tegra_gr3d_match,
+		.pm = &tegra_gr3d_pm,
 	},
 	.probe = gr3d_probe,
 	.remove = gr3d_remove,
