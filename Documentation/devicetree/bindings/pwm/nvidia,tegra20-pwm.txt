@@ -32,6 +32,17 @@ The PWM node will have following optional properties.
 pinctrl-names:	Pin state names. Must be "default" and "sleep".
 pinctrl-0:	phandle for the default/active state of pin configurations.
 pinctrl-1:	phandle for the sleep state of pin configurations.
+core-supply:	phandle for voltage regulator of the SoC "core" power domain.
+
+operating-points-v2: see ../bindings/opp/opp.txt for details.
+
+For each opp entry in 'operating-points-v2' table:
+- opp-supported-hw: One bitfield indicating:
+	On Tegra20: SoC process ID mask
+	On Tegra30+: SoC speedo ID mask
+
+	A bitwise AND is performed against the value and if any bit
+	matches, the OPP gets enabled.
 
 Example:
 
@@ -42,6 +53,8 @@ Example:
 		clocks = <&tegra_car 17>;
 		resets = <&tegra_car 17>;
 		reset-names = "pwm";
+		operating-points-v2 = <&dvfs_opp_table>;
+		core-supply = <&vdd_core>;
 	};
 
 
