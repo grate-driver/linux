@@ -58,6 +58,24 @@
 	};
 
 	host1x@50000000 {
+		core-supply = <&vdd_core>;
+
+		gr2d@54140000 {
+			core-supply = <&vdd_core>;
+		};
+
+		gr3d@54180000 {
+			core-supply = <&vdd_core>;
+		};
+
+		dc@54200000 {
+			core-supply = <&vdd_core>;
+		};
+
+		dc@54240000 {
+			core-supply = <&vdd_core>;
+		};
+
 		hdmi@54280000 {
 			status = "okay";
 			vdd-supply = <&vdd_vid_reg>;
@@ -65,12 +83,17 @@
 			hdmi-supply = <&sys_3v3_reg>;
 			nvidia,ddc-i2c-bus = <&hdmi_ddc>;
 			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
+			core-supply = <&vdd_core>;
 		};
 	};
 
 	gpio: gpio@6000d000 {
 		gpio-ranges = <&pinmux 0 0 248>;
 		#reset-cells = <1>;
+	};
+
+	vde@6001a000 {
+		core-supply = <&vdd_core>;
 	};
 
 	pinmux@70000868 {
@@ -327,6 +350,7 @@
 
 		mmc-pwrseq = <&wifi_pwrseq>;
 		vmmc-supply = <&sdmmc_3v3_reg>;
+		core-supply = <&vdd_core>;
 		vqmmc-supply = <&vdd_1v8>;
 
 		/* Azurewave AW-NH660 BCM4330 */
@@ -354,6 +378,7 @@
 	usb@7d000000 {
 		compatible = "nvidia,tegra30-udc";
 		status = "okay";
+		core-supply = <&vdd_core>;
 	};
 
 	usb-phy@7d000000 {
