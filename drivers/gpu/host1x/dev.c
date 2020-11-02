@@ -12,6 +12,7 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of.h>
+#include <linux/pm_runtime.h>
 #include <linux/slab.h>
 
 #define CREATE_TRACE_POINTS
@@ -417,7 +418,7 @@ static int host1x_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	host->rst = devm_reset_control_get(&pdev->dev, "host1x");
+	host->rst = devm_reset_control_get_exclusive_released(&pdev->dev, "host1x");
 	if (IS_ERR(host->rst)) {
 		err = PTR_ERR(host->rst);
 		dev_err(&pdev->dev, "failed to get reset: %d\n", err);
@@ -437,16 +438,15 @@ static int host1x_probe(struct platform_device *pdev)
 		goto iommu_exit;
 	}
 
-	err = clk_prepare_enable(host->clk);
-	if (err < 0) {
-		dev_err(&pdev->dev, "failed to enable clock\n");
-		goto free_channels;
-	}
+	pm_runtime_enable(&pdev->dev);
+	err = pm_runtime_get_sync(&pdev->dev);
+	if (err < 0)
+		goto rpm_disable;
 
 	err = reset_control_deassert(host->rst);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to deassert reset: %d\n", err);
-		goto unprepare_disable;
+		goto rpm_disable;
 	}
 
 	err = host1x_syncpt_init(host);
@@ -485,9 +485,10 @@ deinit_syncpt:
 	host1x_syncpt_deinit(host);
 reset_assert:
 	reset_control_assert(host->rst);
-unprepare_disable:
-	clk_disable_unprepare(host->clk);
-free_channels:
+rpm_disable:
+	pm_runtime_put(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
+
 	host1x_channel_list_free(&host->channel_list);
 iommu_exit:
 	host1x_iommu_exit(host);
@@ -504,16 +505,95 @@ static int host1x_remove(struct platform_device *pdev)
 	host1x_intr_deinit(host);
 	host1x_syncpt_deinit(host);
 	reset_control_assert(host->rst);
-	clk_disable_unprepare(host->clk);
+	pm_runtime_put(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
 	host1x_iommu_exit(host);
 
 	return 0;
 }
 
+static int __maybe_unused host1x_runtime_suspend(struct device *dev)
+{
+	struct host1x *host = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(host->clk);
+	reset_control_release(host->rst);
+
+	return 0;
+}
+
+static int __maybe_unused host1x_runtime_resume(struct device *dev)
+{
+	struct host1x *host = dev_get_drvdata(dev);
+	int err;
+
+	err = reset_control_acquire(host->rst);
+	if (err) {
+		dev_err(dev, "failed to acquire reset: %d\n", err);
+		return err;
+	}
+
+	err = clk_prepare_enable(host->clk);
+	if (err) {
+		dev_err(dev, "failed to enable clock: %d\n", err);
+		goto release_reset;
+	}
+
+	return 0;
+
+release_reset:
+	reset_control_release(host->rst);
+
+	return err;
+}
+
+static __maybe_unused int host1x_suspend(struct device *dev)
+{
+	struct host1x *host = dev_get_drvdata(dev);
+	int err;
+
+	host1x_syncpt_save(host);
+
+	err = pm_runtime_force_suspend(dev);
+	if (err < 0)
+		return err;
+
+	return 0;
+}
+
+static __maybe_unused int host1x_resume(struct device *dev)
+{
+	struct host1x *host = dev_get_drvdata(dev);
+	struct host1x_channel *channel;
+	unsigned int index;
+	int err;
+
+	err = pm_runtime_force_resume(dev);
+	if (err < 0)
+		return err;
+
+	host1x_syncpt_restore(host);
+
+	for_each_set_bit(index, host->channel_list.allocated_channels,
+			 host->info->nb_channels) {
+		channel = &host->channel_list.channels[index];
+		host1x_hw_channel_init(host, channel, channel->id);
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops host1x_pm = {
+	SET_RUNTIME_PM_OPS(host1x_runtime_suspend, host1x_runtime_resume,
+			   NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(host1x_suspend, host1x_resume)
+};
+
 static struct platform_driver tegra_host1x_driver = {
 	.driver = {
 		.name = "tegra-host1x",
 		.of_match_table = host1x_of_match,
+		.pm = &host1x_pm,
 	},
 	.probe = host1x_probe,
 	.remove = host1x_remove,
