@@ -42,11 +42,14 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/pm_opp.h>
 #include <linux/pwm.h>
 #include <linux/platform_device.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/slab.h>
 #include <linux/reset.h>
+
+#include <soc/tegra/common.h>
 
 #define PWM_ENABLE	(1 << 31)
 #define PWM_DUTY_WIDTH	8
@@ -145,7 +148,7 @@ static int tegra_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 		required_clk_rate =
 			(NSEC_PER_SEC / period_ns) << PWM_DUTY_WIDTH;
 
-		err = clk_set_rate(pc->clk, required_clk_rate);
+		err = dev_pm_opp_set_rate(pc->dev, required_clk_rate);
 		if (err < 0)
 			return -EINVAL;
 
@@ -181,6 +184,10 @@ static int tegra_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	 * before writing the register. Otherwise, keep it enabled.
 	 */
 	if (!pwm_is_enabled(pwm)) {
+		err = dev_pm_opp_set_rate(pc->dev, pc->clk_rate);
+		if (err < 0)
+			return err;
+
 		err = clk_prepare_enable(pc->clk);
 		if (err < 0)
 			return err;
@@ -191,9 +198,12 @@ static int tegra_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	/*
 	 * If the PWM is not enabled, turn the clock off again to save power.
+	 * Remove OPP performance/voltage vote after disabling the clock.
 	 */
-	if (!pwm_is_enabled(pwm))
+	if (!pwm_is_enabled(pwm)) {
 		clk_disable_unprepare(pc->clk);
+		dev_pm_opp_set_rate(pc->dev, 0);
+	}
 
 	return 0;
 }
@@ -203,6 +213,10 @@ static int tegra_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 	struct tegra_pwm_chip *pc = to_tegra_pwm_chip(chip);
 	int rc = 0;
 	u32 val;
+
+	rc = dev_pm_opp_set_rate(pc->dev, pc->clk_rate);
+	if (rc < 0)
+		return rc;
 
 	rc = clk_prepare_enable(pc->clk);
 	if (rc < 0)
@@ -225,6 +239,7 @@ static void tegra_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 	pwm_writel(pc, pwm->hwpwm, val);
 
 	clk_disable_unprepare(pc->clk);
+	dev_pm_opp_set_rate(pc->dev, 0);
 }
 
 static const struct pwm_ops tegra_pwm_ops = {
@@ -233,6 +248,60 @@ static const struct pwm_ops tegra_pwm_ops = {
 	.disable = tegra_pwm_disable,
 	.owner = THIS_MODULE,
 };
+
+static void tegra_pwm_deinit_opp_table(void *data)
+{
+	struct device *dev = data;
+	struct opp_table *opp_table;
+
+	opp_table = dev_pm_opp_get_opp_table(dev);
+	dev_pm_opp_of_remove_table(dev);
+	dev_pm_opp_put_regulators(opp_table);
+	dev_pm_opp_put_opp_table(opp_table);
+}
+
+static int devm_tegra_pwm_init_opp_table(struct device *dev)
+{
+	struct opp_table *opp_table;
+	const char *rname = "core";
+	int err;
+
+	/* voltage scaling is optional */
+	if (device_property_present(dev, "core-supply"))
+		opp_table = dev_pm_opp_set_regulators(dev, &rname, 1);
+	else
+		opp_table = dev_pm_opp_get_opp_table(dev);
+
+	if (IS_ERR(opp_table))
+		return dev_err_probe(dev, PTR_ERR(opp_table),
+				     "failed to prepare OPP table\n");
+
+	/*
+	 * OPP table presence is optional and we want the set_rate() of OPP
+	 * API to work similarly to clk_set_rate() if table is missing in a
+	 * device-tree.  The add_table() errors out if OPP is missing in DT.
+	 */
+	if (device_property_present(dev, "operating-points-v2")) {
+		err = dev_pm_opp_of_add_table(dev);
+		if (err) {
+			dev_err(dev, "failed to add OPP table: %d\n", err);
+			goto put_table;
+		}
+	}
+
+	err = devm_add_action(dev, tegra_pwm_deinit_opp_table, dev);
+	if (err)
+		goto remove_table;
+
+	return 0;
+
+remove_table:
+	dev_pm_opp_of_remove_table(dev);
+put_table:
+	dev_pm_opp_put_regulators(opp_table);
+
+	return err;
+}
 
 static int tegra_pwm_probe(struct platform_device *pdev)
 {
@@ -258,8 +327,12 @@ static int tegra_pwm_probe(struct platform_device *pdev)
 	if (IS_ERR(pwm->clk))
 		return PTR_ERR(pwm->clk);
 
+	ret = devm_tegra_pwm_init_opp_table(&pdev->dev);
+	if (ret)
+		return ret;
+
 	/* Set maximum frequency of the IP */
-	ret = clk_set_rate(pwm->clk, pwm->soc->max_frequency);
+	ret = dev_pm_opp_set_rate(pwm->dev, pwm->soc->max_frequency);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to set max frequency: %d\n", ret);
 		return ret;
@@ -308,6 +381,10 @@ static int tegra_pwm_remove(struct platform_device *pdev)
 
 	if (WARN_ON(!pc))
 		return -ENODEV;
+
+	err = dev_pm_opp_set_rate(pc->dev, pc->clk_rate);
+	if (err < 0)
+		return err;
 
 	err = clk_prepare_enable(pc->clk);
 	if (err < 0)
@@ -375,6 +452,7 @@ static struct platform_driver tegra_pwm_driver = {
 		.name = "tegra-pwm",
 		.of_match_table = tegra_pwm_of_match,
 		.pm = &tegra_pwm_pm_ops,
+		.sync_state = tegra_soc_device_sync_state,
 	},
 	.probe = tegra_pwm_probe,
 	.remove = tegra_pwm_remove,
