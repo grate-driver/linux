@@ -13,6 +13,9 @@
 #include <linux/of_device.h>
 #include <linux/of.h>
 #include <linux/slab.h>
+#include <linux/pm_opp.h>
+
+#include <soc/tegra/fuse.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/host1x.h>
@@ -341,6 +344,85 @@ static void host1x_iommu_exit(struct host1x *host)
 	}
 }
 
+static void host1x_deinit_opp_table(void *data)
+{
+	struct device *dev = data;
+	struct opp_table *opp_table;
+
+	opp_table = dev_pm_opp_get_opp_table(dev);
+	dev_pm_opp_of_remove_table(dev);
+	dev_pm_opp_put_supported_hw(opp_table);
+	dev_pm_opp_put_regulators(opp_table);
+	dev_pm_opp_put_opp_table(opp_table);
+}
+
+static int devm_host1x_init_opp_table(struct host1x *host)
+{
+	struct opp_table *opp_table, *hw_opp_table;
+	const char *rname = "core";
+	u32 hw_version;
+	int err;
+
+	/* voltage scaling is optional */
+	if (device_property_present(host->dev, "core-supply"))
+		opp_table = dev_pm_opp_set_regulators(host->dev, &rname, 1);
+	else
+		opp_table = dev_pm_opp_get_opp_table(host->dev);
+
+	if (IS_ERR(opp_table))
+		return dev_err_probe(host->dev, PTR_ERR(opp_table),
+				     "failed to prepare OPP table\n");
+
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		hw_version = BIT(tegra_sku_info.soc_process_id);
+	else
+		hw_version = BIT(tegra_sku_info.soc_speedo_id);
+
+	hw_opp_table = dev_pm_opp_set_supported_hw(host->dev, &hw_version, 1);
+	err = PTR_ERR_OR_ZERO(hw_opp_table);
+	if (err) {
+		dev_err(host->dev, "failed to set supported HW: %d\n", err);
+		goto put_table;
+	}
+
+	/*
+	 * OPP table presence is optional and we want the set_rate() of OPP
+	 * API to work similarly to clk_set_rate() if table is missing in a
+	 * device-tree.  The add_table() errors out if OPP is missing in DT.
+	 */
+	if (device_property_present(host->dev, "operating-points-v2")) {
+		err = dev_pm_opp_of_add_table(host->dev);
+		if (err) {
+			dev_err(host->dev, "failed to add OPP table: %d\n", err);
+			goto put_hw;
+		}
+	}
+
+	/* first dummy rate-set initializes voltage vote */
+	err = dev_pm_opp_set_rate(host->dev, clk_get_rate(host->clk));
+	if (err) {
+		dev_err(host->dev, "failed to initialize OPP clock: %d\n", err);
+		goto remove_table;
+	}
+
+	err = devm_add_action(host->dev, host1x_deinit_opp_table, host->dev);
+	if (err)
+		goto remove_table;
+
+	dev_info(host->dev, "OPP HW ver. 0x%x\n", hw_version);
+
+	return 0;
+
+remove_table:
+	dev_pm_opp_of_remove_table(host->dev);
+put_hw:
+	dev_pm_opp_put_supported_hw(opp_table);
+put_table:
+	dev_pm_opp_put_regulators(opp_table);
+
+	return err;
+}
+
 static int host1x_probe(struct platform_device *pdev)
 {
 	struct host1x *host;
@@ -423,6 +505,11 @@ static int host1x_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to get reset: %d\n", err);
 		return err;
 	}
+
+	err = devm_host1x_init_opp_table(host);
+	if (err < 0)
+		return dev_err_probe(&pdev->dev, err,
+				     "failed to initialize OPP\n");
 
 	err = host1x_iommu_init(host);
 	if (err < 0) {
