@@ -90,6 +90,7 @@ Optional properties:
   case, the "idle" state needs to pull down the data and strobe pin
   and the "active" state needs to pull up the strobe pin.
 - pinctrl-n: alternate pin modes
+- operating-points-v2: See ../bindings/opp/opp.txt for details.
 
 i.mx specific properties
 - fsl,usbmisc: phandler of non-core register device, with one
@@ -109,6 +110,9 @@ i.mx specific properties
   Adjust the high-speed transmitter DC level voltage.
   The range is from 0x0 to 0xf, the default value is 0x3.
   Details can refer to TXVREFTUNE0 bits of USBNC_n_PHY_CFG1.
+
+Tegra specific properties
+- core-supply: phandle of voltage regulator of the SoC "core" power domain
 
 Example:
 
