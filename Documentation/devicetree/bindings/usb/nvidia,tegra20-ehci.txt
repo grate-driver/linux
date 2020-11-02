@@ -21,3 +21,5 @@ Required properties :
 Optional properties:
  - nvidia,needs-double-reset : boolean is to be set for some of the Tegra20
    USB ports, which need reset twice due to hardware issues.
+ - operating-points-v2: See ../bindings/opp/opp.txt for details.
+ - core-supply: Phandle of voltage regulator of the SoC "core" power domain.
