@@ -15,11 +15,13 @@
 #include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
+#include <soc/tegra/fuse.h>
 #include <soc/tegra/pmc.h>
 
 #include "uapi.h"
@@ -926,6 +928,9 @@ static __maybe_unused int tegra_vde_runtime_suspend(struct device *dev)
 
 	clk_disable_unprepare(vde->clk);
 
+	/* remove performance/voltage vote */
+	dev_pm_opp_set_rate(dev, 0);
+
 	return 0;
 }
 
@@ -933,6 +938,12 @@ static __maybe_unused int tegra_vde_runtime_resume(struct device *dev)
 {
 	struct tegra_vde *vde = dev_get_drvdata(dev);
 	int err;
+
+	err = dev_pm_opp_set_rate(dev, vde->default_clk_rate);
+	if (err) {
+		dev_err(dev, "Failed to set clock rate: %d\n", err);
+		return err;
+	}
 
 	err = tegra_powergate_sequence_power_up(TEGRA_POWERGATE_VDEC,
 						vde->clk, vde->rst);
@@ -942,6 +953,118 @@ static __maybe_unused int tegra_vde_runtime_resume(struct device *dev)
 	}
 
 	return 0;
+}
+
+static void tegra_vde_deinit_opp_table(void *data)
+{
+	struct device *dev = data;
+	struct opp_table *opp_table;
+
+	opp_table = dev_pm_opp_get_opp_table(dev);
+	dev_pm_opp_of_remove_table(dev);
+	dev_pm_opp_put_supported_hw(opp_table);
+	dev_pm_opp_put_regulators(opp_table);
+	dev_pm_opp_put_opp_table(opp_table);
+}
+
+static int devm_tegra_vde_init_opp_table(struct device *dev,
+					 struct tegra_vde *vde)
+{
+	struct opp_table *opp_table, *hw_opp_table;
+	const char *rname = "core";
+	struct dev_pm_opp *opp;
+	unsigned long rate;
+	u32 hw_version;
+	int err;
+
+	/* voltage scaling is optional */
+	if (device_property_present(dev, "core-supply"))
+		opp_table = dev_pm_opp_set_regulators(dev, &rname, 1);
+	else
+		opp_table = dev_pm_opp_get_opp_table(dev);
+
+	if (IS_ERR(opp_table))
+		return dev_err_probe(dev, PTR_ERR(opp_table),
+				     "Failed to prepare OPP table\n");
+
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		hw_version = BIT(tegra_sku_info.soc_process_id);
+	else
+		hw_version = BIT(tegra_sku_info.soc_speedo_id);
+
+	hw_opp_table = dev_pm_opp_set_supported_hw(dev, &hw_version, 1);
+	err = PTR_ERR_OR_ZERO(hw_opp_table);
+	if (err) {
+		dev_err(dev, "Failed to set supported HW: %d\n", err);
+		goto put_table;
+	}
+
+	/*
+	 * OPP table presence is optional and we want the set_rate() of OPP
+	 * API to work similarly to clk_set_rate() if table is missing in a
+	 * device-tree.  The add_table() errors out if OPP is missing in DT.
+	 *
+	 * Clock rate should be pre-initialized (i.e. it's non-zero) either
+	 * by clock driver or by assigned clocks in a device-tree.
+	 */
+	if (!device_property_present(dev, "operating-points-v2")) {
+		vde->default_clk_rate = clk_get_rate(vde->clk);
+		goto add_action;
+	}
+
+	err = dev_pm_opp_of_add_table(dev);
+	if (err) {
+		dev_err(dev, "Failed to add OPP table: %d\n", err);
+		goto put_hw;
+	}
+
+	/*
+	 * If voltage regulator presents, then we could select the fastest
+	 * clock rate, but driver doesn't support frequency scaling yet,
+	 * hence the top freq OPP may vote for a very high voltage that will
+	 * produce lot's of heat.  Let's select OPP for the current/default
+	 * rate for now.
+	 *
+	 * Clock rate should be pre-initialized (i.e. it's non-zero) either
+	 * by clock driver or by assigned clocks in a device-tree.
+	 */
+	rate = clk_get_rate(vde->clk);
+
+	/* find suitable OPP for the clock rate supportable by SoC */
+	opp = dev_pm_opp_find_freq_ceil(dev, &rate);
+
+	if (opp == ERR_PTR(-ERANGE))
+		opp = dev_pm_opp_find_freq_floor(dev, &rate);
+
+	err = PTR_ERR_OR_ZERO(opp);
+	if (err) {
+		dev_err(dev, "failed to get OPP for %ld Hz: %d\n",
+			rate, err);
+		goto remove_table;
+	}
+
+	dev_pm_opp_put(opp);
+
+	vde->default_clk_rate = clk_round_rate(vde->clk, rate);
+
+add_action:
+	err = devm_add_action(dev, tegra_vde_deinit_opp_table, dev);
+	if (err)
+		goto remove_table;
+
+	dev_info(dev, "OPP HW ver. 0x%x, clock rate %lu MHz\n",
+		 hw_version, vde->default_clk_rate / 1000000);
+
+	return 0;
+
+remove_table:
+	dev_pm_opp_of_remove_table(dev);
+put_hw:
+	dev_pm_opp_put_supported_hw(opp_table);
+put_table:
+	dev_pm_opp_put_regulators(opp_table);
+
+	return err;
 }
 
 static int tegra_vde_probe(struct platform_device *pdev)
@@ -1023,6 +1146,10 @@ static int tegra_vde_probe(struct platform_device *pdev)
 		dev_err(dev, "Could not request IRQ %d\n", err);
 		return err;
 	}
+
+	err = devm_tegra_vde_init_opp_table(dev, vde);
+	if (err)
+		return dev_err_probe(dev, err, "Failed to initialize OPP\n");
 
 	vde->iram_pool = of_gen_pool_get(dev->of_node, "iram", 0);
 	if (!vde->iram_pool) {

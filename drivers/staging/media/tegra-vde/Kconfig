@@ -4,6 +4,7 @@ config TEGRA_VDE
 	depends on ARCH_TEGRA || COMPILE_TEST
 	select DMA_SHARED_BUFFER
 	select IOMMU_IOVA
+	select PM_OPP
 	select SRAM
 	help
 	    Say Y here to enable support for the NVIDIA Tegra video decoder

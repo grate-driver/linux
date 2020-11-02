@@ -48,6 +48,7 @@ struct tegra_vde {
 	struct iova_domain iova;
 	struct iova *iova_resv_static_addresses;
 	struct iova *iova_resv_last_page;
+	unsigned long default_clk_rate;
 	dma_addr_t iram_lists_addr;
 	u32 *iram;
 };
