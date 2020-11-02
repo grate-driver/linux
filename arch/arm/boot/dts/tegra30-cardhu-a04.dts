@@ -93,6 +93,34 @@
 		gpio = <&gpio TEGRA_GPIO(DD, 0) GPIO_ACTIVE_HIGH>;
 	};
 
+	host1x@50000000 {
+		core-supply = <&vddcore_reg>;
+
+		gr2d@54140000 {
+			core-supply = <&vddcore_reg>;
+		};
+
+		gr3d@54180000 {
+			core-supply = <&vddcore_reg>;
+		};
+
+		dc@54200000 {
+			core-supply = <&vddcore_reg>;
+		};
+
+		dc@54240000 {
+			core-supply = <&vddcore_reg>;
+		};
+	};
+
+	vde@6001a000 {
+		core-supply = <&vddcore_reg>;
+	};
+
+	pwm: pwm@7000a000 {
+		core-supply = <&vddcore_reg>;
+	};
+
 	i2c@7000d000 {
 		pmic: tps65911@2d {
 			regulators {
@@ -115,6 +143,22 @@
 
 			nvidia,tegra-core-regulator;
 		};
+	};
+
+	memory-controller@7000f400 {
+		core-supply = <&vddcore_reg>;
+	};
+
+	mmc@78000000 {
+		core-supply = <&vddcore_reg>;
+	};
+
+	mmc@78000600 {
+		core-supply = <&vddcore_reg>;
+	};
+
+	usb@7d008000 {
+		core-supply = <&vddcore_reg>;
 	};
 
 	cpus {
