@@ -60,7 +60,19 @@
 	};
 
 	host1x@50000000 {
+		core-supply = <&vdd_core>;
+
+		gr2d@54140000 {
+			core-supply = <&vdd_core>;
+		};
+
+		gr3d@54180000 {
+			core-supply = <&vdd_core>;
+		};
+
 		dc@54200000 {
+			core-supply = <&vdd_core>;
+
 			rgb {
 				status = "okay";
 
@@ -71,6 +83,10 @@
 					};
 				};
 			};
+		};
+
+		dc@54240000 {
+			core-supply = <&vdd_core>;
 		};
 	};
 
@@ -88,6 +104,10 @@
 			gpios = <TEGRA_GPIO(I, 6) GPIO_ACTIVE_HIGH>;
 			input;
 		};
+	};
+
+	vde@6001a000 {
+		core-supply = <&vdd_core>;
 	};
 
 	pinmux@70000868 {
@@ -835,6 +855,7 @@
 
 	pwm: pwm@7000a000 {
 		status = "okay";
+		core-supply = <&vdd_core>;
 	};
 
 	i2c@7000c400 {
@@ -994,6 +1015,7 @@
 
 		mmc-pwrseq = <&brcm_wifi_pwrseq>;
 		vmmc-supply = <&vdd_3v3_sys>;
+		core-supply = <&vdd_core>;
 		vqmmc-supply = <&vdd_1v8>;
 
 		/* Azurewave AW-NH665 BCM4330 */
@@ -1018,6 +1040,7 @@
 		compatible = "nvidia,tegra30-udc";
 		status = "okay";
 		dr_mode = "peripheral";
+		core-supply = <&vdd_core>;
 	};
 
 	usb-phy@7d000000 {
