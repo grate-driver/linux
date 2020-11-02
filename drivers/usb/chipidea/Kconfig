@@ -56,6 +56,7 @@ config USB_CHIPIDEA_TEGRA
 	tristate "Enable Tegra UDC glue driver" if EMBEDDED
 	depends on OF
 	depends on USB_CHIPIDEA_UDC
+	select PM_OPP
 	default USB_CHIPIDEA
 
 endif
