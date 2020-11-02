@@ -1666,6 +1666,12 @@ static int tegra_emc_resume(struct device *dev)
 	return 0;
 }
 
+static void tegra_emc_sync_state(struct device *dev)
+{
+	tegra_soc_device_sync_state(dev);
+	icc_sync_state(dev);
+}
+
 static const struct dev_pm_ops tegra_emc_pm_ops = {
 	.suspend = tegra_emc_suspend,
 	.resume = tegra_emc_resume,
@@ -1684,7 +1690,7 @@ static struct platform_driver tegra_emc_driver = {
 		.of_match_table = tegra_emc_of_match,
 		.pm = &tegra_emc_pm_ops,
 		.suppress_bind_attrs = true,
-		.sync_state = icc_sync_state,
+		.sync_state = tegra_emc_sync_state,
 	},
 };
 module_platform_driver(tegra_emc_driver);
