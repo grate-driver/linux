@@ -42,6 +42,8 @@ struct io_uring_sqe {
 		__u32		statx_flags;
 		__u32		fadvise_advice;
 		__u32		splice_flags;
+		__u32		rename_flags;
+		__u32		unlink_flags;
 	};
 	__u64	user_data;	/* data to be passed back at completion time */
 	union {
@@ -132,6 +134,9 @@ enum {
 	IORING_OP_PROVIDE_BUFFERS,
 	IORING_OP_REMOVE_BUFFERS,
 	IORING_OP_TEE,
+	IORING_OP_SHUTDOWN,
+	IORING_OP_RENAMEAT,
+	IORING_OP_UNLINKAT,
 
 	/* this goes last, obviously */
 	IORING_OP_LAST,
@@ -253,6 +258,7 @@ struct io_uring_params {
 #define IORING_FEAT_CUR_PERSONALITY	(1U << 4)
 #define IORING_FEAT_FAST_POLL		(1U << 5)
 #define IORING_FEAT_POLL_32BITS 	(1U << 6)
+#define IORING_FEAT_SQPOLL_NONFIXED	(1U << 7)
 
 /*
  * io_uring_register(2) opcodes and arguments
