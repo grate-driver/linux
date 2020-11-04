@@ -1822,7 +1822,21 @@ fetch_events:
 
 		if (!schedule_hrtimeout_range(to, slack, HRTIMER_MODE_ABS)) {
 			timed_out = 1;
-			break;
+			__set_current_state(TASK_RUNNING);
+			/*
+			 * Acquire the lock and try to remove this thread from
+			 * the wait queue. If this thread is not on the wait
+			 * queue, it has woken up after its timeout ended
+			 * before it could re-acquire the lock. In that case,
+			 * try to harvest some events.
+			 */
+			write_lock_irq(&ep->lock);
+			if (!list_empty(&wait.entry))
+				__remove_wait_queue(&ep->wq, &wait);
+			else
+				eavail = 1;
+			write_unlock_irq(&ep->lock);
+			goto send_events;
 		}
 
 		/* We were woken up, thus go and try to harvest some events */
