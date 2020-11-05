@@ -290,6 +290,15 @@ config QCS_GCC_404
 	  Say Y if you want to use multimedia devices or peripheral
 	  devices such as UART, SPI, I2C, USB, SD/eMMC, PCIe etc.
 
+config SC_CAMCC_7180
+	tristate "SC7180 Camera Clock Controller"
+	select SC_GCC_7180
+	help
+	  Support for the camera clock controller on Qualcomm Technologies, Inc
+	  SC7180 devices.
+	  Say Y if you want to support camera devices and functionality such as
+	  capturing pictures.
+
 config SC_DISPCC_7180
 	tristate "SC7180 Display Clock Controller"
 	select SC_GCC_7180
@@ -501,5 +510,11 @@ config KRAITCC
 	help
 	  Support for the Krait CPU clocks on Qualcomm devices.
 	  Say Y if you want to support CPU frequency scaling.
+
+config CLK_GFM_LPASS_SM8250
+	tristate "SM8250 GFM LPASS Clocks"
+	help
+	  Support for the Glitch Free Mux (GFM) Low power audio
+          subsystem (LPASS) clocks found on SM8250 SoCs.
 
 endif
