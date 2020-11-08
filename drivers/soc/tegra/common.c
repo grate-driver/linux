@@ -3,9 +3,6 @@
  * Copyright (C) 2014 NVIDIA CORPORATION.  All rights reserved.
  */
 
-#define dev_fmt(fmt)	"%s: " fmt, __func__
-#define pr_fmt(fmt)	"%s: " fmt, __func__
-
 #include <linux/export.h>
 #include <linux/init.h>
 #include <linux/mutex.h>
