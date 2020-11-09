@@ -163,6 +163,12 @@ void dev_pm_opp_remove_table(struct device *dev);
 void dev_pm_opp_cpumask_remove_table(const struct cpumask *cpumask);
 int dev_pm_opp_sync_regulators(struct device *dev);
 int dev_pm_opp_set_voltage(struct device *dev, struct dev_pm_opp *opp);
+struct opp_table *devm_pm_opp_get_opp_table(struct device *dev);
+struct opp_table *devm_pm_opp_set_regulators(struct device *dev, const char * const names[], unsigned int count);
+struct opp_table *devm_pm_opp_set_supported_hw(struct device *dev, const u32 *versions, unsigned int count);
+struct opp_table *devm_pm_opp_set_clkname(struct device *dev, const char *name);
+struct opp_table *devm_pm_opp_register_set_opp_helper(struct device *dev, int (*set_opp)(struct dev_pm_set_opp_data *data));
+struct opp_table *devm_pm_opp_attach_genpd(struct device *dev, const char **names, struct device ***virt_devs);
 #else
 static inline struct opp_table *dev_pm_opp_get_opp_table(struct device *dev)
 {
@@ -396,9 +402,49 @@ static inline int dev_pm_opp_set_voltage(struct device *dev, struct dev_pm_opp *
 	return -ENOTSUPP;
 }
 
+static inline struct opp_table *devm_pm_opp_get_opp_table(struct device *dev)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline struct opp_table *
+devm_pm_opp_set_regulators(struct device *dev, const char * const names[],
+			   unsigned int count)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline struct opp_table *
+devm_pm_opp_set_supported_hw(struct device *dev, const u32 *versions,
+			     unsigned int count)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline struct opp_table *
+devm_pm_opp_set_clkname(struct device *dev, const char *name)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline struct opp_table *
+devm_pm_opp_register_set_opp_helper(struct device *dev,
+				    int (*set_opp)(struct dev_pm_set_opp_data *data))
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline struct opp_table *
+devm_pm_opp_attach_genpd(struct device *dev, const char **names,
+			 struct device ***virt_devs)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
 #endif		/* CONFIG_PM_OPP */
 
 #if defined(CONFIG_PM_OPP) && defined(CONFIG_OF)
+int devm_pm_opp_of_add_table(struct device *dev);
 int dev_pm_opp_of_add_table(struct device *dev);
 int dev_pm_opp_of_add_table_indexed(struct device *dev, int index);
 void dev_pm_opp_of_remove_table(struct device *dev);
@@ -469,6 +515,11 @@ static inline int of_get_required_opp_performance_state(struct device_node *np, 
 }
 
 static inline int dev_pm_opp_of_find_icc_paths(struct device *dev, struct opp_table *opp_table)
+{
+	return -ENOTSUPP;
+}
+
+static inline int devm_pm_opp_of_add_table(struct device *dev)
 {
 	return -ENOTSUPP;
 }
