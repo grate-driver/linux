@@ -1350,3 +1350,28 @@ failed:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_of_register_em);
+
+/**
+ * devm_pm_opp_of_add_table() - Initialize opp table from device tree
+ * @dev:	device pointer used to lookup OPP table.
+ *
+ * This is a resource-managed version of dev_pm_opp_of_add_table().
+ *
+ * Return: 0 on success and errorno otherwise.
+ */
+int devm_pm_opp_of_add_table(struct device *dev)
+{
+	int err;
+
+	err = dev_pm_opp_of_add_table(dev);
+	if (err)
+		return err;
+
+	err = devm_add_action_or_reset(dev, (void *)dev_pm_opp_remove_table,
+				       dev);
+	if (err)
+		return err;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(devm_pm_opp_of_add_table);
