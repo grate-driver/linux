@@ -83,6 +83,13 @@ will provide an empty/cleared cpu mask for the associated boot argument.
 Note that "all" and "none" are not necessarily valid/sensible input values
 for each available parameter expecting a CPU list.
 
+        foo_cpus=1,3,5,16-last
+
+will at runtime, replace "last" with the number of the last (highest number)
+present CPU on the system.  Thus a common deployment can be used on multiple
+systems with different total number of cores present, without needing to
+evaluate the total core count in advance on each system.
+
 This document may not be entirely up to date and comprehensive. The command
 "modinfo -p ${modulename}" shows a current list of all parameters of a loadable
 module. Loadable modules, after being loaded into the running kernel, also
