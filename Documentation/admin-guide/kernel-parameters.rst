@@ -68,6 +68,13 @@ For example one can add to the command line following parameter:
 
 where the final item represents CPUs 100,101,125,126,150,151,...
 
+The following convenience aliases are also accepted and used:
+
+        foo_cpus=all
+
+is equivalent to "foo_cpus=0-N" -- where "N" is the numerically last CPU on
+the system, thus avoiding looking up the value in "/sys/devices/system/cpu"
+in advance on each deployed system.
 
 
 This document may not be entirely up to date and comprehensive. The command
