@@ -189,6 +189,7 @@ static void rcu_iw_handler(struct irq_work *iwp)
 
 	rdp = container_of(iwp, struct rcu_data, rcu_iw);
 	rnp = rdp->mynode;
+	lockdep_assert_irqs_disabled();
 	raw_spin_lock_rcu_node(rnp);
 	if (!WARN_ON_ONCE(!rdp->rcu_iw_pending)) {
 		rdp->rcu_iw_gp_seq = rnp->gp_seq;
@@ -462,8 +463,11 @@ static void rcu_check_gp_kthread_starvation(void)
 		if (gpk) {
 			pr_err("\tUnless %s kthread gets sufficient CPU time, OOM is now expected behavior.\n", rcu_state.name);
 			pr_err("RCU grace-period kthread stack dump:\n");
+			lockdep_assert_irqs_disabled();
 			sched_show_task(gpk);
+			lockdep_assert_irqs_disabled();
 			wake_up_process(gpk);
+			lockdep_assert_irqs_disabled();
 		}
 	}
 }
