@@ -8,7 +8,7 @@
 
 extern void __bad_xchg(void);
 
-#define __xchg(new, ptr, size)					\
+#define __xchg_relaxed(new, ptr, size)				\
 ({								\
 	__typeof__(ptr) __ptr = (ptr);				\
 	__typeof__(new) __new = (new);				\
@@ -18,7 +18,6 @@ extern void __bad_xchg(void);
 	case 2:							\
 		align = ((unsigned long) __ptr & 0x3);		\
 		addr = ((unsigned long) __ptr & ~0x3);		\
-		smp_mb();					\
 		if (align) {					\
 		asm volatile (					\
 		"1:	ldex.w		%0, (%4) \n"		\
@@ -50,10 +49,8 @@ extern void __bad_xchg(void);
 			: "r" (__new), "r"(addr)		\
 			:);					\
 		}						\
-		smp_mb();					\
 		break;						\
 	case 4:							\
-		smp_mb();					\
 		asm volatile (					\
 		"1:	ldex.w		%0, (%3) \n"		\
 		"	mov		%1, %2   \n"		\
@@ -62,7 +59,6 @@ extern void __bad_xchg(void);
 			: "=&r" (__ret), "=&r" (tmp)		\
 			: "r" (__new), "r"(__ptr)		\
 			:);					\
-		smp_mb();					\
 		break;						\
 	default:						\
 		__bad_xchg();					\
@@ -70,9 +66,32 @@ extern void __bad_xchg(void);
 	__ret;							\
 })
 
-#define xchg(ptr, x)	(__xchg((x), (ptr), sizeof(*(ptr))))
+#define xchg_relaxed(ptr, x)					\
+({								\
+	__xchg_relaxed((x), (ptr), sizeof(*(ptr)));		\
+})
 
-#define __cmpxchg(ptr, old, new, size)				\
+#define xchg_acquire(ptr, x)					\
+({								\
+	__typeof__(*(ptr)) __ret;				\
+	__ret = xchg_relaxed(ptr, x);				\
+	__smp_acquire_fence();					\
+	__ret;							\
+})
+
+#define xchg_release(ptr, x)					\
+({								\
+	__smp_release_fence();					\
+	xchg_relaxed(ptr, x);					\
+})
+
+#define xchg(ptr, x)						\
+({								\
+	__smp_release_fence();					\
+	xchg_acquire(ptr, x);					\
+})
+
+#define __cmpxchg_relaxed(ptr, old, new, size)			\
 ({								\
 	__typeof__(ptr) __ptr = (ptr);				\
 	__typeof__(new) __new = (new);				\
@@ -81,7 +100,6 @@ extern void __bad_xchg(void);
 	__typeof__(*(ptr)) __ret = 0;				\
 	switch (size) {						\
 	case 4:							\
-		smp_mb();					\
 		asm volatile (					\
 		"1:	ldex.w		%0, (%3) \n"		\
 		"	cmpne		%0, %4   \n"		\
@@ -93,7 +111,6 @@ extern void __bad_xchg(void);
 			: "=&r" (__ret), "=&r" (__tmp)		\
 			: "r" (__new), "r"(__ptr), "r"(__old)	\
 			:);					\
-		smp_mb();					\
 		break;						\
 	default:						\
 		__bad_xchg();					\
@@ -101,8 +118,54 @@ extern void __bad_xchg(void);
 	__ret;							\
 })
 
-#define cmpxchg(ptr, o, n) \
-	(__cmpxchg((ptr), (o), (n), sizeof(*(ptr))))
+#define cmpxchg_relaxed(ptr, o, n)				\
+	(__cmpxchg_relaxed((ptr), (o), (n), sizeof(*(ptr))))
+
+#define cmpxchg_release(ptr, o, n)				\
+({								\
+	__smp_release_fence();					\
+	cmpxchg_relaxed(ptr, o, n);				\
+})
+
+#define __cmpxchg_acquire(ptr, old, new, size)			\
+({								\
+	__typeof__(ptr) __ptr = (ptr);				\
+	__typeof__(new) __new = (new);				\
+	__typeof__(new) __tmp;					\
+	__typeof__(old) __old = (old);				\
+	__typeof__(*(ptr)) __ret = 0;				\
+	switch (size) {						\
+	case 4:							\
+		asm volatile (					\
+		"1:	ldex.w		%0, (%3) \n"		\
+		"	cmpne		%0, %4   \n"		\
+		"	bt		2f       \n"		\
+		"	mov		%1, %2   \n"		\
+		"	stex.w		%1, (%3) \n"		\
+		"	bez		%1, 1b   \n"		\
+		ACQUIRE_FENCE					\
+		"2:				 \n"		\
+			: "=&r" (__ret), "=&r" (__tmp)		\
+			: "r" (__new), "r"(__ptr), "r"(__old)	\
+			:);					\
+		break;						\
+	default:						\
+		__bad_xchg();					\
+	}							\
+	__ret;							\
+})
+
+#define cmpxchg_acquire(ptr, o, n)				\
+	(__cmpxchg_acquire((ptr), (o), (n), sizeof(*(ptr))))
+
+#define cmpxchg(ptr, o, n)					\
+({								\
+	__typeof__(*(ptr)) __ret;				\
+	__smp_release_fence();					\
+	__ret = cmpxchg_acquire(ptr, o, n);			\
+	__ret;							\
+})
+
 #else
 #include <asm-generic/cmpxchg.h>
 #endif
