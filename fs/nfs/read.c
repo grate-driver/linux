@@ -124,10 +124,11 @@ static void nfs_readpage_release(struct nfs_page *req, int error)
 		struct address_space *mapping = page_file_mapping(page);
 
 		if (PageUptodate(page))
-			nfs_readpage_to_fscache(inode, page, 0);
+			; /* FIXME: review fscache page error handling */
 		else if (!PageError(page) && !PagePrivate(page))
 			generic_error_remove_page(mapping, page);
-		unlock_page(page);
+		if (!nfs_i_fscache(inode))
+			unlock_page(page);
 	}
 	nfs_release_request(req);
 }
@@ -181,6 +182,8 @@ static void nfs_read_completion(struct nfs_pgio_header *hdr)
 		nfs_list_remove_request(req);
 		nfs_readpage_release(req, error);
 	}
+	/* FIXME: NFS_IOHDR_ERROR and NFS_IOHDR_EOF handled per-page */
+	nfs_read_completion_to_fscache(hdr, bytes);
 out:
 	hdr->release(hdr);
 }
@@ -359,7 +362,7 @@ int nfs_readpage(struct file *filp, struct page *page)
 		desc.ctx = get_nfs_open_context(nfs_file_open_context(filp));
 
 	if (!IS_SYNC(inode)) {
-		ret = nfs_readpage_from_fscache(desc.ctx, inode, page);
+		ret = nfs_readpage_from_fscache(filp, page, &desc);
 		if (ret == 0)
 			goto out;
 	}
