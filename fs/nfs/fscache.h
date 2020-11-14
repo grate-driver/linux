@@ -98,12 +98,10 @@ extern int nfs_fscache_release_page(struct page *, gfp_t);
 extern int nfs_readpage_from_fscache(struct file *file,
 				     struct page *page,
 				     struct nfs_readdesc *desc);
-extern int __nfs_readpages_from_fscache(struct nfs_open_context *,
-					struct inode *, struct address_space *,
-					struct list_head *, unsigned *);
+extern int nfs_readahead_from_fscache(struct nfs_readdesc *desc,
+				      struct readahead_control *ractl);
 extern void nfs_read_completion_to_fscache(struct nfs_pgio_header *hdr,
 					   unsigned long bytes);
-
 /*
  * wait for a page to complete writing to the cache
  */
@@ -123,21 +121,6 @@ static inline void nfs_fscache_invalidate_page(struct page *page,
 {
 	if (PageFsCache(page))
 		__nfs_fscache_invalidate_page(page, inode);
-}
-
-/*
- * Retrieve a set of pages from an inode data storage object.
- */
-static inline int nfs_readpages_from_fscache(struct nfs_open_context *ctx,
-					     struct inode *inode,
-					     struct address_space *mapping,
-					     struct list_head *pages,
-					     unsigned *nr_pages)
-{
-	if (NFS_I(inode)->fscache)
-		return __nfs_readpages_from_fscache(ctx, inode, mapping, pages,
-						    nr_pages);
-	return -ENOBUFS;
 }
 
 /*
@@ -195,11 +178,8 @@ static inline int nfs_readpage_from_fscache(struct file *file,
 {
 	return -ENOBUFS;
 }
-static inline int nfs_readpages_from_fscache(struct nfs_open_context *ctx,
-					     struct inode *inode,
-					     struct address_space *mapping,
-					     struct list_head *pages,
-					     unsigned *nr_pages)
+static inline int nfs_readahead_from_fscache(struct nfs_readdesc *desc,
+					     struct readahead_control *ractl)
 {
 	return -ENOBUFS;
 }
