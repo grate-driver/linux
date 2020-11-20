@@ -13,6 +13,7 @@
 
 #include <linux/energy_model.h>
 #include <linux/err.h>
+#include <linux/kref.h>
 #include <linux/notifier.h>
 
 struct clk;
@@ -74,6 +75,7 @@ struct dev_pm_opp_info {
  * @regulator_count: Number of regulators
  * @clk:	Pointer to clk
  * @dev:	Pointer to the struct device
+ * @kref:	Reference counter
  *
  * This structure contains all information required for setting an OPP.
  */
@@ -85,6 +87,7 @@ struct dev_pm_set_opp_data {
 	unsigned int regulator_count;
 	struct clk *clk;
 	struct device *dev;
+	struct kref kref;
 };
 
 #if defined(CONFIG_PM_OPP)
