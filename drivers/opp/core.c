@@ -829,16 +829,21 @@ static int _set_opp_custom(const struct opp_table *opp_table,
 			   struct dev_pm_opp_supply *new_supply)
 {
 	struct dev_pm_set_opp_data *data;
-	int size;
+	int size, count;
+
+	if (opp_table->regulators)
+		count = opp_table->regulator_count;
+	else
+		count = 0;
 
 	data = opp_table->set_opp_data;
 	data->regulators = opp_table->regulators;
-	data->regulator_count = opp_table->regulator_count;
+	data->regulator_count = count;
 	data->clk = opp_table->clk;
 	data->dev = dev;
 
 	data->old_opp.rate = old_freq;
-	size = sizeof(*old_supply) * opp_table->regulator_count;
+	size = sizeof(*old_supply) * count;
 	if (!old_supply)
 		memset(data->old_opp.supplies, 0, size);
 	else
@@ -1817,8 +1822,14 @@ static int _allocate_set_opp_data(struct opp_table *opp_table)
 	struct dev_pm_set_opp_data *data;
 	int len, count = opp_table->regulator_count;
 
-	if (WARN_ON(!opp_table->regulators))
-		return -EINVAL;
+	/* just bump the refcount if already allocated */
+	if (opp_table->set_opp_data) {
+		kref_get(&opp_table->set_opp_data->kref);
+		return 0;
+	}
+
+	/* allocate maximum number of regulators, for simplicity */
+	count = max(count, 1);
 
 	/* space for set_opp_data */
 	len = sizeof(*data);
@@ -1830,6 +1841,7 @@ static int _allocate_set_opp_data(struct opp_table *opp_table)
 	if (!data)
 		return -ENOMEM;
 
+	kref_init(&data->kref);
 	data->old_opp.supplies = (void *)(data + 1);
 	data->new_opp.supplies = data->old_opp.supplies + count;
 
@@ -1838,10 +1850,17 @@ static int _allocate_set_opp_data(struct opp_table *opp_table)
 	return 0;
 }
 
+static void _release_set_opp_data(struct kref *kref)
+{
+	kfree(container_of(kref, struct dev_pm_set_opp_data, kref));
+}
+
 static void _free_set_opp_data(struct opp_table *opp_table)
 {
-	kfree(opp_table->set_opp_data);
-	opp_table->set_opp_data = NULL;
+	struct dev_pm_set_opp_data *data = opp_table->set_opp_data;
+
+	if (kref_put(&data->kref, _release_set_opp_data))
+		opp_table->set_opp_data = NULL;
 }
 
 /**
@@ -2042,6 +2061,7 @@ struct opp_table *dev_pm_opp_register_set_opp_helper(struct device *dev,
 			int (*set_opp)(struct dev_pm_set_opp_data *data))
 {
 	struct opp_table *opp_table;
+	int ret;
 
 	if (!set_opp)
 		return ERR_PTR(-EINVAL);
@@ -2056,11 +2076,21 @@ struct opp_table *dev_pm_opp_register_set_opp_helper(struct device *dev,
 		return ERR_PTR(-EBUSY);
 	}
 
+	/* Allocate block to pass to set_opp() routines */
+	ret = _allocate_set_opp_data(opp_table);
+	if (ret)
+		goto err;
+
 	/* Another CPU that shares the OPP table has set the helper ? */
 	if (!opp_table->set_opp)
 		opp_table->set_opp = set_opp;
 
 	return opp_table;
+
+err:
+	dev_pm_opp_put_opp_table(opp_table);
+
+	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_register_set_opp_helper);
 
@@ -2078,6 +2108,8 @@ void dev_pm_opp_unregister_set_opp_helper(struct opp_table *opp_table)
 
 	/* Make sure there are no concurrent readers while updating opp_table */
 	WARN_ON(!list_empty(&opp_table->opp_list));
+
+	_free_set_opp_data(opp_table);
 
 	opp_table->set_opp = NULL;
 	dev_pm_opp_put_opp_table(opp_table);
