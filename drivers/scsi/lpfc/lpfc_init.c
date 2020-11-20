@@ -2844,28 +2844,6 @@ lpfc_cleanup(struct lpfc_vport *vport)
 		lpfc_port_link_failure(vport);
 
 	list_for_each_entry_safe(ndlp, next_ndlp, &vport->fc_nodes, nlp_listp) {
-		if (!NLP_CHK_NODE_ACT(ndlp)) {
-			ndlp = lpfc_enable_node(vport, ndlp,
-						NLP_STE_UNUSED_NODE);
-			if (!ndlp)
-				continue;
-			spin_lock_irq(&phba->ndlp_lock);
-			NLP_SET_FREE_REQ(ndlp);
-			spin_unlock_irq(&phba->ndlp_lock);
-			/* Trigger the release of the ndlp memory */
-			lpfc_nlp_put(ndlp);
-			continue;
-		}
-		spin_lock_irq(&phba->ndlp_lock);
-		if (NLP_CHK_FREE_REQ(ndlp)) {
-			/* The ndlp should not be in memory free mode already */
-			spin_unlock_irq(&phba->ndlp_lock);
-			continue;
-		} else
-			/* Indicate request for freeing ndlp memory */
-			NLP_SET_FREE_REQ(ndlp);
-		spin_unlock_irq(&phba->ndlp_lock);
-
 		if (vport->port_type != LPFC_PHYSICAL_PORT &&
 		    ndlp->nlp_DID == Fabric_DID) {
 			/* Just free up ndlp with Fabric_DID for vports */
@@ -2873,20 +2851,23 @@ lpfc_cleanup(struct lpfc_vport *vport)
 			continue;
 		}
 
-		/* take care of nodes in unused state before the state
-		 * machine taking action.
-		 */
-		if (ndlp->nlp_state == NLP_STE_UNUSED_NODE) {
+		if (ndlp->nlp_DID == Fabric_Cntl_DID &&
+		    ndlp->nlp_state == NLP_STE_UNUSED_NODE) {
 			lpfc_nlp_put(ndlp);
 			continue;
 		}
 
-		if (ndlp->nlp_type & NLP_FABRIC)
+		/* Fabric Ports not in UNMAPPED state are cleaned up in the
+		 * DEVICE_RM event.
+		 */
+		if (ndlp->nlp_type & NLP_FABRIC &&
+		    ndlp->nlp_state == NLP_STE_UNMAPPED_NODE)
 			lpfc_disc_state_machine(vport, ndlp, NULL,
 					NLP_EVT_DEVICE_RECOVERY);
 
-		lpfc_disc_state_machine(vport, ndlp, NULL,
-					     NLP_EVT_DEVICE_RM);
+		if (!(ndlp->fc4_xpt_flags & (NVME_XPT_REGD|SCSI_XPT_REGD)))
+			lpfc_disc_state_machine(vport, ndlp, NULL,
+					NLP_EVT_DEVICE_RM);
 	}
 
 	/* At this point, ALL ndlp's should be gone
@@ -2901,12 +2882,13 @@ lpfc_cleanup(struct lpfc_vport *vport)
 			list_for_each_entry_safe(ndlp, next_ndlp,
 						&vport->fc_nodes, nlp_listp) {
 				lpfc_printf_vlog(ndlp->vport, KERN_ERR,
-						LOG_TRACE_EVENT,
-						"0282 did:x%x ndlp:x%px "
-						"usgmap:x%x refcnt:%d\n",
-						ndlp->nlp_DID, (void *)ndlp,
-						ndlp->nlp_usg_map,
-						kref_read(&ndlp->kref));
+						 LOG_TRACE_EVENT,
+						 "0282 did:x%x ndlp:x%px "
+						 "refcnt:%d xflags x%x nflag x%x\n",
+						 ndlp->nlp_DID, (void *)ndlp,
+						 kref_read(&ndlp->kref),
+						 ndlp->fc4_xpt_flags,
+						 ndlp->nlp_flag);
 			}
 			break;
 		}
@@ -3080,7 +3062,6 @@ lpfc_sli4_node_prep(struct lpfc_hba *phba)
 	struct lpfc_nodelist  *ndlp, *next_ndlp;
 	struct lpfc_vport **vports;
 	int i, rpi;
-	unsigned long flags;
 
 	if (phba->sli_rev != LPFC_SLI_REV4)
 		return;
@@ -3096,22 +3077,18 @@ lpfc_sli4_node_prep(struct lpfc_hba *phba)
 		list_for_each_entry_safe(ndlp, next_ndlp,
 					 &vports[i]->fc_nodes,
 					 nlp_listp) {
-			if (!NLP_CHK_NODE_ACT(ndlp))
-				continue;
 			rpi = lpfc_sli4_alloc_rpi(phba);
 			if (rpi == LPFC_RPI_ALLOC_ERROR) {
-				spin_lock_irqsave(&phba->ndlp_lock, flags);
-				NLP_CLR_NODE_ACT(ndlp);
-				spin_unlock_irqrestore(&phba->ndlp_lock, flags);
+				/* TODO print log? */
 				continue;
 			}
 			ndlp->nlp_rpi = rpi;
 			lpfc_printf_vlog(ndlp->vport, KERN_INFO,
 					 LOG_NODE | LOG_DISCOVERY,
 					 "0009 Assign RPI x%x to ndlp x%px "
-					 "DID:x%06x flg:x%x map:x%x\n",
+					 "DID:x%06x flg:x%x\n",
 					 ndlp->nlp_rpi, ndlp, ndlp->nlp_DID,
-					 ndlp->nlp_flag, ndlp->nlp_usg_map);
+					 ndlp->nlp_flag);
 		}
 	}
 	lpfc_destroy_vport_work_array(phba, vports);
@@ -3510,8 +3487,7 @@ lpfc_offline_prep(struct lpfc_hba *phba, int mbx_action)
 			list_for_each_entry_safe(ndlp, next_ndlp,
 						 &vports[i]->fc_nodes,
 						 nlp_listp) {
-				if ((!NLP_CHK_NODE_ACT(ndlp)) ||
-				    ndlp->nlp_state == NLP_STE_UNUSED_NODE) {
+				if (ndlp->nlp_state == NLP_STE_UNUSED_NODE) {
 					/* Driver must assume RPI is invalid for
 					 * any unused or inactive node.
 					 */
@@ -3519,33 +3495,42 @@ lpfc_offline_prep(struct lpfc_hba *phba, int mbx_action)
 					continue;
 				}
 
-				if (ndlp->nlp_type & NLP_FABRIC) {
-					lpfc_disc_state_machine(vports[i], ndlp,
-						NULL, NLP_EVT_DEVICE_RECOVERY);
-					lpfc_disc_state_machine(vports[i], ndlp,
-						NULL, NLP_EVT_DEVICE_RM);
-				}
-				spin_lock_irq(shost->host_lock);
+				spin_lock_irq(&ndlp->lock);
 				ndlp->nlp_flag &= ~NLP_NPR_ADISC;
-				spin_unlock_irq(shost->host_lock);
+				spin_unlock_irq(&ndlp->lock);
 				/*
 				 * Whenever an SLI4 port goes offline, free the
 				 * RPI. Get a new RPI when the adapter port
 				 * comes back online.
 				 */
 				if (phba->sli_rev == LPFC_SLI_REV4) {
-					lpfc_printf_vlog(ndlp->vport, KERN_INFO,
+					lpfc_printf_vlog(vports[i], KERN_INFO,
 						 LOG_NODE | LOG_DISCOVERY,
 						 "0011 Free RPI x%x on "
-						 "ndlp:x%px did x%x "
-						 "usgmap:x%x\n",
+						 "ndlp: %p did x%x\n",
 						 ndlp->nlp_rpi, ndlp,
-						 ndlp->nlp_DID,
-						 ndlp->nlp_usg_map);
+						 ndlp->nlp_DID);
 					lpfc_sli4_free_rpi(phba, ndlp->nlp_rpi);
 					ndlp->nlp_rpi = LPFC_RPI_ALLOC_ERROR;
 				}
 				lpfc_unreg_rpi(vports[i], ndlp);
+
+				if (ndlp->nlp_type & NLP_FABRIC) {
+					lpfc_disc_state_machine(vports[i], ndlp,
+						NULL, NLP_EVT_DEVICE_RECOVERY);
+
+					/* Don't remove the node unless the
+					 * has been unregistered with the
+					 * transport.  If so, let dev_loss
+					 * take care of the node.
+					 */
+					if (!(ndlp->fc4_xpt_flags &
+					      (NVME_XPT_REGD | SCSI_XPT_REGD)))
+						lpfc_disc_state_machine
+							(vports[i], ndlp,
+							 NULL,
+							 NLP_EVT_DEVICE_RM);
+				}
 			}
 		}
 	}
@@ -5604,11 +5589,6 @@ lpfc_sli4_perform_vport_cvl(struct lpfc_vport *vport)
 		ndlp->nlp_type |= NLP_FABRIC;
 		/* Put ndlp onto node list */
 		lpfc_enqueue_node(vport, ndlp);
-	} else if (!NLP_CHK_NODE_ACT(ndlp)) {
-		/* re-setup ndlp without removing from node list */
-		ndlp = lpfc_enable_node(vport, ndlp, NLP_STE_UNUSED_NODE);
-		if (!ndlp)
-			return 0;
 	}
 	if ((phba->pport->port_state < LPFC_FLOGI) &&
 		(phba->pport->port_state != LPFC_VPORT_FAILED))
@@ -5846,9 +5826,9 @@ lpfc_sli4_async_fip_evt(struct lpfc_hba *phba,
 			mod_timer(&ndlp->nlp_delayfunc,
 				  jiffies + msecs_to_jiffies(1000));
 			shost = lpfc_shost_from_vport(vport);
-			spin_lock_irq(shost->host_lock);
+			spin_lock_irq(&ndlp->lock);
 			ndlp->nlp_flag |= NLP_DELAY_TMO;
-			spin_unlock_irq(shost->host_lock);
+			spin_unlock_irq(&ndlp->lock);
 			ndlp->nlp_last_elscmd = ELS_CMD_FDISC;
 			vport->port_state = LPFC_FDISC;
 		} else {
@@ -6297,9 +6277,6 @@ lpfc_setup_driver_resource_phase1(struct lpfc_hba *phba)
 	atomic_set(&phba->dbg_log_cnt, 0);
 	atomic_set(&phba->dbg_log_dmping, 0);
 	spin_lock_init(&phba->hbalock);
-
-	/* Initialize ndlp management spinlock */
-	spin_lock_init(&phba->ndlp_lock);
 
 	/* Initialize port_list spinlock */
 	spin_lock_init(&phba->port_list_lock);
@@ -12534,10 +12511,11 @@ lpfc_pci_remove_one_s3(struct pci_dev *pdev)
 		}
 	lpfc_destroy_vport_work_array(phba, vports);
 
-	/* Remove FC host and then SCSI host with the physical port */
+	/* Remove FC host with the physical port */
 	fc_remove_host(shost);
 	scsi_remove_host(shost);
 
+	/* Clean up all nodes, mailboxes and IOs. */
 	lpfc_cleanup(vport);
 
 	/*
@@ -13377,7 +13355,6 @@ lpfc_pci_remove_one_s4(struct pci_dev *pdev)
 	vport->load_flag |= FC_UNLOADING;
 	spin_unlock_irq(&phba->hbalock);
 
-	/* Free the HBA sysfs attributes */
 	lpfc_free_sysfs_attr(vport);
 
 	/* Release all the vports against this physical port */
@@ -13390,7 +13367,7 @@ lpfc_pci_remove_one_s4(struct pci_dev *pdev)
 		}
 	lpfc_destroy_vport_work_array(phba, vports);
 
-	/* Remove FC host and then SCSI host with the physical port */
+	/* Remove FC host with the physical port */
 	fc_remove_host(shost);
 	scsi_remove_host(shost);
 
@@ -14143,7 +14120,7 @@ lpfc_init(void)
 		fc_release_transport(lpfc_transport_template);
 		goto unregister;
 	}
-	lpfc_nvme_cmd_template();
+	lpfc_wqe_cmd_template();
 	lpfc_nvmet_cmd_template();
 
 	/* Initialize in case vector mapping is needed */
