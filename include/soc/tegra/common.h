@@ -22,10 +22,16 @@ struct tegra_core_opp_params {
 
 #ifdef CONFIG_ARCH_TEGRA
 bool soc_is_tegra(void);
+bool tegra_soc_core_domain_state_synced(void);
 int devm_tegra_core_dev_init_opp_table(struct device *dev,
 				       struct tegra_core_opp_params *params);
 #else
 static inline bool soc_is_tegra(void)
+{
+	return false;
+}
+
+static inline bool tegra_soc_core_domain_state_synced(void)
 {
 	return false;
 }
