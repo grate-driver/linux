@@ -339,9 +339,11 @@ static int _genpd_set_performance_state(struct generic_pm_domain *genpd,
 			goto err;
 	}
 
-	ret = genpd->set_performance_state(genpd, state);
-	if (ret)
-		goto err;
+	if (genpd->set_performance_state) {
+		ret = genpd->set_performance_state(genpd, state);
+		if (ret)
+			goto err;
+	}
 
 	genpd->performance_state = state;
 	return 0;
@@ -398,9 +400,6 @@ int dev_pm_genpd_set_performance_state(struct device *dev, unsigned int state)
 	genpd = dev_to_genpd_safe(dev);
 	if (!genpd)
 		return -ENODEV;
-
-	if (unlikely(!genpd->set_performance_state))
-		return -EINVAL;
 
 	if (WARN_ON(!dev->power.subsys_data ||
 		     !dev->power.subsys_data->domain_data))
