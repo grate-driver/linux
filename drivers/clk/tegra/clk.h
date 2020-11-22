@@ -865,6 +865,9 @@ void tegra_periph_clk_init(void __iomem *clk_base, void __iomem *pmc_base,
 			struct tegra_clk *tegra_clks,
 			struct tegra_clk_pll_params *pll_params);
 
+void tegra_periph_clk_rpm_init(void __iomem *clk_base,
+			       struct tegra_clk *tegra_clks);
+
 void tegra_fixed_clk_init(struct tegra_clk *tegra_clks);
 int tegra_osc_clk_init(void __iomem *clk_base, struct tegra_clk *clks,
 		       unsigned long *input_freqs, unsigned int num,
@@ -903,6 +906,8 @@ void tegra114_clock_deassert_dfll_dvco_reset(void);
 
 typedef void (*tegra_clk_apply_init_table_func)(void);
 extern tegra_clk_apply_init_table_func tegra_clk_apply_init_table;
+typedef void (*tegra_clk_apply_rpm_init_table_func)(void);
+extern tegra_clk_apply_rpm_init_table_func tegra_clk_apply_rpm_clocks;
 int tegra_pll_wait_for_lock(struct tegra_clk_pll *pll);
 u16 tegra_pll_get_fixed_mdiv(struct clk_hw *hw, unsigned long input_rate);
 int tegra_pll_p_div_to_hw(struct tegra_clk_pll *pll, u8 p_div);
@@ -926,5 +931,7 @@ struct clk *tegra20_clk_register_emc(void __iomem *ioaddr, bool low_jitter);
 
 struct clk *tegra210_clk_register_emc(struct device_node *np,
 				      void __iomem *regs);
+
+struct clk *tegra_clk_register(struct clk_hw *hw);
 
 #endif /* TEGRA_CLK_H */
