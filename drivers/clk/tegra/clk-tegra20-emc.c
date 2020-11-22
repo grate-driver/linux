@@ -270,7 +270,7 @@ struct clk *tegra20_clk_register_emc(void __iomem *ioaddr, bool low_jitter)
 	emc->hw.init = &init;
 	emc->want_low_jitter = low_jitter;
 
-	clk = clk_register(NULL, &emc->hw);
+	clk = tegra_clk_register(&emc->hw);
 	if (IS_ERR(clk)) {
 		kfree(emc);
 		return NULL;
