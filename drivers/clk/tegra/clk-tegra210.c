@@ -3131,6 +3131,7 @@ static __init void tegra210_periph_clk_init(struct device_node *np,
 	}
 
 	tegra_periph_clk_init(clk_base, pmc_base, tegra210_clks, &pll_p_params);
+	tegra_periph_clk_rpm_init(clk_base, tegra210_clks);
 
 	/* emc */
 	clk = tegra210_clk_register_emc(np, clk_base);
