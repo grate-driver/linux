@@ -1081,6 +1081,7 @@ static __init void tegra124_periph_clk_init(void __iomem *clk_base,
 	}
 
 	tegra_periph_clk_init(clk_base, pmc_base, tegra124_clks, &pll_p_params);
+	tegra_periph_clk_rpm_init(clk_base, tegra124_clks);
 }
 
 static void __init tegra124_pll_init(void __iomem *clk_base,
