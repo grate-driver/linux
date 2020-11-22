@@ -812,11 +812,6 @@ static void __init tegra30_pll_init(void)
 {
 	struct clk *clk;
 
-	/* PLLC */
-	clk = tegra_clk_register_pll("pll_c", "pll_ref", clk_base, pmc_base, 0,
-				     &pll_c_params, NULL);
-	clks[TEGRA30_CLK_PLL_C] = clk;
-
 	/* PLLC_OUT1 */
 	clk = tegra_clk_register_divider("pll_c_out1_div", "pll_c",
 				clk_base + PLLC_OUT, 0, TEGRA_DIVIDER_ROUND_UP,
@@ -825,11 +820,6 @@ static void __init tegra30_pll_init(void)
 				clk_base + PLLC_OUT, 1, 0, CLK_SET_RATE_PARENT,
 				0, NULL);
 	clks[TEGRA30_CLK_PLL_C_OUT1] = clk;
-
-	/* PLLM */
-	clk = tegra_clk_register_pll("pll_m", "pll_ref", clk_base, pmc_base,
-			    CLK_SET_RATE_GATE, &pll_m_params, NULL);
-	clks[TEGRA30_CLK_PLL_M] = clk;
 
 	/* PLLM_OUT1 */
 	clk = tegra_clk_register_divider("pll_m_out1_div", "pll_m",
@@ -880,9 +870,6 @@ static void __init tegra30_pll_init(void)
 			       ARRAY_SIZE(pll_e_parents),
 			       CLK_SET_RATE_NO_REPARENT,
 			       clk_base + PLLE_AUX, 2, 1, 0, NULL);
-	clk = tegra_clk_register_plle("pll_e", "pll_e_mux", clk_base, pmc_base,
-			     CLK_GET_RATE_NOCACHE, &pll_e_params, NULL);
-	clks[TEGRA30_CLK_PLL_E] = clk;
 }
 
 static const char *cclk_g_parents[] = { "clk_m", "pll_c", "clk_32k", "pll_m",
@@ -970,14 +957,6 @@ static void __init tegra30_super_clk_init(void)
 				  TEGRA_DIVIDER_2, 4, 8, 9,
 			      NULL);
 	clks[TEGRA30_CLK_CCLK_LP] = clk;
-
-	/* SCLK */
-	clk = tegra_clk_register_super_mux("sclk", sclk_parents,
-				  ARRAY_SIZE(sclk_parents),
-				  CLK_SET_RATE_PARENT | CLK_IS_CRITICAL,
-				  clk_base + SCLK_BURST_POLICY,
-				  0, 4, 0, 0, NULL);
-	clks[TEGRA30_CLK_SCLK] = clk;
 
 	/* twd */
 	clk = clk_register_fixed_factor(NULL, "twd", "cclk_g",
@@ -1354,13 +1333,56 @@ static void __init tegra30_clock_init(struct device_node *np)
 			     tegra30_audio_plls,
 			     ARRAY_SIZE(tegra30_audio_plls), 24000000);
 
-	tegra_init_dup_clks(tegra_clk_duplicates, clks, TEGRA30_CLK_CLK_MAX);
-
 	tegra_add_of_provider(np, tegra30_clk_src_onecell_get);
-	tegra_register_devclks(devclks, ARRAY_SIZE(devclks));
 
 	tegra_clk_apply_init_table = tegra30_clock_apply_init_table;
 
 	tegra_cpu_car_ops = &tegra30_cpu_car_ops;
 }
 CLK_OF_DECLARE(tegra30, "nvidia,tegra30-car", tegra30_clock_init);
+
+/*
+ * Clocks that use runtime PM can't be created at the CLK_OF_DECLARE
+ * stage because drivers base isn't initialized yet, and thus platform
+ * devices can't be created for the clocks.  Hence we need to split the
+ * registration of the clocks into two phases.  The first phase registers
+ * essential clocks which don't require RPM and are actually used during
+ * early boot.  The second phase registers clocks which use RPM and this
+ * is done when device drivers core API is ready.
+ */
+static int __init tegra30_init_runtime_pm_clocks(void)
+{
+	struct clk *clk;
+
+	if (!of_machine_is_compatible("nvidia,tegra30"))
+		return 0;
+
+	/* PLLC */
+	clk = tegra_clk_register_pll("pll_c", "pll_ref", clk_base, pmc_base, 0,
+				     &pll_c_params, NULL);
+	clks[TEGRA30_CLK_PLL_C] = clk;
+
+	/* PLLE */
+	clk = tegra_clk_register_plle("pll_e", "pll_e_mux", clk_base, pmc_base,
+				      CLK_GET_RATE_NOCACHE, &pll_e_params, NULL);
+	clks[TEGRA30_CLK_PLL_E] = clk;
+
+	/* PLLM */
+	clk = tegra_clk_register_pll("pll_m", "pll_ref", clk_base, pmc_base,
+				     CLK_SET_RATE_GATE, &pll_m_params, NULL);
+	clks[TEGRA30_CLK_PLL_M] = clk;
+
+	/* SCLK */
+	clk = tegra_clk_register_super_mux("sclk", sclk_parents,
+					   ARRAY_SIZE(sclk_parents),
+					   CLK_SET_RATE_PARENT | CLK_IS_CRITICAL,
+					   clk_base + SCLK_BURST_POLICY,
+					   0, 4, 0, 0, NULL);
+	clks[TEGRA30_CLK_SCLK] = clk;
+
+	tegra_init_dup_clks(tegra_clk_duplicates, clks, TEGRA30_CLK_CLK_MAX);
+	tegra_register_devclks(devclks, ARRAY_SIZE(devclks));
+
+	return 0;
+}
+postcore_initcall_sync(tegra30_init_runtime_pm_clocks);
