@@ -9,14 +9,19 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/clk/tegra.h>
+#include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/reset-controller.h>
+#include <linux/string.h>
 
 #include <soc/tegra/fuse.h>
 
 #include "clk.h"
 
 /* Global data of Tegra CPU CAR ops */
+static struct device_node *tegra_car_np;
 static struct tegra_cpu_car_ops dummy_car_ops;
 struct tegra_cpu_car_ops *tegra_cpu_car_ops = &dummy_car_ops;
 
@@ -320,6 +325,8 @@ void __init tegra_add_of_provider(struct device_node *np,
 {
 	int i;
 
+	tegra_car_np = np;
+
 	for (i = 0; i < clk_num; i++) {
 		if (IS_ERR(clks[i])) {
 			pr_err
@@ -372,6 +379,66 @@ struct clk ** __init tegra_lookup_dt_id(int clk_id,
 		return NULL;
 }
 
+static struct device_node *tegra_clk_dt_node(struct clk_hw *hw)
+{
+	struct device_node *np, *root;
+
+	if (!tegra_car_np)
+		return NULL;
+
+	root = of_get_child_by_name(tegra_car_np, "tegra-clocks");
+	if (!root)
+		return NULL;
+
+	for_each_child_of_node(root, np) {
+		if (strcmp(np->name, hw->init->name))
+			continue;
+
+		if (!of_device_is_compatible(np, "nvidia,tegra20-clock") &&
+		    !of_device_is_compatible(np, "nvidia,tegra30-clock"))
+			continue;
+
+		return np;
+	}
+
+	of_node_put(root);
+
+	return NULL;
+}
+
+struct clk *tegra_clk_register(struct clk_hw *hw)
+{
+	struct platform_device *pdev;
+	struct device *dev = NULL;
+	struct device_node *np;
+	const char *dev_name;
+
+	np = tegra_clk_dt_node(hw);
+
+	if (!of_device_is_available(np))
+		goto reg_clk;
+
+	dev_name = kasprintf(GFP_KERNEL, "tegra_clk_%s", hw->init->name);
+	if (!dev_name) {
+		of_node_put(np);
+		goto reg_clk;
+	}
+
+	pdev = of_platform_device_create(np, dev_name, NULL);
+	if (!pdev) {
+		pr_err("%s: failed to create device for %pOF\n", __func__, np);
+		kfree(dev_name);
+		of_node_put(np);
+		goto reg_clk;
+	}
+
+	dev = &pdev->dev;
+	pm_runtime_enable(dev);
+
+reg_clk:
+	return clk_register(dev, hw);
+}
+
 tegra_clk_apply_init_table_func tegra_clk_apply_init_table;
 
 static int __init tegra_clocks_apply_init_table(void)
@@ -384,3 +451,25 @@ static int __init tegra_clocks_apply_init_table(void)
 	return 0;
 }
 arch_initcall(tegra_clocks_apply_init_table);
+
+tegra_clk_apply_rpm_init_table_func tegra_clk_apply_rpm_clocks;
+
+/*
+ * Clocks that use runtime PM can't be created at the CLK_OF_DECLARE
+ * stage because drivers base isn't initialized yet, and thus platform
+ * devices can't be created for the clocks.  Hence we need to split the
+ * registration of the clocks into two phases.  The first phase registers
+ * essential clocks which don't require RPM and are actually used during
+ * early boot.  The second phase registers clocks which use RPM and this
+ * is done when drivers base is ready.
+ */
+static int __init tegra_clocks_apply_core_rpm(void)
+{
+	if (!tegra_clk_apply_rpm_clocks)
+		return 0;
+
+	tegra_clk_apply_rpm_clocks();
+
+	return 0;
+}
+postcore_initcall_sync(tegra_clocks_apply_core_rpm);

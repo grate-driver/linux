@@ -195,7 +195,7 @@ static struct clk *_tegra_clk_register_periph(const char *name,
 	periph->gate.regs = bank;
 	periph->gate.enable_refcnt = periph_clk_enb_refcnt;
 
-	clk = clk_register(NULL, &periph->hw);
+	clk = tegra_clk_register(&periph->hw);
 	if (IS_ERR(clk))
 		return clk;
 
