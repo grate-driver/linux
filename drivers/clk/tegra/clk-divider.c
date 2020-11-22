@@ -163,7 +163,7 @@ struct clk *tegra_clk_register_divider(const char *name,
 	/* Data in .init is copied by clk_register(), so stack variable OK */
 	divider->hw.init = &init;
 
-	clk = clk_register(NULL, &divider->hw);
+	clk = tegra_clk_register(&divider->hw);
 	if (IS_ERR(clk))
 		kfree(divider);
 
