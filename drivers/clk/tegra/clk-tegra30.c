@@ -812,11 +812,6 @@ static void __init tegra30_pll_init(void)
 {
 	struct clk *clk;
 
-	/* PLLC */
-	clk = tegra_clk_register_pll("pll_c", "pll_ref", clk_base, pmc_base, 0,
-				     &pll_c_params, NULL);
-	clks[TEGRA30_CLK_PLL_C] = clk;
-
 	/* PLLC_OUT1 */
 	clk = tegra_clk_register_divider("pll_c_out1_div", "pll_c",
 				clk_base + PLLC_OUT, 0, TEGRA_DIVIDER_ROUND_UP,
@@ -825,11 +820,6 @@ static void __init tegra30_pll_init(void)
 				clk_base + PLLC_OUT, 1, 0, CLK_SET_RATE_PARENT,
 				0, NULL);
 	clks[TEGRA30_CLK_PLL_C_OUT1] = clk;
-
-	/* PLLM */
-	clk = tegra_clk_register_pll("pll_m", "pll_ref", clk_base, pmc_base,
-			    CLK_SET_RATE_GATE, &pll_m_params, NULL);
-	clks[TEGRA30_CLK_PLL_M] = clk;
 
 	/* PLLM_OUT1 */
 	clk = tegra_clk_register_divider("pll_m_out1_div", "pll_m",
@@ -880,9 +870,6 @@ static void __init tegra30_pll_init(void)
 			       ARRAY_SIZE(pll_e_parents),
 			       CLK_SET_RATE_NO_REPARENT,
 			       clk_base + PLLE_AUX, 2, 1, 0, NULL);
-	clk = tegra_clk_register_plle("pll_e", "pll_e_mux", clk_base, pmc_base,
-			     CLK_GET_RATE_NOCACHE, &pll_e_params, NULL);
-	clks[TEGRA30_CLK_PLL_E] = clk;
 }
 
 static const char *cclk_g_parents[] = { "clk_m", "pll_c", "clk_32k", "pll_m",
@@ -971,14 +958,6 @@ static void __init tegra30_super_clk_init(void)
 			      NULL);
 	clks[TEGRA30_CLK_CCLK_LP] = clk;
 
-	/* SCLK */
-	clk = tegra_clk_register_super_mux("sclk", sclk_parents,
-				  ARRAY_SIZE(sclk_parents),
-				  CLK_SET_RATE_PARENT | CLK_IS_CRITICAL,
-				  clk_base + SCLK_BURST_POLICY,
-				  0, 4, 0, 0, NULL);
-	clks[TEGRA30_CLK_SCLK] = clk;
-
 	/* twd */
 	clk = clk_register_fixed_factor(NULL, "twd", "cclk_g",
 					CLK_SET_RATE_PARENT, 1, 2);
@@ -1018,29 +997,7 @@ static struct tegra_periph_init_data tegra_periph_nodiv_clk_list[] = {
 
 static void __init tegra30_periph_clk_init(void)
 {
-	struct tegra_periph_init_data *data;
 	struct clk *clk;
-	unsigned int i;
-
-	/* dsia */
-	clk = tegra_clk_register_periph_gate("dsia", "pll_d_out0", 0, clk_base,
-				    0, 48, periph_clk_enb_refcnt);
-	clks[TEGRA30_CLK_DSIA] = clk;
-
-	/* pcie */
-	clk = tegra_clk_register_periph_gate("pcie", "clk_m", 0, clk_base, 0,
-				    70, periph_clk_enb_refcnt);
-	clks[TEGRA30_CLK_PCIE] = clk;
-
-	/* afi */
-	clk = tegra_clk_register_periph_gate("afi", "clk_m", 0, clk_base, 0, 72,
-				    periph_clk_enb_refcnt);
-	clks[TEGRA30_CLK_AFI] = clk;
-
-	/* emc */
-	clk = tegra20_clk_register_emc(clk_base + CLK_SOURCE_EMC, true);
-
-	clks[TEGRA30_CLK_EMC] = clk;
 
 	clk = tegra_clk_register_mc("mc", "emc", clk_base + CLK_SOURCE_EMC,
 				    NULL);
@@ -1055,21 +1012,6 @@ static void __init tegra30_periph_clk_init(void)
 	clk = clk_register_gate(NULL, "cml1", "pll_e", 0, clk_base + PLLE_AUX,
 				1, 0, &cml_lock);
 	clks[TEGRA30_CLK_CML1] = clk;
-
-	for (i = 0; i < ARRAY_SIZE(tegra_periph_clk_list); i++) {
-		data = &tegra_periph_clk_list[i];
-		clk = tegra_clk_register_periph_data(clk_base, data);
-		clks[data->clk_id] = clk;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(tegra_periph_nodiv_clk_list); i++) {
-		data = &tegra_periph_nodiv_clk_list[i];
-		clk = tegra_clk_register_periph_nodiv(data->name,
-					data->p.parent_names,
-					data->num_parents, &data->periph,
-					clk_base, data->offset);
-		clks[data->clk_id] = clk;
-	}
 
 	tegra_periph_clk_init(clk_base, pmc_base, tegra30_clks, &pll_p_params);
 }
@@ -1317,6 +1259,77 @@ static struct clk *tegra30_clk_src_onecell_get(struct of_phandle_args *clkspec,
 	return clk;
 }
 
+static void __init tegra30_clock_core_rpm_init(void)
+{
+	struct tegra_periph_init_data *data;
+	struct clk *clk;
+	unsigned int i;
+
+	/* PLLC */
+	clk = tegra_clk_register_pll("pll_c", "pll_ref", clk_base, pmc_base, 0,
+				     &pll_c_params, NULL);
+	clks[TEGRA30_CLK_PLL_C] = clk;
+
+	/* PLLE */
+	clk = tegra_clk_register_plle("pll_e", "pll_e_mux", clk_base, pmc_base,
+				      CLK_GET_RATE_NOCACHE, &pll_e_params, NULL);
+	clks[TEGRA30_CLK_PLL_E] = clk;
+
+	/* PLLM */
+	clk = tegra_clk_register_pll("pll_m", "pll_ref", clk_base, pmc_base,
+				     CLK_SET_RATE_GATE, &pll_m_params, NULL);
+	clks[TEGRA30_CLK_PLL_M] = clk;
+
+	/* SCLK */
+	clk = tegra_clk_register_super_mux("sclk", sclk_parents,
+					   ARRAY_SIZE(sclk_parents),
+					   CLK_SET_RATE_PARENT | CLK_IS_CRITICAL,
+					   clk_base + SCLK_BURST_POLICY,
+					   0, 4, 0, 0, NULL);
+	clks[TEGRA30_CLK_SCLK] = clk;
+
+	/* dsia */
+	clk = tegra_clk_register_periph_gate("dsia", "pll_d_out0", 0, clk_base,
+					     0, 48, periph_clk_enb_refcnt);
+	clks[TEGRA30_CLK_DSIA] = clk;
+
+	/* dsib */
+	for (i = 0; i < ARRAY_SIZE(tegra_periph_nodiv_clk_list); i++) {
+		data = &tegra_periph_nodiv_clk_list[i];
+		clk = tegra_clk_register_periph_nodiv(data->name,
+						      data->p.parent_names,
+						      data->num_parents,
+						      &data->periph,
+						      clk_base, data->offset);
+		clks[data->clk_id] = clk;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(tegra_periph_clk_list); i++) {
+		data = &tegra_periph_clk_list[i];
+		clk = tegra_clk_register_periph_data(clk_base, data);
+		clks[data->clk_id] = clk;
+	}
+
+	/* pcie */
+	clk = tegra_clk_register_periph_gate("pcie", "clk_m", 0, clk_base, 0,
+					     70, periph_clk_enb_refcnt);
+	clks[TEGRA30_CLK_PCIE] = clk;
+
+	/* afi */
+	clk = tegra_clk_register_periph_gate("afi", "clk_m", 0, clk_base, 0, 72,
+					     periph_clk_enb_refcnt);
+	clks[TEGRA30_CLK_AFI] = clk;
+
+	/* emc */
+	clk = tegra20_clk_register_emc(clk_base + CLK_SOURCE_EMC, true);
+
+	clks[TEGRA30_CLK_EMC] = clk;
+
+	tegra_periph_clk_rpm_init(clk_base, tegra30_clks);
+	tegra_init_dup_clks(tegra_clk_duplicates, clks, TEGRA30_CLK_CLK_MAX);
+	tegra_register_devclks(devclks, ARRAY_SIZE(devclks));
+}
+
 static void __init tegra30_clock_init(struct device_node *np)
 {
 	struct device_node *node;
@@ -1357,12 +1370,10 @@ static void __init tegra30_clock_init(struct device_node *np)
 			     tegra30_audio_plls,
 			     ARRAY_SIZE(tegra30_audio_plls), 24000000);
 
-	tegra_init_dup_clks(tegra_clk_duplicates, clks, TEGRA30_CLK_CLK_MAX);
-
 	tegra_add_of_provider(np, tegra30_clk_src_onecell_get);
-	tegra_register_devclks(devclks, ARRAY_SIZE(devclks));
 
 	tegra_clk_apply_init_table = tegra30_clock_apply_init_table;
+	tegra_clk_apply_rpm_clocks = tegra30_clock_core_rpm_init;
 
 	tegra_cpu_car_ops = &tegra30_cpu_car_ops;
 }
