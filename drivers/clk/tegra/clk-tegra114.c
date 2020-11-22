@@ -1069,6 +1069,7 @@ static __init void tegra114_periph_clk_init(void __iomem *clk_base,
 
 	tegra_periph_clk_init(clk_base, pmc_base, tegra114_clks,
 				&pll_p_params);
+	tegra_periph_clk_rpm_init(clk_base, tegra114_clks);
 }
 
 /* Tegra114 CPU clock and reset control functions */
