@@ -274,6 +274,7 @@
 		nvidia,core-pwr-off-time = <458>;
 		nvidia,core-power-req-active-high;
 		nvidia,sys-clock-req-active-high;
+		core-supply = <&vdd_core>;
 	};
 
 	mc_timings: memory-controller@7000f000 {
