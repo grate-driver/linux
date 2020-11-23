@@ -475,6 +475,10 @@
 		backlight = <&backlight>;
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	vdd_ac_bat_reg: regulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_ac_bat";
