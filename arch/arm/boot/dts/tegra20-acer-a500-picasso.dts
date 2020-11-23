@@ -949,6 +949,10 @@
 		};
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	vdd_5v0_sys: regulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0";

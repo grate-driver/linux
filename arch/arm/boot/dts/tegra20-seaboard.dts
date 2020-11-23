@@ -444,7 +444,7 @@
 					regulator-always-on;
 				};
 
-				sm0 {
+				vdd_core: sm0 {
 					regulator-name = "vdd_sm0,vdd_core";
 					regulator-min-microvolt = <1300000>;
 					regulator-max-microvolt = <1300000>;
@@ -826,6 +826,10 @@
 
 		backlight = <&backlight>;
 		ddc-i2c-bus = <&lvds_ddc>;
+	};
+
+	power-domain-core {
+		power-supply = <&vdd_core>;
 	};
 
 	vdd_5v0_reg: regulator@0 {
