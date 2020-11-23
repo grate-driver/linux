@@ -606,6 +606,10 @@
 		backlight = <&backlight>;
 	};
 
+	power-domain-core {
+		power-supply = <&core_vdd_reg>;
+	};
+
 	p5valw_reg: regulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "+5valw";
