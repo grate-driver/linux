@@ -1047,6 +1047,10 @@
 		operating-range-celsius = <0 45>;
 	};
 
+	core-domain {
+		power-supply = <&vdd_core>;
+	};
+
 	/* PMIC has a built-in 32KHz oscillator which is used by PMC */
 	clk32k_in: clock@0 {
 		compatible = "fixed-clock";

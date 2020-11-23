@@ -377,6 +377,10 @@
 		status = "okay";
 	};
 
+	core-domain {
+		power-supply = <&vdd_core>;
+	};
+
 	/* PMIC has a built-in 32KHz oscillator which is used by PMC */
 	clk32k_in: clock {
 		compatible = "fixed-clock";
