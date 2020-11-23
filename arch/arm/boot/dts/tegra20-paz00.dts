@@ -569,6 +569,10 @@
 		backlight-boot-off;
 	};
 
+	power-domain-core {
+		power-supply = <&core_vdd_reg>;
+	};
+
 	clk32k_in: clock@0 {
 		compatible = "fixed-clock";
 		clock-frequency = <32768>;

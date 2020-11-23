@@ -834,6 +834,10 @@
 		clock-output-names = "kk3270032";
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	cpus {
 		cpu0: cpu@0 {
 			cpu-supply = <&vdd_cpu>;

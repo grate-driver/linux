@@ -379,6 +379,10 @@
 		bus-width = <4>;
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	clk32k_in: clock@0 {
 		compatible = "fixed-clock";
 		clock-frequency = <32768>;
@@ -441,6 +445,14 @@
 		regulator-name = "pci_vdd";
 		regulator-min-microvolt = <1050000>;
 		regulator-max-microvolt = <1050000>;
+		regulator-always-on;
+	};
+
+	vdd_core: regulator@5 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_core";
+		regulator-min-microvolt = <1300000>;
+		regulator-max-microvolt = <1300000>;
 		regulator-always-on;
 	};
 
