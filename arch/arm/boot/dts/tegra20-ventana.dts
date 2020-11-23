@@ -647,6 +647,10 @@
 		ddc-i2c-bus = <&lvds_ddc>;
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	vdd_5v0_reg: regulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0";
