@@ -401,6 +401,10 @@
 		gpios = <&gpio TEGRA_GPIO(X, 7) GPIO_ACTIVE_LOW>;
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	hdmi_vdd_reg: regulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "avdd_hdmi";
@@ -441,6 +445,14 @@
 		regulator-name = "pci_vdd";
 		regulator-min-microvolt = <1050000>;
 		regulator-max-microvolt = <1050000>;
+		regulator-always-on;
+	};
+
+	vdd_core: regulator@5 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_core";
+		regulator-min-microvolt = <1300000>;
+		regulator-max-microvolt = <1300000>;
 		regulator-always-on;
 	};
 
