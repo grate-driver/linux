@@ -123,6 +123,8 @@
 		resets = <&tegra_car 28>;
 		reset-names = "host1x";
 		iommus = <&mc TEGRA_SWGROUP_HC>;
+		operating-points-v2 = <&host1x_dvfs_opp_table>;
+		power-domains = <&pd_heg>;
 
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -136,6 +138,7 @@
 			clocks = <&tegra_car TEGRA30_CLK_MPE>;
 			resets = <&tegra_car 60>;
 			reset-names = "mpe";
+			power-domains = <&pd_mpe>;
 
 			iommus = <&mc TEGRA_SWGROUP_MPE>;
 		};
@@ -147,6 +150,7 @@
 			clocks = <&tegra_car TEGRA30_CLK_VI>;
 			resets = <&tegra_car 20>;
 			reset-names = "vi";
+			power-domains = <&pd_venc>;
 
 			iommus = <&mc TEGRA_SWGROUP_VI>;
 		};
@@ -158,6 +162,7 @@
 			clocks = <&tegra_car TEGRA30_CLK_EPP>;
 			resets = <&tegra_car 19>;
 			reset-names = "epp";
+			power-domains = <&pd_heg>;
 
 			iommus = <&mc TEGRA_SWGROUP_EPP>;
 		};
@@ -169,6 +174,7 @@
 			clocks = <&tegra_car TEGRA30_CLK_ISP>;
 			resets = <&tegra_car 23>;
 			reset-names = "isp";
+			power-domains = <&pd_venc>;
 
 			iommus = <&mc TEGRA_SWGROUP_ISP>;
 		};
@@ -180,6 +186,8 @@
 			clocks = <&tegra_car TEGRA30_CLK_GR2D>;
 			resets = <&tegra_car 21>;
 			reset-names = "2d";
+			operating-points-v2 = <&gr2d_dvfs_opp_table>;
+			power-domains = <&pd_heg>;
 
 			iommus = <&mc TEGRA_SWGROUP_G2>;
 		};
@@ -193,6 +201,9 @@
 			resets = <&tegra_car 24>,
 				 <&tegra_car 98>;
 			reset-names = "3d", "3d2";
+			operating-points-v2 = <&gr3d_dvfs_opp_table>;
+			power-domains = <&pd_3d0>, <&pd_3d1>;
+			power-domain-names = "3d0", "3d1";
 
 			iommus = <&mc TEGRA_SWGROUP_NV>,
 				 <&mc TEGRA_SWGROUP_NV2>;
@@ -207,6 +218,8 @@
 			clock-names = "dc", "parent";
 			resets = <&tegra_car 27>;
 			reset-names = "dc";
+			operating-points-v2 = <&disp1_dvfs_opp_table>;
+			power-domains = <&pd_core>;
 
 			iommus = <&mc TEGRA_SWGROUP_DC>;
 
@@ -237,6 +250,8 @@
 			clock-names = "dc", "parent";
 			resets = <&tegra_car 26>;
 			reset-names = "dc";
+			operating-points-v2 = <&disp2_dvfs_opp_table>;
+			power-domains = <&pd_core>;
 
 			iommus = <&mc TEGRA_SWGROUP_DCB>;
 
@@ -357,6 +372,260 @@
 		reg = <0x60006000 0x1000>;
 		#clock-cells = <1>;
 		#reset-cells = <1>;
+
+		tegra-clocks {
+			afi {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&afi_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_AFI>;
+				power-domains = <&pd_core>;
+			};
+
+			cve {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&cve_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_CVE>;
+				power-domains = <&pd_core>;
+			};
+
+			dsia {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&dsia_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_DSIA>;
+				power-domains = <&pd_core>;
+			};
+
+			dsib {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&dsib_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_DSIB>;
+				power-domains = <&pd_core>;
+			};
+
+			epp {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&epp_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_EPP>;
+				power-domains = <&pd_core>;
+			};
+
+			fuse_burn {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&fuse_burn_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_FUSE_BURN>;
+				power-domains = <&pd_core>;
+			};
+
+			hdmi {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&hdmi_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_HDMI>;
+				power-domains = <&pd_core>;
+			};
+
+			mipi {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&mipi_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_MIPI>;
+				power-domains = <&pd_core>;
+			};
+
+			mpe {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&mpe_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_MPE>;
+				power-domains = <&pd_core>;
+			};
+
+			sclk {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sclk_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SCLK>;
+				power-domains = <&pd_core>;
+			};
+
+			se {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&se_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SE>;
+				power-domains = <&pd_core>;
+			};
+
+			ndflash {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&ndflash_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_NDFLASH>;
+				power-domains = <&pd_core>;
+			};
+
+			nor {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&nor_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_NOR>;
+				power-domains = <&pd_core>;
+			};
+
+			pcie {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&pcie_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_PCIE>;
+				power-domains = <&pd_core>;
+			};
+
+			pll_c {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&pll_c_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_PLL_C>;
+				power-domains = <&pd_core>;
+			};
+
+			pll_e {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&pll_e_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_PLL_E>;
+				power-domains = <&pd_core>;
+			};
+
+			pll_m {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&pll_m_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_PLL_M>;
+				power-domains = <&pd_core>;
+			};
+
+			pwm {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&pwm_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_PWM>;
+				power-domains = <&pd_core>;
+			};
+
+			sata {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sata_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SATA>;
+				power-domains = <&pd_core>;
+			};
+
+			sata_oob {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sata_oob_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SATA_OOB>;
+				power-domains = <&pd_core>;
+			};
+
+			sbc1 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sbc1_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SBC1>;
+				power-domains = <&pd_core>;
+			};
+
+			sbc2 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sbc2_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SBC2>;
+				power-domains = <&pd_core>;
+			};
+
+			sbc3 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sbc3_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SBC3>;
+				power-domains = <&pd_core>;
+			};
+
+			sbc4 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sbc4_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SBC4>;
+				power-domains = <&pd_core>;
+			};
+
+			sbc5 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sbc5_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SBC5>;
+				power-domains = <&pd_core>;
+			};
+
+			sbc6 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sbc6_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SBC6>;
+				power-domains = <&pd_core>;
+			};
+
+			sdmmc1 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sdmmc1_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SDMMC1>;
+				power-domains = <&pd_core>;
+			};
+
+			sdmmc3 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&sdmmc3_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SDMMC3>;
+				power-domains = <&pd_core>;
+			};
+
+			spdif_out {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&spdif_out_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_SPDIF_OUT>;
+				power-domains = <&pd_core>;
+			};
+
+			tvdac {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&tvdac_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_TVDAC>;
+				power-domains = <&pd_core>;
+			};
+
+			tvo {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&tvo_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_TVO>;
+				power-domains = <&pd_core>;
+			};
+
+			usbd {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&usbd_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_USBD>;
+				power-domains = <&pd_core>;
+			};
+
+			usb2 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&usb2_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_USB2>;
+				power-domains = <&pd_core>;
+			};
+
+			usb3 {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&usb3_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_USB3>;
+				power-domains = <&pd_core>;
+			};
+
+			vde {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&vde_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_VDE>;
+				power-domains = <&pd_core>;
+			};
+
+			vi {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&vi_dvfs_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_VI>;
+				power-domains = <&pd_core>;
+			};
+		};
 	};
 
 	flow-controller@60007000 {
@@ -466,6 +735,8 @@
 		reset-names = "vde", "mc";
 		resets = <&tegra_car 61>, <&mc TEGRA30_MC_RESET_VDE>;
 		iommus = <&mc TEGRA_SWGROUP_VDE>;
+		operating-points-v2 = <&vde_dvfs_opp_table>;
+		power-domains = <&pd_vde>;
 	};
 
 	apbmisc@70000800 {
@@ -763,6 +1034,67 @@
 		clocks = <&tegra_car TEGRA30_CLK_PCLK>, <&clk32k_in>;
 		clock-names = "pclk", "clk32k_in";
 		#clock-cells = <1>;
+
+		powergates {
+			pd_3d0: 3d0 {
+				clocks = <&tegra_car TEGRA30_CLK_GR3D>;
+				resets = <&mc TEGRA30_MC_RESET_3D>,
+					 <&tegra_car TEGRA30_CLK_GR3D>;
+				power-domains = <&pd_core>;
+				#power-domain-cells = <0>;
+			};
+
+			pd_3d1: 3d1 {
+				clocks = <&tegra_car TEGRA30_CLK_GR3D2>;
+				resets = <&mc TEGRA30_MC_RESET_3D2>,
+					 <&tegra_car TEGRA30_CLK_GR3D2>;
+				power-domains = <&pd_core>;
+				#power-domain-cells = <0>;
+			};
+
+			pd_venc: venc {
+				clocks = <&tegra_car TEGRA30_CLK_ISP>,
+					 <&tegra_car TEGRA30_CLK_VI>,
+					 <&tegra_car TEGRA30_CLK_CSI>;
+				resets = <&mc TEGRA30_MC_RESET_ISP>,
+					 <&mc TEGRA30_MC_RESET_VI>,
+					 <&tegra_car TEGRA30_CLK_ISP>,
+					 <&tegra_car 20 /* VI */>,
+					 <&tegra_car TEGRA30_CLK_CSI>;
+				power-domains = <&pd_core>;
+				#power-domain-cells = <0>;
+			};
+
+			pd_vde: vdec {
+				clocks = <&tegra_car TEGRA30_CLK_VDE>;
+				resets = <&mc TEGRA30_MC_RESET_VDE>,
+					 <&tegra_car TEGRA30_CLK_VDE>;
+				power-domains = <&pd_core>;
+				#power-domain-cells = <0>;
+			};
+
+			pd_mpe: mpe {
+				clocks = <&tegra_car TEGRA30_CLK_MPE>;
+				resets = <&mc TEGRA30_MC_RESET_MPE>,
+					 <&tegra_car TEGRA30_CLK_MPE>;
+				power-domains = <&pd_core>;
+				#power-domain-cells = <0>;
+			};
+
+			pd_heg: heg {
+				clocks = <&tegra_car TEGRA30_CLK_GR2D>,
+					 <&tegra_car TEGRA30_CLK_EPP>,
+					 <&tegra_car TEGRA30_CLK_HOST1X>;
+				resets = <&mc TEGRA30_MC_RESET_2D>,
+					 <&mc TEGRA30_MC_RESET_EPP>,
+					 <&mc TEGRA30_MC_RESET_HC>,
+					 <&tegra_car TEGRA30_CLK_GR2D>,
+					 <&tegra_car TEGRA30_CLK_EPP>,
+					 <&tegra_car TEGRA30_CLK_HOST1X>;
+				power-domains = <&pd_core>;
+				#power-domain-cells = <0>;
+			};
+		};
 	};
 
 	mc: memory-controller@7000f000 {
@@ -783,6 +1115,7 @@
 		reg = <0x7000f400 0x400>;
 		interrupts = <GIC_SPI 78 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&tegra_car TEGRA30_CLK_EMC>;
+		power-domains = <&pd_core>;
 
 		nvidia,memory-controller = <&mc>;
 		operating-points-v2 = <&emc_icc_dvfs_opp_table>;
@@ -1100,5 +1433,11 @@
 				     <&{/cpus/cpu@1}>,
 				     <&{/cpus/cpu@2}>,
 				     <&{/cpus/cpu@3}>;
+	};
+
+	pd_core: power-domain-core {
+		compatible = "nvidia,tegra30-core-domain";
+		operating-points-v2 = <&core_opp_table>;
+		#power-domain-cells = <0>;
 	};
 };
