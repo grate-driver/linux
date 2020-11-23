@@ -19,6 +19,16 @@ Required properties :
   In clock consumers, this cell represents the bit number in the CAR's
   array of CLK_RST_CONTROLLER_RST_DEVICES_* registers.
 
+Optional child sub-node "clocks" should contain nodes matching the clocks
+on the Tegra SoC. Refer to Tegra TRM for mode details on the clock nodes.
+
+Required properties :
+- compatible : Should be "nvidia,tegra30-clock".
+- operating-points-v2: See ../bindings/opp/opp.txt for details.
+- clocks : Should contain clock which corresponds to the node.
+- power-domains: Phandle to a power domain node as described by generic
+                 PM domain bindings.
+
 Example SoC include file:
 
 / {
@@ -31,6 +41,22 @@ Example SoC include file:
 
 	usb@c5004000 {
 		clocks = <&tegra_car TEGRA30_CLK_USB2>;
+
+		clocks {
+			hdmi {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&hdmi_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_HDMI>;
+				power-domains = <&domain>;
+			};
+
+			pll_m {
+				compatible = "nvidia,tegra30-clock";
+				operating-points-v2 = <&pll_m_opp_table>;
+				clocks = <&tegra_car TEGRA30_CLK_PLL_M>;
+				power-domains = <&domain>;
+			};
+		};
 	};
 };
 
