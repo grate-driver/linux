@@ -445,7 +445,7 @@
 		regulator-always-on;
 	};
 
-	vdd_core: regulator@5 {
+	vdd_core: regulator-core {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_core";
 		regulator-min-microvolt = <1300000>;
