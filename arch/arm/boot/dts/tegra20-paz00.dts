@@ -26,7 +26,19 @@
 	};
 
 	host1x@50000000 {
+		core-supply = <&core_vdd_reg>;
+
+		gr2d@54140000 {
+			core-supply = <&core_vdd_reg>;
+		};
+
+		gr3d@54180000 {
+			core-supply = <&core_vdd_reg>;
+		};
+
 		dc@54200000 {
+			core-supply = <&core_vdd_reg>;
+
 			rgb {
 				status = "okay";
 
@@ -34,16 +46,25 @@
 			};
 		};
 
+		dc@54240000 {
+			core-supply = <&core_vdd_reg>;
+		};
+
 		hdmi@54280000 {
 			status = "okay";
 
 			vdd-supply = <&hdmi_vdd_reg>;
 			pll-supply = <&hdmi_pll_reg>;
+			core-supply = <&core_vdd_reg>;
 
 			nvidia,ddc-i2c-bus = <&hdmi_ddc>;
 			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7)
 				GPIO_ACTIVE_HIGH>;
 		};
+	};
+
+	vde@6001a000 {
+		core-supply = <&core_vdd_reg>;
 	};
 
 	pinmux@70000014 {
@@ -314,6 +335,8 @@
 	memory-controller@7000f400 {
 		nvidia,use-ram-code;
 
+		core-supply = <&core_vdd_reg>;
+
 		emc-tables@0 {
 			nvidia,ram-code = <0x0>;
 			#address-cells = <1>;
@@ -387,10 +410,10 @@
 
 				core_vdd_reg: sm0 {
 					regulator-name = "+1.2vs_sm0,vdd_core";
-					regulator-min-microvolt = <1200000>;
-					regulator-max-microvolt = <1225000>;
+					regulator-min-microvolt = <950000>;
+					regulator-max-microvolt = <1300000>;
 					regulator-coupled-with = <&rtc_vdd_reg &cpu_vdd_reg>;
-					regulator-coupled-max-spread = <170000 450000>;
+					regulator-coupled-max-spread = <170000 550000>;
 					regulator-always-on;
 
 					nvidia,tegra-core-regulator;
@@ -401,7 +424,7 @@
 					regulator-min-microvolt = <750000>;
 					regulator-max-microvolt = <1100000>;
 					regulator-coupled-with = <&core_vdd_reg &rtc_vdd_reg>;
-					regulator-coupled-max-spread = <450000 450000>;
+					regulator-coupled-max-spread = <550000 550000>;
 					regulator-always-on;
 
 					nvidia,tegra-cpu-regulator;
@@ -425,10 +448,10 @@
 
 				rtc_vdd_reg: ldo2 {
 					regulator-name = "+1.2vs_ldo2,vdd_rtc";
-					regulator-min-microvolt = <1200000>;
-					regulator-max-microvolt = <1225000>;
+					regulator-min-microvolt = <950000>;
+					regulator-max-microvolt = <1300000>;
 					regulator-coupled-with = <&core_vdd_reg &cpu_vdd_reg>;
-					regulator-coupled-max-spread = <170000 450000>;
+					regulator-coupled-max-spread = <170000 550000>;
 					regulator-always-on;
 
 					nvidia,tegra-rtc-regulator;
@@ -517,6 +540,7 @@
 		compatible = "nvidia,tegra20-udc";
 		status = "okay";
 		dr_mode = "peripheral";
+		core-supply = <&core_vdd_reg>;
 	};
 
 	usb-phy@c5000000 {
@@ -527,6 +551,7 @@
 		status = "okay";
 		nvidia,phy-reset-gpio = <&gpio TEGRA_GPIO(V, 0)
 			GPIO_ACTIVE_LOW>;
+		core-supply = <&core_vdd_reg>;
 	};
 
 	usb-phy@c5004000 {
@@ -537,6 +562,7 @@
 
 	usb@c5008000 {
 		status = "okay";
+		core-supply = <&core_vdd_reg>;
 	};
 
 	usb-phy@c5008000 {
@@ -549,12 +575,14 @@
 		wp-gpios = <&gpio TEGRA_GPIO(H, 1) GPIO_ACTIVE_HIGH>;
 		power-gpios = <&gpio TEGRA_GPIO(V, 1) GPIO_ACTIVE_HIGH>;
 		bus-width = <4>;
+		core-supply = <&core_vdd_reg>;
 	};
 
 	mmc@c8000600 {
 		status = "okay";
 		bus-width = <8>;
 		non-removable;
+		core-supply = <&core_vdd_reg>;
 	};
 
 	backlight: backlight {
@@ -567,6 +595,10 @@
 		default-brightness-level = <10>;
 
 		backlight-boot-off;
+	};
+
+	core-domain {
+		power-supply = <&core_vdd_reg>;
 	};
 
 	clk32k_in: clock@0 {
