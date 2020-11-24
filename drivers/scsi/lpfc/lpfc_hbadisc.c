@@ -84,7 +84,6 @@ lpfc_rport_invalid(struct fc_rport *rport)
 {
 	struct lpfc_rport_data *rdata;
 	struct lpfc_nodelist *ndlp;
-	struct lpfc_vport *vport;
 
 	if (!rport) {
 		pr_err("**** %s: NULL rport, exit.\n", __func__);
@@ -105,7 +104,6 @@ lpfc_rport_invalid(struct fc_rport *rport)
 		return -EINVAL;
 	}
 
-	vport = ndlp->vport;
 	if (!ndlp->vport) {
 		pr_err("**** %s: Null vport on ndlp %p, DID x%x rport %p "
 		       "SID x%x\n", __func__, ndlp, ndlp->nlp_DID, rport,
@@ -246,14 +244,12 @@ lpfc_dev_loss_tmo_handler(struct lpfc_nodelist *ndlp)
 {
 	struct lpfc_vport *vport;
 	struct lpfc_hba   *phba;
-	struct Scsi_Host  *shost;
 	uint8_t *name;
 	int warn_on = 0;
 	int fcf_inuse = 0;
 	unsigned long iflags;
 
 	vport = ndlp->vport;
-	shost = lpfc_shost_from_vport(vport);
 	name = (uint8_t *)&ndlp->nlp_portname;
 	phba = vport->phba;
 
@@ -6195,7 +6191,6 @@ lpfc_nlp_release(struct kref *kref)
 struct lpfc_nodelist *
 lpfc_nlp_get(struct lpfc_nodelist *ndlp)
 {
-	struct lpfc_hba *phba;
 	unsigned long flags;
 
 	if (ndlp) {
@@ -6208,7 +6203,6 @@ lpfc_nlp_get(struct lpfc_nodelist *ndlp)
 		 * ndlp reference count that is in the process of being
 		 * released.
 		 */
-		phba = ndlp->phba;
 		spin_lock_irqsave(&ndlp->lock, flags);
 		if (!kref_get_unless_zero(&ndlp->kref)) {
 			spin_unlock_irqrestore(&ndlp->lock, flags);
