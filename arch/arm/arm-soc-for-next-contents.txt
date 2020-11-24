@@ -19,6 +19,10 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.11-tag1
 	sunxi/rework-mbus
 		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mripard/linux tags/sunxi-rework-mbus
+	samsung/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-5.11
+	patch
+		soc: sunxi: Fix compilation of sunxi_mbus
 
 arm/defconfig
 	renesas/defconfig
