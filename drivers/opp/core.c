@@ -1531,9 +1531,10 @@ static bool _opp_supported_by_regulators(struct dev_pm_opp *opp,
 	return true;
 }
 
-int _opp_compare_key(struct dev_pm_opp *opp1, struct dev_pm_opp *opp2)
+int _opp_compare_key(struct dev_pm_opp *opp1, struct dev_pm_opp *opp2,
+		     bool rate_not_available)
 {
-	if (opp1->rate != opp2->rate)
+	if (!rate_not_available && opp1->rate != opp2->rate)
 		return opp1->rate < opp2->rate ? -1 : 1;
 	if (opp1->bandwidth && opp2->bandwidth &&
 	    opp1->bandwidth[0].peak != opp2->bandwidth[0].peak)
@@ -1545,7 +1546,8 @@ int _opp_compare_key(struct dev_pm_opp *opp1, struct dev_pm_opp *opp2)
 
 static int _opp_is_duplicate(struct device *dev, struct dev_pm_opp *new_opp,
 			     struct opp_table *opp_table,
-			     struct list_head **head)
+			     struct list_head **head,
+			     bool rate_not_available)
 {
 	struct dev_pm_opp *opp;
 	int opp_cmp;
@@ -1559,13 +1561,13 @@ static int _opp_is_duplicate(struct device *dev, struct dev_pm_opp *new_opp,
 	 * loop.
 	 */
 	list_for_each_entry(opp, &opp_table->opp_list, node) {
-		opp_cmp = _opp_compare_key(new_opp, opp);
+		opp_cmp = _opp_compare_key(new_opp, opp, rate_not_available);
 		if (opp_cmp > 0) {
 			*head = &opp->node;
 			continue;
 		}
 
-		if (opp_cmp < 0)
+		if (opp_cmp < 0 || rate_not_available)
 			return 0;
 
 		/* Duplicate OPPs */
@@ -1601,12 +1603,11 @@ int _opp_add(struct device *dev, struct dev_pm_opp *new_opp,
 	mutex_lock(&opp_table->lock);
 	head = &opp_table->opp_list;
 
-	if (likely(!rate_not_available)) {
-		ret = _opp_is_duplicate(dev, new_opp, opp_table, &head);
-		if (ret) {
-			mutex_unlock(&opp_table->lock);
-			return ret;
-		}
+	ret = _opp_is_duplicate(dev, new_opp, opp_table, &head,
+				rate_not_available);
+	if (ret) {
+		mutex_unlock(&opp_table->lock);
+		return ret;
 	}
 
 	list_add(&new_opp->node, head);
