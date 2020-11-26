@@ -527,14 +527,14 @@ END {
 }' >> $T/script
 
 cat << '___EOF___' >> $T/script
-echo
-echo
-echo " --- `date` Test summary:"
+echo | tee -a $TORTURE_RESDIR/log
+echo | tee -a $TORTURE_RESDIR/log
+echo " --- `date` Test summary:" | tee -a $TORTURE_RESDIR/log
 ___EOF___
 cat << ___EOF___ >> $T/script
-echo Results directory: $resdir/$ds
-kcsan-collapse.sh $resdir/$ds
-kvm-recheck.sh $resdir/$ds
+echo Results directory: $resdir/$ds | tee -a $resdir/$ds/log
+kcsan-collapse.sh $resdir/$ds | tee -a $resdir/$ds/log
+kvm-recheck.sh $resdir/$ds | tee -a $resdir/$ds/log
 ___EOF___
 
 if test "$dryrun" = script
@@ -558,7 +558,7 @@ else
 	# Not a dryrun, so run the script.
 	sh $T/script
 	ret=$?
-	echo " --- Done at `date` (`get_starttime_duration $starttime`)"
+	echo " --- Done at `date` (`get_starttime_duration $starttime`) exitcode $ret" | tee -a $resdir/$ds/log
 	exit $ret
 fi
 
