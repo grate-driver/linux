@@ -11,6 +11,10 @@ arm/dt
 		ARM: dts: add Nuvoton NPCM730 device tree
 	ux500/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-dts-for-v5.11-1
+	hisi/dt
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm32-dt-for-5.11
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-5.11
 
 arm/drivers
 	optee/uuid
@@ -23,6 +27,12 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-5.11
 	patch
 		soc: sunxi: Fix compilation of sunxi_mbus
+	fsl/driver
+		git://git.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-next-v5.11
+	drivers/memory
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.11
+	drivers/memory-tegra
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-tegra-5.11-2
 
 arm/defconfig
 	renesas/defconfig
@@ -42,4 +52,10 @@ arm/fixes
 		MAINTAINERS: Remove myself as LPC32xx maintainers
 	<no branch> (7327c8b98e2e14c47021eea14d1ab268086a6408)
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.10-rockchip-dtsfixes1
+	<no branch> (acfdd18591eaac25446e976a0c0d190f8b3dbfb1)
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-fixes-for-v5.10-rc6
+	<no branch> (2663b3388551230cbc4606a40fabf3331ceb59e4)
+		git://git.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-fix-v5.10
+	<no branch> (d98bccf10dd0f36cabee71a425381fce0908de3b)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-arm64-dt-fixes
 
