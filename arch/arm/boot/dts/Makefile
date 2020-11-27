@@ -1066,6 +1066,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32mp157a-iot-box.dtb \
 	stm32mp157a-stinger96.dtb \
 	stm32mp157c-dhcom-pdk2.dtb \
+	stm32mp157c-dhcom-picoitx.dtb \
 	stm32mp157c-dk2.dtb \
 	stm32mp157c-ed1.dtb \
 	stm32mp157c-ev1.dtb \
@@ -1241,7 +1242,8 @@ dtb-$(CONFIG_ARCH_TEGRA_3x_SOC) += \
 	tegra30-beaver.dtb \
 	tegra30-cardhu-a02.dtb \
 	tegra30-cardhu-a04.dtb \
-	tegra30-colibri-eval-v3.dtb
+	tegra30-colibri-eval-v3.dtb \
+	tegra30-ouya.dtb
 dtb-$(CONFIG_ARCH_TEGRA_114_SOC) += \
 	tegra114-dalmore.dtb \
 	tegra114-roth.dtb \
