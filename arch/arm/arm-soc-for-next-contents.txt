@@ -55,6 +55,10 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-soc
 	tegra/firmware
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-firmware
+	<no branch> (3cea11cd5e3b00d91caf0b4730194039b45c5891)
+		Backmerge tag 'v5.10-rc2' into arm/drivers
+	<no branch> (f83eb664cdb45169338b9633f22eaafc23764f05)
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.11
 
 arm/defconfig
 	renesas/defconfig
