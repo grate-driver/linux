@@ -657,6 +657,7 @@ const struct file_operations v9fs_cached_file_operations = {
 	.lock = v9fs_file_lock,
 	.mmap = v9fs_file_mmap,
 	.splice_read = generic_file_splice_read,
+	.splice_write = iter_file_splice_write,
 	.fsync = v9fs_file_fsync,
 };
 
@@ -670,6 +671,7 @@ const struct file_operations v9fs_cached_file_operations_dotl = {
 	.flock = v9fs_file_flock_dotl,
 	.mmap = v9fs_file_mmap,
 	.splice_read = generic_file_splice_read,
+	.splice_write = iter_file_splice_write,
 	.fsync = v9fs_file_fsync_dotl,
 };
 
@@ -682,6 +684,7 @@ const struct file_operations v9fs_file_operations = {
 	.lock = v9fs_file_lock,
 	.mmap = generic_file_readonly_mmap,
 	.splice_read = generic_file_splice_read,
+	.splice_write = iter_file_splice_write,
 	.fsync = v9fs_file_fsync,
 };
 
@@ -695,6 +698,7 @@ const struct file_operations v9fs_file_operations_dotl = {
 	.flock = v9fs_file_flock_dotl,
 	.mmap = generic_file_readonly_mmap,
 	.splice_read = generic_file_splice_read,
+	.splice_write = iter_file_splice_write,
 	.fsync = v9fs_file_fsync_dotl,
 };
 
@@ -707,6 +711,7 @@ const struct file_operations v9fs_mmap_file_operations = {
 	.lock = v9fs_file_lock,
 	.mmap = v9fs_mmap_file_mmap,
 	.splice_read = generic_file_splice_read,
+	.splice_write = iter_file_splice_write,
 	.fsync = v9fs_file_fsync,
 };
 
@@ -720,5 +725,6 @@ const struct file_operations v9fs_mmap_file_operations_dotl = {
 	.flock = v9fs_file_flock_dotl,
 	.mmap = v9fs_mmap_file_mmap,
 	.splice_read = generic_file_splice_read,
+	.splice_write = iter_file_splice_write,
 	.fsync = v9fs_file_fsync_dotl,
 };
