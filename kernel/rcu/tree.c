@@ -3449,7 +3449,7 @@ add_ptr_to_bulk_krc_lock(struct kfree_rcu_cpu **krcp,
 {
 	struct kvfree_rcu_bulk_data *bnode;
 	bool can_alloc_page = preemptible();
-	gfp_t gfp = (can_sleep ? GFP_KERNEL | __GFP_RETRY_MAYFAIL :
+	gfp_t gfp = (can_sleep ? GFP_KERNEL | __GFP_RETRY_MAYFAIL | __GFP_NOMEMALLOC :
 		GFP_ATOMIC) | __GFP_NOWARN;
 	int idx;
 
