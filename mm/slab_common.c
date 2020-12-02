@@ -536,6 +536,26 @@ bool slab_is_available(void)
 	return slab_state >= UP;
 }
 
+/*
+ * If the pointer references a slab-allocated object and if sufficient
+ * debugging is enabled, return the returrn address for the corresponding
+ * allocation.  Otherwise, return NULL.  Note that passing random pointers
+ * to this function (including addresses of on-stack variables) is likely
+ * to result in panics.
+ */
+void *kmem_last_alloc(void *object)
+{
+	struct page *page;
+
+	if (!virt_addr_valid(object))
+		return NULL;
+	page = virt_to_head_page(object);
+	if (!PageSlab(page))
+		return NULL;
+	return kmem_cache_last_alloc(page->slab_cache, object);
+}
+EXPORT_SYMBOL_GPL(kmem_last_alloc);
+
 #ifndef CONFIG_SLOB
 /* Create a cache during boot when no slab services are available yet */
 void __init create_boot_cache(struct kmem_cache *s, const char *name,

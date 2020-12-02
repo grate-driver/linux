@@ -461,6 +461,11 @@ out:
 	spin_unlock_irqrestore(&slob_lock, flags);
 }
 
+void *kmem_cache_last_alloc(struct kmem_cache *s, void *object)
+{
+	return NULL;
+}
+
 /*
  * End of slob allocator proper. Begin kmem_cache_alloc and kmalloc frontend.
  */
