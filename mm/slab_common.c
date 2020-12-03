@@ -537,6 +537,30 @@ bool slab_is_available(void)
 }
 
 /*
+ * If the pointer corresponds to a kmem_last_alloc() error, return
+ * a pointer to the corresponding string, otherwise NULL.
+ */
+const char *kmem_last_alloc_errstring(void *lastalloc)
+{
+	long klaerrno;
+	static const char * const es[] = {
+		"local memory",			/* KMEM_LA_NO_PAGE - 1 */
+		"non-slab memory",		/* KMEM_LA_NO_SLAB - 1 */
+		"slob doesn't do debug",	/* KMEM_LA_SLOB - 1 */
+		"debugging disabled",		/* KMEM_LA_NO_DEBUG - 1 */
+		"bogus slub block",		/* KMEM_LA_INCONSISTENT - 1 */
+	};
+
+	if (!IS_ERR(lastalloc))
+		return NULL;
+	klaerrno = -PTR_ERR(lastalloc) - 1;
+	if (WARN_ON_ONCE(klaerrno >= ARRAY_SIZE(es)))
+		return "kmem_last_alloc error out of range";
+	return es[klaerrno];
+}
+EXPORT_SYMBOL_GPL(kmem_last_alloc_errstring);
+
+/*
  * If the pointer references a slab-allocated object and if sufficient
  * debugging is enabled, return the returrn address for the corresponding
  * allocation.  Otherwise, return NULL.  Note that passing random pointers
@@ -548,10 +572,10 @@ void *kmem_last_alloc(void *object)
 	struct page *page;
 
 	if (!virt_addr_valid(object))
-		return NULL;
+		return ERR_PTR(-KMEM_LA_NO_PAGE);
 	page = virt_to_head_page(object);
 	if (!PageSlab(page))
-		return NULL;
+		return ERR_PTR(-KMEM_LA_NO_SLAB);
 	return kmem_cache_last_alloc(page->slab_cache, object);
 }
 EXPORT_SYMBOL_GPL(kmem_last_alloc);

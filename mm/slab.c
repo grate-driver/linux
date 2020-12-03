@@ -3610,7 +3610,7 @@ void *kmem_cache_last_alloc(struct kmem_cache *cachep, void *object)
 	struct page *page;
 
 	if (!(cachep->flags & SLAB_STORE_USER))
-		return NULL;
+		return ERR_PTR(-KMEM_LA_NO_DEBUG);
 	objp = object - obj_offset(cachep);
 	page = virt_to_head_page(objp);
 	objnr = obj_to_index(cachep, page, objp);

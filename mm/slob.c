@@ -463,7 +463,7 @@ out:
 
 void *kmem_cache_last_alloc(struct kmem_cache *s, void *object)
 {
-	return NULL;
+	return ERR_PTR(-KMEM_LA_SLOB);
 }
 
 /*

@@ -3928,7 +3928,7 @@ void *kmem_cache_last_alloc(struct kmem_cache *s, void *object)
 	struct track *trackp;
 
 	if (!(s->flags & SLAB_STORE_USER))
-		return NULL;
+		return ERR_PTR(-KMEM_LA_NO_DEBUG);
 	page = virt_to_head_page(object);
 	base = page_address(page);
 	objp = kasan_reset_tag(object);
@@ -3936,7 +3936,7 @@ void *kmem_cache_last_alloc(struct kmem_cache *s, void *object)
 	objnr = obj_to_index(s, page, objp);
 	objp = base + s->size * objnr;
 	if (objp < base || objp >= base + page->objects * s->size || (objp - base) % s->size)
-		return NULL;
+		return ERR_PTR(-KMEM_LA_INCONSISTENT);
 	trackp = get_track(s, objp, TRACK_ALLOC);
 	return (void *)trackp->addr;
 #else
