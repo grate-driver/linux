@@ -2957,6 +2957,8 @@ static void check_cb_ovld(struct rcu_data *rdp)
 static void
 __call_rcu(struct rcu_head *head, rcu_callback_t func)
 {
+	void *allocaddr;
+	const char *allocerr;
 	unsigned long flags;
 	struct rcu_data *rdp;
 	bool was_alldone;
@@ -2970,8 +2972,14 @@ __call_rcu(struct rcu_head *head, rcu_callback_t func)
 		 * Use rcu:rcu_callback trace event to find the previous
 		 * time callback was passed to __call_rcu().
 		 */
-		WARN_ONCE(1, "__call_rcu(): Double-freed CB %p->%pS()!!!\n",
-			  head, head->func);
+		allocaddr = kmem_last_alloc(head);
+		allocerr = kmem_last_alloc_errstring(allocaddr);
+		if (allocerr)
+			WARN_ONCE(1, "__call_rcu(): Double-freed CB %p->%pS()!!! (%s)\n",
+				  head, head->func, allocerr);
+		else
+			WARN_ONCE(1, "__call_rcu(): Double-freed CB %p->%pS()!!! (Allocated at %pS)\n",
+				  head, head->func, allocaddr);
 		WRITE_ONCE(head->func, rcu_leak_callback);
 		return;
 	}
