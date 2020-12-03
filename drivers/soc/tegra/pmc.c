@@ -709,6 +709,14 @@ static int tegra_powergate_power_up(struct tegra_powergate *pg,
 
 	usleep_range(10, 20);
 
+	/*
+	 * Some hardware blocks may need a 0->1->0 reset pulse in order
+	 * to propagate the reset, Tegra30 3D1 is one example.
+	 */
+	err = reset_control_reset(pg->reset);
+	if (err)
+		goto powergate_off;
+
 	if (pg->pmc->soc->needs_mbist_war)
 		err = tegra210_clk_handle_mbist_war(pg->id);
 	if (err)
