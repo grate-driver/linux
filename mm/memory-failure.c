@@ -1185,7 +1185,7 @@ static int memory_failure_hugetlb(unsigned long pfn, int flags)
 
 	num_poisoned_pages_inc();
 
-	if (!(flags & MF_COUNT_INCREASED) && !get_hwpoison_page(p)) {
+	if (!get_hwpoison_page(p)) {
 		/*
 		 * Check "filter hit" and "race with other subpage."
 		 */
@@ -1387,7 +1387,7 @@ try_again:
 	 * In fact it's dangerous to directly bump up page count from 0,
 	 * that may make page_ref_freeze()/page_ref_unfreeze() mismatch.
 	 */
-	if (!(flags & MF_COUNT_INCREASED) && !get_hwpoison_page(p)) {
+	if (!get_hwpoison_page(p)) {
 		if (is_free_buddy_page(p)) {
 			if (take_page_off_buddy(p)) {
 				page_ref_inc(p);
@@ -1716,9 +1716,6 @@ static int get_any_page(struct page *p, int flags)
 {
 	int ret = 0, pass = 0;
 
-	if (flags & MF_COUNT_INCREASED)
-		return 1;
-
 try_again:
 	if (!get_hwpoison_page(p)) {
 		if (page_count(p)) {
@@ -1919,8 +1916,6 @@ int soft_offline_page(unsigned long pfn, int flags)
 
 	if (PageHWPoison(page)) {
 		pr_info("%s: %#lx page already poisoned\n", __func__, pfn);
-		if (flags & MF_COUNT_INCREASED)
-			put_page(page);
 		return 0;
 	}
 
