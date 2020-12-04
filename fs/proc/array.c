@@ -369,7 +369,7 @@ static inline void task_seccomp(struct seq_file *m, struct task_struct *p)
 		break;
 	}
 
-	seq_puts(m, "\nSpeculation_Indirect_Branch:\t");
+	seq_puts(m, "\nSpeculationIndirectBranch:\t");
 	switch (arch_prctl_spec_ctrl_get(p, PR_SPEC_INDIRECT_BRANCH)) {
 	case -EINVAL:
 		seq_puts(m, "unsupported");
