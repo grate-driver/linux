@@ -496,7 +496,7 @@ static inline bool lruvec_holds_page_lru_lock(struct page *page,
 		return lruvec == &pgdat->__lruvec;
 
 	mz = container_of(lruvec, struct mem_cgroup_per_node, lruvec);
-	memcg = page->mem_cgroup ? : root_mem_cgroup;
+	memcg = page_memcg(page) ? : root_mem_cgroup;
 
 	return lruvec->pgdat == pgdat && mz->memcg == memcg;
 }
