@@ -613,6 +613,8 @@ static inline struct lruvec *mem_cgroup_lruvec(struct mem_cgroup *memcg,
 	struct mem_cgroup_per_node *mz;
 	struct lruvec *lruvec;
 
+	VM_WARN_ON_ONCE(!memcg);
+
 	if (mem_cgroup_disabled()) {
 		lruvec = &pgdat->__lruvec;
 		goto out;
