@@ -1378,7 +1378,7 @@ static bool system_ram_resources_mergeable(struct resource *r1,
 
 /**
  * merge_system_ram_resource - mark the System RAM resource mergeable and try to
- * 	merge it with adjacent, mergeable resources
+ *	merge it with adjacent, mergeable resources
  * @res: resource descriptor
  *
  * This interface is intended for memory hotplug, whereby lots of contiguous
