@@ -613,8 +613,6 @@ static inline struct lruvec *mem_cgroup_lruvec(struct mem_cgroup *memcg,
 	struct mem_cgroup_per_node *mz;
 	struct lruvec *lruvec;
 
-	VM_WARN_ON_ONCE(!memcg);
-
 	if (mem_cgroup_disabled()) {
 		lruvec = &pgdat->__lruvec;
 		goto out;
@@ -646,7 +644,10 @@ out:
 static inline struct lruvec *mem_cgroup_page_lruvec(struct page *page,
 						struct pglist_data *pgdat)
 {
-	return mem_cgroup_lruvec(page_memcg(page), pgdat);
+	struct mem_cgroup *memcg = page_memcg(page);
+
+	VM_WARN_ON_ONCE_PAGE(!memcg, page);
+	return mem_cgroup_lruvec(memcg, pgdat);
 }
 
 static inline bool lruvec_holds_page_lru_lock(struct page *page,
