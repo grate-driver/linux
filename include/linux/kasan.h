@@ -11,6 +11,7 @@ struct task_struct;
 
 #ifdef CONFIG_KASAN
 
+#include <linux/linkage.h>
 #include <asm/kasan.h>
 
 /* kasan_data struct is used in KUnit tests for KASAN expected failures */
