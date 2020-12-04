@@ -1038,6 +1038,9 @@ config HAVE_STATIC_CALL_INLINE
 config HAVE_ARCH_PFN_VALID
 	bool
 
+config ARCH_SUPPORTS_DEBUG_PAGEALLOC
+	bool
+
 source "kernel/gcov/Kconfig"
 
 source "scripts/gcc-plugins/Kconfig"
