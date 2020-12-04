@@ -13,19 +13,19 @@ static const char *cmdline_test_strings[] = {
 	"+,"  , "--", ",,", "''" , "\"\",", "\",\"", "-\"\"", "\"",
 };
 
-static const char *cmdline_test_values[] = {
+static const char cmdline_test_values[] = {
 	1, 1, 1, 1, 2, 3, 2, 3,
 	1, 3, 2, 1, 1, 1, 3, 1,
 };
 
-static void cmdline_do_one_test(struct kunit *test, char *in, int rc, int offset)
+static void cmdline_do_one_test(struct kunit *test, const char *in, int rc, int offset)
 {
 	const char *fmt = "Pattern: %s";
-	char *out = in;
+	const char *out = in;
 	int dummy;
 	int ret;
 
-	ret = get_option(&out, &dummy);
+	ret = get_option((char **)&out, &dummy);
 
 	KUNIT_EXPECT_EQ_MSG(test, ret, rc, fmt, in);
 	KUNIT_EXPECT_PTR_EQ_MSG(test, out, in + offset, fmt, in);
