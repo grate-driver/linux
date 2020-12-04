@@ -1592,8 +1592,9 @@ int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
 			mmap_read_unlock(mm);
 			return 0;
 		}
-	} else
+	} else {
 		__lock_page(page);
+	}
 	return 1;
 
 }
