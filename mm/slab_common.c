@@ -576,7 +576,7 @@ void *kmem_last_alloc(void *object)
 	page = virt_to_head_page(object);
 	if (!PageSlab(page))
 		return ERR_PTR(-KMEM_LA_NO_SLAB);
-	return kmem_cache_last_alloc(page->slab_cache, object);
+	return kmem_cache_last_alloc(page->slab_cache, object, NULL, 0);
 }
 EXPORT_SYMBOL_GPL(kmem_last_alloc);
 

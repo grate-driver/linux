@@ -3918,7 +3918,7 @@ int __kmem_cache_shutdown(struct kmem_cache *s)
 	return 0;
 }
 
-void *kmem_cache_last_alloc(struct kmem_cache *s, void *object)
+void *kmem_cache_last_alloc(struct kmem_cache *s, void *object, void **stackp, int nstackp)
 {
 #ifdef CONFIG_SLUB_DEBUG
 	void *base;

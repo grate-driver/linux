@@ -3602,25 +3602,6 @@ void *kmem_cache_alloc_node_trace(struct kmem_cache *cachep,
 EXPORT_SYMBOL(kmem_cache_alloc_node_trace);
 #endif
 
-void *kmem_cache_last_alloc(struct kmem_cache *cachep, void *object)
-{
-#ifdef DEBUG
-	unsigned int objnr;
-	void *objp;
-	struct page *page;
-
-	if (!(cachep->flags & SLAB_STORE_USER))
-		return ERR_PTR(-KMEM_LA_NO_DEBUG);
-	objp = object - obj_offset(cachep);
-	page = virt_to_head_page(objp);
-	objnr = obj_to_index(cachep, page, objp);
-	objp = index_to_obj(cachep, page, objnr);
-	return *dbg_userword(cachep, objp);
-#else
-	return NULL;
-#endif
-}
-
 static __always_inline void *
 __do_kmalloc_node(size_t size, gfp_t flags, int node, unsigned long caller)
 {
@@ -3651,6 +3632,27 @@ void *__kmalloc_node_track_caller(size_t size, gfp_t flags,
 }
 EXPORT_SYMBOL(__kmalloc_node_track_caller);
 #endif /* CONFIG_NUMA */
+
+void *kmem_cache_last_alloc(struct kmem_cache *cachep, void *object, void **stackp, int nstackp)
+{
+#ifdef DEBUG
+	unsigned int objnr;
+	void *objp;
+	struct page *page;
+
+	if (!(cachep->flags & SLAB_STORE_USER))
+		return ERR_PTR(-KMEM_LA_NO_DEBUG);
+	objp = object - obj_offset(cachep);
+	page = virt_to_head_page(objp);
+	objnr = obj_to_index(cachep, page, objp);
+	objp = index_to_obj(cachep, page, objnr);
+	if (stackp && nstackp)
+		stackp[0] = NULL;
+	return *dbg_userword(cachep, objp);
+#else
+	return NULL;
+#endif
+}
 
 /**
  * __do_kmalloc - allocate memory
