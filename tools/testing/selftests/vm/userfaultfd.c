@@ -137,11 +137,12 @@ static void usage(void)
 	exit(1);
 }
 
-static void uffd_error(const char *message, __s64 code)
-{
-	fprintf(stderr, "%s: %" PRId64 "\n", message, (int64_t)code);
-	exit(1);
-}
+#define uffd_error(code, fmt, ...)                                             \
+	do {                                                                   \
+		fprintf(stderr, fmt, ##__VA_ARGS__);                           \
+		fprintf(stderr, ": %" PRId64 "\n", (int64_t)(code));           \
+		exit(1);                                                       \
+	} while (0)
 
 static void uffd_stats_reset(struct uffd_stats *uffd_stats,
 			     unsigned long n_cpus)
@@ -490,11 +491,11 @@ static void retry_copy_page(int ufd, struct uffdio_copy *uffdio_copy,
 	if (ioctl(ufd, UFFDIO_COPY, uffdio_copy)) {
 		/* real retval in ufdio_copy.copy */
 		if (uffdio_copy->copy != -EEXIST) {
-			uffd_error("UFFDIO_COPY retry error",
-				   uffdio_copy->copy);
+			uffd_error(uffdio_copy->copy,
+				   "UFFDIO_COPY retry error");
 		}
 	} else
-		uffd_error("UFFDIO_COPY retry unexpected", uffdio_copy->copy);
+		uffd_error(uffdio_copy->copy, "UFFDIO_COPY retry unexpected");
 }
 
 static int __copy_page(int ufd, unsigned long offset, bool retry)
@@ -516,10 +517,10 @@ static int __copy_page(int ufd, unsigned long offset, bool retry)
 	if (ioctl(ufd, UFFDIO_COPY, &uffdio_copy)) {
 		/* real retval in ufdio_copy.copy */
 		if (uffdio_copy.copy != -EEXIST)
-			uffd_error("UFFDIO_COPY error", uffdio_copy.copy);
-	} else if (uffdio_copy.copy != page_size)
-		uffd_error("UFFDIO_COPY unexpected copy", uffdio_copy.copy);
-	else {
+			uffd_error(uffdio_copy.copy, "UFFDIO_COPY error");
+	} else if (uffdio_copy.copy != page_size) {
+		uffd_error(uffdio_copy.copy, "UFFDIO_COPY unexpected copy");
+	} else {
 		if (test_uffdio_copy_eexist && retry) {
 			test_uffdio_copy_eexist = false;
 			retry_copy_page(ufd, &uffdio_copy, offset);
@@ -960,12 +961,12 @@ static void retry_uffdio_zeropage(int ufd,
 				     offset);
 	if (ioctl(ufd, UFFDIO_ZEROPAGE, uffdio_zeropage)) {
 		if (uffdio_zeropage->zeropage != -EEXIST) {
-			uffd_error("UFFDIO_ZEROPAGE retry error",
-				   uffdio_zeropage->zeropage);
+			uffd_error(uffdio_zeropage->zeropage,
+				   "UFFDIO_ZEROPAGE retry error");
 		}
 	} else {
-		uffd_error("UFFDIO_ZEROPAGE retry unexpected",
-			   uffdio_zeropage->zeropage);
+		uffd_error(uffdio_zeropage->zeropage,
+			   "UFFDIO_ZEROPAGE retry unexpected");
 	}
 }
 
@@ -974,6 +975,7 @@ static int __uffdio_zeropage(int ufd, unsigned long offset, bool retry)
 	struct uffdio_zeropage uffdio_zeropage;
 	int ret;
 	unsigned long has_zeropage;
+	__s64 res;
 
 	has_zeropage = uffd_test_ops->expected_ioctls & (1 << _UFFDIO_ZEROPAGE);
 
@@ -985,23 +987,17 @@ static int __uffdio_zeropage(int ufd, unsigned long offset, bool retry)
 	uffdio_zeropage.range.len = page_size;
 	uffdio_zeropage.mode = 0;
 	ret = ioctl(ufd, UFFDIO_ZEROPAGE, &uffdio_zeropage);
+	res = uffdio_zeropage.zeropage;
 	if (ret) {
 		/* real retval in ufdio_zeropage.zeropage */
 		if (has_zeropage) {
-			uffd_error(uffdio_zeropage.zeropage == -EEXIST ?
-						 "UFFDIO_ZEROPAGE -EEXIST" :
-						 "UFFDIO_ZEROPAGE error",
-				   uffdio_zeropage.zeropage);
-		} else {
-			if (uffdio_zeropage.zeropage != -EINVAL) {
-				uffd_error("UFFDIO_ZEROPAGE not -EINVAL",
-					   uffdio_zeropage.zeropage);
-			}
-		}
+			uffd_error(res, "UFFDIO_ZEROPAGE %s",
+				   res == -EEXIST ? "-EEXIST" : "error");
+		} else if (res != -EINVAL)
+			uffd_error(res, "UFFDIO_ZEROPAGE not -EINVAL");
 	} else if (has_zeropage) {
-		if (uffdio_zeropage.zeropage != page_size) {
-			uffd_error("UFFDIO_ZEROPAGE unexpected",
-				   uffdio_zeropage.zeropage);
+		if (res != page_size) {
+			uffd_error(res, "UFFDIO_ZEROPAGE unexpected");
 		} else {
 			if (test_uffdio_zeropage_eexist && retry) {
 				test_uffdio_zeropage_eexist = false;
@@ -1010,10 +1006,8 @@ static int __uffdio_zeropage(int ufd, unsigned long offset, bool retry)
 			}
 			return 1;
 		}
-	} else {
-		uffd_error("UFFDIO_ZEROPAGE succeeded",
-			   uffdio_zeropage.zeropage);
-	}
+	} else
+		uffd_error(res, "UFFDIO_ZEROPAGE succeeded");
 
 	return 0;
 }
