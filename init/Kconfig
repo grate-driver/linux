@@ -49,7 +49,7 @@ config CLANG_VERSION
 
 config LLD_VERSION
 	int
-	default $(shell,$(srctree)/scripts/lld-version.sh $(LD))
+	default $(shell,/bin/sh $(srctree)/scripts/lld-version.sh $(LD))
 
 config CC_CAN_LINK
 	bool
