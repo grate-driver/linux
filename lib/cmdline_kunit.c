@@ -96,3 +96,5 @@ static struct kunit_suite cmdline_test_suite = {
 	.test_cases = cmdline_test_cases,
 };
 kunit_test_suite(cmdline_test_suite);
+
+MODULE_LICENSE("GPL");
