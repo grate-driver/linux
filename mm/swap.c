@@ -1015,7 +1015,7 @@ struct lruvecs {
 };
 
 /* Sort pvec pages on their lruvec */
-int sort_page_lruvec(struct lruvecs *lruvecs, struct pagevec *pvec)
+static int sort_page_lruvec(struct lruvecs *lruvecs, struct pagevec *pvec)
 {
 	int i, j, nr_lruvec;
 	struct page *page;
