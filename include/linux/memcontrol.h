@@ -479,14 +479,20 @@ static inline struct obj_cgroup **page_objcgs_check(struct page *page)
  * set_page_objcgs - associate a page with a object cgroups vector
  * @page: a pointer to the page struct
  * @objcgs: a pointer to the object cgroups vector
+ * @atomic: save the value atomically
  *
  * Atomically associates a page with a vector of object cgroups.
  */
 static inline bool set_page_objcgs(struct page *page,
-					struct obj_cgroup **objcgs)
+				   struct obj_cgroup **objcgs, bool atomic)
 {
-	return !cmpxchg(&page->memcg_data, 0, (unsigned long)objcgs |
-			MEMCG_DATA_OBJCGS);
+	unsigned long memcg_data = (unsigned long) objcgs | MEMCG_DATA_OBJCGS;
+
+	if (atomic)
+		return !cmpxchg(&page->memcg_data, 0, memcg_data);
+
+	page->memcg_data = memcg_data;
+	return true;
 }
 #else
 static inline struct obj_cgroup **page_objcgs(struct page *page)
@@ -500,7 +506,7 @@ static inline struct obj_cgroup **page_objcgs_check(struct page *page)
 }
 
 static inline bool set_page_objcgs(struct page *page,
-					struct obj_cgroup **objcgs)
+				   struct obj_cgroup **objcgs, bool atomic)
 {
 	return true;
 }

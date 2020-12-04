@@ -2987,7 +2987,7 @@ static void commit_charge(struct page *page, struct mem_cgroup *memcg)
 
 #ifdef CONFIG_MEMCG_KMEM
 int memcg_alloc_page_obj_cgroups(struct page *page, struct kmem_cache *s,
-				 gfp_t gfp)
+				 gfp_t gfp, bool atomic)
 {
 	unsigned int objects = objs_per_slab_page(s, page);
 	void *vec;
@@ -2997,7 +2997,7 @@ int memcg_alloc_page_obj_cgroups(struct page *page, struct kmem_cache *s,
 	if (!vec)
 		return -ENOMEM;
 
-	if (!set_page_objcgs(page, vec))
+	if (!set_page_objcgs(page, vec, atomic))
 		kfree(vec);
 	else
 		kmemleak_not_leak(vec);
