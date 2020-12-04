@@ -1712,7 +1712,7 @@ EXPORT_SYMBOL(unpoison_memory);
  * We only incremented refcount in case the page was already in-use and it is
  * a known type we can handle.
  */
-static int get_any_page(struct page *p, unsigned long pfn, int flags)
+static int get_any_page(struct page *p, int flags)
 {
 	int ret = 0, pass = 0;
 
@@ -1926,7 +1926,7 @@ int soft_offline_page(unsigned long pfn, int flags)
 
 retry:
 	get_online_mems();
-	ret = get_any_page(page, pfn, flags);
+	ret = get_any_page(page, flags);
 	put_online_mems();
 
 	if (ret > 0) {
