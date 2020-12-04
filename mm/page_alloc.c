@@ -3025,6 +3025,16 @@ static void drain_local_pages_wq(struct work_struct *work)
 	preempt_enable();
 }
 
+/*
+ * The implementation of drain_all_pages(), exposing an extra parameter to
+ * drain on all cpus.
+ *
+ * drain_all_pages() is optimized to only execute on cpus where pcplists are
+ * not empty. The check for non-emptiness can however race with a free to
+ * pcplist that has not yet increased the pcp->count from 0 to 1. Callers
+ * that need the guarantee that every CPU has drained can disable the
+ * optimizing racy check.
+ */
 void __drain_all_pages(struct zone *zone, bool force_all_cpus)
 {
 	int cpu;
