@@ -823,6 +823,7 @@ config PERCPU_STATS
 
 config GUP_TEST
 	bool "Enable infrastructure for get_user_pages()-related unit tests"
+	depends on DEBUG_FS
 	help
 	  Provides /sys/kernel/debug/gup_test, which in turn provides a way
 	  to make ioctl calls that can launch kernel-based unit tests for
