@@ -1055,9 +1055,10 @@ static void __page_set_anon_rmap(struct page *page,
 		anon_vma = anon_vma->root;
 
 	/*
-	 * Prevent page->mapping from pointing to an anon_vma without
-	 * the PAGE_MAPPING_ANON bit set.  This could happen if the
-	 * compiler stores anon_vma and then adds PAGE_MAPPING_ANON to it.
+	 * page_idle does a lockless/optimistic rmap scan on page->mapping.
+	 * Make sure the compiler doesn't split the stores of anon_vma and
+	 * the PAGE_MAPPING_ANON type identifier, otherwise the rmap code
+	 * could mistake the mapping for a struct address_space and crash.
 	 */
 	anon_vma = (void *) anon_vma + PAGE_MAPPING_ANON;
 	WRITE_ONCE(page->mapping, (struct address_space *) anon_vma);
