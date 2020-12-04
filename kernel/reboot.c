@@ -704,19 +704,19 @@ static ssize_t type_store(struct kobject *kobj, struct kobj_attribute *attr,
 		return -EPERM;
 
 	if (!strncmp(buf, BOOT_TRIPLE_STR, strlen(BOOT_TRIPLE_STR)))
-		reboot_mode = BOOT_TRIPLE;
+		reboot_type = BOOT_TRIPLE;
 	else if (!strncmp(buf, BOOT_KBD_STR, strlen(BOOT_KBD_STR)))
-		reboot_mode = BOOT_KBD;
+		reboot_type = BOOT_KBD;
 	else if (!strncmp(buf, BOOT_BIOS_STR, strlen(BOOT_BIOS_STR)))
-		reboot_mode = BOOT_BIOS;
+		reboot_type = BOOT_BIOS;
 	else if (!strncmp(buf, BOOT_ACPI_STR, strlen(BOOT_ACPI_STR)))
-		reboot_mode = BOOT_ACPI;
+		reboot_type = BOOT_ACPI;
 	else if (!strncmp(buf, BOOT_EFI_STR, strlen(BOOT_EFI_STR)))
-		reboot_mode = BOOT_EFI;
+		reboot_type = BOOT_EFI;
 	else if (!strncmp(buf, BOOT_CF9_FORCE_STR, strlen(BOOT_CF9_FORCE_STR)))
-		reboot_mode = BOOT_CF9_FORCE;
+		reboot_type = BOOT_CF9_FORCE;
 	else if (!strncmp(buf, BOOT_CF9_SAFE_STR, strlen(BOOT_CF9_SAFE_STR)))
-		reboot_mode = BOOT_CF9_SAFE;
+		reboot_type = BOOT_CF9_SAFE;
 	else
 		return -EINVAL;
 
