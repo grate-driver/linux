@@ -1374,6 +1374,7 @@ out:
  *
  * This series functions should be used in either conditions:
  * PageLRU is cleared or unset
+ * or page->_refcount is zero
  * or page is locked.
  */
 struct lruvec *lock_page_lruvec(struct page *page)
