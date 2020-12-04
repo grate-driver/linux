@@ -1009,24 +1009,65 @@ static void __pagevec_lru_add_fn(struct page *page, struct lruvec *lruvec)
 	trace_mm_lru_insertion(page, lru);
 }
 
+struct lruvecs {
+	struct list_head lists[PAGEVEC_SIZE];
+	struct lruvec *vecs[PAGEVEC_SIZE];
+};
+
+/* Sort pvec pages on their lruvec */
+int sort_page_lruvec(struct lruvecs *lruvecs, struct pagevec *pvec)
+{
+	int i, j, nr_lruvec;
+	struct page *page;
+	struct lruvec *lruvec = NULL;
+
+	lruvecs->vecs[0] = NULL;
+	for (i = nr_lruvec = 0; i < pagevec_count(pvec); i++) {
+		page = pvec->pages[i];
+		lruvec = mem_cgroup_page_lruvec(page, page_pgdat(page));
+
+		/* Try to find a same lruvec */
+		for (j = 0; j <= nr_lruvec; j++)
+			if (lruvec == lruvecs->vecs[j])
+				break;
+
+		/* A new lruvec */
+		if (j > nr_lruvec) {
+			INIT_LIST_HEAD(&lruvecs->lists[nr_lruvec]);
+			lruvecs->vecs[nr_lruvec] = lruvec;
+			j = nr_lruvec++;
+			lruvecs->vecs[nr_lruvec] = 0;
+		}
+
+		list_add_tail(&page->lru, &lruvecs->lists[j]);
+	}
+
+	return nr_lruvec;
+}
+
 /*
  * Add the passed pages to the LRU, then drop the caller's refcount
  * on them.  Reinitialises the caller's pagevec.
  */
 void __pagevec_lru_add(struct pagevec *pvec)
 {
-	int i;
-	struct lruvec *lruvec = NULL;
+	int i, nr_lruvec;
 	unsigned long flags = 0;
+	struct page *page;
+	struct lruvecs lruvecs;
 
-	for (i = 0; i < pagevec_count(pvec); i++) {
-		struct page *page = pvec->pages[i];
+	nr_lruvec = sort_page_lruvec(&lruvecs, pvec);
 
-		lruvec = relock_page_lruvec_irqsave(page, lruvec, &flags);
-		__pagevec_lru_add_fn(page, lruvec);
+	for (i = 0; i < nr_lruvec; i++) {
+		spin_lock_irqsave(&lruvecs.vecs[i]->lru_lock, flags);
+		while (!list_empty(&lruvecs.lists[i])) {
+			page = lru_to_page(&lruvecs.lists[i]);
+			list_del(&page->lru);
+			__pagevec_lru_add_fn(page, lruvecs.vecs[i]);
+		}
+		spin_unlock_irqrestore(&lruvecs.vecs[i]->lru_lock, flags);
 	}
-	if (lruvec)
-		unlock_page_lruvec_irqrestore(lruvec, flags);
+
 	release_pages(pvec->pages, pvec->nr);
 	pagevec_reinit(pvec);
 }
