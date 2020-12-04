@@ -1318,13 +1318,17 @@ int mem_cgroup_scan_tasks(struct mem_cgroup *memcg,
 #ifdef CONFIG_DEBUG_VM
 void lruvec_memcg_debug(struct lruvec *lruvec, struct page *page)
 {
+	struct mem_cgroup *memcg;
+
 	if (mem_cgroup_disabled())
 		return;
 
-	if (!page->mem_cgroup)
+	memcg = page_memcg(page);
+
+	if (!memcg)
 		VM_BUG_ON_PAGE(lruvec_memcg(lruvec) != root_mem_cgroup, page);
 	else
-		VM_BUG_ON_PAGE(lruvec_memcg(lruvec) != page->mem_cgroup, page);
+		VM_BUG_ON_PAGE(lruvec_memcg(lruvec) != memcg, page);
 }
 #endif
 
@@ -3333,7 +3337,7 @@ void obj_cgroup_uncharge(struct obj_cgroup *objcg, size_t size)
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 /*
- * Because page->mem_cgroup is not set on compound tails, set it now.
+ * Because page_memcg(head) is not set on compound tails, set it now.
  */
 void mem_cgroup_split_huge_fixup(struct page *head)
 {
