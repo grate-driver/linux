@@ -891,6 +891,8 @@ __SYSCALL(__NR_faccessat2, sys_faccessat2)
 __SYSCALL(__NR_process_madvise, sys_process_madvise)
 #define __NR_watch_mount 441
 __SYSCALL(__NR_watch_mount, sys_watch_mount)
+#define __NR_epoll_pwait2 442
+__SYSCALL(__NR_epoll_pwait2, sys_epoll_pwait2)
 
 /*
  * Please add new compat syscalls above this comment and update
