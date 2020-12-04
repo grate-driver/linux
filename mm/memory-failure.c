@@ -809,7 +809,7 @@ static int me_swapcache_clean(struct page *p, unsigned long pfn)
  */
 static int me_huge_page(struct page *p, unsigned long pfn)
 {
-	int res = 0;
+	int res;
 	struct page *hpage = compound_head(p);
 	struct address_space *mapping;
 
@@ -820,6 +820,7 @@ static int me_huge_page(struct page *p, unsigned long pfn)
 	if (mapping) {
 		res = truncate_error_page(hpage, pfn, mapping);
 	} else {
+		res = MF_FAILED;
 		unlock_page(hpage);
 		/*
 		 * migration entry prevents later access on error anonymous
@@ -828,8 +829,10 @@ static int me_huge_page(struct page *p, unsigned long pfn)
 		 */
 		if (PageAnon(hpage))
 			put_page(hpage);
-		dissolve_free_huge_page(p);
-		res = MF_RECOVERED;
+		if (!dissolve_free_huge_page(p) && take_page_off_buddy(p)) {
+			page_ref_inc(p);
+			res = MF_RECOVERED;
+		}
 		lock_page(hpage);
 	}
 
@@ -1196,9 +1199,13 @@ static int memory_failure_hugetlb(unsigned long pfn, int flags)
 			}
 		}
 		unlock_page(head);
-		dissolve_free_huge_page(p);
-		action_result(pfn, MF_MSG_FREE_HUGE, MF_DELAYED);
-		return 0;
+		res = MF_FAILED;
+		if (!dissolve_free_huge_page(p) && take_page_off_buddy(p)) {
+			page_ref_inc(p);
+			res = MF_RECOVERED;
+		}
+		action_result(pfn, MF_MSG_FREE_HUGE, res);
+		return res == MF_RECOVERED ? 0 : -EBUSY;
 	}
 
 	lock_page(head);
