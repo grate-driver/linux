@@ -197,6 +197,7 @@ size_t __ksize(const void *);
 size_t ksize(const void *);
 void *kmem_cache_last_alloc(struct kmem_cache *s, void *object, void **stackp, int nstackp);
 void *kmem_last_alloc(void *object);
+void *kmem_last_alloc_stack(void *object, void **stackp, int nstackp);
 const char *kmem_last_alloc_errstring(void *lastalloc);
 
 #ifdef CONFIG_HAVE_HARDENED_USERCOPY_ALLOCATOR

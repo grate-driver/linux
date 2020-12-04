@@ -3922,6 +3922,7 @@ void *kmem_cache_last_alloc(struct kmem_cache *s, void *object, void **stackp, i
 {
 #ifdef CONFIG_SLUB_DEBUG
 	void *base;
+	int i = 0;
 	unsigned int objnr;
 	void *objp;
 	struct page *page;
@@ -3938,6 +3939,17 @@ void *kmem_cache_last_alloc(struct kmem_cache *s, void *object, void **stackp, i
 	if (objp < base || objp >= base + page->objects * s->size || (objp - base) % s->size)
 		return ERR_PTR(-KMEM_LA_INCONSISTENT);
 	trackp = get_track(s, objp, TRACK_ALLOC);
+#ifdef CONFIG_STACKTRACE
+	if (stackp) {
+		for (; i < nstackp && i < TRACK_ADDRS_COUNT; i++) {
+			stackp[i] = (void *)trackp->addrs[i];
+			if (!stackp[i])
+				break;
+		}
+	}
+#endif
+	if (stackp && i < nstackp)
+		stackp[i] = NULL;
 	return (void *)trackp->addr;
 #else
 	return NULL;

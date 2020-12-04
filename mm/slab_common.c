@@ -560,14 +560,22 @@ const char *kmem_last_alloc_errstring(void *lastalloc)
 }
 EXPORT_SYMBOL_GPL(kmem_last_alloc_errstring);
 
-/*
+/**
+ * kmem_last_alloc_stack - Get return address and stack for last allocation
+ * @object: object for which to find last-allocation return address.
+ * @stackp: %NULL or pointer to location to place return-address stack.
+ * @nstackp: maximum number of return addresses that may be stored.
+ *
  * If the pointer references a slab-allocated object and if sufficient
- * debugging is enabled, return the returrn address for the corresponding
- * allocation.  Otherwise, return NULL.  Note that passing random pointers
- * to this function (including addresses of on-stack variables) is likely
- * to result in panics.
+ * debugging is enabled, return the return address for the corresponding
+ * allocation.  If stackp is non-%NULL in %CONFIG_STACKTRACE kernels running
+ * the slub allocator, also copy the return-address stack into @stackp,
+ * limited by @nstackp.  Otherwise, return %NULL or an appropriate error
+ * code using %ERR_PTR().
+ *
+ * Return: return address from last allocation, %NULL or negative error code.
  */
-void *kmem_last_alloc(void *object)
+void *kmem_last_alloc_stack(void *object, void **stackp, int nstackp)
 {
 	struct page *page;
 
@@ -576,7 +584,24 @@ void *kmem_last_alloc(void *object)
 	page = virt_to_head_page(object);
 	if (!PageSlab(page))
 		return ERR_PTR(-KMEM_LA_NO_SLAB);
-	return kmem_cache_last_alloc(page->slab_cache, object, NULL, 0);
+	return kmem_cache_last_alloc(page->slab_cache, object, stackp, nstackp);
+}
+EXPORT_SYMBOL_GPL(kmem_last_alloc_stack);
+
+/**
+ * kmem_last_alloc - Get return address for last allocation
+ * @object: object for which to find last-allocation return address.
+ *
+ * If the pointer references a slab-allocated object and if sufficient
+ * debugging is enabled, return the return address for the corresponding
+ * allocation.  Otherwise, return %NULL or an appropriate error code using
+ * %ERR_PTR().
+ *
+ * Return: return address from last allocation, %NULL or negative error code.
+ */
+void *kmem_last_alloc(void *object)
+{
+	return kmem_last_alloc_stack(object, NULL, 0);
 }
 EXPORT_SYMBOL_GPL(kmem_last_alloc);
 
