@@ -4093,16 +4093,16 @@ static inline void finish_lock_switch(struct rq *rq)
 static inline void kmap_local_sched_out(void)
 {
 #ifdef CONFIG_KMAP_LOCAL
-	if (unlikely(current->kmap_ctrl.idx))
-		__kmap_local_sched_out();
+//	if (unlikely(current->kmap_ctrl.idx))
+//		__kmap_local_sched_out();
 #endif
 }
 
 static inline void kmap_local_sched_in(void)
 {
 #ifdef CONFIG_KMAP_LOCAL
-	if (unlikely(current->kmap_ctrl.idx))
-		__kmap_local_sched_in();
+//	if (unlikely(current->kmap_ctrl.idx))
+//		__kmap_local_sched_in();
 #endif
 }
 
