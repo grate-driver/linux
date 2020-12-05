@@ -4,6 +4,7 @@
 #define __ASM_KFENCE_H
 
 #include <asm/cacheflush.h>
+#include <linux/set_memory.h>
 
 #define KFENCE_SKIP_ARCH_FAULT_HANDLER "el1_sync"
 
