@@ -509,6 +509,7 @@ struct linereq {
 	 GPIO_V2_LINE_DIRECTION_FLAGS | \
 	 GPIO_V2_LINE_DRIVE_FLAGS | \
 	 GPIO_V2_LINE_EDGE_FLAGS | \
+	 GPIO_V2_LINE_FLAG_EVENT_CLOCK_REALTIME | \
 	 GPIO_V2_LINE_BIAS_FLAGS)
 
 static void linereq_put_event(struct linereq *lr,
@@ -529,6 +530,14 @@ static void linereq_put_event(struct linereq *lr,
 		pr_debug_ratelimited("event FIFO is full - event dropped\n");
 }
 
+static u64 line_event_timestamp(struct line *line)
+{
+	if (test_bit(FLAG_EVENT_CLOCK_REALTIME, &line->desc->flags))
+		return ktime_get_real_ns();
+
+	return ktime_get_ns();
+}
+
 static irqreturn_t edge_irq_thread(int irq, void *p)
 {
 	struct line *line = p;
@@ -546,7 +555,7 @@ static irqreturn_t edge_irq_thread(int irq, void *p)
 		 * which case we didn't get the timestamp from
 		 * edge_irq_handler().
 		 */
-		le.timestamp_ns = ktime_get_ns();
+		le.timestamp_ns = line_event_timestamp(line);
 		if (lr->num_lines != 1)
 			line->req_seqno = atomic_inc_return(&lr->seqno);
 	}
@@ -590,7 +599,7 @@ static irqreturn_t edge_irq_handler(int irq, void *p)
 	 * Just store the timestamp in hardirq context so we get it as
 	 * close in time as possible to the actual event.
 	 */
-	line->timestamp_ns = ktime_get_ns();
+	line->timestamp_ns = line_event_timestamp(line);
 
 	if (lr->num_lines != 1)
 		line->req_seqno = atomic_inc_return(&lr->seqno);
@@ -663,7 +672,7 @@ static void debounce_work_func(struct work_struct *work)
 	memset(&le, 0, sizeof(le));
 
 	lr = line->req;
-	le.timestamp_ns = ktime_get_ns();
+	le.timestamp_ns = line_event_timestamp(line);
 	le.offset = gpio_chip_hwgpio(line->desc);
 	line->line_seqno++;
 	le.line_seqno = line->line_seqno;
@@ -967,6 +976,9 @@ static void gpio_v2_line_config_flags_to_desc_flags(u64 flags,
 		   flags & GPIO_V2_LINE_FLAG_BIAS_PULL_DOWN);
 	assign_bit(FLAG_BIAS_DISABLE, flagsp,
 		   flags & GPIO_V2_LINE_FLAG_BIAS_DISABLED);
+
+	assign_bit(FLAG_EVENT_CLOCK_REALTIME, flagsp,
+		   flags & GPIO_V2_LINE_FLAG_EVENT_CLOCK_REALTIME);
 }
 
 static long linereq_get_values(struct linereq *lr, void __user *ip)
@@ -1479,21 +1491,10 @@ static __poll_t lineevent_poll(struct file *file,
 	return events;
 }
 
-static ssize_t lineevent_get_size(void)
-{
-#if defined(CONFIG_X86_64) && !defined(CONFIG_UML)
-	/* i386 has no padding after 'id' */
-	if (in_ia32_syscall()) {
-		struct compat_gpioeevent_data {
-			compat_u64	timestamp;
-			u32		id;
-		};
-
-		return sizeof(struct compat_gpioeevent_data);
-	}
-#endif
-	return sizeof(struct gpioevent_data);
-}
+struct compat_gpioeevent_data {
+	compat_u64	timestamp;
+	u32		id;
+};
 
 static ssize_t lineevent_read(struct file *file,
 			      char __user *buf,
@@ -1515,7 +1516,10 @@ static ssize_t lineevent_read(struct file *file,
 	 * actual sizeof() and pass this as an argument to copy_to_user() to
 	 * drop unneeded bytes from the output.
 	 */
-	ge_size = lineevent_get_size();
+	if (compat_need_64bit_alignment_fixup())
+		ge_size = sizeof(struct compat_gpioeevent_data);
+	else
+		ge_size = sizeof(struct gpioevent_data);
 	if (count < ge_size)
 		return -EINVAL;
 
@@ -1937,6 +1941,9 @@ static void gpio_desc_to_lineinfo(struct gpio_desc *desc,
 		info->flags |= GPIO_V2_LINE_FLAG_EDGE_RISING;
 	if (test_bit(FLAG_EDGE_FALLING, &desc->flags))
 		info->flags |= GPIO_V2_LINE_FLAG_EDGE_FALLING;
+
+	if (test_bit(FLAG_EVENT_CLOCK_REALTIME, &desc->flags))
+		info->flags |= GPIO_V2_LINE_FLAG_EVENT_CLOCK_REALTIME;
 
 	debounce_period_us = READ_ONCE(desc->debounce_period_us);
 	if (debounce_period_us) {
