@@ -18,6 +18,7 @@
 #include <sound/sof/pm.h>
 #include <sound/sof/trace.h>
 #include <uapi/sound/sof/fw.h>
+#include <sound/sof/ext_manifest.h>
 
 /* debug flags */
 #define SOF_DBG_ENABLE_TRACE	BIT(0)
@@ -100,7 +101,7 @@ struct snd_sof_dsp_ops {
 
 	/* DSP core boot / reset */
 	int (*run)(struct snd_sof_dev *sof_dev); /* mandatory */
-	int (*stall)(struct snd_sof_dev *sof_dev); /* optional */
+	int (*stall)(struct snd_sof_dev *sof_dev, unsigned int core_mask); /* optional */
 	int (*reset)(struct snd_sof_dev *sof_dev); /* optional */
 	int (*core_power_up)(struct snd_sof_dev *sof_dev,
 			     unsigned int core_mask); /* optional */
@@ -208,6 +209,10 @@ struct snd_sof_dsp_ops {
 	int (*pre_fw_run)(struct snd_sof_dev *sof_dev); /* optional */
 	int (*post_fw_run)(struct snd_sof_dev *sof_dev); /* optional */
 
+	/* parse platform specific extended manifest, optional */
+	int (*parse_platform_ext_manifest)(struct snd_sof_dev *sof_dev,
+					   const struct sof_ext_man_elem_header *hdr);
+
 	/* DSP PM */
 	int (*suspend)(struct snd_sof_dev *sof_dev,
 		       u32 target_state); /* optional */
@@ -290,6 +295,7 @@ enum sof_debugfs_access_type {
 /* FS entry for debug files that can expose DSP memories, registers */
 struct snd_sof_dfsentry {
 	size_t size;
+	size_t buf_data_size;  /* length of buffered data for file read operation */
 	enum sof_dfsentry_type type;
 	/*
 	 * access_type specifies if the
@@ -523,6 +529,7 @@ void snd_sof_get_status(struct snd_sof_dev *sdev, u32 panic_code,
 			void *stack, size_t stack_words);
 int snd_sof_init_trace_ipc(struct snd_sof_dev *sdev);
 void snd_sof_handle_fw_exception(struct snd_sof_dev *sdev);
+int snd_sof_dbg_memory_info_init(struct snd_sof_dev *sdev);
 
 /*
  * Platform specific ops.
