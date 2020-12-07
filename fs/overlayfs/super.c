@@ -79,7 +79,7 @@ static void ovl_dentry_release(struct dentry *dentry)
 static struct dentry *ovl_d_real(struct dentry *dentry,
 				 const struct inode *inode)
 {
-	struct dentry *real;
+	struct dentry *real = NULL, *lower;
 
 	/* It's an overlay file */
 	if (inode && d_inode(dentry) == inode)
@@ -98,9 +98,10 @@ static struct dentry *ovl_d_real(struct dentry *dentry,
 	if (real && !inode && ovl_has_upperdata(d_inode(dentry)))
 		return real;
 
-	real = ovl_dentry_lowerdata(dentry);
-	if (!real)
+	lower = ovl_dentry_lowerdata(dentry);
+	if (!lower)
 		goto bug;
+	real = lower;
 
 	/* Handle recursion */
 	real = d_real(real, inode);
@@ -108,8 +109,10 @@ static struct dentry *ovl_d_real(struct dentry *dentry,
 	if (!inode || inode == d_inode(real))
 		return real;
 bug:
-	WARN(1, "ovl_d_real(%pd4, %s:%lu): real dentry not found\n", dentry,
-	     inode ? inode->i_sb->s_id : "NULL", inode ? inode->i_ino : 0);
+	WARN(1, "%s(%pd4, %s:%lu): real dentry (%p/%lu) not found\n",
+	     __func__, dentry, inode ? inode->i_sb->s_id : "NULL",
+	     inode ? inode->i_ino : 0, real,
+	     real && d_inode(real) ? d_inode(real)->i_ino : 0);
 	return dentry;
 }
 
@@ -356,6 +359,8 @@ static int ovl_show_options(struct seq_file *m, struct dentry *dentry)
 		seq_printf(m, ",redirect_dir=%s", ofs->config.redirect_mode);
 	if (ofs->config.index != ovl_index_def)
 		seq_printf(m, ",index=%s", ofs->config.index ? "on" : "off");
+	if (!ofs->config.uuid)
+		seq_puts(m, ",uuid=off");
 	if (ofs->config.nfs_export != ovl_nfs_export_def)
 		seq_printf(m, ",nfs_export=%s", ofs->config.nfs_export ?
 						"on" : "off");
@@ -410,6 +415,8 @@ enum {
 	OPT_REDIRECT_DIR,
 	OPT_INDEX_ON,
 	OPT_INDEX_OFF,
+	OPT_UUID_ON,
+	OPT_UUID_OFF,
 	OPT_NFS_EXPORT_ON,
 	OPT_NFS_EXPORT_OFF,
 	OPT_XINO_ON,
@@ -429,6 +436,8 @@ static const match_table_t ovl_tokens = {
 	{OPT_REDIRECT_DIR,		"redirect_dir=%s"},
 	{OPT_INDEX_ON,			"index=on"},
 	{OPT_INDEX_OFF,			"index=off"},
+	{OPT_UUID_ON,			"uuid=on"},
+	{OPT_UUID_OFF,			"uuid=off"},
 	{OPT_NFS_EXPORT_ON,		"nfs_export=on"},
 	{OPT_NFS_EXPORT_OFF,		"nfs_export=off"},
 	{OPT_XINO_ON,			"xino=on"},
@@ -547,6 +556,14 @@ static int ovl_parse_opt(char *opt, struct ovl_config *config)
 		case OPT_INDEX_OFF:
 			config->index = false;
 			index_opt = true;
+			break;
+
+		case OPT_UUID_ON:
+			config->uuid = true;
+			break;
+
+		case OPT_UUID_OFF:
+			config->uuid = false;
 			break;
 
 		case OPT_NFS_EXPORT_ON:
@@ -1877,6 +1894,7 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 	ofs->share_whiteout = true;
 
 	ofs->config.index = ovl_index_def;
+	ofs->config.uuid = true;
 	ofs->config.nfs_export = ovl_nfs_export_def;
 	ofs->config.xino = ovl_xino_def();
 	ofs->config.metacopy = ovl_metacopy_def;
@@ -1955,6 +1973,11 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 	/* If the upper fs is nonexistent, we mark overlayfs r/o too */
 	if (!ovl_upper_mnt(ofs))
 		sb->s_flags |= SB_RDONLY;
+
+	if (!ofs->config.uuid && ofs->numfs > 1) {
+		pr_warn("The uuid=off requires a single fs for lower and upper, falling back to uuid=on.\n");
+		ofs->config.uuid = true;
+	}
 
 	if (!ovl_force_readonly(ofs) && ofs->config.index) {
 		err = ovl_get_indexdir(sb, ofs, oe, &upperpath);
