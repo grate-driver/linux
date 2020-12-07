@@ -157,11 +157,9 @@ unsigned long __init mmu_mapin_ram(unsigned long base, unsigned long top)
 	unsigned long done;
 	unsigned long border = (unsigned long)__init_begin - PAGE_OFFSET;
 
-	if (__map_without_bats) {
-		pr_debug("RAM mapped without BATs\n");
-		return base;
-	}
-	if (debug_pagealloc_enabled()) {
+
+	if (debug_pagealloc_enabled() || __map_without_bats) {
+		pr_debug_once("Read-Write memory mapped without BATs\n");
 		if (base >= border)
 			return base;
 		if (top >= border)
@@ -304,7 +302,7 @@ void __init setbat(int index, unsigned long virt, phys_addr_t phys,
 /*
  * Preload a translation in the hash table
  */
-void hash_preload(struct mm_struct *mm, unsigned long ea)
+static void hash_preload(struct mm_struct *mm, unsigned long ea)
 {
 	pmd_t *pmd;
 

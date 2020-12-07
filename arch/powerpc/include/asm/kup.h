@@ -15,11 +15,13 @@
 #define KUAP_CURRENT		(KUAP_CURRENT_READ | KUAP_CURRENT_WRITE)
 
 #ifdef CONFIG_PPC_BOOK3S_64
-#include <asm/book3s/64/kup-radix.h>
+#include <asm/book3s/64/kup.h>
 #endif
+
 #ifdef CONFIG_PPC_8xx
 #include <asm/nohash/32/kup-8xx.h>
 #endif
+
 #ifdef CONFIG_PPC_BOOK3S_32
 #include <asm/book3s/32/kup.h>
 #endif
@@ -42,6 +44,9 @@
 
 #else /* !__ASSEMBLY__ */
 
+extern bool disable_kuep;
+extern bool disable_kuap;
+
 #include <linux/pgtable.h>
 
 void setup_kup(void);
@@ -57,8 +62,8 @@ void setup_kuap(bool disabled);
 #else
 static inline void setup_kuap(bool disabled) { }
 
-static inline bool
-bad_kuap_fault(struct pt_regs *regs, unsigned long address, bool is_write)
+static inline bool bad_kuap_fault(struct pt_regs *regs, unsigned long address,
+				  bool is_write, unsigned long error_code)
 {
 	return false;
 }

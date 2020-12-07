@@ -177,6 +177,7 @@ config PPC
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
 	select GENERIC_TIME_VSYSCALL
+	select GENERIC_GETTIMEOFDAY
 	select HAVE_ARCH_AUDITSYSCALL
 	select HAVE_ARCH_HUGE_VMAP		if PPC_BOOK3S_64 && PPC_RADIX_MMU
 	select HAVE_ARCH_JUMP_LABEL
@@ -207,6 +208,7 @@ config PPC
 	select HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_FUNCTION_TRACER
 	select HAVE_GCC_PLUGINS			if GCC_VERSION >= 50200   # plugin support on gcc <= 5.1 is buggy on PPC
+	select HAVE_GENERIC_VDSO
 	select HAVE_HW_BREAKPOINT		if PERF_EVENTS && (PPC_BOOK3S || PPC_8xx)
 	select HAVE_IDE
 	select HAVE_IOREMAP_PROT
@@ -311,6 +313,10 @@ config GENERIC_BUG
 	bool
 	default y
 	depends on BUG
+
+config GENERIC_BUG_RELATIVE_POINTERS
+	def_bool y
+	depends on GENERIC_BUG
 
 config SYS_SUPPORTS_APM_EMULATION
 	default y if PMAC_APM_EMU
@@ -421,6 +427,7 @@ config HUGETLB_PAGE_SIZE_VARIABLE
 config MATH_EMULATION
 	bool "Math emulation"
 	depends on 4xx || PPC_8xx || PPC_MPC832x || BOOKE
+	select PPC_FPU_REGS
 	help
 	  Some PowerPC chips designed for embedded applications do not have
 	  a floating-point unit and therefore do not implement the
@@ -660,9 +667,15 @@ config IRQ_ALL_CPUS
 	  reported with SMP Power Macintoshes with this option enabled.
 
 config NUMA
-	bool "NUMA support"
-	depends on PPC64
-	default y if SMP && PPC_PSERIES
+	bool "NUMA Memory Allocation and Scheduler Support"
+	depends on PPC64 && SMP
+	default y if PPC_PSERIES || PPC_POWERNV
+	help
+	  Enable NUMA (Non-Uniform Memory Access) support.
+
+	  The kernel will try to allocate memory used by a CPU on the
+	  local memory controller of the CPU and add some more
+	  NUMA awareness to the kernel.
 
 config NODES_SHIFT
 	int
