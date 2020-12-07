@@ -1,0 +1,97 @@
+arm/soc
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.11/soc-signed
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v5.11-tag1
+
+arm/dt
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.11-tag1
+	renesas/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.11-tag1
+	samsung/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.11
+	patch
+		ARM: dts: add Nuvoton NPCM730 device tree
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-dts-for-v5.11-1
+	hisi/dt
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm32-dt-for-5.11
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-5.11
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.11/dt-signed
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.11-1
+	renesas/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.11-tag2
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-dt-bindings
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-arm-dt
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-arm64-dt
+
+arm/drivers
+	optee/uuid
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/optee-use-uuid-api-for-v5.10
+	renesas/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.11-tag1
+	sunxi/rework-mbus
+		ssh://gitolite.kernel.org/pub/scm/linux/kernel/git/mripard/linux tags/sunxi-rework-mbus
+	samsung/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-5.11
+	patch
+		soc: sunxi: Fix compilation of sunxi_mbus
+	fsl/driver
+		git://git.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-next-v5.11
+	drivers/memory
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.11
+	drivers/memory-tegra
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-tegra-5.11-2
+	renesas/drivers-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.11-tag2
+	tegra/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-soc
+	tegra/firmware
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-firmware
+	<no branch> (3cea11cd5e3b00d91caf0b4730194039b45c5891)
+		Backmerge tag 'v5.10-rc2' into arm/drivers
+	<no branch> (f83eb664cdb45169338b9633f22eaafc23764f05)
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.11
+
+arm/defconfig
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v5.11-tag1
+	patch
+		ARM: config: ux500: Update U8500 defconfig
+		ARM: multi_v7_defconfig: ti: Enable networking options for nfs boot
+	omap/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.11/defconfig-signed
+	stm32/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-config-for-v5.11-1
+	tegra/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.11-arm64-defconfig
+
+arm/newsoc
+
+arm/late
+
+arm/fixes
+	patch
+		arm64: dts: broadcom: clear the warnings caused by empty dma-ranges
+		arm64: dts: qcom: clear the warnings caused by empty dma-ranges
+		MAINTAINERS: Remove myself as LPC32xx maintainers
+	<no branch> (7327c8b98e2e14c47021eea14d1ab268086a6408)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.10-rockchip-dtsfixes1
+	<no branch> (acfdd18591eaac25446e976a0c0d190f8b3dbfb1)
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-fixes-for-v5.10-rc6
+	<no branch> (2663b3388551230cbc4606a40fabf3331ceb59e4)
+		git://git.kernel.org/pub/scm/linux/kernel/git/leo/linux tags/soc-fsl-fix-v5.10
+	<no branch> (d98bccf10dd0f36cabee71a425381fce0908de3b)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.10-arm64-dt-fixes
+	<no branch> (05d5de6ba7dbe490dd413b5ca11d0875bd2bc006)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.10/fixes-rc5-signed
+	<no branch> (853735e404244f5496cdb6188c5ed9a0f9627ee6)
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-valid-memory-type-for-v5.11
+
