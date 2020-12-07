@@ -16,24 +16,64 @@
  * sync.i:      inherit from sync, but also flush cpu pipeline
  * sync.is:     the same with sync.i + sync.s
  *
- * bar.brwarw:  ordering barrier for all load/store instructions before it
- * bar.brwarws: ordering barrier for all load/store instructions before it
- *						and shareable to other cores
- * bar.brar:    ordering barrier for all load       instructions before it
- * bar.brars:   ordering barrier for all load       instructions before it
- *						and shareable to other cores
- * bar.bwaw:    ordering barrier for all store      instructions before it
- * bar.bwaws:   ordering barrier for all store      instructions before it
- *						and shareable to other cores
+ *
+ * bar.brwarws: ordering barrier for all load/store instructions
+ *              before/after it and share to other harts
+ *
+ * |31|30 26|25 21|20 16|15  10|9   5|4           0|
+ *  1  10000 s0000 00000 100001	00001 0 bw br aw ar
+ *
+ * b: before
+ * a: after
+ * r: read
+ * w: write
+ * s: share to other harts
+ *
+ * Here are all combinations:
+ *
+ * bar.brws
+ * bar.brs
+ * bar.bws
+ * bar.arws
+ * bar.ars
+ * bar.aws
+ * bar.brwarws
+ * bar.brarws
+ * bar.bwarws
+ * bar.brwars
+ * bar.brwaws
+ * bar.brars
+ * bar.bwaws
  */
 
 #ifdef CONFIG_CPU_HAS_CACHEV2
 #define mb()		asm volatile ("sync.s\n":::"memory")
 
 #ifdef CONFIG_SMP
-#define __smp_mb()	asm volatile ("bar.brwarws\n":::"memory")
-#define __smp_rmb()	asm volatile ("bar.brars\n":::"memory")
-#define __smp_wmb()	asm volatile ("bar.bwaws\n":::"memory")
+
+#define __bar_brws()	asm volatile (".long 0x842cc200\n":::"memory")
+#define __bar_brs()	asm volatile (".long 0x8424c200\n":::"memory")
+#define __bar_bws()	asm volatile (".long 0x8428c200\n":::"memory")
+#define __bar_arws()	asm volatile (".long 0x8423c200\n":::"memory")
+#define __bar_ars()	asm volatile (".long 0x8421c200\n":::"memory")
+#define __bar_aws()	asm volatile (".long 0x8422c200\n":::"memory")
+#define __bar_brwarws()	asm volatile (".long 0x842fc200\n":::"memory")
+#define __bar_brarws()	asm volatile (".long 0x8427c200\n":::"memory")
+#define __bar_bwarws()	asm volatile (".long 0x842bc200\n":::"memory")
+#define __bar_brwars()	asm volatile (".long 0x842dc200\n":::"memory")
+#define __bar_brwaws()	asm volatile (".long 0x842ec200\n":::"memory")
+#define __bar_brars()	asm volatile (".long 0x8425c200\n":::"memory")
+#define __bar_brars()	asm volatile (".long 0x8425c200\n":::"memory")
+#define __bar_bwaws()	asm volatile (".long 0x842ac200\n":::"memory")
+
+#define __smp_mb()	__bar_brwarws()
+#define __smp_rmb()	__bar_brars()
+#define __smp_wmb()	__bar_bwaws()
+
+#define ACQUIRE_FENCE		".long 0x8427c200\n"
+#define __smp_acquire_fence()	__bar_brarws()
+#define __smp_release_fence()	__bar_brwaws()
+
 #endif /* CONFIG_SMP */
 
 #define sync_is()	asm volatile ("sync.is\n":::"memory")
