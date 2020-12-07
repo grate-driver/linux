@@ -45,14 +45,11 @@
 #define STACK_TOP	TASK_SIZE
 #define STACK_TOP_MAX	DEFAULT_TASK_SIZE
 
-/* Allow bigger stacks for 64-bit processes */
-#define STACK_SIZE_MAX	(USER_WIDE_MODE					\
-			 ? (1 << 30)	/* 1 GB */			\
-			 : (CONFIG_MAX_STACK_SIZE_MB*1024*1024))
-
 #endif
 
 #ifndef __ASSEMBLY__
+
+unsigned long calc_max_stack_size(unsigned long stack_max);
 
 /*
  * Data detected about CPUs at boot time which is the same for all CPU's.
@@ -82,7 +79,6 @@ struct system_cpuinfo_parisc {
 
 /* Per CPU data structure - ie varies per CPU.  */
 struct cpuinfo_parisc {
-	unsigned long it_value;     /* Interval Timer at last timer Intr */
 	unsigned long irq_count;    /* number of IRQ's since boot */
 	unsigned long cpuid;        /* aka slot_number or set to NO_PROC_ID */
 	unsigned long hpa;          /* Host Physical address */
@@ -97,7 +93,6 @@ struct cpuinfo_parisc {
 	unsigned long cpu_loc;      /* CPU location from PAT firmware */
 	unsigned int state;
 	struct parisc_device *dev;
-	unsigned long loops_per_jiffy;
 };
 
 extern struct system_cpuinfo_parisc boot_cpu_data;
