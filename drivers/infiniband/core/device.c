@@ -284,6 +284,7 @@ static void ib_device_check_mandatory(struct ib_device *device)
 		IB_MANDATORY_FUNC(poll_cq),
 		IB_MANDATORY_FUNC(req_notify_cq),
 		IB_MANDATORY_FUNC(get_dma_mr),
+		IB_MANDATORY_FUNC(reg_user_mr),
 		IB_MANDATORY_FUNC(dereg_mr),
 		IB_MANDATORY_FUNC(get_port_immutable)
 	};
@@ -600,6 +601,37 @@ struct ib_device *_ib_alloc_device(size_t size)
 	init_completion(&device->unreg_completion);
 	INIT_WORK(&device->unregistration_work, ib_unregister_work);
 
+	device->uverbs_cmd_mask =
+		BIT_ULL(IB_USER_VERBS_CMD_ALLOC_MW) |
+		BIT_ULL(IB_USER_VERBS_CMD_ALLOC_PD) |
+		BIT_ULL(IB_USER_VERBS_CMD_ATTACH_MCAST) |
+		BIT_ULL(IB_USER_VERBS_CMD_CLOSE_XRCD) |
+		BIT_ULL(IB_USER_VERBS_CMD_CREATE_AH) |
+		BIT_ULL(IB_USER_VERBS_CMD_CREATE_COMP_CHANNEL) |
+		BIT_ULL(IB_USER_VERBS_CMD_CREATE_CQ) |
+		BIT_ULL(IB_USER_VERBS_CMD_CREATE_QP) |
+		BIT_ULL(IB_USER_VERBS_CMD_CREATE_SRQ) |
+		BIT_ULL(IB_USER_VERBS_CMD_CREATE_XSRQ) |
+		BIT_ULL(IB_USER_VERBS_CMD_DEALLOC_MW) |
+		BIT_ULL(IB_USER_VERBS_CMD_DEALLOC_PD) |
+		BIT_ULL(IB_USER_VERBS_CMD_DEREG_MR) |
+		BIT_ULL(IB_USER_VERBS_CMD_DESTROY_AH) |
+		BIT_ULL(IB_USER_VERBS_CMD_DESTROY_CQ) |
+		BIT_ULL(IB_USER_VERBS_CMD_DESTROY_QP) |
+		BIT_ULL(IB_USER_VERBS_CMD_DESTROY_SRQ) |
+		BIT_ULL(IB_USER_VERBS_CMD_DETACH_MCAST) |
+		BIT_ULL(IB_USER_VERBS_CMD_GET_CONTEXT) |
+		BIT_ULL(IB_USER_VERBS_CMD_MODIFY_QP) |
+		BIT_ULL(IB_USER_VERBS_CMD_MODIFY_SRQ) |
+		BIT_ULL(IB_USER_VERBS_CMD_OPEN_QP) |
+		BIT_ULL(IB_USER_VERBS_CMD_OPEN_XRCD) |
+		BIT_ULL(IB_USER_VERBS_CMD_QUERY_DEVICE) |
+		BIT_ULL(IB_USER_VERBS_CMD_QUERY_PORT) |
+		BIT_ULL(IB_USER_VERBS_CMD_QUERY_QP) |
+		BIT_ULL(IB_USER_VERBS_CMD_QUERY_SRQ) |
+		BIT_ULL(IB_USER_VERBS_CMD_REG_MR) |
+		BIT_ULL(IB_USER_VERBS_CMD_REREG_MR) |
+		BIT_ULL(IB_USER_VERBS_CMD_RESIZE_CQ);
 	return device;
 }
 EXPORT_SYMBOL(_ib_alloc_device);
@@ -1177,25 +1209,6 @@ out:
 	return ret;
 }
 
-static void setup_dma_device(struct ib_device *device,
-			     struct device *dma_device)
-{
-	/*
-	 * If the caller does not provide a DMA capable device then the IB
-	 * device will be used. In this case the caller should fully setup the
-	 * ibdev for DMA. This usually means using dma_virt_ops.
-	 */
-#ifdef CONFIG_DMA_VIRT_OPS
-	if (!dma_device) {
-		device->dev.dma_ops = &dma_virt_ops;
-		dma_device = &device->dev;
-	}
-#endif
-	WARN_ON(!dma_device);
-	device->dma_device = dma_device;
-	WARN_ON(!device->dma_device->dma_parms);
-}
-
 /*
  * setup_device() allocates memory and sets up data that requires calling the
  * device ops, this is the only reason these actions are not done during
@@ -1341,7 +1354,14 @@ int ib_register_device(struct ib_device *device, const char *name,
 	if (ret)
 		return ret;
 
-	setup_dma_device(device, dma_device);
+	/*
+	 * If the caller does not provide a DMA capable device then the IB core
+	 * will set up ib_sge and scatterlist structures that stash the kernel
+	 * virtual address into the address field.
+	 */
+	WARN_ON(dma_device && !dma_device->dma_parms);
+	device->dma_device = dma_device;
+
 	ret = setup_device(device);
 	if (ret)
 		return ret;
@@ -2576,6 +2596,7 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
 	SET_DEVICE_OP(dev_ops, create_qp);
 	SET_DEVICE_OP(dev_ops, create_rwq_ind_table);
 	SET_DEVICE_OP(dev_ops, create_srq);
+	SET_DEVICE_OP(dev_ops, create_user_ah);
 	SET_DEVICE_OP(dev_ops, create_wq);
 	SET_DEVICE_OP(dev_ops, dealloc_dm);
 	SET_DEVICE_OP(dev_ops, dealloc_driver);
@@ -2674,6 +2695,21 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
 	SET_OBJ_SIZE(dev_ops, ib_xrcd);
 }
 EXPORT_SYMBOL(ib_set_device_ops);
+
+#ifdef CONFIG_INFINIBAND_VIRT_DMA
+int ib_dma_virt_map_sg(struct ib_device *dev, struct scatterlist *sg, int nents)
+{
+	struct scatterlist *s;
+	int i;
+
+	for_each_sg(sg, s, nents, i) {
+		sg_dma_address(s) = (uintptr_t)sg_virt(s);
+		sg_dma_len(s) = s->length;
+	}
+	return nents;
+}
+EXPORT_SYMBOL(ib_dma_virt_map_sg);
+#endif /* CONFIG_INFINIBAND_VIRT_DMA */
 
 static const struct rdma_nl_cbs ibnl_ls_cb_table[RDMA_NL_LS_NUM_OPS] = {
 	[RDMA_NL_LS_OP_RESOLVE] = {
