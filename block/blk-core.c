@@ -421,6 +421,18 @@ void blk_cleanup_queue(struct request_queue *q)
 }
 EXPORT_SYMBOL(blk_cleanup_queue);
 
+#ifdef CONFIG_PM
+static bool rq_suspended(struct request_queue *q)
+{
+	return q->rpm_status == RPM_SUSPENDED;
+}
+#else
+static bool rq_suspended(struct request_queue *q)
+{
+	return false;
+}
+#endif
+
 /**
  * blk_queue_enter() - try to increase q->q_usage_counter
  * @q: request queue pointer
@@ -440,12 +452,10 @@ int blk_queue_enter(struct request_queue *q, blk_mq_req_flags_t flags)
 			 * responsible for ensuring that that counter is
 			 * globally visible before the queue is unfrozen.
 			 */
-			if ((pm && q->rpm_status != RPM_SUSPENDED) ||
-			    !blk_queue_pm_only(q)) {
+			if ((pm && !rq_suspended(q)) || !blk_queue_pm_only(q))
 				success = true;
-			} else {
+			else
 				percpu_ref_put(&q->q_usage_counter);
-			}
 		}
 		rcu_read_unlock();
 
