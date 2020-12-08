@@ -112,8 +112,7 @@ void _rtw_free_mlme_priv(struct mlme_priv *pmlmepriv)
 {
 	if (pmlmepriv) {
 		rtw_free_mlme_priv_ie_data(pmlmepriv);
-		if (pmlmepriv->free_bss_buf)
-			vfree(pmlmepriv->free_bss_buf);
+		vfree(pmlmepriv->free_bss_buf);
 	}
 }
 
@@ -495,7 +494,7 @@ void update_network(struct wlan_bssid_ex *dst, struct wlan_bssid_ex *src,
 
 	#if defined(DBG_RX_SIGNAL_DISPLAY_SSID_MONITORED) && 1
 	if (strcmp(dst->Ssid.Ssid, DBG_RX_SIGNAL_DISPLAY_SSID_MONITORED) == 0) {
-		DBG_871X(FUNC_ADPT_FMT" %s("MAC_FMT", ch%u) ss_ori:%3u, sq_ori:%3u, rssi_ori:%3ld, ss_smp:%3u, sq_smp:%3u, rssi_smp:%3ld\n"
+		DBG_871X(FUNC_ADPT_FMT" %s(%pM, ch%u) ss_ori:%3u, sq_ori:%3u, rssi_ori:%3ld, ss_smp:%3u, sq_smp:%3u, rssi_smp:%3ld\n"
 			, FUNC_ADPT_ARG(padapter)
 			, src->Ssid.Ssid, MAC_ARG(src->MacAddress), src->Configuration.DSConfig
 			, ss_ori, sq_ori, rssi_ori
@@ -540,7 +539,7 @@ void update_network(struct wlan_bssid_ex *dst, struct wlan_bssid_ex *src,
 
 	#if defined(DBG_RX_SIGNAL_DISPLAY_SSID_MONITORED) && 1
 	if (strcmp(dst->Ssid.Ssid, DBG_RX_SIGNAL_DISPLAY_SSID_MONITORED) == 0) {
-		DBG_871X(FUNC_ADPT_FMT" %s("MAC_FMT"), SignalStrength:%u, SignalQuality:%u, RawRSSI:%ld\n"
+		DBG_871X(FUNC_ADPT_FMT" %s(%pM), SignalStrength:%u, SignalQuality:%u, RawRSSI:%ld\n"
 			, FUNC_ADPT_ARG(padapter)
 			, dst->Ssid.Ssid, MAC_ARG(dst->MacAddress), dst->PhyInfo.SignalStrength, dst->PhyInfo.SignalQuality, dst->Rssi);
 	}
@@ -987,7 +986,7 @@ void rtw_free_assoc_resources(struct adapter *adapter, int lock_scanned_queue)
 	struct debug_priv *pdbgpriv = &psdpriv->drv_dbg;
 
 	RT_TRACE(_module_rtl871x_mlme_c_, _drv_notice_, ("+rtw_free_assoc_resources\n"));
-	RT_TRACE(_module_rtl871x_mlme_c_, _drv_info_, ("tgt_network->network.MacAddress ="MAC_FMT" ssid =%s\n",
+	RT_TRACE(_module_rtl871x_mlme_c_, _drv_info_, ("tgt_network->network.MacAddress =%pM ssid =%s\n",
 		MAC_ARG(tgt_network->network.MacAddress), tgt_network->network.Ssid.Ssid));
 
 	if (check_fwstate(pmlmepriv, WIFI_STATION_STATE|WIFI_AP_STATE)) {
@@ -1222,7 +1221,7 @@ static void rtw_joinbss_update_network(struct adapter *padapter, struct wlan_net
 
 	DBG_871X("%s\n", __func__);
 
-	RT_TRACE(_module_rtl871x_mlme_c_, _drv_info_, ("\nfw_state:%x, BSSID:"MAC_FMT"\n"
+	RT_TRACE(_module_rtl871x_mlme_c_, _drv_info_, ("\nfw_state:%x, BSSID:%pM\n"
 		, get_fwstate(pmlmepriv), MAC_ARG(pnetwork->network.MacAddress)));
 
 	/*  why not use ptarget_wlan?? */
@@ -1579,7 +1578,7 @@ void rtw_stadel_event_callback(struct adapter *adapter, u8 *pbuf)
 	else
 		mac_id = pstadel->mac_id;
 
-	DBG_871X("%s(mac_id =%d) =" MAC_FMT "\n", __func__, mac_id, MAC_ARG(pstadel->macaddr));
+	DBG_871X("%s(mac_id =%d) =%pM\n", __func__, mac_id, MAC_ARG(pstadel->macaddr));
 
 	if (mac_id >= 0) {
 		u16 media_status;
@@ -1890,7 +1889,7 @@ static int rtw_check_roaming_candidate(struct mlme_priv *mlme
 	if (rtw_is_desired_network(adapter, competitor) == false)
 		goto exit;
 
-	DBG_871X("roam candidate:%s %s("MAC_FMT", ch%3u) rssi:%d, age:%5d\n",
+	DBG_871X("roam candidate:%s %s(%pM, ch%3u) rssi:%d, age:%5d\n",
 		(competitor == mlme->cur_network_scanned)?"*":" ",
 		competitor->network.Ssid.Ssid,
 		MAC_ARG(competitor->network.MacAddress),
@@ -1912,7 +1911,7 @@ static int rtw_check_roaming_candidate(struct mlme_priv *mlme
 	if (competitor->network.Rssi - mlme->cur_network_scanned->network.Rssi < mlme->roam_rssi_diff_th)
 		goto exit;
 
-	if (*candidate != NULL && (*candidate)->network.Rssi >= competitor->network.Rssi)
+	if (*candidate && (*candidate)->network.Rssi >= competitor->network.Rssi)
 		goto exit;
 
 update:
@@ -1952,7 +1951,7 @@ int rtw_select_roaming_candidate(struct mlme_priv *mlme)
 
 		mlme->pscanned = get_next(mlme->pscanned);
 
-		DBG_871X("%s("MAC_FMT", ch%u) rssi:%d\n"
+		DBG_871X("%s(%pM, ch%u) rssi:%d\n"
 			, pnetwork->network.Ssid.Ssid
 			, MAC_ARG(pnetwork->network.MacAddress)
 			, pnetwork->network.Configuration.DSConfig
@@ -1967,7 +1966,7 @@ int rtw_select_roaming_candidate(struct mlme_priv *mlme)
 		ret = _FAIL;
 		goto exit;
 	} else {
-		DBG_871X("%s: candidate: %s("MAC_FMT", ch:%u)\n", __func__,
+		DBG_871X("%s: candidate: %s(%pM, ch:%u)\n", __func__,
 			candidate->network.Ssid.Ssid, MAC_ARG(candidate->network.MacAddress),
 			candidate->network.Configuration.DSConfig);
 
@@ -2027,7 +2026,7 @@ static int rtw_check_join_candidate(struct mlme_priv *mlme
 	if (updated) {
 		DBG_871X("[by_bssid:%u][assoc_ssid:%s]"
 			"[to_roam:%u] "
-			"new candidate: %s("MAC_FMT", ch%u) rssi:%d\n",
+			"new candidate: %s(%pM, ch%u) rssi:%d\n",
 			mlme->assoc_by_bssid,
 			mlme->assoc_ssid.Ssid,
 			rtw_to_roam(adapter),
@@ -2082,7 +2081,7 @@ int rtw_select_and_join_from_scanned_queue(struct mlme_priv *pmlmepriv)
 
 		pmlmepriv->pscanned = get_next(pmlmepriv->pscanned);
 
-		DBG_871X("%s("MAC_FMT", ch%u) rssi:%d\n"
+		DBG_871X("%s(%pM, ch%u) rssi:%d\n"
 			, pnetwork->network.Ssid.Ssid
 			, MAC_ARG(pnetwork->network.MacAddress)
 			, pnetwork->network.Configuration.DSConfig
@@ -2100,7 +2099,7 @@ int rtw_select_and_join_from_scanned_queue(struct mlme_priv *pmlmepriv)
 		ret = _FAIL;
 		goto exit;
 	} else {
-		DBG_871X("%s: candidate: %s("MAC_FMT", ch:%u)\n", __func__,
+		DBG_871X("%s: candidate: %s(%pM, ch:%u)\n", __func__,
 			candidate->network.Ssid.Ssid, MAC_ARG(candidate->network.MacAddress),
 			candidate->network.Configuration.DSConfig);
 		goto candidate_exist;
@@ -2583,7 +2582,7 @@ unsigned int rtw_restructure_ht_ie(struct adapter *padapter, u8 *in_ie, u8 *out_
 	u32 ielen, out_len;
 	enum HT_CAP_AMPDU_FACTOR max_rx_ampdu_factor;
 	unsigned char *p, *pframe;
-	struct rtw_ieee80211_ht_cap ht_capie;
+	struct ieee80211_ht_cap ht_capie;
 	u8 cbw40_enable = 0, stbc_rx_enable = 0, rf_type = 0, operation_bw = 0;
 	struct registry_priv *pregistrypriv = &padapter->registrypriv;
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
@@ -2594,7 +2593,7 @@ unsigned int rtw_restructure_ht_ie(struct adapter *padapter, u8 *in_ie, u8 *out_
 
 	out_len = *pout_len;
 
-	memset(&ht_capie, 0, sizeof(struct rtw_ieee80211_ht_cap));
+	memset(&ht_capie, 0, sizeof(struct ieee80211_ht_cap));
 
 	ht_capie.cap_info = cpu_to_le16(IEEE80211_HT_CAP_DSSSCCK40);
 
@@ -2661,7 +2660,7 @@ unsigned int rtw_restructure_ht_ie(struct adapter *padapter, u8 *in_ie, u8 *out_
 	}
 
 	/* fill default supported_mcs_set */
-	memcpy(ht_capie.supp_mcs_set, pmlmeext->default_supported_mcs_set, 16);
+	memcpy(ht_capie.mcs.rx_mask, pmlmeext->default_supported_mcs_set, 16);
 
 	/* update default supported_mcs_set */
 	rtw_hal_get_hwreg(padapter, HW_VAR_RF_TYPE, (u8 *)(&rf_type));
@@ -2671,7 +2670,7 @@ unsigned int rtw_restructure_ht_ie(struct adapter *padapter, u8 *in_ie, u8 *out_
 		if (stbc_rx_enable)
 			ht_capie.cap_info |= cpu_to_le16(IEEE80211_HT_CAP_RX_STBC_1R);/* RX STBC One spatial stream */
 
-		set_mcs_rate_by_mask(ht_capie.supp_mcs_set, MCS_RATE_1R);
+		set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_1R);
 		break;
 
 	case RF_2T2R:
@@ -2682,11 +2681,11 @@ unsigned int rtw_restructure_ht_ie(struct adapter *padapter, u8 *in_ie, u8 *out_
 
 		#ifdef CONFIG_DISABLE_MCS13TO15
 		if (((cbw40_enable == 1) && (operation_bw == CHANNEL_WIDTH_40)) && (pregistrypriv->wifi_spec != 1))
-				set_mcs_rate_by_mask(ht_capie.supp_mcs_set, MCS_RATE_2R_13TO15_OFF);
+				set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_2R_13TO15_OFF);
 		else
-				set_mcs_rate_by_mask(ht_capie.supp_mcs_set, MCS_RATE_2R);
+				set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_2R);
 		#else /* CONFIG_DISABLE_MCS13TO15 */
-			set_mcs_rate_by_mask(ht_capie.supp_mcs_set, MCS_RATE_2R);
+			set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_2R);
 		#endif /* CONFIG_DISABLE_MCS13TO15 */
 		break;
 	}
@@ -2713,7 +2712,7 @@ unsigned int rtw_restructure_ht_ie(struct adapter *padapter, u8 *in_ie, u8 *out_
 		ht_capie.ampdu_params_info |= (IEEE80211_HT_CAP_AMPDU_DENSITY&0x00);
 
 	pframe = rtw_set_ie(out_ie+out_len, _HT_CAPABILITY_IE_,
-						sizeof(struct rtw_ieee80211_ht_cap), (unsigned char *)&ht_capie, pout_len);
+						sizeof(struct ieee80211_ht_cap), (unsigned char *)&ht_capie, pout_len);
 
 	phtpriv->ht_option = true;
 
@@ -2735,7 +2734,7 @@ void rtw_update_ht_cap(struct adapter *padapter, u8 *pie, uint ie_len, u8 channe
 	u8 *p, max_ampdu_sz;
 	int len;
 	/* struct sta_info *bmc_sta, *psta; */
-	struct rtw_ieee80211_ht_cap *pht_capie;
+	struct ieee80211_ht_cap *pht_capie;
 	struct ieee80211_ht_addt_info *pht_addtinfo;
 	/* struct recv_reorder_ctrl *preorder_ctrl; */
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
@@ -2764,7 +2763,7 @@ void rtw_update_ht_cap(struct adapter *padapter, u8 *pie, uint ie_len, u8 channe
 	len = 0;
 	p = rtw_get_ie(pie+sizeof(struct ndis_802_11_fix_ie), _HT_CAPABILITY_IE_, &len, ie_len-sizeof(struct ndis_802_11_fix_ie));
 	if (p && len > 0) {
-		pht_capie = (struct rtw_ieee80211_ht_cap *)(p+2);
+		pht_capie = (struct ieee80211_ht_cap *)(p+2);
 		max_ampdu_sz = (pht_capie->ampdu_params_info & IEEE80211_HT_CAP_AMPDU_FACTOR);
 		max_ampdu_sz = 1 << (max_ampdu_sz+3); /*  max_ampdu_sz (kbytes); */
 
@@ -2942,7 +2941,7 @@ void _rtw_roaming(struct adapter *padapter, struct wlan_network *tgt_network)
 	int do_join_r;
 
 	if (0 < rtw_to_roam(padapter)) {
-		DBG_871X("roaming from %s("MAC_FMT"), length:%d\n",
+		DBG_871X("roaming from %s(%pM), length:%d\n",
 				cur_network->network.Ssid.Ssid, MAC_ARG(cur_network->network.MacAddress),
 				cur_network->network.Ssid.SsidLength);
 		memcpy(&pmlmepriv->assoc_ssid, &cur_network->network.Ssid, sizeof(struct ndis_802_11_ssid));

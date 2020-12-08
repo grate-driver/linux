@@ -232,7 +232,7 @@ struct ieee_param {
 			u16 capability;
 			int flags;
 			u8 tx_supp_rates[16];
-			struct rtw_ieee80211_ht_cap ht_cap;
+			struct ieee80211_ht_cap ht_cap;
 		} add_sta;
 		struct {
 			u8 reserved[2];/* for set max_num_sta */
@@ -254,7 +254,7 @@ struct sta_data {
 	u32 sta_set;
 	u8 tx_supp_rates[16];
 	u32 tx_supp_rates_len;
-	struct rtw_ieee80211_ht_cap ht_cap;
+	struct ieee80211_ht_cap ht_cap;
 	u64	rx_pkts;
 	u64	rx_bytes;
 	u64	rx_drops;
@@ -844,9 +844,7 @@ enum ieee80211_state {
 
 #define DEFAULT_MAX_SCAN_AGE (15 * HZ)
 #define DEFAULT_FTS 2346
-#define MAC_FMT "%pM"
 #define MAC_ARG(x) (x)
-#define IP_FMT "%pI4"
 #define IP_ARG(x) (x)
 
 static inline int is_multicast_mac_addr(const u8 *addr)
@@ -895,16 +893,6 @@ enum rtw_ieee80211_category {
 	RTW_WLAN_CATEGORY_P2P = 0x7f,/* P2P action frames */
 };
 
-/* SPECTRUM_MGMT action code */
-enum rtw_ieee80211_spectrum_mgmt_actioncode {
-	RTW_WLAN_ACTION_SPCT_MSR_REQ = 0,
-	RTW_WLAN_ACTION_SPCT_MSR_RPRT = 1,
-	RTW_WLAN_ACTION_SPCT_TPC_REQ = 2,
-	RTW_WLAN_ACTION_SPCT_TPC_RPRT = 3,
-	RTW_WLAN_ACTION_SPCT_CHL_SWITCH = 4,
-	RTW_WLAN_ACTION_SPCT_EXT_CHL_SWITCH = 5,
-};
-
 enum _PUBLIC_ACTION {
 	ACT_PUBLIC_BSSCOEXIST = 0, /*  20/40 BSS Coexistence */
 	ACT_PUBLIC_DSE_ENABLE = 1,
@@ -923,25 +911,6 @@ enum _PUBLIC_ACTION {
 	ACT_PUBLIC_TDLS_DISCOVERY_RSP = 14,
 	ACT_PUBLIC_LOCATION_TRACK = 15,
 	ACT_PUBLIC_MAX
-};
-
-/* BACK action code */
-enum rtw_ieee80211_back_actioncode {
-	RTW_WLAN_ACTION_ADDBA_REQ = 0,
-	RTW_WLAN_ACTION_ADDBA_RESP = 1,
-	RTW_WLAN_ACTION_DELBA = 2,
-};
-
-/* HT features action code */
-enum rtw_ieee80211_ht_actioncode {
-	RTW_WLAN_ACTION_HT_NOTI_CHNL_WIDTH = 0,
-       RTW_WLAN_ACTION_HT_SM_PS = 1,
-       RTW_WLAN_ACTION_HT_PSMP = 2,
-       RTW_WLAN_ACTION_HT_SET_PCO_PHASE = 3,
-       RTW_WLAN_ACTION_HT_CSI = 4,
-       RTW_WLAN_ACTION_HT_NON_COMPRESS_BEAMFORMING = 5,
-       RTW_WLAN_ACTION_HT_COMPRESS_BEAMFORMING = 6,
-       RTW_WLAN_ACTION_HT_ASEL_FEEDBACK = 7,
 };
 
 /* BACK (block-ack) parties */

@@ -119,14 +119,11 @@ u8 *rtw_set_fixed_ie(unsigned char *pbuf, unsigned int len, unsigned char *sourc
 }
 
 /*  rtw_set_ie will update frame length */
-u8 *rtw_set_ie
-(
-	u8 *pbuf,
-	sint index,
-	uint len,
-	u8 *source,
-	uint *frlen /* frame length */
-)
+u8 *rtw_set_ie(u8 *pbuf,
+	       sint index,
+	       uint len,
+	       u8 *source,
+	       uint *frlen) /* frame length */
 {
 	*pbuf = (u8)index;
 
@@ -1127,7 +1124,7 @@ void rtw_macaddr_cfg(struct device *dev, u8 *mac_addr)
 		}
 	}
 
-	DBG_871X("rtw_macaddr_cfg MAC Address  = "MAC_FMT"\n", MAC_ARG(mac_addr));
+	DBG_871X("rtw_macaddr_cfg MAC Address  = %pM\n", MAC_ARG(mac_addr));
 }
 
 static int rtw_get_cipher_info(struct wlan_network *pnetwork)

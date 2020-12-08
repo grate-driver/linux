@@ -415,8 +415,8 @@ static void ConstructARPResponse(
 	{
 		SET_ARP_PKT_TARGET_MAC_ADDR(pARPRspPkt, get_my_bssid(&(pmlmeinfo->network)));
 		SET_ARP_PKT_TARGET_IP_ADDR(pARPRspPkt, pIPAddress);
-		DBG_871X("%s Target Mac Addr:" MAC_FMT "\n", __func__, MAC_ARG(get_my_bssid(&(pmlmeinfo->network))));
-		DBG_871X("%s Target IP Addr" IP_FMT "\n", __func__, IP_ARG(pIPAddress));
+		DBG_871X("%s Target Mac Addr:%pM\n", __func__, MAC_ARG(get_my_bssid(&(pmlmeinfo->network))));
+		DBG_871X("%s Target IP Addr:%pI4\n", __func__, IP_ARG(pIPAddress));
 	}
 
 	*pLength += 28;
@@ -737,8 +737,8 @@ static void ConstructProbeRsp(struct adapter *padapter, u8 *pframe, u32 *pLength
 	memcpy(pwlanhdr->addr2, mac, ETH_ALEN);
 	memcpy(pwlanhdr->addr3, bssid, ETH_ALEN);
 
-	DBG_871X("%s FW Mac Addr:" MAC_FMT "\n", __func__, MAC_ARG(mac));
-	DBG_871X("%s FW IP Addr" IP_FMT "\n", __func__, IP_ARG(StaAddr));
+	DBG_871X("%s FW Mac Addr:%pM\n", __func__, MAC_ARG(mac));
+	DBG_871X("%s FW IP Addr:%pI4\n", __func__, IP_ARG(StaAddr));
 
 	SetSeqNum(pwlanhdr, 0);
 	SetFrameSubType(fctrl, WIFI_PROBERSP);
@@ -1993,12 +1993,12 @@ void rtl8723b_download_rsvd_page(struct adapter *padapter, u8 mstatus)
 
 		if (padapter->bSurpriseRemoved || padapter->bDriverStopped) {
 		} else if (!bcn_valid)
-			DBG_871X(ADPT_FMT": 1 DL RSVD page failed! DLBcnCount:%u, poll:%u\n",
+			DBG_871X("%s: 1 DL RSVD page failed! DLBcnCount:%u, poll:%u\n",
 				ADPT_ARG(padapter), DLBcnCount, poll);
 		else {
 			struct pwrctrl_priv *pwrctl = adapter_to_pwrctl(padapter);
 			pwrctl->fw_psmode_iface_id = padapter->iface_id;
-			DBG_871X(ADPT_FMT": 1 DL RSVD page success! DLBcnCount:%u, poll:%u\n",
+			DBG_871X("%s: 1 DL RSVD page success! DLBcnCount:%u, poll:%u\n",
 				ADPT_ARG(padapter), DLBcnCount, poll);
 		}
 
@@ -2290,14 +2290,14 @@ void rtl8723b_download_BTCoex_AP_mode_rsvd_page(struct adapter *padapter)
 	if (bcn_valid) {
 		struct pwrctrl_priv *pwrctl = adapter_to_pwrctl(padapter);
 		pwrctl->fw_psmode_iface_id = padapter->iface_id;
-		DBG_8192C(ADPT_FMT": DL RSVD page success! DLBcnCount:%d, poll:%d\n",
+		DBG_8192C("%s: DL RSVD page success! DLBcnCount:%d, poll:%d\n",
 			ADPT_ARG(padapter), DLBcnCount, poll);
 	} else {
-		DBG_8192C(ADPT_FMT": DL RSVD page fail! DLBcnCount:%d, poll:%d\n",
+		DBG_8192C("%s: DL RSVD page fail! DLBcnCount:%d, poll:%d\n",
 			ADPT_ARG(padapter), DLBcnCount, poll);
-		DBG_8192C(ADPT_FMT": DL RSVD page fail! bSurpriseRemoved =%d\n",
+		DBG_8192C("%s: DL RSVD page fail! bSurpriseRemoved =%d\n",
 			ADPT_ARG(padapter), padapter->bSurpriseRemoved);
-		DBG_8192C(ADPT_FMT": DL RSVD page fail! bDriverStopped =%d\n",
+		DBG_8192C("%s: DL RSVD page fail! bDriverStopped =%d\n",
 			ADPT_ARG(padapter), padapter->bDriverStopped);
 	}
 

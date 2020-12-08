@@ -355,20 +355,20 @@ static inline int IS_MCAST(unsigned char *da)
 		return false;
 }
 
-static inline unsigned char * get_ra(unsigned char *pframe)
+static inline unsigned char *get_ra(unsigned char *pframe)
 {
 	unsigned char *ra;
 	ra = GetAddr1Ptr(pframe);
 	return ra;
 }
-static inline unsigned char * get_ta(unsigned char *pframe)
+static inline unsigned char *get_ta(unsigned char *pframe)
 {
 	unsigned char *ta;
 	ta = GetAddr2Ptr(pframe);
 	return ta;
 }
 
-static inline unsigned char * get_da(unsigned char *pframe)
+static inline unsigned char *get_da(unsigned char *pframe)
 {
 	unsigned char *da;
 	unsigned int	to_fr_ds	= (GetToDs(pframe) << 1) | GetFrDs(pframe);
@@ -392,7 +392,7 @@ static inline unsigned char * get_da(unsigned char *pframe)
 }
 
 
-static inline unsigned char * get_sa(unsigned char *pframe)
+static inline unsigned char *get_sa(unsigned char *pframe)
 {
 	unsigned char *sa;
 	unsigned int	to_fr_ds	= (GetToDs(pframe) << 1) | GetFrDs(pframe);
@@ -415,7 +415,7 @@ static inline unsigned char * get_sa(unsigned char *pframe)
 	return sa;
 }
 
-static inline unsigned char * get_hdr_bssid(unsigned char *pframe)
+static inline unsigned char *get_hdr_bssid(unsigned char *pframe)
 {
 	unsigned char *sa = NULL;
 	unsigned int	to_fr_ds	= (GetToDs(pframe) << 1) | GetFrDs(pframe);
@@ -656,22 +656,6 @@ struct rtw_ieee80211_bar {
 	__le16 control;
 	__le16 start_seq_num;
 } __attribute__((packed));
-
- /**
- * struct rtw_ieee80211_ht_cap - HT capabilities
- *
- * This structure refers to "HT capabilities element" as
- * described in 802.11n draft section 7.3.2.52
- */
-
-struct rtw_ieee80211_ht_cap {
-	__le16	cap_info;
-	unsigned char ampdu_params_info;
-	unsigned char supp_mcs_set[16];
-	__le16	extended_ht_cap_info;
-	__le16		tx_BF_cap_info;
-	unsigned char        antenna_selection_info;
-} __attribute__ ((packed));
 
 /**
  * struct rtw_ieee80211_ht_cap - HT additional information
