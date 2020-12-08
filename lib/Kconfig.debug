@@ -901,6 +901,7 @@ config DEBUG_STACKOVERFLOW
 	  If in doubt, say "N".
 
 source "lib/Kconfig.kasan"
+source "lib/Kconfig.kfence"
 
 endmenu # "Memory Debugging"
 
@@ -1700,6 +1701,12 @@ config IO_STRICT_DEVMEM
 
 menu "$(SRCARCH) Debugging"
 
+config DEBUG_AID_FOR_SYZBOT
+       bool "Additional debug code for syzbot"
+       default n
+       help
+         This option is intended for testing by syzbot.
+
 source "arch/$(SRCARCH)/Kconfig.debug"
 
 endmenu
@@ -2295,6 +2302,17 @@ config LINEAR_RANGES_TEST
 	help
 	  This builds the linear_ranges unit test, which runs on boot.
 	  Tests the linear_ranges logic correctness.
+	  For more information on KUnit and unit tests in general please refer
+	  to the KUnit documentation in Documentation/dev-tools/kunit/.
+
+	  If unsure, say N.
+
+config CMDLINE_KUNIT_TEST
+	tristate "KUnit test for cmdline API"
+	depends on KUNIT
+	help
+	  This builds the cmdline API unit test.
+	  Tests the logic of API provided by cmdline.c.
 	  For more information on KUnit and unit tests in general please refer
 	  to the KUnit documentation in Documentation/dev-tools/kunit/.
 

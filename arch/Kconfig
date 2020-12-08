@@ -682,6 +682,13 @@ config HAVE_IRQ_TIME_ACCOUNTING
 	  Archs need to ensure they use a high enough resolution clock to
 	  support irq time accounting and then call enable_sched_clock_irqtime().
 
+config HAVE_MOVE_PUD
+	bool
+	help
+	  Architectures that select this are able to move page tables at the
+	  PUD level. If there are only 3 page table levels, the move effectively
+	  happens at the PGD level.
+
 config HAVE_MOVE_PMD
 	bool
 	help
@@ -1070,6 +1077,12 @@ config ARCH_WANT_LD_ORPHAN_WARN
 	  important because we never want expected sections to be placed heuristically
 	  by the linker, since the locations of such sections can change between linker
 	  versions.
+
+config HAVE_ARCH_PFN_VALID
+	bool
+
+config ARCH_SUPPORTS_DEBUG_PAGEALLOC
+	bool
 
 source "kernel/gcov/Kconfig"
 

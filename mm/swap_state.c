@@ -113,11 +113,9 @@ void *get_shadow_from_swap_cache(swp_entry_t entry)
 	pgoff_t idx = swp_offset(entry);
 	struct page *page;
 
-	page = find_get_entry(address_space, idx);
+	page = xa_load(&address_space->i_pages, idx);
 	if (xa_is_value(page))
 		return page;
-	if (page)
-		put_page(page);
 	return NULL;
 }
 
@@ -429,7 +427,8 @@ struct page *find_get_incore_page(struct address_space *mapping, pgoff_t index)
 {
 	swp_entry_t swp;
 	struct swap_info_struct *si;
-	struct page *page = find_get_entry(mapping, index);
+	struct page *page = pagecache_get_page(mapping, index,
+						FGP_ENTRY | FGP_HEAD, 0);
 
 	if (!page)
 		return page;
@@ -839,7 +838,9 @@ static struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,
 	swp_entry_t entry;
 	unsigned int i;
 	bool page_allocated;
-	struct vma_swap_readahead ra_info = {0,};
+	struct vma_swap_readahead ra_info = {
+		.win = 1,
+	};
 
 	swap_ra_info(vmf, &ra_info);
 	if (ra_info.win == 1)
@@ -900,7 +901,8 @@ struct page *swapin_readahead(swp_entry_t entry, gfp_t gfp_mask,
 static ssize_t vma_ra_enabled_show(struct kobject *kobj,
 				     struct kobj_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%s\n", enable_vma_readahead ? "true" : "false");
+	return sysfs_emit(buf, "%s\n",
+			  enable_vma_readahead ? "true" : "false");
 }
 static ssize_t vma_ra_enabled_store(struct kobject *kobj,
 				      struct kobj_attribute *attr,

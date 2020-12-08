@@ -824,8 +824,8 @@ e.g. cat /proc/sys/vm/stat_refresh /proc/meminfo
 
 As a side-effect, it also checks for negative totals (elsewhere reported
 as 0) and "fails" with EINVAL if any are found, with a warning in dmesg.
-(At time of writing, a few stats are known sometimes to be found negative,
-with no ill effects: errors and warnings on these stats are suppressed.)
+(On a SMP machine some stats can temporarily become negative, with no ill
+effects: errors and warnings on these stats are suppressed.)
 
 
 numa_stat
@@ -873,12 +873,17 @@ file-backed pages is less than the high watermark in a zone.
 unprivileged_userfaultfd
 ========================
 
-This flag controls whether unprivileged users can use the userfaultfd
-system calls.  Set this to 1 to allow unprivileged users to use the
-userfaultfd system calls, or set this to 0 to restrict userfaultfd to only
-privileged users (with SYS_CAP_PTRACE capability).
+This flag controls the mode in which unprivileged users can use the
+userfaultfd system calls. Set this to 0 to restrict unprivileged users
+to handle page faults in user mode only. In this case, users without
+SYS_CAP_PTRACE must pass UFFD_USER_MODE_ONLY in order for userfaultfd to
+succeed. Prohibiting use of userfaultfd for handling faults from kernel
+mode may make certain vulnerabilities more difficult to exploit.
 
-The default value is 1.
+Set this to 1 to allow unprivileged users to use the userfaultfd system
+calls without any restrictions.
+
+The default value is 0.
 
 
 user_reserve_kbytes

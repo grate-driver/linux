@@ -580,8 +580,6 @@ void * __meminit alloc_pages_exact_nid(int nid, size_t size, gfp_t gfp_mask);
 
 extern void __free_pages(struct page *page, unsigned int order);
 extern void free_pages(unsigned long addr, unsigned int order);
-extern void free_unref_page(struct page *page);
-extern void free_unref_page_list(struct list_head *list);
 
 struct page_frag_cache;
 extern void __page_frag_cache_drain(struct page *page, unsigned int count);
@@ -613,6 +611,8 @@ bool gfp_pfmemalloc_allowed(gfp_t gfp_mask);
 
 extern void pm_restrict_gfp_mask(void);
 extern void pm_restore_gfp_mask(void);
+
+extern gfp_t vma_thp_gfp_mask(struct vm_area_struct *vma);
 
 #ifdef CONFIG_PM_SLEEP
 extern bool pm_suspended_storage(void);

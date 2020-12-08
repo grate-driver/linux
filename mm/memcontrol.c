@@ -20,6 +20,9 @@
  * Lockless page tracking & accounting
  * Unified hierarchy configuration model
  * Copyright (C) 2015 Red Hat, Inc., Johannes Weiner
+ *
+ * Per memcg lru locking
+ * Copyright (C) 2020 Alibaba, Inc, Alex Shi
  */
 
 #include <linux/page_counter.h>
@@ -614,14 +617,9 @@ static void __mem_cgroup_insert_exceeded(struct mem_cgroup_per_node *mz,
 		if (mz->usage_in_excess < mz_node->usage_in_excess) {
 			p = &(*p)->rb_left;
 			rightmost = false;
-		}
-
-		/*
-		 * We can't avoid mem cgroups that are over their soft
-		 * limit by the same amount
-		 */
-		else if (mz->usage_in_excess >= mz_node->usage_in_excess)
+		} else {
 			p = &(*p)->rb_right;
+		}
 	}
 
 	if (rightmost)
@@ -849,7 +847,25 @@ void __mod_lruvec_state(struct lruvec *lruvec, enum node_stat_item idx,
 		__mod_memcg_lruvec_state(lruvec, idx, val);
 }
 
-void __mod_lruvec_slab_state(void *p, enum node_stat_item idx, int val)
+void __mod_lruvec_page_state(struct page *page, enum node_stat_item idx,
+			     int val)
+{
+	struct page *head = compound_head(page); /* rmap on tail pages */
+	struct mem_cgroup *memcg = page_memcg(head);
+	pg_data_t *pgdat = page_pgdat(page);
+	struct lruvec *lruvec;
+
+	/* Untracked pages have no memcg, no lruvec. Update only the node */
+	if (!memcg) {
+		__mod_node_page_state(pgdat, idx, val);
+		return;
+	}
+
+	lruvec = mem_cgroup_lruvec(memcg, pgdat);
+	__mod_lruvec_state(lruvec, idx, val);
+}
+
+void __mod_lruvec_kmem_state(void *p, enum node_stat_item idx, int val)
 {
 	pg_data_t *pgdat = page_pgdat(virt_to_page(p));
 	struct mem_cgroup *memcg;
@@ -870,17 +886,6 @@ void __mod_lruvec_slab_state(void *p, enum node_stat_item idx, int val)
 		lruvec = mem_cgroup_lruvec(memcg, pgdat);
 		__mod_lruvec_state(lruvec, idx, val);
 	}
-	rcu_read_unlock();
-}
-
-void mod_memcg_obj_state(void *p, int idx, int val)
-{
-	struct mem_cgroup *memcg;
-
-	rcu_read_lock();
-	memcg = mem_cgroup_from_obj(p);
-	if (memcg)
-		mod_memcg_state(memcg, idx, val);
 	rcu_read_unlock();
 }
 
@@ -1148,12 +1153,6 @@ struct mem_cgroup *mem_cgroup_iter(struct mem_cgroup *root,
 	if (prev && !reclaim)
 		pos = prev;
 
-	if (!root->use_hierarchy && root != root_mem_cgroup) {
-		if (prev)
-			goto out;
-		return root;
-	}
-
 	rcu_read_lock();
 
 	if (reclaim) {
@@ -1233,7 +1232,6 @@ struct mem_cgroup *mem_cgroup_iter(struct mem_cgroup *root,
 
 out_unlock:
 	rcu_read_unlock();
-out:
 	if (prev && prev != root)
 		css_put(&prev->css);
 
@@ -1326,12 +1324,29 @@ int mem_cgroup_scan_tasks(struct mem_cgroup *memcg,
 	return ret;
 }
 
+#ifdef CONFIG_DEBUG_VM
+void lruvec_memcg_debug(struct lruvec *lruvec, struct page *page)
+{
+	struct mem_cgroup *memcg;
+
+	if (mem_cgroup_disabled())
+		return;
+
+	memcg = page_memcg(page);
+
+	if (!memcg)
+		VM_BUG_ON_PAGE(lruvec_memcg(lruvec) != root_mem_cgroup, page);
+	else
+		VM_BUG_ON_PAGE(lruvec_memcg(lruvec) != memcg, page);
+}
+#endif
+
 /**
  * mem_cgroup_page_lruvec - return lruvec for isolating/putting an LRU page
  * @page: the page
  * @pgdat: pgdat of the page
  *
- * This function relies on page->mem_cgroup being stable - see the
+ * This function relies on page's memcg being stable - see the
  * access rules in commit_charge().
  */
 struct lruvec *mem_cgroup_page_lruvec(struct page *page, struct pglist_data *pgdat)
@@ -1363,6 +1378,60 @@ out:
 	 */
 	if (unlikely(lruvec->pgdat != pgdat))
 		lruvec->pgdat = pgdat;
+	return lruvec;
+}
+
+/**
+ * lock_page_lruvec - lock and return lruvec for a given page.
+ * @page: the page
+ *
+ * This series functions should be used in either conditions:
+ * PageLRU is cleared or unset
+ * or page->_refcount is zero
+ * or page is locked.
+ */
+struct lruvec *lock_page_lruvec(struct page *page)
+{
+	struct lruvec *lruvec;
+	struct pglist_data *pgdat = page_pgdat(page);
+
+	rcu_read_lock();
+	lruvec = mem_cgroup_page_lruvec(page, pgdat);
+	spin_lock(&lruvec->lru_lock);
+	rcu_read_unlock();
+
+	lruvec_memcg_debug(lruvec, page);
+
+	return lruvec;
+}
+
+struct lruvec *lock_page_lruvec_irq(struct page *page)
+{
+	struct lruvec *lruvec;
+	struct pglist_data *pgdat = page_pgdat(page);
+
+	rcu_read_lock();
+	lruvec = mem_cgroup_page_lruvec(page, pgdat);
+	spin_lock_irq(&lruvec->lru_lock);
+	rcu_read_unlock();
+
+	lruvec_memcg_debug(lruvec, page);
+
+	return lruvec;
+}
+
+struct lruvec *lock_page_lruvec_irqsave(struct page *page, unsigned long *flags)
+{
+	struct lruvec *lruvec;
+	struct pglist_data *pgdat = page_pgdat(page);
+
+	rcu_read_lock();
+	lruvec = mem_cgroup_page_lruvec(page, pgdat);
+	spin_lock_irqsave(&lruvec->lru_lock, *flags);
+	rcu_read_unlock();
+
+	lruvec_memcg_debug(lruvec, page);
+
 	return lruvec;
 }
 
@@ -1490,6 +1559,7 @@ static struct memory_stat memory_stats[] = {
 	{ "anon", PAGE_SIZE, NR_ANON_MAPPED },
 	{ "file", PAGE_SIZE, NR_FILE_PAGES },
 	{ "kernel_stack", 1024, NR_KERNEL_STACK_KB },
+	{ "pagetables", PAGE_SIZE, NR_PAGETABLE },
 	{ "percpu", 1, MEMCG_PERCPU_B },
 	{ "sock", PAGE_SIZE, MEMCG_SOCK },
 	{ "shmem", PAGE_SIZE, NR_SHMEM },
@@ -1503,6 +1573,8 @@ static struct memory_stat memory_stats[] = {
 	 * constant(e.g. powerpc).
 	 */
 	{ "anon_thp", 0, NR_ANON_THPS },
+	{ "file_thp", 0, NR_FILE_THPS },
+	{ "shmem_thp", 0, NR_SHMEM_THPS },
 #endif
 	{ "inactive_anon", PAGE_SIZE, NR_INACTIVE_ANON },
 	{ "active_anon", PAGE_SIZE, NR_ACTIVE_ANON },
@@ -1532,10 +1604,22 @@ static int __init memory_stats_init(void)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(memory_stats); i++) {
+		switch (memory_stats[i].idx) {
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-		if (memory_stats[i].idx == NR_ANON_THPS)
+		case NR_ANON_THPS:
+		case NR_FILE_THPS:
+		case NR_SHMEM_THPS:
 			memory_stats[i].ratio = HPAGE_PMD_SIZE;
+			break;
 #endif
+		case NR_SLAB_UNRECLAIMABLE_B:
+			VM_BUG_ON(i < 1);
+			VM_BUG_ON(memory_stats[i - 1].idx != NR_SLAB_RECLAIMABLE_B);
+			break;
+		default:
+			break;
+		}
+
 		VM_BUG_ON(!memory_stats[i].ratio);
 		VM_BUG_ON(memory_stats[i].idx >= MEMCG_NR_STAT);
 	}
@@ -1571,9 +1655,15 @@ static char *memory_stat_format(struct mem_cgroup *memcg)
 		size *= memory_stats[i].ratio;
 		seq_buf_printf(&s, "%s %llu\n", memory_stats[i].name, size);
 
+		/*
+		 * We are printing reclaimable, unreclaimable of the slab
+		 * and the sum of both.
+		 */
 		if (unlikely(memory_stats[i].idx == NR_SLAB_UNRECLAIMABLE_B)) {
-			size = memcg_page_state(memcg, NR_SLAB_RECLAIMABLE_B) +
-			       memcg_page_state(memcg, NR_SLAB_UNRECLAIMABLE_B);
+			int idx = i - 1;
+
+			size += memcg_page_state(memcg, memory_stats[idx].idx) *
+				memory_stats[idx].ratio;
 			seq_buf_printf(&s, "slab %llu\n", size);
 		}
 	}
@@ -2140,6 +2230,12 @@ again:
 	memcg = page_memcg(head);
 	if (unlikely(!memcg))
 		return NULL;
+
+#ifdef CONFIG_PROVE_LOCKING
+	local_irq_save(flags);
+	might_lock(&memcg->move_lock);
+	local_irq_restore(flags);
+#endif
 
 	if (atomic_read(&memcg->moving_account) <= 0)
 		return memcg;
@@ -2882,7 +2978,7 @@ static void commit_charge(struct page *page, struct mem_cgroup *memcg)
 {
 	VM_BUG_ON_PAGE(page_memcg(page), page);
 	/*
-	 * Any of the following ensures page->mem_cgroup stability:
+	 * Any of the following ensures page's memcg stability:
 	 *
 	 * - the page lock
 	 * - LRU isolation
@@ -2978,6 +3074,7 @@ __always_inline struct obj_cgroup *get_obj_cgroup_from_current(void)
 		objcg = rcu_dereference(memcg->objcg);
 		if (objcg && obj_cgroup_tryget(objcg))
 			break;
+		objcg = NULL;
 	}
 	rcu_read_unlock();
 
@@ -3233,8 +3330,10 @@ int obj_cgroup_charge(struct obj_cgroup *objcg, gfp_t gfp, size_t size)
 	 * independently later.
 	 */
 	rcu_read_lock();
+retry:
 	memcg = obj_cgroup_memcg(objcg);
-	css_get(&memcg->css);
+	if (unlikely(!css_tryget(&memcg->css)))
+		goto retry;
 	rcu_read_unlock();
 
 	nr_pages = size >> PAGE_SHIFT;
@@ -3259,10 +3358,8 @@ void obj_cgroup_uncharge(struct obj_cgroup *objcg, size_t size)
 #endif /* CONFIG_MEMCG_KMEM */
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-
 /*
- * Because tail pages are not marked as "used", set it. We're under
- * pgdat->lru_lock and migration entries setup in all page mappings.
+ * Because page_memcg(head) is not set on compound tails, set it now.
  */
 void mem_cgroup_split_huge_fixup(struct page *head)
 {
@@ -3457,22 +3554,6 @@ unsigned long mem_cgroup_soft_limit_reclaim(pg_data_t *pgdat, int order,
 }
 
 /*
- * Test whether @memcg has children, dead or alive.  Note that this
- * function doesn't care whether @memcg has use_hierarchy enabled and
- * returns %true if there are child csses according to the cgroup
- * hierarchy.  Testing use_hierarchy is the caller's responsibility.
- */
-static inline bool memcg_has_children(struct mem_cgroup *memcg)
-{
-	bool ret;
-
-	rcu_read_lock();
-	ret = css_next_child(NULL, &memcg->css);
-	rcu_read_unlock();
-	return ret;
-}
-
-/*
  * Reclaims as many pages from the given memcg as possible.
  *
  * Caller is responsible for holding css reference for memcg.
@@ -3520,37 +3601,20 @@ static ssize_t mem_cgroup_force_empty_write(struct kernfs_open_file *of,
 static u64 mem_cgroup_hierarchy_read(struct cgroup_subsys_state *css,
 				     struct cftype *cft)
 {
-	return mem_cgroup_from_css(css)->use_hierarchy;
+	return 1;
 }
 
 static int mem_cgroup_hierarchy_write(struct cgroup_subsys_state *css,
 				      struct cftype *cft, u64 val)
 {
-	int retval = 0;
-	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
-	struct mem_cgroup *parent_memcg = mem_cgroup_from_css(memcg->css.parent);
-
-	if (memcg->use_hierarchy == val)
+	if (val == 1)
 		return 0;
 
-	/*
-	 * If parent's use_hierarchy is set, we can't make any modifications
-	 * in the child subtrees. If it is unset, then the change can
-	 * occur, provided the current cgroup has no children.
-	 *
-	 * For the root cgroup, parent_mem is NULL, we allow value to be
-	 * set if there are no children.
-	 */
-	if ((!parent_memcg || !parent_memcg->use_hierarchy) &&
-				(val == 1 || val == 0)) {
-		if (!memcg_has_children(memcg))
-			memcg->use_hierarchy = val;
-		else
-			retval = -EBUSY;
-	} else
-		retval = -EINVAL;
+	pr_warn_once("Non-hierarchical mode is deprecated. "
+		     "Please report your usecase to linux-mm@kvack.org if you "
+		     "depend on this functionality.\n");
 
-	return retval;
+	return -EINVAL;
 }
 
 static unsigned long mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
@@ -3699,12 +3763,6 @@ static int memcg_online_kmem(struct mem_cgroup *memcg)
 
 	static_branch_enable(&memcg_kmem_enabled_key);
 
-	/*
-	 * A memory cgroup is considered kmem-online as soon as it gets
-	 * kmemcg_id. Setting the id after enabling static branching will
-	 * guarantee no one starts accounting before all call sites are
-	 * patched.
-	 */
 	memcg->kmemcg_id = memcg_id;
 	memcg->kmem_state = KMEM_ONLINE;
 
@@ -3744,8 +3802,6 @@ static void memcg_offline_kmem(struct mem_cgroup *memcg)
 		child = mem_cgroup_from_css(css);
 		BUG_ON(child->kmemcg_id != kmemcg_id);
 		child->kmemcg_id = parent->kmemcg_id;
-		if (!memcg->use_hierarchy)
-			break;
 	}
 	rcu_read_unlock();
 
@@ -5336,38 +5392,22 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 	if (parent) {
 		memcg->swappiness = mem_cgroup_swappiness(parent);
 		memcg->oom_kill_disable = parent->oom_kill_disable;
-	}
-	if (!parent) {
-		page_counter_init(&memcg->memory, NULL);
-		page_counter_init(&memcg->swap, NULL);
-		page_counter_init(&memcg->kmem, NULL);
-		page_counter_init(&memcg->tcpmem, NULL);
-	} else if (parent->use_hierarchy) {
-		memcg->use_hierarchy = true;
+
 		page_counter_init(&memcg->memory, &parent->memory);
 		page_counter_init(&memcg->swap, &parent->swap);
 		page_counter_init(&memcg->kmem, &parent->kmem);
 		page_counter_init(&memcg->tcpmem, &parent->tcpmem);
 	} else {
-		page_counter_init(&memcg->memory, &root_mem_cgroup->memory);
-		page_counter_init(&memcg->swap, &root_mem_cgroup->swap);
-		page_counter_init(&memcg->kmem, &root_mem_cgroup->kmem);
-		page_counter_init(&memcg->tcpmem, &root_mem_cgroup->tcpmem);
-		/*
-		 * Deeper hierachy with use_hierarchy == false doesn't make
-		 * much sense so let cgroup subsystem know about this
-		 * unfortunate state in our controller.
-		 */
-		if (parent != root_mem_cgroup)
-			memory_cgrp_subsys.broken_hierarchy = true;
-	}
+		page_counter_init(&memcg->memory, NULL);
+		page_counter_init(&memcg->swap, NULL);
+		page_counter_init(&memcg->kmem, NULL);
+		page_counter_init(&memcg->tcpmem, NULL);
 
-	/* The following stuff does not apply to the root */
-	if (!parent) {
 		root_mem_cgroup = memcg;
 		return &memcg->css;
 	}
 
+	/* The following stuff does not apply to the root */
 	error = memcg_online_kmem(memcg);
 	if (error)
 		goto fail;
@@ -6204,24 +6244,6 @@ static void mem_cgroup_move_task(void)
 }
 #endif
 
-/*
- * Cgroup retains root cgroups across [un]mount cycles making it necessary
- * to verify whether we're attached to the default hierarchy on each mount
- * attempt.
- */
-static void mem_cgroup_bind(struct cgroup_subsys_state *root_css)
-{
-	/*
-	 * use_hierarchy is forced on the default hierarchy.  cgroup core
-	 * guarantees that @root doesn't have any children, so turning it
-	 * on for the root memcg is enough.
-	 */
-	if (cgroup_subsys_on_dfl(memory_cgrp_subsys))
-		root_mem_cgroup->use_hierarchy = true;
-	else
-		root_mem_cgroup->use_hierarchy = false;
-}
-
 static int seq_puts_memcg_tunable(struct seq_file *m, unsigned long value)
 {
 	if (value == PAGE_COUNTER_MAX)
@@ -6559,7 +6581,6 @@ struct cgroup_subsys memory_cgrp_subsys = {
 	.can_attach = mem_cgroup_can_attach,
 	.cancel_attach = mem_cgroup_cancel_attach,
 	.post_attach = mem_cgroup_move_task,
-	.bind = mem_cgroup_bind,
 	.dfl_cftypes = memory_files,
 	.legacy_cftypes = mem_cgroup_legacy_files,
 	.early_init = 0,
@@ -6980,7 +7001,6 @@ void mem_cgroup_migrate(struct page *oldpage, struct page *newpage)
 	if (page_memcg(newpage))
 		return;
 
-	/* Swapcache readahead pages can get replaced before being charged */
 	memcg = page_memcg(oldpage);
 	if (!memcg)
 		return;
@@ -7339,9 +7359,9 @@ bool mem_cgroup_swap_full(struct page *page)
 static int __init setup_swap_account(char *s)
 {
 	if (!strcmp(s, "1"))
-		cgroup_memory_noswap = 0;
+		cgroup_memory_noswap = false;
 	else if (!strcmp(s, "0"))
-		cgroup_memory_noswap = 1;
+		cgroup_memory_noswap = true;
 	return 1;
 }
 __setup("swapaccount=", setup_swap_account);
