@@ -1477,7 +1477,6 @@ ieee80211_rx_h_check(struct ieee80211_rx_data *rx)
 	if (unlikely((ieee80211_is_data(hdr->frame_control) ||
 		      ieee80211_is_pspoll(hdr->frame_control)) &&
 		     rx->sdata->vif.type != NL80211_IFTYPE_ADHOC &&
-		     rx->sdata->vif.type != NL80211_IFTYPE_WDS &&
 		     rx->sdata->vif.type != NL80211_IFTYPE_OCB &&
 		     (!rx->sta || !test_sta_flag(rx->sta, WLAN_STA_ASSOC)))) {
 		/*
@@ -4080,10 +4079,6 @@ static bool ieee80211_accept_frame(struct ieee80211_rx_data *rx)
 			return false;
 
 		return true;
-	case NL80211_IFTYPE_WDS:
-		if (bssid || !ieee80211_is_data(hdr->frame_control))
-			return false;
-		return ether_addr_equal(sdata->u.wds.remote_addr, hdr->addr2);
 	case NL80211_IFTYPE_P2P_DEVICE:
 		return ieee80211_is_public_action(hdr, skb->len) ||
 		       ieee80211_is_probe_req(hdr->frame_control) ||
@@ -4742,6 +4737,8 @@ void ieee80211_rx_list(struct ieee80211_hw *hw, struct ieee80211_sta *pubsta,
 
 	status->rx_flags = 0;
 
+	kcov_remote_start_common(skb_get_kcov_handle(skb));
+
 	/*
 	 * Frames with failed FCS/PLCP checksum are not returned,
 	 * all other frames are returned without radiotap header
@@ -4749,15 +4746,15 @@ void ieee80211_rx_list(struct ieee80211_hw *hw, struct ieee80211_sta *pubsta,
 	 * Also, frames with less than 16 bytes are dropped.
 	 */
 	skb = ieee80211_rx_monitor(local, skb, rate);
-	if (!skb)
-		return;
+	if (skb) {
+		ieee80211_tpt_led_trig_rx(local,
+					  ((struct ieee80211_hdr *)skb->data)->frame_control,
+					  skb->len);
 
-	ieee80211_tpt_led_trig_rx(local,
-			((struct ieee80211_hdr *)skb->data)->frame_control,
-			skb->len);
+		__ieee80211_rx_handle_packet(hw, pubsta, skb, list);
+	}
 
-	__ieee80211_rx_handle_packet(hw, pubsta, skb, list);
-
+	kcov_remote_stop();
 	return;
  drop:
 	kfree_skb(skb);

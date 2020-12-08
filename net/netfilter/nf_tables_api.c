@@ -581,7 +581,8 @@ struct nft_module_request {
 };
 
 #ifdef CONFIG_MODULES
-static int nft_request_module(struct net *net, const char *fmt, ...)
+static __printf(2, 3) int nft_request_module(struct net *net, const char *fmt,
+					     ...)
 {
 	char module_name[MODULE_NAME_LEN];
 	struct nft_module_request *req;
@@ -1282,7 +1283,7 @@ static struct nft_chain *nft_chain_lookup(struct net *net,
 	if (nla == NULL)
 		return ERR_PTR(-EINVAL);
 
-	nla_strlcpy(search, nla, sizeof(search));
+	nla_strscpy(search, nla, sizeof(search));
 
 	WARN_ON(!rcu_read_lock_held() &&
 		!lockdep_commit_lock_is_held(net));
@@ -1722,7 +1723,7 @@ static struct nft_hook *nft_netdev_hook_alloc(struct net *net,
 		goto err_hook_alloc;
 	}
 
-	nla_strlcpy(ifname, attr, IFNAMSIZ);
+	nla_strscpy(ifname, attr, IFNAMSIZ);
 	dev = __dev_get_by_name(net, ifname);
 	if (!dev) {
 		err = -ENOENT;
@@ -5735,7 +5736,7 @@ struct nft_object *nft_obj_lookup(const struct net *net,
 	struct rhlist_head *tmp, *list;
 	struct nft_object *obj;
 
-	nla_strlcpy(search, nla, sizeof(search));
+	nla_strscpy(search, nla, sizeof(search));
 	k.name = search;
 
 	WARN_ON_ONCE(!rcu_read_lock_held() &&

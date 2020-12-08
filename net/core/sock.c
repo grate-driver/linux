@@ -1159,6 +1159,22 @@ set_sndbuf:
 				sk->sk_ll_usec = val;
 		}
 		break;
+	case SO_PREFER_BUSY_POLL:
+		if (valbool && !capable(CAP_NET_ADMIN))
+			ret = -EPERM;
+		else
+			WRITE_ONCE(sk->sk_prefer_busy_poll, valbool);
+		break;
+	case SO_BUSY_POLL_BUDGET:
+		if (val > READ_ONCE(sk->sk_busy_poll_budget) && !capable(CAP_NET_ADMIN)) {
+			ret = -EPERM;
+		} else {
+			if (val < 0 || val > U16_MAX)
+				ret = -EINVAL;
+			else
+				WRITE_ONCE(sk->sk_busy_poll_budget, val);
+		}
+		break;
 #endif
 
 	case SO_MAX_PACING_RATE:
@@ -1522,6 +1538,9 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 #ifdef CONFIG_NET_RX_BUSY_POLL
 	case SO_BUSY_POLL:
 		v.val = sk->sk_ll_usec;
+		break;
+	case SO_PREFER_BUSY_POLL:
+		v.val = READ_ONCE(sk->sk_prefer_busy_poll);
 		break;
 #endif
 
@@ -2486,7 +2505,7 @@ bool sk_page_frag_refill(struct sock *sk, struct page_frag *pfrag)
 }
 EXPORT_SYMBOL(sk_page_frag_refill);
 
-static void __lock_sock(struct sock *sk)
+void __lock_sock(struct sock *sk)
 	__releases(&sk->sk_lock.slock)
 	__acquires(&sk->sk_lock.slock)
 {
@@ -3078,7 +3097,7 @@ EXPORT_SYMBOL(release_sock);
  *
  *   sk_lock.slock unlocked, owned = 1, BH enabled
  */
-bool lock_sock_fast(struct sock *sk)
+bool lock_sock_fast(struct sock *sk) __acquires(&sk->sk_lock.slock)
 {
 	might_sleep();
 	spin_lock_bh(&sk->sk_lock.slock);
@@ -3096,6 +3115,7 @@ bool lock_sock_fast(struct sock *sk)
 	 * The sk_lock has mutex_lock() semantics here:
 	 */
 	mutex_acquire(&sk->sk_lock.dep_map, 0, 0, _RET_IP_);
+	__acquire(&sk->sk_lock.slock);
 	local_bh_enable();
 	return true;
 }
