@@ -7768,9 +7768,9 @@ F:	drivers/clocksource/h8300_*.c
 F:	drivers/irqchip/irq-renesas-h8*.c
 
 HABANALABS PCI DRIVER
-M:	Oded Gabbay <oded.gabbay@gmail.com>
+M:	Oded Gabbay <ogabbay@kernel.org>
 S:	Supported
-T:	git https://github.com/HabanaAI/linux.git
+T:	git https://git.kernel.org/pub/scm/linux/kernel/git/ogabbay/linux.git
 F:	Documentation/ABI/testing/debugfs-driver-habanalabs
 F:	Documentation/ABI/testing/sysfs-driver-habanalabs
 F:	drivers/misc/habanalabs/
@@ -15580,6 +15580,14 @@ M:	Jingoo Han <jingoohan1@gmail.com>
 L:	linux-fbdev@vger.kernel.org
 S:	Maintained
 F:	drivers/video/fbdev/s3c-fb.c
+
+SAMSUNG INTERCONNECT DRIVERS
+M:	Sylwester Nawrocki <s.nawrocki@samsung.com>
+M:	Artur Świgoń <a.swigon@samsung.com>
+L:	linux-pm@vger.kernel.org
+L:	linux-samsung-soc@vger.kernel.org
+S:	Supported
+F:	drivers/interconnect/samsung/
 
 SAMSUNG LAPTOP DRIVER
 M:	Corentin Chary <corentin.chary@gmail.com>
