@@ -719,6 +719,28 @@ int acpi_device_add(struct acpi_device *device,
 /* --------------------------------------------------------------------------
                                  Device Enumeration
    -------------------------------------------------------------------------- */
+static bool acpi_info_matches_hids(struct acpi_device_info *info,
+				   const char * const hids[])
+{
+	int i;
+
+	if (!(info->valid & ACPI_VALID_HID))
+		return false;
+
+	for (i = 0; hids[i]; i++) {
+		if (!strcmp(info->hardware_id.string, hids[i]))
+			return true;
+	}
+
+	return false;
+}
+
+/* List of HIDs for which we ignore matching ACPI devices, when checking _DEP lists. */
+static const char * const acpi_ignore_dep_hids[] = {
+	"INT3396", /* Windows System Power Management Controller */
+	NULL
+};
+
 static struct acpi_device *acpi_bus_get_parent(acpi_handle handle)
 {
 	struct acpi_device *device = NULL;
@@ -1236,10 +1258,8 @@ static bool acpi_object_is_system_bus(acpi_handle handle)
 }
 
 static void acpi_set_pnp_ids(acpi_handle handle, struct acpi_device_pnp *pnp,
-				int device_type)
+				int device_type, struct acpi_device_info *info)
 {
-	acpi_status status;
-	struct acpi_device_info *info;
 	struct acpi_pnp_device_id_list *cid_list;
 	int i;
 
@@ -1250,8 +1270,7 @@ static void acpi_set_pnp_ids(acpi_handle handle, struct acpi_device_pnp *pnp,
 			break;
 		}
 
-		status = acpi_get_object_info(handle, &info);
-		if (ACPI_FAILURE(status)) {
+		if (!info) {
 			pr_err(PREFIX "%s: Error reading device info\n",
 					__func__);
 			return;
@@ -1275,8 +1294,6 @@ static void acpi_set_pnp_ids(acpi_handle handle, struct acpi_device_pnp *pnp,
 							GFP_KERNEL);
 		if (info->valid & ACPI_VALID_CLS)
 			acpi_add_id(pnp, info->class_code.string);
-
-		kfree(info);
 
 		/*
 		 * Some devices don't reliably have _HIDs & _CIDs, so add
@@ -1583,7 +1600,8 @@ static bool acpi_device_enumeration_by_parent(struct acpi_device *device)
 }
 
 void acpi_init_device_object(struct acpi_device *device, acpi_handle handle,
-			     int type, unsigned long long sta)
+			     int type, unsigned long long sta,
+			     struct acpi_device_info *info)
 {
 	INIT_LIST_HEAD(&device->pnp.ids);
 	device->device_type = type;
@@ -1592,7 +1610,7 @@ void acpi_init_device_object(struct acpi_device *device, acpi_handle handle,
 	device->fwnode.ops = &acpi_device_fwnode_ops;
 	acpi_set_device_status(device, sta);
 	acpi_device_get_busid(device);
-	acpi_set_pnp_ids(handle, &device->pnp, type);
+	acpi_set_pnp_ids(handle, &device->pnp, type, info);
 	acpi_init_properties(device);
 	acpi_bus_get_flags(device);
 	device->flags.match_driver = false;
@@ -1620,14 +1638,20 @@ static int acpi_add_single_object(struct acpi_device **child,
 	int result;
 	struct acpi_device *device;
 	struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
+	struct acpi_device_info *info = NULL;
+
+	if (handle != ACPI_ROOT_OBJECT && type == ACPI_BUS_TYPE_DEVICE)
+		acpi_get_object_info(handle, &info);
 
 	device = kzalloc(sizeof(struct acpi_device), GFP_KERNEL);
 	if (!device) {
 		printk(KERN_ERR PREFIX "Memory allocation error\n");
+		kfree(info);
 		return -ENOMEM;
 	}
 
-	acpi_init_device_object(device, handle, type, sta);
+	acpi_init_device_object(device, handle, type, sta, info);
+	kfree(info);
 	/*
 	 * For ACPI_BUS_TYPE_DEVICE getting the status is delayed till here so
 	 * that we can call acpi_bus_get_status() and use its quirk handling.
@@ -1833,13 +1857,7 @@ static void acpi_device_dep_initialize(struct acpi_device *adev)
 			continue;
 		}
 
-		/*
-		 * Skip the dependency of Windows System Power
-		 * Management Controller
-		 */
-		skip = info->valid & ACPI_VALID_HID &&
-			!strcmp(info->hardware_id.string, "INT3396");
-
+		skip = acpi_info_matches_hids(info, acpi_ignore_dep_hids);
 		kfree(info);
 
 		if (skip)
