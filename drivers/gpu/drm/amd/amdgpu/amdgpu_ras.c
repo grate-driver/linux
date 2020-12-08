@@ -905,13 +905,6 @@ int amdgpu_ras_error_inject(struct amdgpu_device *adev,
 	return ret;
 }
 
-int amdgpu_ras_error_cure(struct amdgpu_device *adev,
-		struct ras_cure_if *info)
-{
-	/* psp fw has no cure interface for now. */
-	return 0;
-}
-
 /* get the total error counts on all IPs */
 unsigned long amdgpu_ras_query_error_count(struct amdgpu_device *adev,
 		bool is_ce)
@@ -1479,8 +1472,8 @@ static void amdgpu_ras_log_on_err_counter(struct amdgpu_device *adev)
 }
 
 /* Parse RdRspStatus and WrRspStatus */
-void amdgpu_ras_error_status_query(struct amdgpu_device *adev,
-		struct ras_query_if *info)
+static void amdgpu_ras_error_status_query(struct amdgpu_device *adev,
+					  struct ras_query_if *info)
 {
 	/*
 	 * Only two block need to query read/write

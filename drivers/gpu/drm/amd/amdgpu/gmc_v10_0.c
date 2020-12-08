@@ -94,12 +94,38 @@ static int gmc_v10_0_process_interrupt(struct amdgpu_device *adev,
 				       struct amdgpu_irq_src *source,
 				       struct amdgpu_iv_entry *entry)
 {
+	bool retry_fault = !!(entry->src_data[1] & 0x80);
 	struct amdgpu_vmhub *hub = &adev->vmhub[entry->vmid_src];
+	struct amdgpu_task_info task_info;
 	uint32_t status = 0;
 	u64 addr;
 
 	addr = (u64)entry->src_data[0] << 12;
 	addr |= ((u64)entry->src_data[1] & 0xf) << 44;
+
+	if (retry_fault) {
+		/* Returning 1 here also prevents sending the IV to the KFD */
+
+		/* Process it onyl if it's the first fault for this address */
+		if (entry->ih != &adev->irq.ih_soft &&
+		    amdgpu_gmc_filter_faults(adev, addr, entry->pasid,
+					     entry->timestamp))
+			return 1;
+
+		/* Delegate it to a different ring if the hardware hasn't
+		 * already done it.
+		 */
+		if (in_interrupt()) {
+			amdgpu_irq_delegate(adev, entry, 8);
+			return 1;
+		}
+
+		/* Try to handle the recoverable page faults by filling page
+		 * tables
+		 */
+		if (amdgpu_vm_handle_fault(adev, entry->pasid, addr))
+			return 1;
+	}
 
 	if (!amdgpu_sriov_vf(adev)) {
 		/*
@@ -115,24 +141,25 @@ static int gmc_v10_0_process_interrupt(struct amdgpu_device *adev,
 		WREG32_P(hub->vm_l2_pro_fault_cntl, 1, ~1);
 	}
 
-	if (printk_ratelimit()) {
-		struct amdgpu_task_info task_info;
+	if (!printk_ratelimit())
+		return 0;
 
-		memset(&task_info, 0, sizeof(struct amdgpu_task_info));
-		amdgpu_vm_get_task_info(adev, entry->pasid, &task_info);
+	memset(&task_info, 0, sizeof(struct amdgpu_task_info));
+	amdgpu_vm_get_task_info(adev, entry->pasid, &task_info);
 
-		dev_err(adev->dev,
-			"[%s] page fault (src_id:%u ring:%u vmid:%u pasid:%u, "
-			"for process %s pid %d thread %s pid %d)\n",
-			entry->vmid_src ? "mmhub" : "gfxhub",
-			entry->src_id, entry->ring_id, entry->vmid,
-			entry->pasid, task_info.process_name, task_info.tgid,
-			task_info.task_name, task_info.pid);
-		dev_err(adev->dev, "  in page starting at address 0x%016llx from client %d\n",
-			addr, entry->client_id);
-		if (!amdgpu_sriov_vf(adev))
-			hub->vmhub_funcs->print_l2_protection_fault_status(adev, status);
-	}
+	dev_err(adev->dev,
+		"[%s] page fault (src_id:%u ring:%u vmid:%u pasid:%u, "
+		"for process %s pid %d thread %s pid %d)\n",
+		entry->vmid_src ? "mmhub" : "gfxhub",
+		entry->src_id, entry->ring_id, entry->vmid,
+		entry->pasid, task_info.process_name, task_info.tgid,
+		task_info.task_name, task_info.pid);
+	dev_err(adev->dev, "  in page starting at address 0x%012llx from client %d\n",
+		addr, entry->client_id);
+
+	if (!amdgpu_sriov_vf(adev))
+		hub->vmhub_funcs->print_l2_protection_fault_status(adev,
+								   status);
 
 	return 0;
 }
@@ -270,6 +297,8 @@ static void gmc_v10_0_flush_vm_hub(struct amdgpu_device *adev, uint32_t vmid,
  *
  * @adev: amdgpu_device pointer
  * @vmid: vm instance to flush
+ * @vmhub: vmhub type
+ * @flush_type: the flush type
  *
  * Flush the TLB for the requested page table.
  */
@@ -362,6 +391,8 @@ error_alloc:
  *
  * @adev: amdgpu_device pointer
  * @pasid: pasid to be flush
+ * @flush_type: the flush type
+ * @all_hub: Used with PACKET3_INVALIDATE_TLBS_ALL_HUB()
  *
  * Flush the TLB for the requested pasid.
  */
@@ -711,6 +742,7 @@ static void gmc_v10_0_vram_gtt_location(struct amdgpu_device *adev,
 
 	amdgpu_gmc_vram_location(adev, &adev->gmc, base);
 	amdgpu_gmc_gart_location(adev, mc);
+	amdgpu_gmc_agp_location(adev, mc);
 
 	/* base offset of vram pages */
 	adev->vm_manager.vram_base_offset = adev->gfxhub.funcs->get_mc_fb_offset(adev);

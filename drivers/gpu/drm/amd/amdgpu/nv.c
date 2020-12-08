@@ -336,6 +336,38 @@ static int nv_asic_mode1_reset(struct amdgpu_device *adev)
 	return ret;
 }
 
+static int nv_asic_mode2_reset(struct amdgpu_device *adev)
+{
+	u32 i;
+	int ret = 0;
+
+	amdgpu_atombios_scratch_regs_engine_hung(adev, true);
+
+	/* disable BM */
+	pci_clear_master(adev->pdev);
+
+	amdgpu_device_cache_pci_state(adev->pdev);
+
+	ret = amdgpu_dpm_mode2_reset(adev);
+	if (ret)
+		dev_err(adev->dev, "GPU mode2 reset failed\n");
+
+	amdgpu_device_load_pci_state(adev->pdev);
+
+	/* wait for asic to come out of reset */
+	for (i = 0; i < adev->usec_timeout; i++) {
+		u32 memsize = adev->nbio.funcs->get_memsize(adev);
+
+		if (memsize != 0xffffffff)
+			break;
+		udelay(1);
+	}
+
+	amdgpu_atombios_scratch_regs_engine_hung(adev, false);
+
+	return ret;
+}
+
 static bool nv_asic_supports_baco(struct amdgpu_device *adev)
 {
 	struct smu_context *smu = &adev->smu;
@@ -352,6 +384,7 @@ nv_asic_reset_method(struct amdgpu_device *adev)
 	struct smu_context *smu = &adev->smu;
 
 	if (amdgpu_reset_method == AMD_RESET_METHOD_MODE1 ||
+	    amdgpu_reset_method == AMD_RESET_METHOD_MODE2 ||
 	    amdgpu_reset_method == AMD_RESET_METHOD_BACO)
 		return amdgpu_reset_method;
 
@@ -360,6 +393,8 @@ nv_asic_reset_method(struct amdgpu_device *adev)
 				  amdgpu_reset_method);
 
 	switch (adev->asic_type) {
+	case CHIP_VANGOGH:
+		return AMD_RESET_METHOD_MODE2;
 	case CHIP_SIENNA_CICHLID:
 	case CHIP_NAVY_FLOUNDER:
 		return AMD_RESET_METHOD_MODE1;
@@ -376,7 +411,8 @@ static int nv_asic_reset(struct amdgpu_device *adev)
 	int ret = 0;
 	struct smu_context *smu = &adev->smu;
 
-	if (nv_asic_reset_method(adev) == AMD_RESET_METHOD_BACO) {
+	switch (nv_asic_reset_method(adev)) {
+	case AMD_RESET_METHOD_BACO:
 		dev_info(adev->dev, "BACO reset\n");
 
 		ret = smu_baco_enter(smu);
@@ -385,9 +421,15 @@ static int nv_asic_reset(struct amdgpu_device *adev)
 		ret = smu_baco_exit(smu);
 		if (ret)
 			return ret;
-	} else {
+		break;
+	case AMD_RESET_METHOD_MODE2:
+		dev_info(adev->dev, "MODE2 reset\n");
+		ret = nv_asic_mode2_reset(adev);
+		break;
+	default:
 		dev_info(adev->dev, "MODE1 reset\n");
 		ret = nv_asic_mode1_reset(adev);
+		break;
 	}
 
 	return ret;
@@ -578,7 +620,7 @@ int nv_set_ip_blocks(struct amdgpu_device *adev)
 		if (likely(adev->firmware.load_type == AMDGPU_FW_LOAD_PSP))
 			amdgpu_device_ip_block_add(adev, &psp_v11_0_ip_block);
 		if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP &&
-		    is_support_sw_smu(adev) && !amdgpu_sriov_vf(adev))
+		    is_support_sw_smu(adev))
 			amdgpu_device_ip_block_add(adev, &smu_v11_0_ip_block);
 		if (adev->enable_virtual_display || amdgpu_sriov_vf(adev))
 			amdgpu_device_ip_block_add(adev, &dce_virtual_ip_block);
