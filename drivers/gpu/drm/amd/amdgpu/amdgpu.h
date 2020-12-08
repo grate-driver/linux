@@ -55,7 +55,6 @@
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
-#include <drm/ttm/ttm_module.h>
 #include <drm/ttm/ttm_execbuf_util.h>
 
 #include <drm/amdgpu_drm.h>
@@ -1280,6 +1279,8 @@ int amdgpu_enable_vblank_kms(struct drm_crtc *crtc);
 void amdgpu_disable_vblank_kms(struct drm_crtc *crtc);
 long amdgpu_kms_compat_ioctl(struct file *filp, unsigned int cmd,
 			     unsigned long arg);
+int amdgpu_info_ioctl(struct drm_device *dev, void *data,
+		      struct drm_file *filp);
 
 /*
  * functions used by amdgpu_encoder.c

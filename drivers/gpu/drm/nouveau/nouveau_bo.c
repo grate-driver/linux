@@ -774,7 +774,10 @@ nouveau_bo_move_m2mf(struct ttm_buffer_object *bo, int evict,
 			return ret;
 	}
 
-	mutex_lock_nested(&cli->mutex, SINGLE_DEPTH_NESTING);
+	if (drm_drv_uses_atomic_modeset(drm->dev))
+		mutex_lock(&cli->mutex);
+	else
+		mutex_lock_nested(&cli->mutex, SINGLE_DEPTH_NESTING);
 	ret = nouveau_fence_sync(nouveau_bo(bo), chan, true, ctx->interruptible);
 	if (ret == 0) {
 		ret = drm->ttm.move(chan, bo, &bo->mem, new_reg);
@@ -1231,9 +1234,8 @@ nouveau_ttm_tt_populate(struct ttm_bo_device *bdev,
 		return 0;
 
 	if (slave && ttm->sg) {
-		/* make userspace faulting work */
-		drm_prime_sg_to_page_addr_arrays(ttm->sg, ttm->pages,
-						 ttm_dma->dma_address, ttm->num_pages);
+		drm_prime_sg_to_dma_addr_array(ttm->sg, ttm_dma->dma_address,
+					       ttm->num_pages);
 		return 0;
 	}
 
