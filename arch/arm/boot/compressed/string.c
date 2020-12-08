@@ -21,9 +21,9 @@
 #undef memcpy
 #undef memmove
 #undef memset
-void *__memcpy(void *__dest, __const void *__src, size_t __n) __alias(memcpy);
-void *__memmove(void *__dest, __const void *__src, size_t count) __alias(memmove);
-void *__memset(void *s, int c, size_t count) __alias(memset);
+void *__memcpy(void *__dest, __const void *__src, size_t __n) __alias("memcpy");
+void *__memmove(void *__dest, __const void *__src, size_t count) __alias("memmove");
+void *__memset(void *s, int c, size_t count) __alias("memset");
 #endif
 
 void *memcpy(void *__dest, __const void *__src, size_t __n)
