@@ -191,9 +191,28 @@ static void percpu_ref_switch_to_atomic_rcu(struct rcu_head *rcu)
 	 */
 	atomic_long_add((long)count - PERCPU_COUNT_BIAS, &data->count);
 
-	WARN_ONCE(atomic_long_read(&data->count) <= 0,
-		  "percpu ref (%ps) <= 0 (%ld) after switching to atomic",
-		  data->release, atomic_long_read(&data->count));
+	if (atomic_long_read(&data->count) <= 0) {
+		void *allocaddr;
+		const char *allocerr;
+		void *allocstack[8];
+		int i;
+
+		allocaddr = kmem_last_alloc_stack(data, allocstack, ARRAY_SIZE(allocstack));
+		allocerr = kmem_last_alloc_errstring(allocaddr);
+		if (allocerr) {
+			WARN_ONCE(1, "percpu ref (%ps) <= 0 (%ld) after switching to atomic (%s)",
+				  data->release, atomic_long_read(&data->count), allocerr);
+		} else {
+			pr_err("percpu ref (%ps) <= 0 (%ld) after switching to atomic (allocated at %pS)\n",
+			       data->release, atomic_long_read(&data->count), allocaddr);
+			for (i = 0; i < ARRAY_SIZE(allocstack); i++) {
+				if (!allocstack[i])
+					break;
+				pr_err("\t%pS\n", allocstack[i]);
+			}
+			WARN_ON_ONCE(1);
+		}
+	}
 
 	/* @ref is viewed as dead on all CPUs, send out switch confirmation */
 	percpu_ref_call_confirm_rcu(rcu);

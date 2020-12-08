@@ -48,6 +48,12 @@ module_param(disable_onoff_at_boot, bool, 0444);
 static bool ftrace_dump_at_shutdown;
 module_param(ftrace_dump_at_shutdown, bool, 0444);
 
+static int verbose_sleep_frequency;
+module_param(verbose_sleep_frequency, int, 0444);
+
+static int verbose_sleep_duration = 1;
+module_param(verbose_sleep_duration, int, 0444);
+
 static char *torture_type;
 static int verbose;
 
@@ -57,6 +63,95 @@ static int verbose;
 #define FULLSTOP_RMMOD    2	/* Normal rmmod of torture. */
 static int fullstop = FULLSTOP_RMMOD;
 static DEFINE_MUTEX(fullstop_mutex);
+
+static atomic_t verbose_sleep_counter;
+
+/*
+ * Sleep if needed from VERBOSE_TOROUT*().
+ */
+void verbose_torout_sleep(void)
+{
+	if (verbose_sleep_frequency > 0 &&
+	    verbose_sleep_duration > 0 &&
+	    !(atomic_inc_return(&verbose_sleep_counter) % verbose_sleep_frequency))
+		schedule_timeout_uninterruptible(verbose_sleep_duration);
+}
+EXPORT_SYMBOL_GPL(verbose_torout_sleep);
+
+/*
+ * Schedule a high-resolution-timer sleep in nanoseconds, with a 32-bit
+ * nanosecond random fuzz.  This function and its friends desynchronize
+ * testing from the timer wheel.
+ */
+int torture_hrtimeout_ns(ktime_t baset_ns, u32 fuzzt_ns, struct torture_random_state *trsp)
+{
+	ktime_t hto = baset_ns;
+
+	if (trsp)
+		hto += (torture_random(trsp) >> 3) % fuzzt_ns;
+	set_current_state(TASK_UNINTERRUPTIBLE);
+	return schedule_hrtimeout(&hto, HRTIMER_MODE_REL);
+}
+EXPORT_SYMBOL_GPL(torture_hrtimeout_ns);
+
+/*
+ * Schedule a high-resolution-timer sleep in microseconds, with a 32-bit
+ * nanosecond (not microsecond!) random fuzz.
+ */
+int torture_hrtimeout_us(u32 baset_us, u32 fuzzt_ns, struct torture_random_state *trsp)
+{
+	ktime_t baset_ns = baset_us * NSEC_PER_USEC;
+
+	return torture_hrtimeout_ns(baset_ns, fuzzt_ns, trsp);
+}
+EXPORT_SYMBOL_GPL(torture_hrtimeout_us);
+
+/*
+ * Schedule a high-resolution-timer sleep in milliseconds, with a 32-bit
+ * microsecond (not millisecond!) random fuzz.
+ */
+int torture_hrtimeout_ms(u32 baset_ms, u32 fuzzt_us, struct torture_random_state *trsp)
+{
+	ktime_t baset_ns = baset_ms * NSEC_PER_MSEC;
+	u32 fuzzt_ns;
+
+	if ((u32)~0U / NSEC_PER_USEC < fuzzt_us)
+		fuzzt_ns = (u32)~0U;
+	else
+		fuzzt_ns = fuzzt_us * NSEC_PER_USEC;
+	return torture_hrtimeout_ns(baset_ns, fuzzt_ns, trsp);
+}
+EXPORT_SYMBOL_GPL(torture_hrtimeout_ms);
+
+/*
+ * Schedule a high-resolution-timer sleep in jiffies, with an
+ * implied one-jiffy random fuzz.  This is intended to replace calls to
+ * schedule_timeout_interruptible() and friends.
+ */
+int torture_hrtimeout_jiffies(u32 baset_j, struct torture_random_state *trsp)
+{
+	ktime_t baset_ns = jiffies_to_nsecs(baset_j);
+
+	return torture_hrtimeout_ns(baset_ns, jiffies_to_nsecs(1), trsp);
+}
+EXPORT_SYMBOL_GPL(torture_hrtimeout_jiffies);
+
+/*
+ * Schedule a high-resolution-timer sleep in milliseconds, with a 32-bit
+ * millisecond (not second!) random fuzz.
+ */
+int torture_hrtimeout_s(u32 baset_s, u32 fuzzt_ms, struct torture_random_state *trsp)
+{
+	ktime_t baset_ns = baset_s * NSEC_PER_SEC;
+	u32 fuzzt_ns;
+
+	if ((u32)~0U / NSEC_PER_MSEC < fuzzt_ms)
+		fuzzt_ns = (u32)~0U;
+	else
+		fuzzt_ns = fuzzt_ms * NSEC_PER_MSEC;
+	return torture_hrtimeout_ns(baset_ns, fuzzt_ns, trsp);
+}
+EXPORT_SYMBOL_GPL(torture_hrtimeout_s);
 
 #ifdef CONFIG_HOTPLUG_CPU
 
@@ -602,18 +697,25 @@ static int stutter_gap;
  */
 bool stutter_wait(const char *title)
 {
-	int spt;
+	unsigned int i = 0;
 	bool ret = false;
+	int spt;
 
 	cond_resched_tasks_rcu_qs();
 	spt = READ_ONCE(stutter_pause_test);
 	for (; spt; spt = READ_ONCE(stutter_pause_test)) {
-		ret = true;
+		if (!ret) {
+			sched_set_normal(current, MAX_NICE);
+			ret = true;
+		}
 		if (spt == 1) {
 			schedule_timeout_interruptible(1);
 		} else if (spt == 2) {
-			while (READ_ONCE(stutter_pause_test))
+			while (READ_ONCE(stutter_pause_test)) {
+				if (!(i++ & 0xffff))
+					torture_hrtimeout_us(10, 0, NULL);
 				cond_resched();
+			}
 		} else {
 			schedule_timeout_interruptible(round_jiffies_relative(HZ));
 		}
@@ -629,24 +731,25 @@ EXPORT_SYMBOL_GPL(stutter_wait);
  */
 static int torture_stutter(void *arg)
 {
+	DEFINE_TORTURE_RANDOM(rand);
 	int wtime;
 
 	VERBOSE_TOROUT_STRING("torture_stutter task started");
 	do {
 		if (!torture_must_stop() && stutter > 1) {
 			wtime = stutter;
-			if (stutter > HZ + 1) {
+			if (stutter > 2) {
 				WRITE_ONCE(stutter_pause_test, 1);
-				wtime = stutter - HZ - 1;
-				schedule_timeout_interruptible(wtime);
-				wtime = HZ + 1;
+				wtime = stutter - 3;
+				torture_hrtimeout_jiffies(wtime, &rand);
+				wtime = 2;
 			}
 			WRITE_ONCE(stutter_pause_test, 2);
-			schedule_timeout_interruptible(wtime);
+			torture_hrtimeout_jiffies(wtime, NULL);
 		}
 		WRITE_ONCE(stutter_pause_test, 0);
 		if (!torture_must_stop())
-			schedule_timeout_interruptible(stutter_gap);
+			torture_hrtimeout_jiffies(stutter_gap, NULL);
 		torture_shutdown_absorb("torture_stutter");
 	} while (!torture_must_stop());
 	torture_kthread_stopping("torture_stutter");

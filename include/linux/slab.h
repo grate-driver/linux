@@ -133,6 +133,15 @@
 #define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) <= \
 				(unsigned long)ZERO_SIZE_PTR)
 
+/*
+ * kmem_last_alloc error codes.
+ */
+#define KMEM_LA_NO_PAGE		1  /* No page structure for pointer. */
+#define KMEM_LA_NO_SLAB		2  /* Pointer not from slab allocator. */
+#define KMEM_LA_SLOB		3  /* No debugging info for slob. */
+#define KMEM_LA_NO_DEBUG	4  /* Debugging not enabled for slab/slub. */
+#define KMEM_LA_INCONSISTENT	5  /* Bogus block within slub page. */
+
 #include <linux/kasan.h>
 
 struct mem_cgroup;
@@ -186,6 +195,10 @@ void kfree(const void *);
 void kfree_sensitive(const void *);
 size_t __ksize(const void *);
 size_t ksize(const void *);
+void *kmem_cache_last_alloc(struct kmem_cache *s, void *object, void **stackp, int nstackp);
+void *kmem_last_alloc(void *object);
+void *kmem_last_alloc_stack(void *object, void **stackp, int nstackp);
+const char *kmem_last_alloc_errstring(void *lastalloc);
 
 #ifdef CONFIG_HAVE_HARDENED_USERCOPY_ALLOCATOR
 void __check_heap_object(const void *ptr, unsigned long n, struct page *page,

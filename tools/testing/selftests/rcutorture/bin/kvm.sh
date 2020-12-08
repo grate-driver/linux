@@ -47,6 +47,9 @@ cpus=0
 ds=`date +%Y.%m.%d-%H.%M.%S`
 jitter="-1"
 
+startdate="`date`"
+starttime="`get_starttime`"
+
 usage () {
 	echo "Usage: $scriptname optional arguments:"
 	echo "       --allcpus"
@@ -58,7 +61,7 @@ usage () {
 	echo "       --datestamp string"
 	echo "       --defconfig string"
 	echo "       --dryrun sched|script"
-	echo "       --duration minutes"
+	echo "       --duration minutes | <seconds>s | <hours>h | <days>d"
 	echo "       --gdb"
 	echo "       --help"
 	echo "       --interactive"
@@ -85,7 +88,7 @@ do
 		;;
 	--bootargs|--bootarg)
 		checkarg --bootargs "(list of kernel boot arguments)" "$#" "$2" '.*' '^--'
-		TORTURE_BOOTARGS="$2"
+		TORTURE_BOOTARGS="$TORTURE_BOOTARGS $2"
 		shift
 		;;
 	--bootimage)
@@ -93,12 +96,12 @@ do
 		TORTURE_BOOT_IMAGE="$2"
 		shift
 		;;
-	--buildonly)
+	--buildonly|--build-only)
 		TORTURE_BUILDONLY=1
 		;;
 	--configs|--config)
-		checkarg --configs "(list of config files)" "$#" "$2" '^[^/]*$' '^--'
-		configs="$2"
+		checkarg --configs "(list of config files)" "$#" "$2" '^[^/]\+$' '^--'
+		configs="$configs $2"
 		shift
 		;;
 	--cpus)
@@ -113,7 +116,7 @@ do
 		shift
 		;;
 	--datestamp)
-		checkarg --datestamp "(relative pathname)" "$#" "$2" '^[^/]*$' '^--'
+		checkarg --datestamp "(relative pathname)" "$#" "$2" '^[a-zA-Z0-9._-/]*$' '^--'
 		ds=$2
 		shift
 		;;
@@ -128,8 +131,20 @@ do
 		shift
 		;;
 	--duration)
-		checkarg --duration "(minutes)" $# "$2" '^[0-9]*$' '^error'
-		dur=$(($2*60))
+		checkarg --duration "(minutes)" $# "$2" '^[0-9][0-9]*\(s\|m\|h\|d\|\)$' '^error'
+		mult=60
+		if echo "$2" | grep -q 's$'
+		then
+			mult=1
+		elif echo "$2" | grep -q 'h$'
+		then
+			mult=3600
+		elif echo "$2" | grep -q 'd$'
+		then
+			mult=86400
+		fi
+		ts=`echo $2 | sed -e 's/[smhd]$//'`
+		dur=$(($ts*mult))
 		shift
 		;;
 	--gdb)
@@ -148,20 +163,20 @@ do
 		jitter="$2"
 		shift
 		;;
-	--kconfig)
+	--kconfig|--kconfigs)
 		checkarg --kconfig "(Kconfig options)" $# "$2" '^CONFIG_[A-Z0-9_]\+=\([ynm]\|[0-9]\+\)\( CONFIG_[A-Z0-9_]\+=\([ynm]\|[0-9]\+\)\)*$' '^error$'
-		TORTURE_KCONFIG_ARG="$2"
+		TORTURE_KCONFIG_ARG="`echo "$TORTURE_KCONFIG_ARG $2" | sed -e 's/^ *//' -e 's/ *$//'`"
 		shift
 		;;
 	--kasan)
 		TORTURE_KCONFIG_KASAN_ARG="CONFIG_DEBUG_INFO=y CONFIG_KASAN=y"; export TORTURE_KCONFIG_KASAN_ARG
 		;;
 	--kcsan)
-		TORTURE_KCONFIG_KCSAN_ARG="CONFIG_DEBUG_INFO=y CONFIG_KCSAN=y CONFIG_KCSAN_ASSUME_PLAIN_WRITES_ATOMIC=n CONFIG_KCSAN_REPORT_VALUE_CHANGE_ONLY=n CONFIG_KCSAN_REPORT_ONCE_IN_MS=100000 CONFIG_KCSAN_VERBOSE=y CONFIG_KCSAN_INTERRUPT_WATCHER=y"; export TORTURE_KCONFIG_KCSAN_ARG
+		TORTURE_KCONFIG_KCSAN_ARG="CONFIG_DEBUG_INFO=y CONFIG_KCSAN=y CONFIG_KCSAN_ASSUME_PLAIN_WRITES_ATOMIC=n CONFIG_KCSAN_REPORT_VALUE_CHANGE_ONLY=n CONFIG_KCSAN_REPORT_ONCE_IN_MS=100000 CONFIG_KCSAN_INTERRUPT_WATCHER=y CONFIG_KCSAN_VERBOSE=y CONFIG_DEBUG_LOCK_ALLOC=y CONFIG_PROVE_LOCKING=y"; export TORTURE_KCONFIG_KCSAN_ARG
 		;;
-	--kmake-arg)
+	--kmake-arg|--kmake-args)
 		checkarg --kmake-arg "(kernel make arguments)" $# "$2" '.*' '^error$'
-		TORTURE_KMAKE_ARG="$2"
+		TORTURE_KMAKE_ARG="`echo "$TORTURE_KMAKE_ARG $2" | sed -e 's/^ *//' -e 's/ *$//'`"
 		shift
 		;;
 	--mac)
@@ -179,7 +194,7 @@ do
 		;;
 	--qemu-args|--qemu-arg)
 		checkarg --qemu-args "(qemu arguments)" $# "$2" '^-' '^error'
-		TORTURE_QEMU_ARG="$2"
+		TORTURE_QEMU_ARG="`echo "$TORTURE_QEMU_ARG $2" | sed -e 's/^ *//' -e 's/ *$//'`"
 		shift
 		;;
 	--qemu-cmd)
@@ -275,7 +290,13 @@ for CF1 in $configs_derep
 do
 	if test -f "$CONFIGFRAG/$CF1"
 	then
-		cpu_count=`configNR_CPUS.sh $CONFIGFRAG/$CF1`
+		if echo "$TORTURE_KCONFIG_ARG" | grep -q '\<CONFIG_NR_CPUS='
+		then
+			echo "$TORTURE_KCONFIG_ARG" | tr -s ' ' | tr ' ' '\012' > $T/KCONFIG_ARG
+			cpu_count=`configNR_CPUS.sh $T/KCONFIG_ARG`
+		else
+			cpu_count=`configNR_CPUS.sh $CONFIGFRAG/$CF1`
+		fi
 		cpu_count=`configfrag_boot_cpus "$TORTURE_BOOTARGS" "$CONFIGFRAG/$CF1" "$cpu_count"`
 		cpu_count=`configfrag_boot_maxcpus "$TORTURE_BOOTARGS" "$CONFIGFRAG/$CF1" "$cpu_count"`
 		echo $CF1 $cpu_count >> $T/cfgcpu
@@ -363,7 +384,7 @@ if ! test -e $resdir
 then
 	mkdir -p "$resdir" || :
 fi
-mkdir $resdir/$ds
+mkdir -p $resdir/$ds
 TORTURE_RESDIR="$resdir/$ds"; export TORTURE_RESDIR
 TORTURE_STOPFILE="$resdir/$ds/STOP"; export TORTURE_STOPFILE
 echo Results directory: $resdir/$ds
@@ -459,8 +480,11 @@ function dump(first, pastlast, batchnum)
 	print "if test -n \"$needqemurun\""
 	print "then"
 	print "\techo ---- Starting kernels. `date` | tee -a " rd "log";
-	for (j = 0; j < njitter; j++)
+	print "\techo > " rd "jitter_pids"
+	for (j = 0; j < njitter; j++) {
 		print "\tjitter.sh " j " " dur " " ja[2] " " ja[3] "&"
+		print "\techo $! >> " rd "jitter_pids"
+	}
 	print "\twait"
 	print "\techo ---- All kernel runs complete. `date` | tee -a " rd "log";
 	print "else"
@@ -502,13 +526,15 @@ END {
 		dump(first, i, batchnum);
 }' >> $T/script
 
+cat << '___EOF___' >> $T/script
+echo | tee -a $TORTURE_RESDIR/log
+echo | tee -a $TORTURE_RESDIR/log
+echo " --- `date` Test summary:" | tee -a $TORTURE_RESDIR/log
+___EOF___
 cat << ___EOF___ >> $T/script
-echo
-echo
-echo " --- `date` Test summary:"
-echo Results directory: $resdir/$ds
-kcsan-collapse.sh $resdir/$ds
-kvm-recheck.sh $resdir/$ds
+echo Results directory: $resdir/$ds | tee -a $resdir/$ds/log
+kcsan-collapse.sh $resdir/$ds | tee -a $resdir/$ds/log
+kvm-recheck.sh $resdir/$ds | tee -a $resdir/$ds/log
 ___EOF___
 
 if test "$dryrun" = script
@@ -521,10 +547,19 @@ then
 	egrep 'Start batch|Starting build\.' $T/script |
 		grep -v ">>" |
 		sed -e 's/:.*$//' -e 's/^echo //'
+	nbuilds="`grep 'Starting build\.' $T/script |
+		  grep -v ">>" | sed -e 's/:.*$//' -e 's/^echo //' |
+		  awk '{ print $1 }' | grep -v '\.' | wc -l`"
+	echo Total number of builds: $nbuilds
+	nbatches="`grep 'Start batch' $T/script | grep -v ">>" | wc -l`"
+	echo Total number of batches: $nbatches
 	exit 0
 else
 	# Not a dryrun, so run the script.
 	sh $T/script
+	ret=$?
+	echo " --- Done at `date` (`get_starttime_duration $starttime`) exitcode $ret" | tee -a $resdir/$ds/log
+	exit $ret
 fi
 
 # Tracing: trace_event=rcu:rcu_grace_period,rcu:rcu_future_grace_period,rcu:rcu_grace_period_init,rcu:rcu_nocb_wake,rcu:rcu_preempt_task,rcu:rcu_unlock_preempted_task,rcu:rcu_quiescent_state_report,rcu:rcu_fqs,rcu:rcu_callback,rcu:rcu_kfree_callback,rcu:rcu_batch_start,rcu:rcu_invoke_callback,rcu:rcu_invoke_kfree_callback,rcu:rcu_batch_end,rcu:rcu_torture_read,rcu:rcu_barrier

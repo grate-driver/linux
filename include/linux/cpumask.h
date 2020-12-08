@@ -685,11 +685,19 @@ static inline int cpumask_parse(const char *buf, struct cpumask *dstp)
  * @dstp: the cpumask to set.
  *
  * Returns -errno, or 0 for success.
+ *
+ * There are instances of non-SMP callers of this, and the easiest way
+ * to remain 100% runtime compatible is to let them continue to have the
+ * one-line stub, while the SMP version in lib/cpumask.c gets improved.
  */
+#if NR_CPUS == 1
 static inline int cpulist_parse(const char *buf, struct cpumask *dstp)
 {
 	return bitmap_parselist(buf, cpumask_bits(dstp), nr_cpumask_bits);
 }
+#else
+int cpulist_parse(const char *buf, struct cpumask *dstp);
+#endif
 
 /**
  * cpumask_size - size to allocate for a 'struct cpumask' in bytes

@@ -2,6 +2,8 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/bitops.h>
+#include <linux/string.h>
+#include <linux/ctype.h>
 #include <linux/cpumask.h>
 #include <linux/export.h>
 #include <linux/memblock.h>
@@ -94,6 +96,136 @@ again:
 	return next;
 }
 EXPORT_SYMBOL(cpumask_next_wrap);
+
+/*
+ * Basically strstr() but given "foo", ignore "foobar", "myfoo", "foofoo"
+ * and "foo2bar" -- i.e. any case where the token is a word fragment.
+ */
+static char *cpumask_find_token(const char *str, const char *token)
+{
+	char *here = strstr(str, token);
+	size_t tlen = strlen(token);
+
+	if (!here)
+		return NULL;
+
+	while (here) {
+		size_t offset = here - str;
+		char prev, next = str[offset + tlen];
+
+		if (offset)
+			prev = str[offset - 1];
+		else
+			prev = '\0';
+
+		if (!(isalnum(prev) || isalnum(next)))
+			break;
+
+		here = strstr(here + tlen, token);
+	}
+
+	return here;
+}
+
+/*
+ * replace old token with new token: Given a convenience or placeholder
+ * token "last" and an associated value not known until boot, of say 1234,
+ * replace instances of "last" with "1234".
+ *
+ * For example src = "1,3,last,7-last,9,lastly,last-2047\0"  results in a
+ *            dest = "1,3,1234,7-1234,9,lastly,1234-2047\0"
+ *
+ * The destination string may be shorter than, equal to, or longer than
+ * the source string -- based on whether the new token strlen is shorter
+ * than, equal to, or longer than the old token strlen.
+ * The caller must allocate dest space accordingly with that in mind.
+ */
+
+static void cpulist_replace_token(char *dest, const char *src,
+			   const char *old_token, const char *new_token)
+{
+	const char *src_start = src;
+	char *dest_start = dest, *here;
+	const size_t olen = strlen(old_token);
+	const size_t nlen = strlen(new_token);
+
+	here = cpumask_find_token(src_start, old_token);
+	if (!here) {
+		strcpy(dest, src);
+		return;
+	}
+
+	while (here) {
+		size_t offset = here - src_start;
+
+		strncpy(dest_start, src_start, offset);
+		dest_start += offset;
+		src_start += offset;
+
+		strcpy(dest_start, new_token);
+		dest_start += nlen;
+		src_start += olen;
+
+		strcpy(dest_start, src_start);	/* remainder of string */
+		here = cpumask_find_token(src_start, old_token);
+	}
+}
+
+/**
+ * cpulist_parse - extract a cpumask from a user string of ranges
+ * @buf: the buffer to extract from
+ * @dstp: the cpumask to set.
+ *
+ * Returns -errno, or 0 for success.
+ *
+ * Marked __ref because memblock_*() are __meminit and we use them for
+ * any early calls before slab is available.
+ */
+int __ref cpulist_parse(const char *buf, struct cpumask *dstp)
+{
+	int r;
+	char *cpulist, last_cpu[5];	/* NR_CPUS <= 9999 */
+	size_t len = strlen(buf) + 1;	/* don't forget '\0' */
+	bool early = !slab_is_available();
+
+	if (!strcmp(buf, "all")) {
+		cpumask_setall(dstp);
+		return 0;
+	}
+
+	if (!strcmp(buf, "none")) {
+		cpumask_clear(dstp);
+		return 0;
+	}
+
+	/*
+	 * strlen("last") means "len" is OK up to NR_CPUS <= 9999.
+	 */
+	if (early)
+		cpulist = memblock_alloc(len, SMP_CACHE_BYTES);
+	else
+		cpulist = kzalloc(len, GFP_KERNEL);
+
+	if (cpulist == NULL)
+		return -ENOMEM;
+
+	/*
+	 * bitmap_parselist has no concept of "last" CPU, so we have to
+	 * replace "last" with a real number in dest copy of the string.
+	 */
+	sprintf(last_cpu, "%d", cpumask_last(cpu_present_mask));
+	cpulist_replace_token(cpulist, buf, "last", last_cpu);
+
+	r = bitmap_parselist(cpulist, cpumask_bits(dstp), nr_cpumask_bits);
+
+	if (early)
+		memblock_free((phys_addr_t)cpulist, len);
+	else
+		kfree(cpulist);
+
+	return r;
+}
+EXPORT_SYMBOL(cpulist_parse);
 
 /* These are not inline because of header tangles. */
 #ifdef CONFIG_CPUMASK_OFFSTACK

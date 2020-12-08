@@ -38,6 +38,7 @@
 #include <asm/byteorder.h>
 #include <linux/torture.h>
 #include <linux/vmalloc.h>
+#include <linux/rcupdate_trace.h>
 
 #include "rcu.h"
 
@@ -292,6 +293,35 @@ static struct rcu_scale_ops tasks_ops = {
 	.sync		= synchronize_rcu_tasks,
 	.exp_sync	= synchronize_rcu_tasks,
 	.name		= "tasks"
+};
+
+/*
+ * Definitions for RCU-tasks-trace scalability testing.
+ */
+
+static int tasks_trace_scale_read_lock(void)
+{
+	rcu_read_lock_trace();
+	return 0;
+}
+
+static void tasks_trace_scale_read_unlock(int idx)
+{
+	rcu_read_unlock_trace();
+}
+
+static struct rcu_scale_ops tasks_tracing_ops = {
+	.ptype		= RCU_TASKS_FLAVOR,
+	.init		= rcu_sync_scale_init,
+	.readlock	= tasks_trace_scale_read_lock,
+	.readunlock	= tasks_trace_scale_read_unlock,
+	.get_gp_seq	= rcu_no_completed,
+	.gp_diff	= rcu_seq_diff,
+	.async		= call_rcu_tasks_trace,
+	.gp_barrier	= rcu_barrier_tasks_trace,
+	.sync		= synchronize_rcu_tasks_trace,
+	.exp_sync	= synchronize_rcu_tasks_trace,
+	.name		= "tasks-tracing"
 };
 
 static unsigned long rcuscale_seq_diff(unsigned long new, unsigned long old)
@@ -606,6 +636,11 @@ struct kfree_obj {
 	struct rcu_head rh;
 };
 
+// For testing percpu_ref underflow.
+static void pcr_release(struct percpu_ref *ref)
+{
+}
+
 static int
 kfree_scale_thread(void *arg)
 {
@@ -662,6 +697,38 @@ kfree_scale_thread(void *arg)
 		if (shutdown) {
 			smp_mb(); /* Assign before wake. */
 			wake_up(&shutdown_wq);
+		}
+	}
+
+	{
+		struct percpu_ref pcr;
+		struct rcu_head *rhp;
+		struct kmem_cache *kcp;
+		static int z;
+
+		kcp = kmem_cache_create("rcuscale", 136, 8, SLAB_STORE_USER, NULL);
+		rhp = kmem_cache_alloc(kcp, GFP_KERNEL);
+		pr_alert("kmem_last_alloc() slab test: kfree_scale_thread = %px, &rhp = %px, rhp = %px, &z = %px\n", kfree_scale_thread, &rhp, rhp, &z);
+		pr_alert("kmem_last_alloc(%px) = %pS, %s\n", &rhp, kmem_last_alloc(&rhp), kmem_last_alloc_errstring(kmem_last_alloc(&rhp)));
+		pr_alert("kmem_last_alloc(%px) = %pS, %s\n", rhp, kmem_last_alloc(rhp), kmem_last_alloc_errstring(kmem_last_alloc(rhp)));
+		pr_alert("kmem_last_alloc(%px) = %pS, %s\n", &rhp->func, kmem_last_alloc(&rhp->func), kmem_last_alloc_errstring(kmem_last_alloc(&rhp->func)));
+		pr_alert("kmem_last_alloc(%px) = %pS, %s\n", &z, kmem_last_alloc(&z), kmem_last_alloc_errstring(kmem_last_alloc(&z)));
+		kmem_cache_free(kcp, rhp);
+		kmem_cache_destroy(kcp);
+		rhp = kmalloc(sizeof(*rhp), GFP_KERNEL);
+		pr_alert("kmem_last_alloc() kmalloc test: kfree_scale_thread = %px, &rhp = %px, rhp = %px\n", kfree_scale_thread, &rhp, rhp);
+		pr_alert("kmem_last_alloc(kmalloc %px) = %pS, %s\n", rhp, kmem_last_alloc(rhp), kmem_last_alloc_errstring(kmem_last_alloc(rhp)));
+		pr_alert("kmem_last_alloc(kmalloc %px) = %pS, %s\n", &rhp->func, kmem_last_alloc(&rhp->func), kmem_last_alloc_errstring(kmem_last_alloc(&rhp->func)));
+		kfree(rhp);
+		if (percpu_ref_init(&pcr, pcr_release, 0, GFP_KERNEL)) {
+			pr_alert("Out of memory, no percpu_ref test.\n");
+		} else {
+			percpu_ref_get(&pcr);
+			percpu_ref_put(&pcr);
+			percpu_ref_put(&pcr); // Intentional bug.
+			percpu_ref_kill(&pcr);
+			rcu_barrier();
+			percpu_ref_exit(&pcr);
 		}
 	}
 
@@ -754,7 +821,7 @@ rcu_scale_init(void)
 	long i;
 	int firsterr = 0;
 	static struct rcu_scale_ops *scale_ops[] = {
-		&rcu_ops, &srcu_ops, &srcud_ops, &tasks_ops,
+		&rcu_ops, &srcu_ops, &srcud_ops, &tasks_ops, &tasks_tracing_ops
 	};
 
 	if (!torture_init_begin(scale_type, verbose))
@@ -772,7 +839,6 @@ rcu_scale_init(void)
 		for (i = 0; i < ARRAY_SIZE(scale_ops); i++)
 			pr_cont(" %s", scale_ops[i]->name);
 		pr_cont("\n");
-		WARN_ON(!IS_MODULE(CONFIG_RCU_SCALE_TEST));
 		firsterr = -EINVAL;
 		cur_ops = NULL;
 		goto unwind;
@@ -846,6 +912,10 @@ rcu_scale_init(void)
 unwind:
 	torture_init_end();
 	rcu_scale_cleanup();
+	if (shutdown) {
+		WARN_ON(!IS_MODULE(CONFIG_RCU_SCALE_TEST));
+		kernel_power_off();
+	}
 	return firsterr;
 }
 

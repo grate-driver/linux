@@ -536,6 +536,75 @@ bool slab_is_available(void)
 	return slab_state >= UP;
 }
 
+/*
+ * If the pointer corresponds to a kmem_last_alloc() error, return
+ * a pointer to the corresponding string, otherwise NULL.
+ */
+const char *kmem_last_alloc_errstring(void *lastalloc)
+{
+	long klaerrno;
+	static const char * const es[] = {
+		"local memory",			/* KMEM_LA_NO_PAGE - 1 */
+		"non-slab memory",		/* KMEM_LA_NO_SLAB - 1 */
+		"slob doesn't do debug",	/* KMEM_LA_SLOB - 1 */
+		"debugging disabled",		/* KMEM_LA_NO_DEBUG - 1 */
+		"bogus slub block",		/* KMEM_LA_INCONSISTENT - 1 */
+	};
+
+	if (!IS_ERR(lastalloc))
+		return NULL;
+	klaerrno = -PTR_ERR(lastalloc) - 1;
+	if (WARN_ON_ONCE(klaerrno >= ARRAY_SIZE(es)))
+		return "kmem_last_alloc error out of range";
+	return es[klaerrno];
+}
+EXPORT_SYMBOL_GPL(kmem_last_alloc_errstring);
+
+/**
+ * kmem_last_alloc_stack - Get return address and stack for last allocation
+ * @object: object for which to find last-allocation return address.
+ * @stackp: %NULL or pointer to location to place return-address stack.
+ * @nstackp: maximum number of return addresses that may be stored.
+ *
+ * If the pointer references a slab-allocated object and if sufficient
+ * debugging is enabled, return the return address for the corresponding
+ * allocation.  If stackp is non-%NULL in %CONFIG_STACKTRACE kernels running
+ * the slub allocator, also copy the return-address stack into @stackp,
+ * limited by @nstackp.  Otherwise, return %NULL or an appropriate error
+ * code using %ERR_PTR().
+ *
+ * Return: return address from last allocation, %NULL or negative error code.
+ */
+void *kmem_last_alloc_stack(void *object, void **stackp, int nstackp)
+{
+	struct page *page;
+
+	if (!virt_addr_valid(object))
+		return ERR_PTR(-KMEM_LA_NO_PAGE);
+	page = virt_to_head_page(object);
+	if (!PageSlab(page))
+		return ERR_PTR(-KMEM_LA_NO_SLAB);
+	return kmem_cache_last_alloc(page->slab_cache, object, stackp, nstackp);
+}
+EXPORT_SYMBOL_GPL(kmem_last_alloc_stack);
+
+/**
+ * kmem_last_alloc - Get return address for last allocation
+ * @object: object for which to find last-allocation return address.
+ *
+ * If the pointer references a slab-allocated object and if sufficient
+ * debugging is enabled, return the return address for the corresponding
+ * allocation.  Otherwise, return %NULL or an appropriate error code using
+ * %ERR_PTR().
+ *
+ * Return: return address from last allocation, %NULL or negative error code.
+ */
+void *kmem_last_alloc(void *object)
+{
+	return kmem_last_alloc_stack(object, NULL, 0);
+}
+EXPORT_SYMBOL_GPL(kmem_last_alloc);
+
 #ifndef CONFIG_SLOB
 /* Create a cache during boot when no slab services are available yet */
 void __init create_boot_cache(struct kmem_cache *s, const char *name,
