@@ -118,12 +118,6 @@ struct rtc_device {
 	 */
 	long set_offset_nsec;
 
-	bool registered;
-
-	/* Old ABI support */
-	bool nvram_old_abi;
-	struct bin_attribute *nvram;
-
 	time64_t range_min;
 	timeu64_t range_max;
 	time64_t start_secs;
@@ -161,7 +155,7 @@ extern struct rtc_device *devm_rtc_device_register(struct device *dev,
 					const struct rtc_class_ops *ops,
 					struct module *owner);
 struct rtc_device *devm_rtc_allocate_device(struct device *dev);
-int __rtc_register_device(struct module *owner, struct rtc_device *rtc);
+int __devm_rtc_register_device(struct module *owner, struct rtc_device *rtc);
 
 extern int rtc_read_time(struct rtc_device *rtc, struct rtc_time *tm);
 extern int rtc_set_time(struct rtc_device *rtc, struct rtc_time *tm);
@@ -238,8 +232,8 @@ static inline bool rtc_tv_nsec_ok(s64 set_offset_nsec,
 	return false;
 }
 
-#define rtc_register_device(device) \
-	__rtc_register_device(THIS_MODULE, device)
+#define devm_rtc_register_device(device) \
+	__devm_rtc_register_device(THIS_MODULE, device)
 
 #ifdef CONFIG_RTC_HCTOSYS_DEVICE
 extern int rtc_hctosys_ret;
@@ -248,16 +242,14 @@ extern int rtc_hctosys_ret;
 #endif
 
 #ifdef CONFIG_RTC_NVMEM
-int rtc_nvmem_register(struct rtc_device *rtc,
-		       struct nvmem_config *nvmem_config);
-void rtc_nvmem_unregister(struct rtc_device *rtc);
+int devm_rtc_nvmem_register(struct rtc_device *rtc,
+			    struct nvmem_config *nvmem_config);
 #else
-static inline int rtc_nvmem_register(struct rtc_device *rtc,
-				     struct nvmem_config *nvmem_config)
+static inline int devm_rtc_nvmem_register(struct rtc_device *rtc,
+					  struct nvmem_config *nvmem_config)
 {
 	return 0;
 }
-static inline void rtc_nvmem_unregister(struct rtc_device *rtc) {}
 #endif
 
 #ifdef CONFIG_RTC_INTF_SYSFS
