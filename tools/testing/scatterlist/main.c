@@ -51,7 +51,7 @@ static void fail(struct test *test, struct sg_table *st, const char *cond)
 
 int main(void)
 {
-	const unsigned int sgmax = SCATTERLIST_MAX_SEGMENT;
+	const unsigned int sgmax = UINT_MAX;
 	struct test *test, tests[] = {
 		{ -EINVAL, 1, pfn(0), NULL, PAGE_SIZE, 0, 1 },
 		{ 0, 1, pfn(0), NULL, PAGE_SIZE, PAGE_SIZE + 1, 1 },
