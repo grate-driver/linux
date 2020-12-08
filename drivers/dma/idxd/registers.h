@@ -102,6 +102,8 @@ union offsets_reg {
 	u64 bits[2];
 } __packed;
 
+#define IDXD_TABLE_MULT			0x100
+
 #define IDXD_GENCFG_OFFSET		0x80
 union gencfg_reg {
 	struct {
@@ -336,6 +338,8 @@ union wqcfg {
 	u32 bits[8];
 } __packed;
 
+#define WQCFG_PASID_IDX                2
+
 /*
  * This macro calculates the offset into the WQCFG register
  * idxd - struct idxd *
@@ -353,5 +357,23 @@ union wqcfg {
 })
 
 #define WQCFG_STRIDES(_idxd_dev) ((_idxd_dev)->wqcfg_size / sizeof(u32))
+
+#define GRPCFG_SIZE		64
+#define GRPWQCFG_STRIDES	4
+
+/*
+ * This macro calculates the offset into the GRPCFG register
+ * idxd - struct idxd *
+ * n - wq id
+ * ofs - the index of the 32b dword for the config register
+ *
+ * The WQCFG register block is divided into groups per each wq. The n index
+ * allows us to move to the register group that's for that particular wq.
+ * Each register is 32bits. The ofs gives us the number of register to access.
+ */
+#define GRPWQCFG_OFFSET(idxd_dev, n, ofs) ((idxd_dev)->grpcfg_offset +\
+					   (n) * GRPCFG_SIZE + sizeof(u64) * (ofs))
+#define GRPENGCFG_OFFSET(idxd_dev, n) ((idxd_dev)->grpcfg_offset + (n) * GRPCFG_SIZE + 32)
+#define GRPFLGCFG_OFFSET(idxd_dev, n) ((idxd_dev)->grpcfg_offset + (n) * GRPCFG_SIZE + 40)
 
 #endif
