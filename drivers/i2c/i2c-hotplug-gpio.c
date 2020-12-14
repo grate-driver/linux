@@ -19,6 +19,7 @@
 struct i2c_hotplug_priv {
 	struct i2c_adapter	 adap;
 	struct i2c_adapter	*parent;
+	struct device		*adap_dev;
 	struct gpio_desc	*gpio;
 	int			 irq;
 };
@@ -118,6 +119,13 @@ static int i2c_hotplug_activate(struct i2c_hotplug_priv *priv)
 	if (priv->adap.algo_data)
 		return 0;
 
+	/*
+	 * Store the dev data in adapter dev, since
+	 * previous i2c_del_adapter might have wiped it.
+	 */
+	priv->adap.dev.parent = priv->adap_dev;
+	priv->adap.dev.of_node = priv->adap_dev->of_node;
+
 	dev_dbg(priv->adap.dev.parent, "connection detected");
 
 	ret = i2c_add_adapter(&priv->adap);
@@ -195,8 +203,7 @@ static int i2c_hotplug_gpio_probe(struct platform_device *pdev)
 	priv->adap.algo = i2c_hotplug_algo[is_i2c][is_smbus];
 	priv->adap.algo_data = NULL;
 	priv->adap.lock_ops = &i2c_hotplug_lock_ops;
-	priv->adap.dev.parent = &pdev->dev;
-	priv->adap.dev.of_node = pdev->dev.of_node;
+	priv->adap_dev = &pdev->dev;
 	priv->adap.class = parent->class;
 	priv->adap.retries = parent->retries;
 	priv->adap.timeout = parent->timeout;
