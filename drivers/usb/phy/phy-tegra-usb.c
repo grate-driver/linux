@@ -395,6 +395,9 @@ ulock:
 
 	clk_disable_unprepare(phy->pad_clk);
 
+	msleep(100);
+	WARN_ON_ONCE(readl_relaxed(phy->regs + USB_SUSP_CTRL) & USB_PHY_CLK_VALID);
+
 	return ret;
 }
 
