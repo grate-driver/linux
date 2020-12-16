@@ -21,6 +21,7 @@
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <linux/usb/otg.h>
+#include <linux/workqueue.h>
 
 /*
  * utmi_pll_config_in_car_module: true if the UTMI PLL configuration registers
@@ -87,6 +88,8 @@ struct tegra_usb_phy {
 	bool wakeup_enabled;
 	bool pad_wakeup;
 	bool powered_on;
+
+	struct delayed_work clk_dbg_check_work;
 };
 
 void tegra_usb_phy_preresume(struct usb_phy *phy);
