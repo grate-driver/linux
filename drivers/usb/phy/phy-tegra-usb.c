@@ -330,6 +330,8 @@ static int utmip_pad_power_on(struct tegra_usb_phy *phy)
 	u32 val;
 	int err;
 
+	cancel_delayed_work_sync(&phy->clk_dbg_check_work);
+
 	err = clk_prepare_enable(phy->pad_clk);
 	if (err)
 		return err;
@@ -402,6 +404,10 @@ ulock:
 	spin_unlock(&utmip_pad_lock);
 
 	clk_disable_unprepare(phy->pad_clk);
+
+	cancel_delayed_work_sync(&phy->clk_dbg_check_work);
+	if (phy->wakeup_enabled)
+		schedule_delayed_work(&phy->clk_dbg_check_work, 15 * HZ);
 
 	return ret;
 }
@@ -1269,6 +1275,14 @@ static const struct of_device_id tegra_usb_phy_id_table[] = {
 };
 MODULE_DEVICE_TABLE(of, tegra_usb_phy_id_table);
 
+static void clk_dbg_check_work(struct work_struct *work)
+{
+	struct tegra_usb_phy *phy;
+
+	phy = container_of(work, struct tegra_usb_phy, clk_dbg_check_work.work);
+	WARN_ON_ONCE(readl_relaxed(phy->regs + USB_SUSP_CTRL) & USB_PHY_CLK_VALID);
+}
+
 static int tegra_usb_phy_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -1406,6 +1420,7 @@ static int tegra_usb_phy_probe(struct platform_device *pdev)
 	tegra_phy->u_phy.set_wakeup = tegra_usb_phy_set_wakeup;
 	tegra_phy->u_phy.set_suspend = tegra_usb_phy_set_suspend;
 	tegra_phy->irq = platform_get_irq_optional(pdev, 0);
+	INIT_DELAYED_WORK(&tegra_phy->clk_dbg_check_work, clk_dbg_check_work);
 
 	platform_set_drvdata(pdev, tegra_phy);
 
