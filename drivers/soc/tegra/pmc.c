@@ -1283,6 +1283,7 @@ free_mem:
 static int tegra_powergate_init(struct tegra_pmc *pmc,
 				struct device_node *parent)
 {
+	struct of_phandle_args child_args, parent_args;
 	struct device_node *np, *child;
 	int err = 0;
 
@@ -1293,6 +1294,21 @@ static int tegra_powergate_init(struct tegra_pmc *pmc,
 	for_each_child_of_node(np, child) {
 		err = tegra_powergate_add(pmc, child);
 		if (err < 0) {
+			of_node_put(child);
+			break;
+		}
+
+		if (of_parse_phandle_with_args(child, "power-domains",
+					       "#power-domain-cells",
+					       0, &parent_args))
+			continue;
+
+		child_args.np = child;
+		child_args.args_count = 0;
+
+		err = of_genpd_add_subdomain(&parent_args, &child_args);
+		of_node_put(parent_args.np);
+		if (err) {
 			of_node_put(child);
 			break;
 		}
