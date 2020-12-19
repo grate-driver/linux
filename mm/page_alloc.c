@@ -6257,7 +6257,7 @@ static void __meminit zone_init_free_lists(struct zone *zone)
  * Only struct pages that are backed by physical memory available to the
  * kernel are zeroed and initialized by memmap_init_zone().
  * But, there are some struct pages that are either reserved by firmware or
- * do not correspond to physical page frames becuase the actual memory bank
+ * do not correspond to physical page frames because the actual memory bank
  * is not a multiple of SECTION_SIZE.
  * Fields of those struct pages may be accessed (for example page_to_pfn()
  * on some configuration accesses page flags) so we must explicitly
