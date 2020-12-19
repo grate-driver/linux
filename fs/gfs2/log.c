@@ -287,16 +287,34 @@ static void gfs2_ail_empty_tr(struct gfs2_sbd *sdp, struct gfs2_trans *tr,
  * @tr: the transaction
  * @max_revokes: If nonzero, issue revokes for the bd items for written buffers
  *
- * returns: the transaction's count of remaining active items
+ * Returns: true if the transaction has completed
  */
 
-static int gfs2_ail1_empty_one(struct gfs2_sbd *sdp, struct gfs2_trans *tr,
+static bool gfs2_ail1_empty_one(struct gfs2_sbd *sdp, struct gfs2_trans *tr,
 				int *max_revokes)
 {
 	struct gfs2_bufdata *bd, *s;
 	struct buffer_head *bh;
-	int active_count = 0;
+	bool empty;
 
+	if (!sdp->sd_log_error) {
+		empty = true;
+		list_for_each_entry_reverse(bd, &tr->tr_ail1_list, bd_ail_st_list) {
+			bh = bd->bd_bh;
+
+			if (buffer_busy(bh) || !list_empty(&bd->bd_list)) {
+				empty = false;
+				break;
+			}
+		}
+		if (empty) {
+			gfs2_ail_empty_tr(sdp, tr, &tr->tr_ail1_list);
+			gfs2_ail_empty_tr(sdp, tr, &tr->tr_ail2_list);
+			return empty;
+		}
+	}
+
+	empty = true;
 	list_for_each_entry_safe_reverse(bd, s, &tr->tr_ail1_list,
 					 bd_ail_st_list) {
 		bh = bd->bd_bh;
@@ -311,7 +329,7 @@ static int gfs2_ail1_empty_one(struct gfs2_sbd *sdp, struct gfs2_trans *tr,
 		 * for others.
 		 */
 		if (!sdp->sd_log_error && buffer_busy(bh)) {
-			active_count++;
+			empty = false;
 			continue;
 		}
 		if (!buffer_uptodate(bh) &&
@@ -332,7 +350,7 @@ static int gfs2_ail1_empty_one(struct gfs2_sbd *sdp, struct gfs2_trans *tr,
 		}
 		list_move(&bd->bd_ail_st_list, &tr->tr_ail2_list);
 	}
-	return active_count;
+	return empty;
 }
 
 /**
@@ -351,7 +369,7 @@ static int gfs2_ail1_empty(struct gfs2_sbd *sdp, int max_revokes)
 
 	spin_lock(&sdp->sd_ail_lock);
 	list_for_each_entry_safe_reverse(tr, s, &sdp->sd_ail1_list, tr_list) {
-		if (!gfs2_ail1_empty_one(sdp, tr, &max_revokes) && oldest_tr)
+		if (gfs2_ail1_empty_one(sdp, tr, &max_revokes) && oldest_tr)
 			list_move(&tr->tr_list, &sdp->sd_ail2_list);
 		else
 			oldest_tr = 0;
