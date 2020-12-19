@@ -120,6 +120,7 @@ int memblock_clear_nomap(phys_addr_t base, phys_addr_t size);
 unsigned long memblock_free_all(void);
 void reset_node_managed_pages(pg_data_t *pgdat);
 void reset_all_zones_managed_pages(void);
+void memblock_enforce_memory_reserved_overlap(void);
 
 /* Low level functions */
 void __next_mem_range(u64 *idx, int nid, enum memblock_flags flags,

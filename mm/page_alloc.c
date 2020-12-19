@@ -7511,6 +7511,13 @@ void __init free_area_init(unsigned long *max_zone_pfn)
 	memset(arch_zone_highest_possible_pfn, 0,
 				sizeof(arch_zone_highest_possible_pfn));
 
+	/*
+	 * Some architectures (e.g. x86) have reserved pages outside of
+	 * memblock.memory. Make sure these pages are taken into account
+	 * when detecting zone and node boundaries
+	 */
+	memblock_enforce_memory_reserved_overlap();
+
 	start_pfn = find_min_pfn_with_active_regions();
 	descending = arch_has_descending_max_zone_pfns();
 
