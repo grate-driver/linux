@@ -29,8 +29,6 @@
 
 #ifdef __NR_memfd_secret
 
-#include <linux/secretmem.h>
-
 #define PATTERN	0x55
 
 static const int prot = PROT_READ | PROT_WRITE;
