@@ -415,6 +415,9 @@ static int __init secretmem_setup(char *str)
 	unsigned long reserved_size;
 	int err;
 
+	if (!can_set_direct_map())
+		return 0;
+
 	reserved_size = memparse(str, NULL);
 	if (!reserved_size)
 		return 0;
