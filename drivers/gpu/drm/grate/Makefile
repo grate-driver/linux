@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0
+ccflags-y := -I $(srctree)/$(src)
+ccflags-y += -I $(srctree)/$(src)/uapi
+ccflags-y += -I $(srctree)/drivers/gpu/host1x-grate/soc/hw
 ccflags-$(CONFIG_DRM_TEGRA_DEBUG) += -DDEBUG
 
 tegra-drm-y := \
 	drm.o \
-	uapi.o \
-	submit.o \
-	firewall.o \
 	gem.o \
 	fb.o \
 	dp.o \
@@ -24,11 +24,17 @@ tegra-drm-y := \
 	gr3d.o \
 	falcon.o \
 	vic.o \
-	nvdec.o \
-	riscv.o
-
-tegra-drm-y += trace.o
+	trace.o \
+	channel.o \
+	client.o \
+	gart.o \
+	uapi/debug.o \
+	uapi/job_v1.o \
+	uapi/job_v2.o \
+	uapi/patching.o \
+	uapi/scheduler.o \
+	uapi/uapi.o
 
 tegra-drm-$(CONFIG_DRM_FBDEV_EMULATION) += fbdev.o
 
-obj-$(CONFIG_DRM_TEGRA_ORIG) += tegra-drm.o
+obj-$(CONFIG_DRM_TEGRA) += tegra-drm.o
