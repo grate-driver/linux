@@ -27,4 +27,4 @@ tegra-drm-y := \
 
 tegra-drm-y += trace.o
 
-obj-$(CONFIG_DRM_TEGRA) += tegra-drm.o
+obj-$(CONFIG_DRM_TEGRA_ORIG) += tegra-drm.o
