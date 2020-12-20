@@ -322,6 +322,10 @@ struct gart_device *tegra_gart_probe(struct device *dev, struct tegra_mc *mc)
 	struct resource *res;
 	int err;
 
+	/* upstream DRM driver will fail with GART */
+	if (IS_ENABLED(CONFIG_DRM_TEGRA_ORIG))
+		return 0;
+
 	BUILD_BUG_ON(PAGE_SHIFT != GART_PAGE_SHIFT);
 
 	/* the GART memory aperture is required */
