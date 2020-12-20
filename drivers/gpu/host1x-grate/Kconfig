@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: GPL-2.0-only
+menuconfig GRATE_HOST1X
+	bool "NVIDIA Tegra host1x BUS support (with experimental changes)"
+	depends on ARCH_TEGRA || (ARM && COMPILE_TEST) || (ARM64 && COMPILE_TEST)
+	depends on !DRM_TEGRA_ORIG
+
+if GRATE_HOST1X
+
+config GRATE_HOST1X_DRV
+	tristate "NVIDIA Tegra host1x driver (with experimental changes)"
+	select IOMMU_IOVA
+	select TEGRA_HOST1X01 if (ARCH_TEGRA_2x_SOC || COMPILE_TEST)
+	select TEGRA_HOST1X01 if (ARCH_TEGRA_3x_SOC || COMPILE_TEST)
+	select TEGRA_HOST1X02 if (ARCH_TEGRA_114_SOC || COMPILE_TEST)
+	select TEGRA_HOST1X04 if (ARCH_TEGRA_124_SOC || COMPILE_TEST)
+	select TEGRA_HOST1X05 if (ARCH_TEGRA_210_SOC || COMPILE_TEST)
+	select TEGRA_HOST1X06 if (ARCH_TEGRA_186_SOC || COMPILE_TEST)
+	select TEGRA_HOST1X07 if (ARCH_TEGRA_194_SOC || COMPILE_TEST)
+	help
+	  Driver for the NVIDIA Tegra host1x hardware.
+
+	  The Tegra host1x module is the DMA engine for register access to
+	  Tegra's graphics- and multimedia-related modules. The modules served
+	  by host1x are referred to as clients. host1x includes some other
+	  functionality, such as synchronization.
+
+config TEGRA_HOST1X01
+	bool "NVIDIA Tegra host1x support for Tegra20/30"
+	depends on GRATE_HOST1X_DRV && (ARCH_TEGRA_2x_SOC || ARCH_TEGRA_3x_SOC || COMPILE_TEST)
+
+config TEGRA_HOST1X02
+	bool "NVIDIA Tegra host1x support for Tegra114"
+	depends on GRATE_HOST1X_DRV && (ARCH_TEGRA_114_SOC || COMPILE_TEST)
+
+config TEGRA_HOST1X04
+	bool "NVIDIA Tegra host1x support for Tegra124"
+	depends on GRATE_HOST1X_DRV && (ARCH_TEGRA_124_SOC || COMPILE_TEST)
+
+config TEGRA_HOST1X05
+	bool "NVIDIA Tegra host1x support for Tegra210"
+	depends on GRATE_HOST1X_DRV && (ARCH_TEGRA_210_SOC || COMPILE_TEST)
+
+config TEGRA_HOST1X06
+	bool "NVIDIA Tegra host1x support for Tegra186"
+	depends on GRATE_HOST1X_DRV && (ARCH_TEGRA_186_SOC || COMPILE_TEST)
+
+config TEGRA_HOST1X07
+	bool "NVIDIA Tegra host1x support for Tegra194"
+	depends on GRATE_HOST1X_DRV && (ARCH_TEGRA_194_SOC || COMPILE_TEST)
+
+endif # GRATE_HOST1X
