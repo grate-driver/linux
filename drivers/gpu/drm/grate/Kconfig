@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
-config DRM_TEGRA_ORIG
-	tristate "NVIDIA Tegra DRM"
+config DRM_TEGRA
+	tristate "NVIDIA Tegra DRM (with experimental changes)"
 	depends on ARCH_TEGRA || (ARM && COMPILE_TEST)
 	depends on COMMON_CLK
 	depends on DRM
@@ -8,18 +8,19 @@ config DRM_TEGRA_ORIG
 	select DRM_KMS_HELPER
 	select DRM_MIPI_DSI
 	select DRM_PANEL
-	select TEGRA_HOST1X
+	select DRM_SCHED
+	select GRATE_HOST1X
+	select GRATE_HOST1X_DRV
 	select INTERCONNECT
 	select IOMMU_IOVA
 	select CEC_CORE if CEC_NOTIFIER
-	depends on !DRM_TEGRA
 	help
 	  Choose this option if you have an NVIDIA Tegra SoC.
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called tegra-drm.
 
-if DRM_TEGRA_ORIG
+if DRM_TEGRA
 
 config DRM_TEGRA_DEBUG
 	bool "NVIDIA Tegra DRM debug support"
