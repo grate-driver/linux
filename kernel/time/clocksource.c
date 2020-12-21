@@ -211,6 +211,78 @@ static void clocksource_watchdog_inject_delay(void)
 	WARN_ON_ONCE(injectfail < 0);
 }
 
+static struct clocksource *clocksource_verify_work_cs;
+static DEFINE_PER_CPU(u64, csnow_mid);
+static cpumask_t cpus_ahead;
+static cpumask_t cpus_behind;
+
+static void clocksource_verify_one_cpu(void *csin)
+{
+	struct clocksource *cs = (struct clocksource *)csin;
+
+	__this_cpu_write(csnow_mid, cs->read(cs));
+}
+
+static void clocksource_verify_percpu_wq(struct work_struct *unused)
+{
+	int cpu;
+	struct clocksource *cs;
+	int64_t cs_nsec;
+	u64 csnow_begin;
+	u64 csnow_end;
+	u64 delta;
+
+	cs = smp_load_acquire(&clocksource_verify_work_cs); // pairs with release
+	if (WARN_ON_ONCE(!cs))
+		return;
+	pr_warn("Checking clocksource %s synchronization from CPU %d.\n",
+		cs->name, smp_processor_id());
+	cpumask_clear(&cpus_ahead);
+	cpumask_clear(&cpus_behind);
+	csnow_begin = cs->read(cs);
+	smp_call_function(clocksource_verify_one_cpu, cs, 1);
+	csnow_end = cs->read(cs);
+	for_each_online_cpu(cpu) {
+		if (cpu == smp_processor_id())
+			continue;
+		delta = (per_cpu(csnow_mid, cpu) - csnow_begin) & cs->mask;
+		if ((s64)delta < 0)
+			cpumask_set_cpu(cpu, &cpus_behind);
+		delta = (csnow_end - per_cpu(csnow_mid, cpu)) & cs->mask;
+		if ((s64)delta < 0)
+			cpumask_set_cpu(cpu, &cpus_ahead);
+	}
+	if (!cpumask_empty(&cpus_ahead))
+		pr_warn("        CPUs %*pbl ahead of CPU %d for clocksource %s.\n",
+			cpumask_pr_args(&cpus_ahead),
+			smp_processor_id(), cs->name);
+	if (!cpumask_empty(&cpus_behind))
+		pr_warn("        CPUs %*pbl behind CPU %d for clocksource %s.\n",
+			cpumask_pr_args(&cpus_behind),
+			smp_processor_id(), cs->name);
+	if (!cpumask_empty(&cpus_ahead) || !cpumask_empty(&cpus_behind)) {
+		delta = clocksource_delta(csnow_end, csnow_begin, cs->mask);
+		cs_nsec = clocksource_cyc2ns(delta, cs->mult, cs->shift);
+		pr_warn("        CPU %d duration %lldns for clocksource %s.\n",
+			smp_processor_id(), cs_nsec, cs->name);
+	}
+	smp_store_release(&clocksource_verify_work_cs, NULL); // pairs with acquire.
+}
+
+static DECLARE_WORK(clocksource_verify_work, clocksource_verify_percpu_wq);
+
+static void clocksource_verify_percpu(struct clocksource *cs)
+{
+	if (!(cs->flags & CLOCK_SOURCE_VERIFY_PERCPU))
+		return;
+	if (smp_load_acquire(&clocksource_verify_work_cs)) { // pairs with release.
+		pr_warn("Previous clocksource synchronization still in flight.\n");
+		return;
+	}
+	smp_store_release(&clocksource_verify_work_cs, cs); //pairs with acquire.
+	queue_work(system_highpri_wq, &clocksource_verify_work);
+}
+
 static void clocksource_watchdog(struct timer_list *unused)
 {
 	struct clocksource *cs;
@@ -284,6 +356,7 @@ retry:
 				watchdog->name, wdnow, wdlast, watchdog->mask);
 			pr_warn("                      '%s' cs_now: %llx cs_last: %llx mask: %llx\n",
 				cs->name, csnow, cslast, cs->mask);
+			clocksource_verify_percpu(cs);
 			__clocksource_unstable(cs);
 			continue;
 		}
