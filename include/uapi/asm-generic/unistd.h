@@ -869,7 +869,7 @@ __SYSCALL(__NR_memfd_secret, sys_memfd_secret)
 #endif
 
 #undef __NR_syscalls
-#define __NR_syscalls 443
+#define __NR_syscalls 444
 
 /*
  * 32 bit systems traditionally used different
