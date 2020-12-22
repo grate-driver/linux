@@ -93,6 +93,7 @@ static struct gfs2_sbd *init_sbd(struct super_block *sb)
 	init_completion(&sdp->sd_locking_init);
 	init_completion(&sdp->sd_wdack);
 	spin_lock_init(&sdp->sd_statfs_spin);
+	INIT_WORK(&sdp->sd_recovery_work, gfs2_recover_func);
 
 	spin_lock_init(&sdp->sd_rindex_spin);
 	sdp->sd_rindex_tree.rb_node = NULL;
@@ -586,7 +587,6 @@ static int gfs2_jindex_hold(struct gfs2_sbd *sdp, struct gfs2_holder *ji_gh)
 		INIT_LIST_HEAD(&jd->extent_list);
 		INIT_LIST_HEAD(&jd->jd_revoke_list);
 
-		INIT_WORK(&jd->jd_work, gfs2_recover_func);
 		jd->jd_inode = gfs2_lookupi(sdp->sd_jindex, &name, 1);
 		if (IS_ERR_OR_NULL(jd->jd_inode)) {
 			if (!jd->jd_inode)

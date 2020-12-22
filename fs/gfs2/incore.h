@@ -529,7 +529,6 @@ struct gfs2_jdesc {
 	struct list_head jd_list;
 	struct list_head extent_list;
 	unsigned int nr_extents;
-	struct work_struct jd_work;
 	struct inode *jd_inode;
 	unsigned long jd_flags;
 #define JDF_RECOVERY 1
@@ -746,6 +745,7 @@ struct gfs2_sbd {
 	struct completion sd_locking_init;
 	struct completion sd_wdack;
 	struct delayed_work sd_control_work;
+	struct work_struct sd_recovery_work;
 
 	/* Inode Stuff */
 
