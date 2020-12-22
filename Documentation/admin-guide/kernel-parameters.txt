@@ -593,6 +593,15 @@
 			times the value specified for inject_delay_freq
 			of consecutive non-delays.
 
+	clocksource.inject_delay_shift_percpu= [KNL]
+			Shift count to obtain bit from CPU number to
+			determine whether to shift the time of the per-CPU
+			clock under test ahead or behind.  For example,
+			setting this to the value four will result in
+			alternating groups of 16 CPUs shifting ahead and
+			the rest of the CPUs shifting behind.  The default
+			value of -1 disable this type of error injection.
+
 	clocksource.max_read_retries= [KNL]
 			Number of clocksource_watchdog() retries due to
 			external delays before the clock will be marked
