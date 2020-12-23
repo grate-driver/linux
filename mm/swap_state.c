@@ -113,11 +113,9 @@ void *get_shadow_from_swap_cache(swp_entry_t entry)
 	pgoff_t idx = swp_offset(entry);
 	struct page *page;
 
-	page = find_get_entry(address_space, idx);
+	page = xa_load(&address_space->i_pages, idx);
 	if (xa_is_value(page))
 		return page;
-	if (page)
-		put_page(page);
 	return NULL;
 }
 
@@ -429,7 +427,8 @@ struct page *find_get_incore_page(struct address_space *mapping, pgoff_t index)
 {
 	swp_entry_t swp;
 	struct swap_info_struct *si;
-	struct page *page = find_get_entry(mapping, index);
+	struct page *page = pagecache_get_page(mapping, index,
+						FGP_ENTRY | FGP_HEAD, 0);
 
 	if (!page)
 		return page;
@@ -537,7 +536,6 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 		workingset_refault(page, shadow);
 
 	/* Caller will initiate read into locked page */
-	SetPageWorkingset(page);
 	lru_cache_add(page);
 	*new_page_allocated = true;
 	return page;

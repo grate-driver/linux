@@ -965,6 +965,7 @@ struct task_struct {
 #ifdef CONFIG_DETECT_HUNG_TASK
 	unsigned long			last_switch_count;
 	unsigned long			last_switch_time;
+	unsigned long			killed_time;
 #endif
 	/* Filesystem information: */
 	struct fs_struct		*fs;
@@ -1234,7 +1235,7 @@ struct task_struct {
 	u64				timer_slack_ns;
 	u64				default_timer_slack_ns;
 
-#ifdef CONFIG_KASAN
+#if defined(CONFIG_KASAN_GENERIC) || defined(CONFIG_KASAN_SW_TAGS)
 	unsigned int			kasan_depth;
 #endif
 
@@ -1366,6 +1367,13 @@ struct task_struct {
 
 #ifdef CONFIG_KRETPROBES
 	struct llist_head               kretprobe_instances;
+#endif
+
+#ifdef CONFIG_DEBUG_AID_FOR_SYZBOT
+	unsigned long			getblk_stamp;
+	unsigned int			getblk_executed;
+	unsigned int			getblk_bh_count;
+	unsigned long			getblk_bh_state;
 #endif
 
 	/*

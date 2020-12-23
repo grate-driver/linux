@@ -1860,6 +1860,30 @@ void __init_memblock memblock_trim_memory(phys_addr_t align)
 	}
 }
 
+/**
+ * memblock_enforce_memory_reserved_overlap - make sure every range in
+ * @memblock.reserved is covered by @memblock.memory
+ *
+ * The data in @memblock.memory is used to detect zone and node boundaries
+ * during initialization of the memory map and the page allocator. Make
+ * sure that every memory range present in @memblock.reserved is also added
+ * to @memblock.memory even if the architecture specific memory
+ * initialization failed to do so
+ */
+void __init memblock_enforce_memory_reserved_overlap(void)
+{
+	phys_addr_t start, end;
+	int nid;
+	u64 i;
+
+	__for_each_mem_range(i, &memblock.reserved, &memblock.memory,
+			     NUMA_NO_NODE, MEMBLOCK_NONE, &start, &end, &nid) {
+		pr_warn("memblock: reserved range [%pa-%pa] is not in memory\n",
+			&start, &end);
+		memblock_add_node(start, (end - start), nid);
+	}
+}
+
 void __init_memblock memblock_set_current_limit(phys_addr_t limit)
 {
 	memblock.current_limit = limit;
