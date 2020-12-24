@@ -61,7 +61,7 @@ static int tegra20_cpufreq_probe(struct platform_device *pdev)
 	if (WARN_ON(!cpu_dev))
 		return -ENODEV;
 
-	opp_table = dev_pm_opp_set_supported_hw(cpu_dev, versions, 2);
+	opp_table = devm_pm_opp_set_supported_hw(cpu_dev, versions, 2);
 	err = PTR_ERR_OR_ZERO(opp_table);
 	if (err) {
 		dev_err(&pdev->dev, "failed to set supported hw: %d\n", err);
@@ -73,30 +73,20 @@ static int tegra20_cpufreq_probe(struct platform_device *pdev)
 	if (err) {
 		dev_err(&pdev->dev,
 			"failed to create cpufreq-dt device: %d\n", err);
-		goto err_put_supported_hw;
+		return err;
 	}
 
 	platform_set_drvdata(pdev, cpufreq_dt);
 
 	return 0;
-
-err_put_supported_hw:
-	dev_pm_opp_put_supported_hw(opp_table);
-
-	return err;
 }
 
 static int tegra20_cpufreq_remove(struct platform_device *pdev)
 {
 	struct platform_device *cpufreq_dt;
-	struct opp_table *opp_table;
 
 	cpufreq_dt = platform_get_drvdata(pdev);
 	platform_device_unregister(cpufreq_dt);
-
-	opp_table = dev_pm_opp_get_opp_table(get_cpu_device(0));
-	dev_pm_opp_put_supported_hw(opp_table);
-	dev_pm_opp_put_opp_table(opp_table);
 
 	return 0;
 }
