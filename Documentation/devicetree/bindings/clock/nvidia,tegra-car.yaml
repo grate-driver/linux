@@ -50,6 +50,45 @@ properties:
     description:
       phandle of the external memory controller node
 
+  tegra-clocks:
+      description: child nodes are the output clocks from the CAR
+      type: object
+
+      patternProperties:
+        "^[a-z]+[0-9]+$":
+          type: object
+          properties:
+            compatible:
+              enum:
+                - nvidia,tegra20-clock
+                - nvidia,tegra30-clock
+
+            operating-points-v2:
+              $ref: /schemas/types.yaml#/definitions/phandle
+              maxItems: 1
+              description:
+                phandle of OPP table that contains freqs, voltages and
+                opp-supported-hw property, which is a bitfield indicating
+                SoC process or speedo ID mask.
+
+            clocks:
+              items:
+                - description: node's clock
+
+            power-domains:
+              $ref: /schemas/types.yaml#/definitions/phandle
+              maxItems: 1
+              description:
+                phandle of the core power domain
+
+          required:
+            - compatible
+            - operating-points-v2
+            - clocks
+            - power-domains
+
+          additionalProperties: false
+
 patternProperties:
   "^emc-timings-[0-9]+$":
     type: object
@@ -110,6 +149,15 @@ examples:
         reg = <0x60006000 0x1000>;
         #clock-cells = <1>;
         #reset-cells = <1>;
+
+        tegra-clocks {
+            sclk {
+                compatible = "nvidia,tegra20-clock";
+                operating-points-v2 = <&opp_table>;
+                clocks = <&tegra_car TEGRA20_CLK_SCLK>;
+                power-domains = <&domain>;
+            };
+        };
     };
 
     usb-controller@c5004000 {
