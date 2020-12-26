@@ -24,16 +24,14 @@
 			};
 		};
 
-		hdmi: dc@54240000 { };
-
-		hdmi@54280000 {
+		hdmi: hdmi@54280000 {
 			status = "okay";
 
-			hdmi-supply = <&vdd_5v0_sys>;
+			hdmi-supply = <&hdmi_5v0_sys>;
 			pll-supply = <&vdd_1v8>;
 			vdd-supply = <&vdd_3v3_sys>;
 
-			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;	// hdmi_hpd, in, lo
+			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
 			nvidia,ddc-i2c-bus = <&hdmi_ddc>;
 		};
 	};
@@ -66,16 +64,9 @@
 				nvidia,pins = "kb_row7_pr7";
 				nvidia,function = "kbc";
 				nvidia,pull = <TEGRA_PIN_PULL_UP>;
-				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
-		};
-	};
-
-	uartc: serial@70006200 {
-		/* Azurewave AW-NH615 BCM4329B1 */
-		bluetooth {
-			compatible = "brcm,bcm4329-bt";
 		};
 	};
 
@@ -86,8 +77,8 @@
 			reg = <0x4d>;
 
 			interrupt-parent = <&gpio>;
-			interrupts = <TEGRA_GPIO(H, 4) IRQ_TYPE_EDGE_FALLING>;		/* touch_irq, in, hi */
-			reset-gpios = <&gpio TEGRA_GPIO(H, 6) GPIO_ACTIVE_LOW>;		/* touch_reset, out, hi */
+			interrupts = <TEGRA_GPIO(H, 4) IRQ_TYPE_EDGE_FALLING>;
+			reset-gpios = <&gpio TEGRA_GPIO(H, 6) GPIO_ACTIVE_LOW>;
 
 			vdda-supply = <&vdd_3v3_sys>;
 			vdd-supply  = <&vdd_3v3_sys>;
@@ -109,29 +100,30 @@
 			compatible = "aptina,mi1040";
 			reg = <0x48>;
 
-			clocks = <>; 						// <&tegra_car TEGRA30_CLK_PLL_A>; CAM_MCLK
+			clocks = <>; 	// <&tegra_car TEGRA30_CLK_PLL_A>; CAM_MCLK
 			clock-names = "extclk";
 
 			vddio-suppy = <&vdd_1v8>;
-			vdda-suppy = <&vdd_3v3_sys>;			// 2.85V?
-			vddc-supply = <&cam_vddc>;			// PWR_DN
+			vdda-suppy = <&vdd_3v3_sys>;	// 2.85V?
+			vddc-supply = <&cam_vddc>;	// PWR_DN
 
 			reset-gpios = <&gpio TEGRA_GPIO(O, 0) GPIO_ACTIVE_LOW>;
 		};
 
-		gyro@68 {
+		mpu3050@68 {
 			mount-matrix =   "0", "-1",  "0",
 					"-1",  "0",  "0",
 					 "0",  "0", "-1";
 
+			/* External I2C interface */
 			i2c-gate {
-				accel: accel@f {
+				accelerometer@f {
 					mount-matrix =  "-1",  "0",  "0",
 							 "0",  "1",  "0",
 							 "0",  "0", "-1";
 				};
 
-				compass: compass@e {
+				magnetometer@e {
 					mount-matrix =  "-1",  "0",  "0",
 							 "0", "-1",  "0",
 							 "0",  "0", "-1";
@@ -142,11 +134,11 @@
 
 	i2c@7000d000 {		/*i2c5*/
 		/* Realtek ALC5631 audio codec */
-		rt5631: rt5631@1a {
+		rt5631: audio-codec@1a {
 			compatible = "realtek,rt5631";
 			reg = <0x1a>;
 
-			realtek,dmic1-data-pin = <1>;
+			realtek,times-of-bclk = <64>;
 		};
 	};
 
@@ -221,15 +213,15 @@
 	sound {
 		compatible = "nvidia,tegra-audio-rt5631-tf201",
 			     "nvidia,tegra-audio-rt5631";
-		nvidia,model = "ASUS Transformer Prime TF201 ALC5631";
+		nvidia,model = "ASUS TF201 RT5631";
 
 		nvidia,audio-routing =
 			"Headphone Jack", "HPOL",
 			"Headphone Jack", "HPOR",
 			"Int Spk", "SPOL",
 			"Int Spk", "SPOR",
-			"MIC1", "Mic Bias1",
-			"Mic Bias1", "Mic Jack",
+			"MIC1", "MIC Bias1",
+			"MIC Bias1", "Mic Jack",
 			"DMIC", "Int Mic";
 
 		nvidia,i2s-controller = <&tegra_i2s1>;

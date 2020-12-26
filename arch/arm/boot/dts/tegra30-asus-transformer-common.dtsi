@@ -59,10 +59,6 @@
 			ecc-size = <16>;
 		};
 
-//		lp0_vec@bddf9000 {
-//			reg = <0xbddf9000 0x2000>;	// passed from bootloader (ATAGS/NVIDIA, cmdline)
-//		};
-
 		trustzone@bfe00000 {
 			/* used by TF firmware */
 			reg = <0xbfe00000 0x200000>;	/* 2MB */
@@ -441,7 +437,7 @@
 				nvidia,function = "spi4";
 				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				nvidia,tristate = <TEGRA_PIN_ENABLE>;
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
 			};
 			gmi_a18_pb1 {
 				nvidia,pins = "gmi_a18_pb1";
@@ -553,10 +549,16 @@
 			gmi_wp_n_pc7 {
 				nvidia,pins = "gmi_wp_n_pc7",
 						"gmi_wait_pi7",
-						"gmi_cs0_n_pj0",
-						"gmi_cs1_n_pj2",
-						"gmi_cs2_n_pk3",
 						"gmi_cs3_n_pk4";
+				nvidia,function = "rsvd1";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+			};
+			gmi_cs0_n_pj0 {
+				nvidia,pins = "gmi_cs0_n_pj0",
+						"gmi_cs1_n_pj2",
+						"gmi_cs2_n_pk3";
 				nvidia,function = "rsvd1";
 				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				nvidia,tristate = <TEGRA_PIN_ENABLE>;
@@ -600,13 +602,6 @@
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
 
-			pbb0 {
-				nvidia,pins = "pbb0";
-				nvidia,function = "rsvd2";
-				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
-				nvidia,tristate = <TEGRA_PIN_DISABLE>;
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
-			};
 			pcc1 {
 				nvidia,pins = "pcc1";
 				nvidia,function = "rsvd2";
@@ -618,6 +613,45 @@
 				nvidia,pins = "sdmmc4_rst_n_pcc3";
 				nvidia,function = "rsvd2";
 				nvidia,pull = <TEGRA_PIN_PULL_DOWN>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+			pv2 {
+				nvidia,pins = "pv2";
+				nvidia,function = "rsvd2";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+			};
+			pv3 {
+				nvidia,pins = "pv3";
+				nvidia,function = "rsvd2";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+			};
+			vi_vsync_pd6 {
+				nvidia,pins = "vi_vsync_pd6",
+						"vi_hsync_pd7";
+				nvidia,function = "rsvd2";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+				nvidia,lock = <0>;
+				nvidia,ioreset = <0>;
+			};
+			vi_d10_pt2 {
+				nvidia,pins = "vi_d10_pt2",
+						"vi_d0_pt4", "pbb0";
+				nvidia,function = "rsvd2";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+			vi_d11_pt3 {
+				nvidia,pins = "vi_d11_pt3";
+				nvidia,function = "rsvd2";
+				nvidia,pull = <TEGRA_PIN_PULL_UP>;
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
@@ -645,8 +679,7 @@
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
 			pu3 {
-				nvidia,pins = "pu3",
-						"pv2";
+				nvidia,pins = "pu3";
 				nvidia,function = "rsvd4";
 				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
@@ -663,39 +696,6 @@
 				nvidia,pins = "pu6";
 				nvidia,function = "rsvd4";
 				nvidia,pull = <TEGRA_PIN_PULL_DOWN>;
-				nvidia,tristate = <TEGRA_PIN_DISABLE>;
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
-			};
-			pv3 {
-				nvidia,pins = "pv3";
-				nvidia,function = "rsvd4";
-				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
-				nvidia,tristate = <TEGRA_PIN_ENABLE>;
-				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
-			};
-
-			vi_vsync_pd6 {
-				nvidia,pins = "vi_vsync_pd6",
-						"vi_hsync_pd7";
-				nvidia,function = "ddr";
-				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
-				nvidia,tristate = <TEGRA_PIN_DISABLE>;
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
-				nvidia,lock = <0>;
-				nvidia,ioreset = <0>;
-			};
-			vi_d10_pt2 {
-				nvidia,pins = "vi_d10_pt2",
-						"vi_d0_pt4";
-				nvidia,function = "ddr";
-				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
-				nvidia,tristate = <TEGRA_PIN_DISABLE>;
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
-			};
-			vi_d11_pt3 {
-				nvidia,pins = "vi_d11_pt3";
-				nvidia,function = "ddr";
-				nvidia,pull = <TEGRA_PIN_PULL_UP>;
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
@@ -762,13 +762,19 @@
 				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
 			};
 
-			gmi_cs6_n_pi3 {
-				nvidia,pins = "gmi_cs6_n_pi3",
-						"gmi_cs4_n_pk2";
+			gmi_cs4_n_pk2 {
+				nvidia,pins = "gmi_cs4_n_pk2";
 				nvidia,function = "gmi";
 				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				nvidia,tristate = <TEGRA_PIN_ENABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+			gmi_cs6_n_pi3 {
+				nvidia,pins = "gmi_cs6_n_pi3";
+				nvidia,function = "gmi";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
 			};
 
 			spdif_out_pk5 {
@@ -989,18 +995,20 @@
 					   <9600 115200 200>,
 					   <1000000 4000000 136>;
 
+		/* Azurewave AW-NH615 BCM4329B1 or AW-NH665 BCM4330B1 */
 		bluetooth {
+			compatible = "brcm,bcm4329-bt", "brcm,bcm4330-bt";
 			max-speed = <4000000>;
 
 			clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
 			clock-names = "txco";
 
-			vbat-supply  = <&vdd_3v3_sys>;
+			vbat-supply  = <&vdd_3v3_com>;
 			vddio-supply = <&vdd_1v8>;
 
-			device-wakeup-gpios = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;	/* bt_ext_wake, out, lo	*/
-			host-wakeup-gpios =   <&gpio TEGRA_GPIO(U, 6) GPIO_ACTIVE_HIGH>;	/* bt_host_wake, in, lo	*/
-			shutdown-gpios =      <&gpio TEGRA_GPIO(U, 0) GPIO_ACTIVE_HIGH>;	/* bcm43xx_nshutdown_gp, out, lo */
+			device-wakeup-gpios = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
+			host-wakeup-gpios =   <&gpio TEGRA_GPIO(U, 6) GPIO_ACTIVE_HIGH>;
+			shutdown-gpios =      <&gpio TEGRA_GPIO(U, 0) GPIO_ACTIVE_HIGH>;
 		};
 	};
 
@@ -1016,8 +1024,10 @@
 		dsp@60 {
 			compatible = "fortemedia,fm34";
 			reg = <0x60>;
+
 			vddc-supply = <&vdd_1v8>;
-			vdda-supply = <&vdd_1v8>;									/* fm34_power_down */
+			vdda-supply = <&vdd_1v8>;					/* fm34_power_down */
+
 			reset-gpios = <&gpio TEGRA_GPIO(O, 3) GPIO_ACTIVE_LOW>;		/* fm34_reset, out, hi */
 		};
 	};
@@ -1030,9 +1040,11 @@
 		asusec@15 {
 			compatible = "asus,pad-ec", "asus,ec";
 			reg = <0x15>;
+
 			interrupt-parent = <&gpio>;
-			interrupts = <TEGRA_GPIO(S, 2) IRQ_TYPE_LEVEL_LOW>;		/* asuspec_apwake, in, hi */
-			request-gpio = <&gpio TEGRA_GPIO(Q, 1) GPIO_ACTIVE_LOW>;	/* asuspec_request, out, hi */
+			interrupts = <TEGRA_GPIO(S, 2) IRQ_TYPE_LEVEL_LOW>;
+
+			request-gpio = <&gpio TEGRA_GPIO(Q, 1) GPIO_ACTIVE_LOW>;
 			asus,dockram = <&dockram_pec>;
 
 			/* Texas Instruments bq24725 SMBus Charge Controller */
@@ -1056,16 +1068,18 @@
 		#size-cells = <0>;
 
 		interrupts-extended = <&gpio TEGRA_GPIO(U, 4) IRQ_TYPE_EDGE_BOTH>;
-		detect-gpios = <&gpio TEGRA_GPIO(U, 4) GPIO_ACTIVE_LOW>;		/* asusdec_dock_in, in, lo [in-dock] */
+		detect-gpios = <&gpio TEGRA_GPIO(U, 4) GPIO_ACTIVE_LOW>;
 
 		i2c-parent = <&i2c2>;
 
 		asusec@19 {
 			compatible = "asus,dock-ec", "asus,ec";
 			reg = <0x19>;
+
 			interrupt-parent = <&gpio>;
-			interrupts = <TEGRA_GPIO(S, 7) IRQ_TYPE_LEVEL_LOW>;		/* asusdec_input, in, hi */
-			request-gpio = <&gpio TEGRA_GPIO(Q, 6) GPIO_ACTIVE_LOW>;	/* asusdec_request, out, hi */
+			interrupts = <TEGRA_GPIO(S, 7) IRQ_TYPE_LEVEL_LOW>;
+
+			request-gpio = <&gpio TEGRA_GPIO(Q, 6) GPIO_ACTIVE_LOW>;
 			asus,dockram = <&dockram_dec>;
 
 			dock_battery: battery {
@@ -1093,37 +1107,32 @@
 			vdd-supply = <&vdd_3v3_sys>;
 		};
 
-		gyro@68 {
+		mpu3050@68 {
 			compatible = "invensense,mpu3050";
 			reg = <0x68>;
 
 			interrupt-parent = <&gpio>;
-			interrupts = <TEGRA_GPIO(X, 1) IRQ_TYPE_EDGE_RISING>;		// mpu3050, in, lo
+			interrupts = <TEGRA_GPIO(X, 1) IRQ_TYPE_EDGE_RISING>;
 
 			vdd-supply    = <&vdd_3v3_sys>;
 			vlogic-supply = <&vdd_1v8>;
 
-			accel-slave = <&accel>;
-			compass-slave = <&compass>;
-
+			/* External I2C interface */
 			i2c-gate {
 				#address-cells = <1>;
 				#size-cells = <0>;
 
-				accel: accel@f {
+				accelerometer@f {
 					compatible = "kionix,kxtf9";
 					reg = <0x0f>;
 
 					interrupt-parent = <&gpio>;
-					interrupts = <TEGRA_GPIO(O, 5) IRQ_TYPE_EDGE_RISING>;	// kxtf9, in, lo
+					interrupts = <TEGRA_GPIO(O, 5) IRQ_TYPE_EDGE_RISING>;
 				};
 
-				compass: compass@e {
+				magnetometer@e {
 					compatible = "aichi,ami306";
 					reg = <0x0e>;
-
-					interrupt-parent = <&gpio>;
-					interrupts = <TEGRA_GPIO(W, 0) IRQ_TYPE_EDGE_RISING>;	// compassirq
 
 					avdd-supply = <&vdd_3v3_sys>;
 					dvdd-supply = <&vdd_1v8>;
@@ -1149,6 +1158,7 @@
 		nct72: temperature-sensor@4c {
 			compatible = "onnn,nct1008";
 			reg = <0x4c>;
+
 			vcc-supply = <&vdd_3v3_sys>;
 			#thermal-sensor-cells = <1>;
 		};
@@ -1347,6 +1357,29 @@
 			enable-active-high;
 			vin-supply = <&vdd2_reg>;
 		};
+
+		vdd_3v3_com: regulator@4 {
+			compatible = "regulator-fixed";
+			reg = <4>;
+			regulator-name = "vdd_3v3_com";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+			gpio = <&gpio TEGRA_GPIO(D, 0) GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			vin-supply = <&vdd_3v3_sys>;
+		};
+
+		hdmi_5v0_sys: regulator@5 {
+			compatible = "regulator-fixed";
+			reg = <5>;
+			regulator-name = "hdmi_5v0_sys";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio TEGRA_GPIO(P, 2) GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			vin-supply = <&vdd_5v0_sys>;
+		};
 	};
 
 	pmc@7000e400 {
@@ -1359,7 +1392,6 @@
 		nvidia,core-pwr-off-time = <0>;
 		nvidia,core-power-req-active-high;
 		nvidia,sys-clock-req-active-high;
-//		nvidia,lp0-vec = <0xbddf9000 0x2000>;	// passed by bootloader
 
 		/* Set DEV_OFF + PWR_OFF_SET bit in DCDC control register of TPS65911 PMIC  */
 		i2c-thermtrip {
@@ -1384,11 +1416,11 @@
 	sdmmc1: mmc@78000000 {
 		status = "okay";
 
-		cd-gpios = <&gpio TEGRA_GPIO(I, 5) GPIO_ACTIVE_LOW>;	// sdhci_cd, in, lo [card in]
+		cd-gpios = <&gpio TEGRA_GPIO(I, 5) GPIO_ACTIVE_LOW>;
 		bus-width = <4>;
 
-		vmmc-supply = <&vddio_usd>;	/* ldo3 */
-		vqmmc-supply = <&vdd_usd>;	/* ldo2 */
+		vmmc-supply = <&vdd_usd>;	/* ldo2 */
+		vqmmc-supply = <&vddio_usd>;	/* ldo3 */
 	};
 
 	brcm_wifi_pwrseq: wifi-pwrseq {
@@ -1397,7 +1429,7 @@
 		clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
 		clock-names = "ext_clock";
 
-		reset-gpios = <&gpio TEGRA_GPIO(D, 3) GPIO_ACTIVE_LOW>;	// wlan_rst, out, lo [wifi-off]
+		reset-gpios = <&gpio TEGRA_GPIO(D, 4) GPIO_ACTIVE_LOW>;
 		post-power-on-delay-ms = <300>;
 		power-off-delay-us = <300>;
 	};
@@ -1418,14 +1450,16 @@
 		non-removable;
 
 		mmc-pwrseq = <&brcm_wifi_pwrseq>;
-		vmmc-supply = <&vdd_3v3_sys>;
+		vmmc-supply = <&vdd_3v3_com>;
 		vqmmc-supply = <&vdd_1v8>;
 
+		/* Azurewave AW-NH615 BCM4329 or AW-NH665 BCM4330 */
 		wifi@1 {
-			reg = <1>;
 			compatible = "brcm,bcm4329-fmac";
+			reg = <1>;
+
 			interrupt-parent = <&gpio>;
-			interrupts = <TEGRA_GPIO(O, 4) IRQ_TYPE_LEVEL_HIGH>;	/* bcmsdh_sdmmc, in, lo */
+			interrupts = <TEGRA_GPIO(O, 4) IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "host-wake";
 		};
 	};
@@ -1439,32 +1473,33 @@
 	};
 
 	/* USB via ASUS connector */
-	usb@7d000000 {			/* usb1 */
+	usb@7d000000 {
 		compatible = "nvidia,tegra30-udc";
 		status = "okay";
 		dr_mode = "peripheral";
 	};
 
-	usb-phy@7d000000 {		/* phy1 */
+	usb-phy@7d000000 {
 		status = "okay";
 		dr_mode = "peripheral";
-		nvidia,xcvr-setup-use-fuses;
+		nvidia,hssync-start-delay = <0>;
+		/delete-property/ nvidia,xcvr-setup-use-fuses;
+		nvidia,xcvr-setup = <5>;      /* Based on TF201 fuse value - 48 */
 		nvidia,xcvr-lsfslew = <2>;
 		nvidia,xcvr-lsrslew = <2>;
-		vbus-supply = <&vdd_5v0_sys>; /* This should be GPIO based fixed reg if any GPIO will be found */
+		vbus-supply = <&vdd_5v0_sys>;
 	};
 
 	/* Dock's USB port */
-	usb@7d008000 {			/* usb3 */
+	usb@7d008000 {
 		status = "okay";		
 	};
 
-	usb-phy@7d008000 {		/* phy3 */
+	usb-phy@7d008000 {
 		status = "okay";
-		nvidia,xcvr-setup-use-fuses;
-		nvidia,xcvr-lsfslew = <2>;
-		nvidia,xcvr-lsrslew = <2>;
-		vbus-supply = <&vdd_5v0_sys>; /* This should be GPIO based fixed reg if any GPIO will be found */
+		/delete-property/ nvidia,xcvr-setup-use-fuses;
+		nvidia,xcvr-setup = <5>;      /* Based on TF201 fuse value - 48 */
+		vbus-supply = <&vdd_5v0_sys>;
 	};
 
 	backlight_lvds: backlight-lvds {
@@ -1528,7 +1563,7 @@
 
 		power {
 			label = "Power";
-			gpios = <&gpio TEGRA_GPIO(V, 0) GPIO_ACTIVE_LOW>;	/* KEY_POWER, in, hi */
+			gpios = <&gpio TEGRA_GPIO(V, 0) GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_POWER>;
 			debounce-interval = <10>;
 			wakeup-event-action = <EV_ACT_ASSERTED>;
@@ -1537,7 +1572,7 @@
 
 		volume-up {
 			label = "Volume Up";
-			gpios = <&gpio TEGRA_GPIO(Q, 2) GPIO_ACTIVE_LOW>;	/* KEY_VOLUMEUP, in, hi */
+			gpios = <&gpio TEGRA_GPIO(Q, 2) GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_VOLUMEUP>;
 			debounce-interval = <10>;
 			wakeup-event-action = <EV_ACT_ASSERTED>;
@@ -1546,7 +1581,7 @@
 
 		volume-down {
 			label = "Volume Down";
-			gpios = <&gpio TEGRA_GPIO(Q, 3) GPIO_ACTIVE_LOW>;	/* KEY_VOLUMEDOWN, in, hi */
+			gpios = <&gpio TEGRA_GPIO(Q, 3) GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_VOLUMEDOWN>;
 			debounce-interval = <10>;
 			wakeup-event-action = <EV_ACT_ASSERTED>;
@@ -1555,7 +1590,7 @@
 
 		dock-hall-sensor {
 			label = "Lid";
-			gpios = <&gpio TEGRA_GPIO(S, 6) GPIO_ACTIVE_LOW>;	/* asusdec_hall_sensor, in, hi [open] */
+			gpios = <&gpio TEGRA_GPIO(S, 6) GPIO_ACTIVE_LOW>;
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LID>;
 			debounce-interval = <10>;
@@ -1564,7 +1599,7 @@
 
 		ac-15v {
 			label = "Power adapter 15V";
-			gpios = <&gpio TEGRA_GPIO(H, 5) GPIO_ACTIVE_HIGH>;	/* LIMIT_SET1, in, lo [usb: pc] */
+			gpios = <&gpio TEGRA_GPIO(H, 5) GPIO_ACTIVE_HIGH>;
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_DOCK>;
 			debounce-interval = <10>;
@@ -1573,7 +1608,7 @@
 
 		lineout-detect {
 			label = "Audio dock line-out detect";
-			gpios = <&gpio TEGRA_GPIO(X, 3) GPIO_ACTIVE_LOW>;	/* lineout_int, in, hi */
+			gpios = <&gpio TEGRA_GPIO(X, 3) GPIO_ACTIVE_LOW>;
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LINEOUT_INSERT>;
 			debounce-interval = <10>;
@@ -1587,10 +1622,6 @@
 
 	hda@70030000 {
 		status = "okay";
-	};
-
-	tegra-power-domain {
-		core-supply = <&vdd_core>;
 	};
 
 	thermal-zones {
@@ -1635,28 +1666,3 @@
 		};
 	};
 };
-
-&emc_icc_dvfs_opp_table {
-	/delete-node/ opp@750000000,1300;
-	/delete-node/ opp@800000000,1300;
-	/delete-node/ opp@900000000,1350;
-};
-
-&emc_bw_dfs_opp_table {
-	/delete-node/ opp@750000000;
-	/delete-node/ opp@800000000;
-	/delete-node/ opp@900000000;
-};
-
-/*
-	interrupt-parent = <&gpio>;
-	interrupts = <TEGRA_GPIO(S, 5) IRQ_TYPE_EDGE_BOTH>,	// dock_charging, in, lo
-		     <TEGRA_GPIO(S, 4) IRQ_TYPE_EDGE_BOTH>;	// low_battery_detect, in, lo
-		     <TEGRA_GPIO(N, 4) IRQ_TYPE_EDGE_BOTH>;	// battery_detect, in, lo
-	interrupt-names = "dock-charging", "low", "detect";
-
-	/delete-property/ interrupts;
-	interrupts-extended = <&lic GIC_SPI 53 IRQ_TYPE_LEVEL_HIGH>,
-				<&gpio TEGRA_GPIO(CC, 2) IRQ_TYPE_EDGE_FALLING>;	// temp_alert, in, hi	[LEVEL_LOW]
-	interrupt-names = "irq", "smbus_alert";
-*/
