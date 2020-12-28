@@ -10,18 +10,18 @@
 	backlight_lvds: backlight-lvds {
 		compatible = "pwm-backlight";
 		power-supply = <&reg_lcd>;
-		enable-gpios = <&gpio_exp1 3 GPIO_ACTIVE_LOW>;
-		pwms = <&pwm2 0 50000>;
+		enable-gpios = <&gpio_exp1 3 GPIO_ACTIVE_HIGH>;
+		pwms = <&pwm2 0 25000>;
 		brightness-levels = <0 4 8 16 32 64 128 255>;
 		default-brightness-level = <6>;
 	};
 
-	backlight_rgb: backlight-rgb {
+	backlight_dpi: backlight-dpi {
 		compatible = "pwm-backlight";
 		power-supply = <&reg_lcd>;
 		enable-gpios = <&gpio_exp1 7 GPIO_ACTIVE_LOW>;
-		pwms = <&pwm0 0 50000>;
-		brightness-levels = <0 4 8 16 32 64 128 255>;
+		pwms = <&pwm0 0 25000>;
+		brightness-levels = <0 25 33 50 63 75 88 100>;
 		default-brightness-level = <6>;
 	};
 
@@ -118,9 +118,9 @@
 			hback-porch = <40>;
 			vfront-porch = <13>;
 			vback-porch = <29>;
-			vsync-len = <3>;
+			vsync-len = <1>;
 			hsync-active = <1>;
-			vsync-active = <1>;
+			vsync-active = <3>;
 			de-active = <1>;
 			pixelclk-active = <0>;
 		};
@@ -135,7 +135,7 @@
 	rgb {
 		/* Different LCD with compatible timings */
 		compatible = "rocktech,rk070er9427";
-		backlight = <&backlight_rgb>;
+		backlight = <&backlight_dpi>;
 		enable-gpios = <&gpio1 21 GPIO_ACTIVE_HIGH>;
 		power-supply = <&reg_lcd>;
 		port {
@@ -150,7 +150,7 @@
 		regulator-name = "audio-1.8V";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
-		gpio = <&gpio_exp2 7 GPIO_ACTIVE_HIGH>;
+		gpio = <&gpio_exp4 1 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
 
@@ -200,15 +200,12 @@
 
 	vccq_sdhi0: regulator-vccq-sdhi0 {
 		compatible = "regulator-gpio";
-
 		regulator-name = "SDHI0 VccQ";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <3300000>;
-
 		gpios = <&gpio6 30 GPIO_ACTIVE_HIGH>;
 		gpios-states = <1>;
 		states = <3300000 1>, <1800000 0>;
-		regulator-always-on;
 	};
 
 	/* External DU dot clocks */
@@ -342,7 +339,7 @@
 
 &i2c2 {
 	status = "okay";
-	clock-frequency = <100000>;
+	clock-frequency = <400000>;
 	pinctrl-0 = <&i2c2_pins>;
 	pinctrl-names = "default";
 
@@ -481,6 +478,13 @@
 	};
 };
 
+&msiof1 {
+	pinctrl-0 = <&msiof1_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+	cs-gpios = <&gpio3 10 GPIO_ACTIVE_LOW>;
+};
+
 &ohci0 {
 	dr_mode = "otg";
 	status = "okay";
@@ -534,6 +538,11 @@
 		bias-pull-down;
 	};
 
+	msiof1_pins: msiof1 {
+		groups = "msiof1_clk_g", "msiof1_rxd_g", "msiof1_txd_g";
+		function = "msiof1";
+	};
+
 	pwm0_pins: pwm0 {
 		groups = "pwm0";
 		function = "pwm0";
@@ -541,7 +550,7 @@
 
 	pwm2_pins: pwm2 {
 		groups = "pwm2_a";
-		function = "pwm2_a";
+		function = "pwm2";
 	};
 
 	sdhi0_pins: sd0 {

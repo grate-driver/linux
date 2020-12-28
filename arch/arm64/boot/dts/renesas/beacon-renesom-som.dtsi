@@ -89,7 +89,6 @@
 	pinctrl-names = "default";
 	uart-has-rtscts;
 	status = "okay";
-	max-speed = <4000000>;
 
 	bluetooth {
 		compatible = "brcm,bcm43438-bt";
@@ -98,6 +97,7 @@
 		device-wakeup-gpios = <&pca9654 5 GPIO_ACTIVE_HIGH>;
 		clocks = <&osc_32k>;
 		clock-names = "extclk";
+		max-speed = <4000000>;
 	};
 };
 
@@ -109,7 +109,7 @@
 
 &i2c4 {
 	status = "okay";
-	clock-frequency = <400000>;
+	clock-frequency = <100000>;
 
 	pca9654: gpio@20 {
 		compatible = "onnn,pca9654";
@@ -302,12 +302,4 @@
 
 &usb3s0_clk {
 	clock-frequency = <100000000>;
-};
-
-&vspb {
-	status = "okay";
-};
-
-&vspi0 {
-	status = "okay";
 };
