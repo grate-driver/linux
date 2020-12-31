@@ -19,31 +19,115 @@
 
 #define ASUSEC_EXT_KEY_CODES 0x20
 
+static int special_key_pressed = 0;
+static int special_key_mode = 0;
+
+static void asusec_input_event(struct input_handle *handle, unsigned int event_type,
+		      unsigned int event_code, int value)
+{
+	//Store special key state
+	if (event_type == EV_KEY && event_code == KEY_RIGHTALT) {
+		special_key_pressed = !!value;
+	}
+}
+
+static int asusec_input_connect(struct input_handler *handler, struct input_dev *dev,
+			  const struct input_device_id *id)
+{
+	struct input_handle *handle;
+	int error;
+
+	handle = kzalloc(sizeof(struct input_handle), GFP_KERNEL);
+	if (!handle)
+		return -ENOMEM;
+
+	handle->dev = dev;
+	handle->handler = handler;
+	handle->name = "asusec-media-handler";
+
+	error = input_register_handle(handle);
+	if (error)
+		goto err_free_handle;
+
+	error = input_open_device(handle);
+	if (error)
+		goto err_unregister_handle;
+
+	return 0;
+
+ err_unregister_handle:
+	input_unregister_handle(handle);
+ err_free_handle:
+	kfree(handle);
+	return error;
+}
+
+static void asusec_input_disconnect(struct input_handle *handle)
+{
+	input_close_device(handle);
+	input_unregister_handle(handle);
+	kfree(handle);
+}
+
+static const struct input_device_id asusec_input_ids[] = {
+	{
+		.flags = INPUT_DEVICE_ID_MATCH_EVBIT,
+		.evbit = { BIT_MASK(EV_KEY) },
+	},
+	{ }
+};
+
+static struct input_handler asusec_input_handler = {
+	.name =	"asusec-media-handler",
+	.event = asusec_input_event,
+	.connect = asusec_input_connect,
+	.disconnect = asusec_input_disconnect,
+	.id_table = asusec_input_ids,
+};
+
 struct asusec_keys_data
 {
 	struct notifier_block	  nb;
 	const struct asusec_info *ec;
 	struct input_dev	 *xidev;
-	unsigned short		  keymap[ASUSEC_EXT_KEY_CODES];
+	unsigned short		  keymap[ASUSEC_EXT_KEY_CODES * 2];
 };
 
 static const unsigned short asusec_dock_ext_keys[] = {
-	[0x01] = KEY_SCREENLOCK,
-	[0x02] = KEY_WLAN,
-	[0x03] = KEY_BLUETOOTH,
-	[0x04] = KEY_TOUCHPAD_TOGGLE,
-	[0x05] = KEY_BRIGHTNESSDOWN,
-	[0x06] = KEY_BRIGHTNESSUP,
-	[0x07] = KEY_BRIGHTNESS_AUTO,
-	[0x08] = KEY_CAMERA,
-	[0x10] = KEY_WWW,
-	[0x11] = KEY_CONFIG,
-	[0x12] = KEY_PREVIOUSSONG,
-	[0x13] = KEY_PLAYPAUSE,
-	[0x14] = KEY_NEXTSONG,
+	//Function keys [0x00 - 0x19]
+	[0x01] = KEY_DELETE,
+	[0x02] = KEY_F1,
+	[0x03] = KEY_F2,
+	[0x04] = KEY_F3,
+	[0x05] = KEY_F4,
+	[0x06] = KEY_F5,
+	[0x07] = KEY_F6,
+	[0x08] = KEY_F7,
+	[0x10] = KEY_F8,
+	[0x11] = KEY_F9,
+	[0x12] = KEY_F10,
+	[0x13] = KEY_F11,
+	[0x14] = KEY_F12,
 	[0x15] = KEY_MUTE,
 	[0x16] = KEY_VOLUMEDOWN,
 	[0x17] = KEY_VOLUMEUP,
+	//Multimedia keys [0x20 - 0x39]
+	[0x21] = KEY_SCREENLOCK,
+	[0x22] = KEY_WLAN,
+	[0x23] = KEY_BLUETOOTH,
+	[0x24] = KEY_TOUCHPAD_TOGGLE,
+	[0x25] = KEY_BRIGHTNESSDOWN,
+	[0x26] = KEY_BRIGHTNESSUP,
+	[0x27] = KEY_BRIGHTNESS_AUTO,
+	[0x28] = KEY_CAMERA,
+	[0x30] = KEY_WWW,
+	[0x31] = KEY_CONFIG,
+	[0x32] = KEY_PREVIOUSSONG,
+	[0x33] = KEY_PLAYPAUSE,
+	[0x34] = KEY_NEXTSONG,
+	[0x35] = KEY_MUTE,
+	[0x36] = KEY_VOLUMEDOWN,
+	[0x37] = KEY_VOLUMEUP,
 };
 
 static void asusec_keys_report_key(struct input_dev *dev, unsigned code,
@@ -56,9 +140,23 @@ static void asusec_keys_report_key(struct input_dev *dev, unsigned code,
 
 static int asusec_keys_process_key(struct input_dev *dev, u8 code)
 {
-	unsigned key;
-
-	key = 0;
+	unsigned key = 0;
+	
+	//Ignore spurious code 0 keys
+	if (code == 0)
+		return NOTIFY_DONE;
+	
+	//Flip special key mode state when pressing key 1 with special key pressed
+	if (special_key_pressed && code == 1) {
+		special_key_mode = !special_key_mode;
+		return NOTIFY_DONE;
+	}
+	
+	//Relocate code to second "page" if pressed state XOR's mode state
+	//This way special key will invert the current mode
+	if (special_key_mode ^ special_key_pressed)
+		code += ASUSEC_EXT_KEY_CODES;
+	
 	if (code < dev->keycodemax) {
 		unsigned short *map = dev->keycode;
 		key = map[code];
@@ -117,17 +215,25 @@ static int asusec_keys_probe(struct platform_device *dev)
 	struct i2c_client *parent = to_i2c_client(dev->dev.parent);
 	struct asusec_keys_data *priv;
 	int ret;
+	
+	ret = input_register_handler(&asusec_input_handler);
+	if (ret)
+		return ret;
 
 	priv = devm_kzalloc(&dev->dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
+	if (!priv) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	platform_set_drvdata(dev, priv);
 	priv->ec = ec;
 
 	priv->xidev = devm_input_allocate_device(&dev->dev);
-	if (!priv->xidev)
-		return -ENOMEM;
+	if (!priv->xidev) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	priv->xidev->name = devm_kasprintf(&dev->dev, GFP_KERNEL,
 					   "%s Keyboard Ext", ec->model);
@@ -140,18 +246,24 @@ static int asusec_keys_probe(struct platform_device *dev)
 	ret = input_register_device(priv->xidev);
 	if (ret < 0) {
 		dev_err(&dev->dev, "failed to register extension keys: %d\n", ret);
-		return ret;
+		goto out;
 	}
 
 	priv->nb.notifier_call = asusec_keys_notify;
 	ret = asusec_register_notifier(ec, &priv->nb);
-
+	
+out:
+	if (ret)
+		input_unregister_handler(&asusec_input_handler);
+	
 	return ret;
 }
 
 static int asusec_keys_remove(struct platform_device *dev)
 {
 	struct asusec_keys_data *priv = platform_get_drvdata(dev);
+	
+	input_unregister_handler(&asusec_input_handler);
 
 	asusec_unregister_notifier(priv->ec, &priv->nb);
 
