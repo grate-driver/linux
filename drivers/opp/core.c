@@ -2831,6 +2831,44 @@ int dev_pm_opp_unregister_notifier(struct device *dev,
 }
 EXPORT_SYMBOL(dev_pm_opp_unregister_notifier);
 
+static void devm_pm_opp_notifier_release(struct device *dev, void *res)
+{
+	struct notifier_block *nb = *(struct notifier_block **)res;
+
+	WARN_ON(dev_pm_opp_unregister_notifier(dev, nb));
+}
+
+/**
+ * devm_pm_opp_register_notifier() - Register OPP notifier for the device
+ * @dev:	Device for which notifier needs to be registered
+ * @nb:		Notifier block to be registered
+ *
+ * Return: 0 on success or a negative error value.
+ *
+ * The notifier will be unregistered after the device is destroyed.
+ */
+int devm_pm_opp_register_notifier(struct device *dev, struct notifier_block *nb)
+{
+	struct notifier_block **ptr;
+	int ret;
+
+	ptr = devres_alloc(devm_pm_opp_notifier_release, sizeof(*ptr), GFP_KERNEL);
+	if (!ptr)
+		return -ENOMEM;
+
+	ret = dev_pm_opp_register_notifier(dev, nb);
+	if (ret) {
+		devres_free(ptr);
+		return ret;
+	}
+
+	*ptr = nb;
+	devres_add(dev, ptr);
+
+	return 0;
+}
+EXPORT_SYMBOL(devm_pm_opp_register_notifier);
+
 /**
  * dev_pm_opp_remove_table() - Free all OPPs associated with the device
  * @dev:	device pointer used to lookup OPP table.
