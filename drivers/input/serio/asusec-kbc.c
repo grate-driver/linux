@@ -32,23 +32,61 @@ static int asusec_kbc_notify(struct notifier_block *nb,
 			     unsigned long action, void *data_)
 {
 	struct asusec_kbc_data *priv = container_of(nb, struct asusec_kbc_data, nb);
-	struct serio *port = NULL;
+	unsigned int port_idx = 0;
 	unsigned n;
 	u8 *data = data_;
 
 	if (action & (ASUSEC_SMI_MASK|ASUSEC_SCI_MASK))
 		return NOTIFY_DONE;
 	else if (action & ASUSEC_AUX_MASK)
-		port = priv->sdev[1];
+		port_idx = 1;
 	else if (action & (ASUSEC_KBC_MASK|ASUSEC_KEY_MASK))
-		port = priv->sdev[0];
+		port_idx = 0;
 	else
 		return NOTIFY_DONE;
 
 	n = data[0] - 1;
 	data += 2;
+	
+	/*
+	 * We need to replace these incoming data for keys:
+	 * RIGHT_META Press   0xE0 0x27      -> LEFT_ALT   Press   0x11
+	 * RIGHT_META Release 0xE0 0xF0 0x27 -> LEFT_ALT   Release 0xF0 0x11
+	 * COMPOSE    Press   0xE0 0x2F      -> RIGHT_META Press   0xE0 0x27
+	 * COMPOSE    Release 0xE0 0xF0 0x2F -> RIGHT_META Release 0xE0 0xF0 0x27
+	 */
+
+	//Detect if serio0 has 2 bytes incoming at least and starts with 0xE0
+	if (port_idx == 0 && 2 <= n && data[0] == 0xE0) {
+		//Check if its press or release
+		if (3 == n && data[1] == 0xF0) {
+			//Release
+			switch (data[2]) {
+			case 0x27: //RIGHT_META?
+				data[0] = 0xF0;
+				data[1] = 0x11;
+				n = 2;
+				break;
+			case 0x2F: //COMPOSE?
+				data[2] = 0x27;
+				break;
+			}
+		} else if (2 == n) {
+			//Press
+			switch (data[1]) {
+			case 0x27: //RIGHT_META?
+				data[0] = 0x11;
+				n = 1;
+				break;
+			case 0x2F: //COMPOSE?
+				data[1] = 0x27;
+				break;
+			}
+		}
+	}
+	
 	while (n--)
-		serio_interrupt(port, *data++, 0);
+		serio_interrupt(priv->sdev[port_idx], *data++, 0);
 
 	return NOTIFY_OK;
 }
