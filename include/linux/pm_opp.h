@@ -438,6 +438,7 @@ int dev_pm_opp_of_add_table(struct device *dev);
 int dev_pm_opp_of_add_table_indexed(struct device *dev, int index);
 int dev_pm_opp_of_add_table_noclk(struct device *dev, int index);
 void dev_pm_opp_of_remove_table(struct device *dev);
+int devm_pm_opp_of_add_table(struct device *dev);
 int dev_pm_opp_of_cpumask_add_table(const struct cpumask *cpumask);
 void dev_pm_opp_of_cpumask_remove_table(const struct cpumask *cpumask);
 int dev_pm_opp_of_get_sharing_cpus(struct device *cpu_dev, struct cpumask *cpumask);
@@ -468,6 +469,11 @@ static inline int dev_pm_opp_of_add_table_noclk(struct device *dev, int index)
 
 static inline void dev_pm_opp_of_remove_table(struct device *dev)
 {
+}
+
+static inline int devm_pm_opp_of_add_table(struct device *dev)
+{
+	return -ENOTSUPP;
 }
 
 static inline int dev_pm_opp_of_cpumask_add_table(const struct cpumask *cpumask)
