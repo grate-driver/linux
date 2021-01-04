@@ -148,7 +148,7 @@ static int tegra_cpuidle_c7_enter(void)
 
 static int tegra_cpuidle_coupled_barrier(struct cpuidle_device *dev)
 {
-	if (tegra_pending_sgi()) {
+	if (tegra_pending_sgi() || need_resched()) {
 		/*
 		 * CPU got local interrupt that will be lost after GIC's
 		 * shutdown because GIC driver doesn't save/restore the
