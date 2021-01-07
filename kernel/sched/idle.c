@@ -55,6 +55,7 @@ __setup("hlt", cpu_idle_nopoll_setup);
 static noinline int __cpuidle cpu_idle_poll(void)
 {
 	trace_cpu_idle(0, smp_processor_id());
+	rcu_nocb_flush_deferred_wakeup();
 	stop_critical_timings();
 	rcu_idle_enter();
 	local_irq_enable();
@@ -178,6 +179,8 @@ static void cpuidle_idle_call(void)
 	struct cpuidle_device *dev = cpuidle_get_device();
 	struct cpuidle_driver *drv = cpuidle_get_cpu_driver(dev);
 	int next_state, entered_state;
+
+	rcu_nocb_flush_deferred_wakeup();
 
 	/*
 	 * Check if the idle task must be rescheduled. If it is the
