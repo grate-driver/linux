@@ -715,6 +715,26 @@ unlock:
 	return cpu;
 }
 
+static void wake_idle_assert_possible(void)
+{
+#ifdef CONFIG_SCHED_DEBUG
+	/* Timers are re-evaluated after idle IRQs */
+	if (in_hardirq())
+		return;
+	/*
+	 * Same as hardirqs, assuming they are executing
+	 * on IRQ tail. Ksoftirqd shouldn't reach here
+	 * as the timer base wouldn't be idle. And inline
+	 * softirq processing after a call to local_bh_enable()
+	 * within idle loop sound too fun to be considered here.
+	 */
+	if (in_serving_softirq())
+		return;
+
+	WARN_ON_ONCE("Late timer enqueue may be ignored\n");
+#endif
+}
+
 /*
  * When add_timer_on() enqueues a timer into the timer wheel of an
  * idle CPU then this timer might expire before the next timer event
@@ -729,8 +749,10 @@ static void wake_up_idle_cpu(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 
-	if (cpu == smp_processor_id())
+	if (cpu == smp_processor_id()) {
+		wake_idle_assert_possible();
 		return;
+	}
 
 	if (set_nr_and_not_polling(rq->idle))
 		smp_send_reschedule(cpu);
