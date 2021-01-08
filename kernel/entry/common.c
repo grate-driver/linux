@@ -5,6 +5,7 @@
 #include <linux/highmem.h>
 #include <linux/livepatch.h>
 #include <linux/audit.h>
+#include <linux/sched.h>
 
 #include "common.h"
 
@@ -23,6 +24,8 @@ static __always_inline void __enter_from_user_mode(struct pt_regs *regs)
 	instrumentation_begin();
 	trace_hardirqs_off_finish();
 	instrumentation_end();
+
+	sched_resched_local_allow();
 }
 
 void noinstr enter_from_user_mode(struct pt_regs *regs)
@@ -206,6 +209,7 @@ static void exit_to_user_mode_prepare(struct pt_regs *regs)
 	if (unlikely(ti_work & EXIT_TO_USER_MODE_WORK))
 		ti_work = exit_to_user_mode_loop(regs, ti_work);
 
+	sched_resched_local_forbid();
 	arch_exit_to_user_mode_prepare(regs, ti_work);
 
 	/* Ensure that the address limit is intact and no locks are held */
