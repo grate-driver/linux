@@ -591,6 +591,44 @@ void wake_up_q(struct wake_q_head *head)
 	}
 }
 
+#ifdef CONFIG_SCHED_DEBUG
+void noinstr sched_resched_local_allow(void)
+{
+	this_rq()->resched_local_allow = 1;
+}
+
+void noinstr sched_resched_local_forbid(void)
+{
+	this_rq()->resched_local_allow = 0;
+}
+
+void noinstr sched_resched_local_assert_allowed(void)
+{
+	if (this_rq()->resched_local_allow)
+		return;
+
+	/*
+	 * Idle interrupts break the CPU from its pause and
+	 * rescheduling happens on idle loop exit.
+	 */
+	if (in_hardirq())
+		return;
+
+	/*
+	 * What applies to hardirq also applies to softirq as
+	 * we assume they execute on hardirq tail. Ksoftirqd
+	 * shouldn't have resched_local_allow == 0.
+	 * We also assume that no local_bh_enable() call may
+	 * execute softirqs inline on fragile idle/entry
+	 * path...
+	 */
+	if (in_serving_softirq())
+		return;
+
+	WARN_ONCE(1, "Late current task rescheduling may be lost\n");
+}
+#endif
+
 /*
  * resched_curr - mark rq's current task 'to be rescheduled now'.
  *
@@ -613,6 +651,7 @@ void resched_curr(struct rq *rq)
 	if (cpu == smp_processor_id()) {
 		set_tsk_need_resched(curr);
 		set_preempt_need_resched();
+		sched_resched_local_assert_allowed();
 		return;
 	}
 
@@ -7795,6 +7834,9 @@ void __init sched_init(void)
 #endif /* CONFIG_SMP */
 		hrtick_rq_init(rq);
 		atomic_set(&rq->nr_iowait, 0);
+#ifdef CONFIG_SCHED_DEBUG
+		rq->resched_local_allow = 1;
+#endif
 	}
 
 	set_load_weight(&init_task, false);

@@ -1917,6 +1917,17 @@ static __always_inline bool need_resched(void)
 	return unlikely(tif_need_resched());
 }
 
+#ifdef CONFIG_SCHED_DEBUG
+extern void sched_resched_local_allow(void);
+extern void sched_resched_local_forbid(void);
+extern void sched_resched_local_assert_allowed(void);
+#else
+static inline void sched_resched_local_allow(void) { }
+static inline void sched_resched_local_forbid(void) { }
+static inline void sched_resched_local_assert_allowed(void) { }
+#endif
+
+
 /*
  * Wrappers for p->thread_info->cpu access. No-op on UP.
  */

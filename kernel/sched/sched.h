@@ -1060,6 +1060,9 @@ struct rq {
 #endif
 	unsigned int		push_busy;
 	struct cpu_stop_work	push_work;
+#ifdef CONFIG_SCHED_DEBUG
+	unsigned int		resched_local_allow;
+#endif
 };
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
