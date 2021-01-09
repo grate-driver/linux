@@ -1418,6 +1418,7 @@ dtb-$(CONFIG_ARCH_TEGRA_3x_SOC) += \
 	tegra30-asus-tf201.dtb \
 	tegra30-asus-tf300t.dtb \
 	tegra30-asus-tf300tg.dtb \
+	tegra30-asus-tf600t.dtb \
 	tegra30-asus-tf700t.dtb \
 	tegra30-beaver.dtb \
 	tegra30-cardhu-a02.dtb \
