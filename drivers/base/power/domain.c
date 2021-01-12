@@ -2466,7 +2466,7 @@ int of_genpd_add_subdomain(struct of_phandle_args *parent_spec,
 out:
 	mutex_unlock(&gpd_list_lock);
 
-	return ret;
+	return ret == -ENOENT ? -EPROBE_DEFER : ret;
 }
 EXPORT_SYMBOL_GPL(of_genpd_add_subdomain);
 
