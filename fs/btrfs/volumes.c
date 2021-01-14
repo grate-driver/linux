@@ -4317,6 +4317,8 @@ int btrfs_recover_balance(struct btrfs_fs_info *fs_info)
 		btrfs_warn(fs_info,
 	"balance: cannot set exclusive op status, resume manually");
 
+	btrfs_release_path(path);
+
 	mutex_lock(&fs_info->balance_mutex);
 	BUG_ON(fs_info->balance_ctl);
 	spin_lock(&fs_info->balance_lock);
@@ -4666,11 +4668,10 @@ again:
 		}
 
 		ret = btrfs_previous_item(root, path, 0, key.type);
-		if (ret)
-			mutex_unlock(&fs_info->delete_unused_bgs_mutex);
-		if (ret < 0)
-			goto done;
 		if (ret) {
+			mutex_unlock(&fs_info->delete_unused_bgs_mutex);
+			if (ret < 0)
+				goto done;
 			ret = 0;
 			btrfs_release_path(path);
 			break;

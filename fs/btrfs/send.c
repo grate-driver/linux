@@ -1191,9 +1191,6 @@ struct backref_ctx {
 	/* may be truncated in case it's the last extent in a file */
 	u64 extent_len;
 
-	/* data offset in the file extent item */
-	u64 data_offset;
-
 	/* Just to check for bugs in backref resolving */
 	int found_itself;
 };
@@ -1401,19 +1398,6 @@ static int find_extent_clone(struct send_ctx *sctx,
 	backref_ctx->cur_offset = data_offset;
 	backref_ctx->found_itself = 0;
 	backref_ctx->extent_len = num_bytes;
-	/*
-	 * For non-compressed extents iterate_extent_inodes() gives us extent
-	 * offsets that already take into account the data offset, but not for
-	 * compressed extents, since the offset is logical and not relative to
-	 * the physical extent locations. We must take this into account to
-	 * avoid sending clone offsets that go beyond the source file's size,
-	 * which would result in the clone ioctl failing with -EINVAL on the
-	 * receiving end.
-	 */
-	if (compressed == BTRFS_COMPRESS_NONE)
-		backref_ctx->data_offset = 0;
-	else
-		backref_ctx->data_offset = btrfs_file_extent_offset(eb, fi);
 
 	/*
 	 * The last extent of a file may be too large due to page alignment.
@@ -5512,6 +5496,21 @@ static int clone_range(struct send_ctx *sctx,
 			break;
 		offset += clone_len;
 		clone_root->offset += clone_len;
+
+		/*
+		 * If we are cloning from the file we are currently processing,
+		 * and using the send root as the clone root, we must stop once
+		 * the current clone offset reaches the current eof of the file
+		 * at the receiver, otherwise we would issue an invalid clone
+		 * operation (source range going beyond eof) and cause the
+		 * receiver to fail. So if we reach the current eof, bail out
+		 * and fallback to a regular write.
+		 */
+		if (clone_root->root == sctx->send_root &&
+		    clone_root->ino == sctx->cur_ino &&
+		    clone_root->offset >= sctx->cur_inode_next_write_offset)
+			break;
+
 		data_offset += clone_len;
 next:
 		path->slots[0]++;
