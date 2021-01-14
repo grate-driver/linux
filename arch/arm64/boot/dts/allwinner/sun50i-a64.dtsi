@@ -215,20 +215,6 @@
 				};
 			};
 		};
-
-		gpu0_thermal: gpu0-thermal {
-			/* milliseconds */
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 1>;
-		};
-
-		gpu1_thermal: gpu1-thermal {
-			/* milliseconds */
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 2>;
-		};
 	};
 
 	soc {
