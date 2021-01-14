@@ -1851,7 +1851,7 @@ int f2fs_start_ckpt_thread(struct f2fs_sb_info *sbi)
 		return PTR_ERR(cprc->f2fs_issue_ckpt);
 	}
 
-	set_task_ioprio(cprc->f2fs_issue_ckpt, DEFAULT_CHECKPOINT_IOPRIO);
+	set_task_ioprio(cprc->f2fs_issue_ckpt, cprc->ckpt_thread_ioprio);
 
 	return 0;
 }
