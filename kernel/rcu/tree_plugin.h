@@ -2202,6 +2202,7 @@ static int rcu_nocb_gp_kthread(void *arg)
 {
 	struct rcu_data *rdp = arg;
 
+	rcu_cpu_kthread_setup(-1);
 	for (;;) {
 		WRITE_ONCE(rdp->nocb_gp_loops, rdp->nocb_gp_loops + 1);
 		nocb_gp_wait(rdp);
@@ -2303,6 +2304,7 @@ static int rcu_nocb_cb_kthread(void *arg)
 
 	// Each pass through this loop does one callback batch, and,
 	// if there are no more ready callbacks, waits for them.
+	rcu_cpu_kthread_setup(-1);
 	for (;;) {
 		nocb_cb_wait(rdp);
 		cond_resched_tasks_rcu_qs();
