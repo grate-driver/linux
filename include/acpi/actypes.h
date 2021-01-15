@@ -1286,4 +1286,9 @@ typedef enum {
 
 #define ACPI_OPT_END                    -1
 
+/* Definitions for explicit fallthrough */
+
+#ifndef ACPI_FALLTHROUGH
+#endif
+
 #endif				/* __ACTYPES_H__ */
