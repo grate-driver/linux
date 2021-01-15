@@ -1,0 +1,39 @@
+arm/soc
+
+arm/dt
+	berlin/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/jszhang/linux-berlin tags/v5.11-berlin-dts64
+	berlin/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/jszhang/linux-berlin tags/v5.11-berlin-dts
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.12-tag1
+	renesas/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.12-tag1
+	patch
+		dt-bindings: vendor-prefixes: Fix misordering introduced by honestar prefix
+
+arm/drivers
+
+arm/defconfig
+
+arm/newsoc
+
+arm/late
+
+arm/fixes
+	<no branch> (5a22747b76ca2384057d8e783265404439d31d7f)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11
+	patch
+		bus: arm-integrator-lm: Add of_node_put() before return statement
+		arm64: defconfig: Drop unused K3 SoC specific options
+		ARM: dts: ux500: Reserve memory carveouts
+
+arm/omap-genpd
+
+arm/platform-removal
+	patch
+		ARM: dts: Remove PicoXcell platforms
+		ARM: Remove PicoXcell platform support
+		ARM: drop efm32 platform
+		MAINTAINERS: Remove deleted platform efm32
+
