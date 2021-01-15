@@ -7345,7 +7345,7 @@ static void __io_sqe_files_unregister(struct io_ring_ctx *ctx)
 #endif
 }
 
-static void io_rsrc_ref_kill(struct percpu_ref *ref)
+static void io_rsrc_data_ref_zero(struct percpu_ref *ref)
 {
 	struct fixed_rsrc_data *data;
 
@@ -7416,7 +7416,7 @@ static struct fixed_rsrc_data *alloc_fixed_rsrc_data(struct io_ring_ctx *ctx)
 	if (!data)
 		return NULL;
 
-	if (percpu_ref_init(&data->refs, io_rsrc_ref_kill,
+	if (percpu_ref_init(&data->refs, io_rsrc_data_ref_zero,
 			    PERCPU_REF_ALLOW_REINIT, GFP_KERNEL)) {
 		kfree(data);
 		return NULL;
@@ -7805,7 +7805,7 @@ static void io_rsrc_put_work(struct work_struct *work)
 	}
 }
 
-static void io_rsrc_data_ref_zero(struct percpu_ref *ref)
+static void io_rsrc_node_ref_zero(struct percpu_ref *ref)
 {
 	struct fixed_rsrc_ref_node *ref_node;
 	struct fixed_rsrc_data *data;
@@ -7849,7 +7849,7 @@ static struct fixed_rsrc_ref_node *alloc_fixed_rsrc_ref_node(
 	if (!ref_node)
 		return NULL;
 
-	if (percpu_ref_init(&ref_node->refs, io_rsrc_data_ref_zero,
+	if (percpu_ref_init(&ref_node->refs, io_rsrc_node_ref_zero,
 			    0, GFP_KERNEL)) {
 		kfree(ref_node);
 		return NULL;
