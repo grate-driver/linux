@@ -24,6 +24,7 @@
 #include "rcu-string.h"
 #include "backref.h"
 #include "disk-io.h"
+#include "subpage.h"
 
 static struct kmem_cache *extent_state_cache;
 static struct kmem_cache *extent_buffer_cache;
@@ -3141,9 +3142,13 @@ static int submit_extent_page(unsigned int opf,
 	return ret;
 }
 
-static void attach_extent_buffer_page(struct extent_buffer *eb,
-				      struct page *page)
+static int attach_extent_buffer_page(struct extent_buffer *eb,
+				     struct page *page,
+				     struct btrfs_subpage *prealloc)
 {
+	struct btrfs_fs_info *fs_info = eb->fs_info;
+	int ret;
+
 	/*
 	 * If the page is mapped to btree inode, we should hold the private
 	 * lock to prevent race.
@@ -3153,10 +3158,32 @@ static void attach_extent_buffer_page(struct extent_buffer *eb,
 	if (page->mapping)
 		lockdep_assert_held(&page->mapping->private_lock);
 
-	if (!PagePrivate(page))
-		attach_page_private(page, eb);
-	else
-		WARN_ON(page->private != (unsigned long)eb);
+	if (fs_info->sectorsize == PAGE_SIZE) {
+		if (!PagePrivate(page))
+			attach_page_private(page, eb);
+		else
+			WARN_ON(page->private != (unsigned long)eb);
+		return 0;
+	}
+
+	/* Already mapped, just free prealloc */
+	if (PagePrivate(page)) {
+		kfree(prealloc);
+		return 0;
+	}
+
+	if (prealloc) {
+		/* Has preallocated memory for subpage */
+		spin_lock_init(&prealloc->lock);
+		attach_page_private(page, prealloc);
+	} else {
+		/* Do new allocation to attach subpage */
+		ret = btrfs_attach_subpage(fs_info, page);
+		if (ret < 0)
+			return ret;
+	}
+
+	return 0;
 }
 
 void set_page_extent_mapped(struct page *page)
@@ -5064,21 +5091,29 @@ struct extent_buffer *btrfs_clone_extent_buffer(const struct extent_buffer *src)
 	if (new == NULL)
 		return NULL;
 
+	set_bit(EXTENT_BUFFER_UPTODATE, &new->bflags);
+	set_bit(EXTENT_BUFFER_UNMAPPED, &new->bflags);
+
 	for (i = 0; i < num_pages; i++) {
+		int ret;
+
 		p = alloc_page(GFP_NOFS);
 		if (!p) {
 			btrfs_release_extent_buffer(new);
 			return NULL;
 		}
-		attach_extent_buffer_page(new, p);
+		ret = attach_extent_buffer_page(new, p, NULL);
+		if (ret < 0) {
+			put_page(p);
+			btrfs_release_extent_buffer(new);
+			return NULL;
+		}
 		WARN_ON(PageDirty(p));
 		SetPageUptodate(p);
 		new->pages[i] = p;
 		copy_page(page_address(p), page_address(src->pages[i]));
 	}
 
-	set_bit(EXTENT_BUFFER_UPTODATE, &new->bflags);
-	set_bit(EXTENT_BUFFER_UNMAPPED, &new->bflags);
 
 	return new;
 }
@@ -5310,9 +5345,25 @@ struct extent_buffer *alloc_extent_buffer(struct btrfs_fs_info *fs_info,
 
 	num_pages = num_extent_pages(eb);
 	for (i = 0; i < num_pages; i++, index++) {
+		struct btrfs_subpage *prealloc = NULL;
+
 		p = find_or_create_page(mapping, index, GFP_NOFS|__GFP_NOFAIL);
 		if (!p) {
 			exists = ERR_PTR(-ENOMEM);
+			goto free_eb;
+		}
+
+		/*
+		 * Preallocate page->private for subpage case, so that we won't
+		 * allocate memory with private_lock hold.  The memory will be
+		 * freed by attach_extent_buffer_page() or freed manually if
+		 * we exit earlier.
+		 */
+		ret = btrfs_alloc_subpage(fs_info, &prealloc);
+		if (ret < 0) {
+			unlock_page(p);
+			put_page(p);
+			exists = ERR_PTR(ret);
 			goto free_eb;
 		}
 
@@ -5323,10 +5374,14 @@ struct extent_buffer *alloc_extent_buffer(struct btrfs_fs_info *fs_info,
 			unlock_page(p);
 			put_page(p);
 			mark_extent_buffer_accessed(exists, p);
+			kfree(prealloc);
 			goto free_eb;
 		}
-		attach_extent_buffer_page(eb, p);
+		/* Should not fail, as we have preallocated the memory */
+		ret = attach_extent_buffer_page(eb, p, prealloc);
+		ASSERT(!ret);
 		spin_unlock(&mapping->private_lock);
+
 		WARN_ON(PageDirty(p));
 		eb->pages[i] = p;
 		if (!PageUptodate(p))

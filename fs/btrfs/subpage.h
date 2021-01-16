@@ -19,7 +19,24 @@
 struct btrfs_subpage {
 	/* Common members for both data and metadata pages */
 	spinlock_t lock;
+	union {
+		/* Structures only used by metadata */
+		/* Structures only used by data */
+	};
 };
+
+/* Allocate additional data where page represents more than one sector */
+static inline int btrfs_alloc_subpage(struct btrfs_fs_info *fs_info,
+				      struct btrfs_subpage **ret)
+{
+	if (fs_info->sectorsize == PAGE_SIZE)
+		return 0;
+
+	*ret = kzalloc(sizeof(struct btrfs_subpage), GFP_NOFS);
+	if (!*ret)
+		return -ENOMEM;
+	return 0;
+}
 
 int btrfs_attach_subpage(struct btrfs_fs_info *fs_info, struct page *page);
 void btrfs_detach_subpage(struct btrfs_fs_info *fs_info, struct page *page);
