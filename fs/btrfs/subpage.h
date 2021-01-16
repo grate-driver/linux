@@ -20,6 +20,7 @@ struct btrfs_subpage {
 	/* Common members for both data and metadata pages */
 	spinlock_t lock;
 	u16 uptodate_bitmap;
+	u16 error_bitmap;
 	union {
 		/* Structures only used by metadata */
 		bool under_alloc;
@@ -130,6 +131,35 @@ static inline void btrfs_subpage_clear_uptodate(const struct btrfs_fs_info *fs_i
 	spin_unlock_irqrestore(&subpage->lock, flags);
 }
 
+static inline void btrfs_subpage_set_error(const struct btrfs_fs_info *fs_info,
+					   struct page *page, u64 start,
+					   u32 len)
+{
+	struct btrfs_subpage *subpage = (struct btrfs_subpage *)page->private;
+	const u16 tmp = btrfs_subpage_calc_bitmap(fs_info, page, start, len);
+	unsigned long flags;
+
+	spin_lock_irqsave(&subpage->lock, flags);
+	subpage->error_bitmap |= tmp;
+	SetPageError(page);
+	spin_unlock_irqrestore(&subpage->lock, flags);
+}
+
+static inline void btrfs_subpage_clear_error(const struct btrfs_fs_info *fs_info,
+					     struct page *page, u64 start,
+					     u32 len)
+{
+	struct btrfs_subpage *subpage = (struct btrfs_subpage *)page->private;
+	const u16 tmp = btrfs_subpage_calc_bitmap(fs_info, page, start, len);
+	unsigned long flags;
+
+	spin_lock_irqsave(&subpage->lock, flags);
+	subpage->error_bitmap &= ~tmp;
+	if (subpage->error_bitmap == 0)
+		ClearPageError(page);
+	spin_unlock_irqrestore(&subpage->lock, flags);
+}
+
 /*
  * Unlike set/clear which is dependent on each page status, for test all bits
  * are tested in the same way.
@@ -149,6 +179,7 @@ static inline bool btrfs_subpage_test_##name(const struct btrfs_fs_info *fs_info
 	return ret;							\
 }
 DECLARE_BTRFS_SUBPAGE_TEST_OP(uptodate);
+DECLARE_BTRFS_SUBPAGE_TEST_OP(error);
 
 /*
  * Note that, in selftests (extent-io-tests), we can have empty fs_info passed
@@ -183,5 +214,6 @@ static inline bool btrfs_page_test_##name(const struct btrfs_fs_info *fs_info, \
 	return btrfs_subpage_test_##name(fs_info, page, start, len);	\
 }
 DECLARE_BTRFS_PAGE_OPS(uptodate, SetPageUptodate, ClearPageUptodate,PageUptodate);
+DECLARE_BTRFS_PAGE_OPS(error, SetPageError, ClearPageError, PageError);
 
 #endif
