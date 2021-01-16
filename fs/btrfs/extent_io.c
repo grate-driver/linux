@@ -4999,25 +4999,53 @@ int extent_buffer_under_io(const struct extent_buffer *eb)
 		test_bit(EXTENT_BUFFER_DIRTY, &eb->bflags));
 }
 
-/*
- * Release all pages attached to the extent buffer.
- */
-static void btrfs_release_extent_buffer_pages(struct extent_buffer *eb)
+static bool page_range_has_eb(struct btrfs_fs_info *fs_info, struct page *page)
 {
-	int i;
-	int num_pages;
-	int mapped = !test_bit(EXTENT_BUFFER_UNMAPPED, &eb->bflags);
+	struct extent_buffer *gang[BTRFS_SUBPAGE_BITMAP_SIZE];
+	struct btrfs_subpage *subpage;
+	int ret;
 
-	BUG_ON(extent_buffer_under_io(eb));
+	lockdep_assert_held(&fs_info->buffer_lock);
+	lockdep_assert_held(&page->mapping->private_lock);
+	ASSERT(PAGE_SIZE / fs_info->nodesize <= BTRFS_SUBPAGE_BITMAP_SIZE);
 
-	num_pages = num_extent_pages(eb);
-	for (i = 0; i < num_pages; i++) {
-		struct page *page = eb->pages[i];
+	/* We have eb under allocation in the page */
+	if (PagePrivate(page)) {
+		subpage = (struct btrfs_subpage *)page->private;
+		if (subpage->under_alloc)
+			return true;
+	}
+	ret = radix_tree_gang_lookup(&fs_info->buffer_radix, (void **)gang,
+			page_offset(page) >> fs_info->sectorsize_bits,
+			PAGE_SIZE / fs_info->nodesize);
+	/*
+	 * Either no eb at all, or the first found eb is already beyond the
+	 * page end, then it means no eb in the page range.
+	 */
+	if (ret == 0 || gang[0]->start >= page_offset(page) + PAGE_SIZE)
+		return false;
+	return true;
+}
 
-		if (!page)
-			continue;
+static void detach_extent_buffer_page(struct extent_buffer *eb, struct page *page)
+{
+	struct btrfs_fs_info *fs_info = eb->fs_info;
+	const bool mapped = !test_bit(EXTENT_BUFFER_UNMAPPED, &eb->bflags);
+
+	/*
+	 * For mapped eb, we're going to change the page private, which should
+	 * be done under the private_lock.
+	 */
+	if (mapped)
+		spin_lock(&page->mapping->private_lock);
+
+	if (!PagePrivate(page)) {
 		if (mapped)
-			spin_lock(&page->mapping->private_lock);
+			spin_unlock(&page->mapping->private_lock);
+		return;
+	}
+
+	if (fs_info->sectorsize == PAGE_SIZE) {
 		/*
 		 * We do this since we'll remove the pages after we've
 		 * removed the eb from the radix tree, so we could race
@@ -5036,9 +5064,52 @@ static void btrfs_release_extent_buffer_pages(struct extent_buffer *eb)
 			 */
 			detach_page_private(page);
 		}
-
 		if (mapped)
 			spin_unlock(&page->mapping->private_lock);
+		return;
+	}
+
+	/*
+	 * For subpage, we can have dummy eb with page private.  In this case,
+	 * we can directly detach the private as such page is only attached to
+	 * one dummy eb, no sharing.
+	 */
+	if (!mapped) {
+		btrfs_detach_subpage(fs_info, page);
+		return;
+	}
+
+	/*
+	 * We can only detach the page private if there are no other ebs in the
+	 * page range.
+	 *
+	 * We want an atomic snapshot of the radix tree, thus we need to take
+	 * spinlock rather than do RCU here.
+	 */
+	spin_lock(&fs_info->buffer_lock);
+	if (!page_range_has_eb(fs_info, page))
+		btrfs_detach_subpage(fs_info, page);
+	spin_unlock(&fs_info->buffer_lock);
+
+	spin_unlock(&page->mapping->private_lock);
+}
+
+/* Release all pages attached to the extent buffer */
+static void btrfs_release_extent_buffer_pages(struct extent_buffer *eb)
+{
+	int i;
+	int num_pages;
+
+	ASSERT(!extent_buffer_under_io(eb));
+
+	num_pages = num_extent_pages(eb);
+	for (i = 0; i < num_pages; i++) {
+		struct page *page = eb->pages[i];
+
+		if (!page)
+			continue;
+
+		detach_extent_buffer_page(eb, page);
 
 		/* One for when we allocated the page */
 		put_page(page);
@@ -5389,6 +5460,12 @@ struct extent_buffer *alloc_extent_buffer(struct btrfs_fs_info *fs_info,
 		/* Should not fail, as we have preallocated the memory */
 		ret = attach_extent_buffer_page(eb, p, prealloc);
 		ASSERT(!ret);
+		/*
+		 * To inform we have extra eb under allocation, so that
+		 * detach_extent_buffer_page() won't release the page private
+		 * when the eb hasn't yet been inserted into radix tree.
+		 */
+		btrfs_page_start_meta_alloc(fs_info, p);
 		spin_unlock(&mapping->private_lock);
 
 		WARN_ON(PageDirty(p));
@@ -5434,15 +5511,23 @@ again:
 	 * btree_releasepage will correctly detect that a page belongs to a
 	 * live buffer and won't free them prematurely.
 	 */
-	for (i = 0; i < num_pages; i++)
+	for (i = 0; i < num_pages; i++) {
+		/*
+		 * The eb is in radix tree now, no longer needs the extra
+		 * indicator.
+		 */
+		btrfs_page_end_meta_alloc(fs_info, eb->pages[i]);
 		unlock_page(eb->pages[i]);
+	}
 	return eb;
 
 free_eb:
 	WARN_ON(!atomic_dec_and_test(&eb->refs));
 	for (i = 0; i < num_pages; i++) {
-		if (eb->pages[i])
+		if (eb->pages[i]) {
+			btrfs_page_end_meta_alloc(fs_info, eb->pages[i]);
 			unlock_page(eb->pages[i]);
+		}
 	}
 
 	btrfs_release_extent_buffer(eb);

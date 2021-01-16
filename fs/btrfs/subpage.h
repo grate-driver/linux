@@ -21,6 +21,7 @@ struct btrfs_subpage {
 	spinlock_t lock;
 	union {
 		/* Structures only used by metadata */
+		bool under_alloc;
 		/* Structures only used by data */
 	};
 };
@@ -36,6 +37,35 @@ static inline int btrfs_alloc_subpage(struct btrfs_fs_info *fs_info,
 	if (!*ret)
 		return -ENOMEM;
 	return 0;
+}
+
+/* Prevent freeing page private when page metadata are allocated */
+static inline void btrfs_page_start_meta_alloc(struct btrfs_fs_info *fs_info,
+					       struct page *page)
+{
+	struct btrfs_subpage *subpage;
+
+	if (fs_info->sectorsize == PAGE_SIZE)
+		return;
+
+	ASSERT(PagePrivate(page) && page->mapping);
+
+	subpage = (struct btrfs_subpage *)page->private;
+	subpage->under_alloc = true;
+}
+
+static inline void btrfs_page_end_meta_alloc(struct btrfs_fs_info *fs_info,
+					     struct page *page)
+{
+	struct btrfs_subpage *subpage;
+
+	if (fs_info->sectorsize == PAGE_SIZE)
+		return;
+
+	ASSERT(PagePrivate(page) && page->mapping);
+
+	subpage = (struct btrfs_subpage *)page->private;
+	subpage->under_alloc = false;
 }
 
 int btrfs_attach_subpage(struct btrfs_fs_info *fs_info, struct page *page);
