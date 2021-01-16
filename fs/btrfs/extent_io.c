@@ -1971,11 +1971,6 @@ static int __process_pages_contig(struct address_space *mapping,
 			if (page_ops & PAGE_SET_PRIVATE2)
 				SetPagePrivate2(pages[i]);
 
-			if (locked_page && pages[i] == locked_page) {
-				put_page(pages[i]);
-				pages_processed++;
-				continue;
-			}
 			if (page_ops & PAGE_CLEAR_DIRTY)
 				clear_page_dirty_for_io(pages[i]);
 			if (page_ops & PAGE_SET_WRITEBACK)
@@ -1984,6 +1979,11 @@ static int __process_pages_contig(struct address_space *mapping,
 				SetPageError(pages[i]);
 			if (page_ops & PAGE_END_WRITEBACK)
 				end_page_writeback(pages[i]);
+			if (locked_page && pages[i] == locked_page) {
+				put_page(pages[i]);
+				pages_processed++;
+				continue;
+			}
 			if (page_ops & PAGE_UNLOCK)
 				unlock_page(pages[i]);
 			if (page_ops & PAGE_LOCK) {
