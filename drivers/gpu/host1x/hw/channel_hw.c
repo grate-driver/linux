@@ -66,7 +66,7 @@ static void submit_gathers(struct host1x_job *job)
 				 host1x_class_host_wait_syncpt(cmd->wait.id,
 					cmd->wait.threshold));
 			host1x_cdma_push(
-				cdma, host1x_opcode_setclass(job->class, 0, 0),
+				cdma, host1x_opcode_setclass(cmd->class, 0, 0),
 				HOST1X_OPCODE_NOP);
 		} else {
 			struct host1x_job_gather *g = &cmd->gather;

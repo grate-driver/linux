@@ -25,6 +25,7 @@ struct host1x_job_wait {
 
 struct host1x_job_cmd {
 	bool is_wait;
+	unsigned int class;
 
 	union {
 		struct host1x_job_gather gather;
