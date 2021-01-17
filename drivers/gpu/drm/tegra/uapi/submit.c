@@ -303,7 +303,7 @@ static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 			}
 
 			host1x_job_add_wait(job, cmd->wait_syncpt.id,
-					    cmd->wait_syncpt.threshold);
+					    cmd->wait_syncpt.threshold, class);
 		} else {
 			err = -EINVAL;
 			goto free_job;
