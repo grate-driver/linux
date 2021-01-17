@@ -161,10 +161,16 @@ static int gr3d_is_addr_reg(struct device *dev, u32 class, u32 offset)
 	return 0;
 }
 
+static int gr3d_is_valid_class(u32 class)
+{
+	return (class == HOST1X_CLASS_GR3D);
+}
+
 static const struct tegra_drm_client_ops gr3d_ops = {
 	.open_channel = gr3d_open_channel,
 	.close_channel = gr3d_close_channel,
 	.is_addr_reg = gr3d_is_addr_reg,
+	.is_valid_class = gr3d_is_valid_class,
 	.submit = tegra_drm_submit,
 };
 
