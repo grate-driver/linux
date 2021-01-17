@@ -111,10 +111,11 @@ void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *bo,
 }
 EXPORT_SYMBOL(host1x_job_add_gather);
 
-void host1x_job_add_wait(struct host1x_job *job, u32 id, u32 thresh)
+void host1x_job_add_wait(struct host1x_job *job, u32 id, u32 thresh, u32 class)
 {
 	struct host1x_job_cmd *cmd = &job->cmds[job->num_cmds];
 
+	cmd->class = class;
 	cmd->is_wait = true;
 	cmd->wait.id = id;
 	cmd->wait.threshold = thresh;
