@@ -341,24 +341,4 @@
 			#size-cells = <0>;
 		};
 	};
-
-	thermal-zones {
-		cpu-thermal-zone {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 0>;
-		};
-
-		ddr-thermal-zone {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 2>;
-		};
-
-		gpu-thermal-zone {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 1>;
-		};
-	};
 };
