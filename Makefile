@@ -1252,8 +1252,11 @@ endef
 
 define filechk_version.h
 	echo \#define LINUX_VERSION_CODE $(shell                         \
-	expr $(VERSION) \* 65536 + 0$(PATCHLEVEL) \* 256 + 0$(SUBLEVEL)); \
-	echo '#define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))'
+	expr $(VERSION) \* 16777216 + 0$(PATCHLEVEL) \* 65536 + 0$(SUBLEVEL)); \
+	echo \#define LINUX_VERSION_MAJOR $(VERSION); \
+	echo \#define LINUX_VERSION_PATCHLEVEL $(PATCHLEVEL); \
+	echo \#define LINUX_VERSION_SUBLEVEL $(SUBLEVEL); \
+	echo '#define KERNEL_VERSION(a,b,c) (((a) << 24) + ((b) << 16) + (c))'
 endef
 
 $(version_h): FORCE
