@@ -16,6 +16,7 @@
 #include "xfs_inode_item.h"
 #include "xfs_icache.h"
 #include "xfs_pnfs.h"
+#include <linux/iversion.h>
 
 /*
  * Note that we only accept fileids which are long enough rather than allow
@@ -223,6 +224,14 @@ xfs_fs_nfs_commit_metadata(
 	return xfs_log_force_inode(XFS_I(inode));
 }
 
+static u64 xfs_fetch_iversion(struct inode *inode)
+{
+	if (IS_I_VERSION(inode))
+		return generic_fetch_iversion(inode);
+	else
+		return time_to_chattr(&inode->i_ctime);
+}
+
 const struct export_operations xfs_export_operations = {
 	.encode_fh		= xfs_fs_encode_fh,
 	.fh_to_dentry		= xfs_fs_fh_to_dentry,
@@ -234,4 +243,5 @@ const struct export_operations xfs_export_operations = {
 	.map_blocks		= xfs_fs_map_blocks,
 	.commit_blocks		= xfs_fs_commit_blocks,
 #endif
+	.fetch_iversion		= xfs_fetch_iversion,
 };
