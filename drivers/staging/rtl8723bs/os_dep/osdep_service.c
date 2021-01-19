@@ -138,8 +138,9 @@ int rtw_change_ifname(struct adapter *padapter, const char *ifname)
 		rereg_priv->old_pnetdev = NULL;
 	}
 
+	/* XXX: this is obviously completely broken */
 	if (!rtnl_is_locked())
-		unregister_netdev(cur_pnetdev);
+		cfg80211_unregister_netdev(cur_pnetdev);
 	else
 		unregister_netdevice(cur_pnetdev);
 
@@ -155,8 +156,9 @@ int rtw_change_ifname(struct adapter *padapter, const char *ifname)
 
 	memcpy(pnetdev->dev_addr, padapter->eeprompriv.mac_addr, ETH_ALEN);
 
+	/* XXX: this is obviously completely broken */
 	if (!rtnl_is_locked())
-		ret = register_netdev(pnetdev);
+		ret = cfg80211_register_netdev(pnetdev);
 	else
 		ret = register_netdevice(pnetdev);
 

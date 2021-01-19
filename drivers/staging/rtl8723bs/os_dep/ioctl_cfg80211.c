@@ -3417,7 +3417,7 @@ void rtw_wdev_unregister(struct wireless_dev *wdev)
 
 	if (pwdev_priv->pmon_ndev) {
 		DBG_8192C("%s, unregister monitor interface\n", __func__);
-		unregister_netdev(pwdev_priv->pmon_ndev);
+		cfg80211_unregister_netdev(pwdev_priv->pmon_ndev);
 	}
 
 	wiphy_unregister(wdev->wiphy);

@@ -1015,7 +1015,7 @@ static int lbs_add_mesh(struct lbs_private *priv)
 
 	mesh_dev->flags |= IFF_BROADCAST | IFF_MULTICAST;
 	/* Register virtual mesh interface */
-	ret = register_netdev(mesh_dev);
+	ret = cfg80211_register_netdev(mesh_dev);
 	if (ret) {
 		pr_err("cannot register mshX virtual interface\n");
 		goto err_free_netdev;
@@ -1032,7 +1032,7 @@ static int lbs_add_mesh(struct lbs_private *priv)
 	goto done;
 
 err_unregister:
-	unregister_netdev(mesh_dev);
+	cfg80211_unregister_netdev(mesh_dev);
 
 err_free_netdev:
 	free_netdev(mesh_dev);
@@ -1056,7 +1056,7 @@ void lbs_remove_mesh(struct lbs_private *priv)
 	netif_carrier_off(mesh_dev);
 	sysfs_remove_group(&(mesh_dev->dev.kobj), &lbs_mesh_attr_group);
 	lbs_persist_config_remove(mesh_dev);
-	unregister_netdev(mesh_dev);
+	cfg80211_unregister_netdev(mesh_dev);
 	priv->mesh_dev = NULL;
 	kfree(mesh_dev->ieee80211_ptr);
 	free_netdev(mesh_dev);

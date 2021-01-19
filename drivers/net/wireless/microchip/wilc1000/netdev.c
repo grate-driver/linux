@@ -872,7 +872,7 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 	srcu_idx = srcu_read_lock(&wilc->srcu);
 	list_for_each_entry_rcu(vif, &wilc->vif_list, list) {
 		if (vif->ndev)
-			unregister_netdev(vif->ndev);
+			cfg80211_unregister_netdev(vif->ndev);
 	}
 	srcu_read_unlock(&wilc->srcu, srcu_idx);
 
@@ -952,7 +952,7 @@ struct wilc_vif *wilc_netdev_ifc_init(struct wilc *wl, const char *name,
 	if (rtnl_locked)
 		ret = register_netdevice(ndev);
 	else
-		ret = register_netdev(ndev);
+		ret = cfg80211_register_netdev(ndev);
 
 	if (ret) {
 		free_netdev(ndev);
