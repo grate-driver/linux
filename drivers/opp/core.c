@@ -831,20 +831,27 @@ static int _set_opp_custom(const struct opp_table *opp_table,
 {
 	struct dev_pm_opp *old_opp = opp_table->current_opp;
 	struct dev_pm_set_opp_data *data;
-	int size;
+	int size, regulator_count;
+
+	if (opp_table->sod_supplies)
+		regulator_count = opp_table->regulator_count;
+	else
+		regulator_count = 0;
 
 	data = opp_table->set_opp_data;
 	data->regulators = opp_table->regulators;
-	data->regulator_count = opp_table->regulator_count;
+	data->regulator_count = regulator_count;
 	data->clk = opp_table->clk;
 	data->dev = dev;
 
 	data->old_opp.rate = old_opp->rate;
-	size = sizeof(*old_opp->supplies) * opp_table->regulator_count;
-	memcpy(data->old_opp.supplies, old_opp->supplies, size);
-
 	data->new_opp.rate = freq;
-	memcpy(data->new_opp.supplies, opp->supplies, size);
+
+	if (regulator_count) {
+		size = sizeof(*old_opp->supplies) * opp_table->regulator_count;
+		memcpy(data->old_opp.supplies, old_opp->supplies, size);
+		memcpy(data->new_opp.supplies, opp->supplies, size);
+	}
 
 	return opp_table->set_opp(data);
 }
