@@ -788,8 +788,7 @@ restore_freq:
 			__func__, old_freq);
 restore_voltage:
 	/* This shouldn't harm even if the voltages weren't updated earlier */
-	if (old_supply)
-		_set_opp_voltage(dev, reg, old_supply);
+	_set_opp_voltage(dev, reg, old_supply);
 
 	return ret;
 }
@@ -839,10 +838,7 @@ static int _set_opp_custom(const struct opp_table *opp_table,
 
 	data->old_opp.rate = old_freq;
 	size = sizeof(*old_supply) * opp_table->regulator_count;
-	if (!old_supply)
-		memset(data->old_opp.supplies, 0, size);
-	else
-		memcpy(data->old_opp.supplies, old_supply, size);
+	memcpy(data->old_opp.supplies, old_supply, size);
 
 	data->new_opp.rate = freq;
 	memcpy(data->new_opp.supplies, new_supply, size);
@@ -943,6 +939,31 @@ int dev_pm_opp_set_bw(struct device *dev, struct dev_pm_opp *opp)
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_set_bw);
 
+static void _find_current_opp(struct device *dev, struct opp_table *opp_table)
+{
+	struct dev_pm_opp *opp = ERR_PTR(-ENODEV);
+	unsigned long freq;
+
+	if (!IS_ERR(opp_table->clk)) {
+		freq = clk_get_rate(opp_table->clk);
+		opp = _find_freq_ceil(opp_table, &freq);
+	}
+
+	/*
+	 * Unable to find the current OPP ? Pick the first from the list since
+	 * it is in ascending order, otherwise rest of the code will need to
+	 * make special checks to validate current_opp.
+	 */
+	if (IS_ERR(opp)) {
+		mutex_lock(&opp_table->lock);
+		opp = list_first_entry(&opp_table->opp_list, struct dev_pm_opp, node);
+		dev_pm_opp_get(opp);
+		mutex_unlock(&opp_table->lock);
+	}
+
+	opp_table->current_opp = opp;
+}
+
 static int _disable_opp_table(struct device *dev, struct opp_table *opp_table)
 {
 	int ret;
@@ -1004,16 +1025,6 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 	if ((long)freq <= 0)
 		freq = target_freq;
 
-	old_freq = clk_get_rate(opp_table->clk);
-
-	/* Return early if nothing to do */
-	if (opp_table->enabled && old_freq == freq) {
-		dev_dbg(dev, "%s: old/new frequencies (%lu Hz) are same, nothing to do\n",
-			__func__, freq);
-		ret = 0;
-		goto put_opp_table;
-	}
-
 	/*
 	 * For IO devices which require an OPP on some platforms/SoCs
 	 * while just needing to scale the clock on some others
@@ -1026,12 +1037,9 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 		goto put_opp_table;
 	}
 
-	temp_freq = old_freq;
-	old_opp = _find_freq_ceil(opp_table, &temp_freq);
-	if (IS_ERR(old_opp)) {
-		dev_err(dev, "%s: failed to find current OPP for freq %lu (%ld)\n",
-			__func__, old_freq, PTR_ERR(old_opp));
-	}
+	/* Find the currently set OPP if we don't know already */
+	if (unlikely(!opp_table->current_opp))
+		_find_current_opp(dev, opp_table);
 
 	temp_freq = freq;
 	opp = _find_freq_ceil(opp_table, &temp_freq);
@@ -1039,7 +1047,17 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 		ret = PTR_ERR(opp);
 		dev_err(dev, "%s: failed to find OPP for freq %lu (%d)\n",
 			__func__, freq, ret);
-		goto put_old_opp;
+		goto put_opp_table;
+	}
+
+	old_opp = opp_table->current_opp;
+	old_freq = old_opp->rate;
+
+	/* Return early if nothing to do */
+	if (opp_table->enabled && old_opp == opp) {
+		dev_dbg(dev, "%s: OPPs are same, nothing to do\n", __func__);
+		ret = 0;
+		goto put_opp;
 	}
 
 	dev_dbg(dev, "%s: switching OPP: %lu Hz --> %lu Hz\n", __func__,
@@ -1054,11 +1072,10 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 
 	if (opp_table->set_opp) {
 		ret = _set_opp_custom(opp_table, dev, old_freq, freq,
-				      IS_ERR(old_opp) ? NULL : old_opp->supplies,
-				      opp->supplies);
+				      old_opp->supplies, opp->supplies);
 	} else if (opp_table->regulators) {
 		ret = _generic_set_opp_regulator(opp_table, dev, old_freq, freq,
-						 IS_ERR(old_opp) ? NULL : old_opp->supplies,
+						 old_opp->supplies,
 						 opp->supplies);
 	} else {
 		/* Only frequency scaling */
@@ -1074,15 +1091,18 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 
 	if (!ret) {
 		ret = _set_opp_bw(opp_table, opp, dev, false);
-		if (!ret)
+		if (!ret) {
 			opp_table->enabled = true;
+			dev_pm_opp_put(old_opp);
+
+			/* Make sure current_opp doesn't get freed */
+			dev_pm_opp_get(opp);
+			opp_table->current_opp = opp;
+		}
 	}
 
 put_opp:
 	dev_pm_opp_put(opp);
-put_old_opp:
-	if (!IS_ERR(old_opp))
-		dev_pm_opp_put(old_opp);
 put_opp_table:
 	dev_pm_opp_put_opp_table(opp_table);
 	return ret;
@@ -1275,6 +1295,9 @@ static void _opp_table_kref_release(struct kref *kref)
 	/* Drop the lock as soon as we can */
 	list_del(&opp_table->node);
 	mutex_unlock(&opp_table_lock);
+
+	if (opp_table->current_opp)
+		dev_pm_opp_put(opp_table->current_opp);
 
 	_of_clear_opp_table(opp_table);
 
