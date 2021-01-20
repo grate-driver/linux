@@ -338,7 +338,7 @@ __smb_send_rqst(struct TCP_Server_Info *server, int num_rqst,
 	if (ssocket == NULL)
 		return -EAGAIN;
 
-	if (signal_pending(current)) {
+	if (fatal_signal_pending(current)) {
 		cifs_dbg(FYI, "signal pending before send request\n");
 		return -ERESTARTSYS;
 	}
