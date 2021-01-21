@@ -647,7 +647,7 @@ static int tegra_devfreq_target(struct device *dev, unsigned long *freq,
 		return PTR_ERR(opp);
 	}
 
-	ret = dev_pm_opp_set_opp(dev, opp);
+	ret = dev_pm_opp_set_bw(dev, opp);
 	dev_pm_opp_put(opp);
 
 	return ret;
