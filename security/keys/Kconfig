@@ -121,5 +121,5 @@ config KEY_NOTIFICATIONS
 	help
 	  This option provides support for getting change notifications on keys
 	  and keyrings on which the caller has View permission.  This makes use
-	  of the /dev/watch_queue misc device to handle the notification
+	  of a pipe opened with O_NOTIFICATION_PIPE to handle the notification
 	  buffer and provides KEYCTL_WATCH_KEY to enable/disable watches.
