@@ -447,3 +447,4 @@
 440	i386	process_madvise		sys_process_madvise
 441	i386	epoll_pwait2		sys_epoll_pwait2		compat_sys_epoll_pwait2
 442	i386	watch_mount		sys_watch_mount
+443	i386	memfd_secret		sys_memfd_secret
