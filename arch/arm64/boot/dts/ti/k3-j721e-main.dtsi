@@ -82,6 +82,7 @@
 		interrupt-controller;
 		interrupt-parent = <&gic500>;
 		#interrupt-cells = <1>;
+		#address-cells = <0>;
 		ti,sci = <&dmsc>;
 		ti,sci-dev-id = <131>;
 		ti,interrupt-ranges = <8 392 56>;
@@ -103,6 +104,7 @@
 			interrupt-controller;
 			interrupt-parent = <&gic500>;
 			#interrupt-cells = <1>;
+			#address-cells = <0>;
 			ti,sci = <&dmsc>;
 			ti,sci-dev-id = <213>;
 			ti,interrupt-ranges = <0 64 64>,
@@ -117,6 +119,7 @@
 			interrupt-parent = <&main_navss_intr>;
 			msi-controller;
 			#interrupt-cells = <0>;
+			#address-cells = <0>;
 			ti,sci = <&dmsc>;
 			ti,sci-dev-id = <209>;
 			ti,interrupt-ranges = <0 0 256>;
@@ -910,6 +913,7 @@
 			     <260>, <261>, <262>, <263>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <128>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 105 TI_SCI_PD_EXCLUSIVE>;
@@ -926,6 +930,7 @@
 		interrupts = <288>, <289>, <290>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <36>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 106 TI_SCI_PD_EXCLUSIVE>;
@@ -943,6 +948,7 @@
 			     <268>, <269>, <270>, <271>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <128>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 107 TI_SCI_PD_EXCLUSIVE>;
@@ -959,6 +965,7 @@
 		interrupts = <292>, <293>, <294>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <36>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 108 TI_SCI_PD_EXCLUSIVE>;
@@ -976,6 +983,7 @@
 			     <276>, <277>, <278>, <279>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <128>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 109 TI_SCI_PD_EXCLUSIVE>;
@@ -992,6 +1000,7 @@
 		interrupts = <296>, <297>, <298>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <36>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 110 TI_SCI_PD_EXCLUSIVE>;
@@ -1009,6 +1018,7 @@
 			     <284>, <285>, <286>, <287>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <128>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 111 TI_SCI_PD_EXCLUSIVE>;
@@ -1025,6 +1035,7 @@
 		interrupts = <300>, <301>, <302>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <36>;
 		ti,davinci-gpio-unbanked = <0>;
 		power-domains = <&k3_pds 112 TI_SCI_PD_EXCLUSIVE>;

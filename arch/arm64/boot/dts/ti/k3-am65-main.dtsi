@@ -439,6 +439,7 @@
 		interrupt-controller;
 		interrupt-parent = <&gic500>;
 		#interrupt-cells = <1>;
+		#address-cells = <0>;
 		ti,sci = <&dmsc>;
 		ti,sci-dev-id = <100>;
 		ti,interrupt-ranges = <0 392 32>;
@@ -460,6 +461,7 @@
 			interrupt-controller;
 			interrupt-parent = <&gic500>;
 			#interrupt-cells = <1>;
+			#address-cells = <0>;
 			ti,sci = <&dmsc>;
 			ti,sci-dev-id = <182>;
 			ti,interrupt-ranges = <0 64 64>,
@@ -473,6 +475,7 @@
 			interrupt-parent = <&intr_main_navss>;
 			msi-controller;
 			#interrupt-cells = <0>;
+			#address-cells = <0>;
 			ti,sci = <&dmsc>;
 			ti,sci-dev-id = <179>;
 			ti,interrupt-ranges = <0 0 256>;
@@ -669,6 +672,7 @@
 		interrupts = <192>, <193>, <194>, <195>, <196>, <197>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <96>;
 		ti,davinci-gpio-unbanked = <0>;
 		clocks = <&k3_clks 57 0>;
@@ -684,6 +688,7 @@
 		interrupts = <200>, <201>, <202>, <203>, <204>, <205>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <90>;
 		ti,davinci-gpio-unbanked = <0>;
 		clocks = <&k3_clks 58 0>;
