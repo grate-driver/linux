@@ -627,6 +627,7 @@ no_pattern:
  * From each group will be used only defined amount of bits.
  * Syntax: range:used_size/group_size
  * Example: 0-1023:2/256 ==> 0,1,256,257,512,513,768,769
+ * Optionally the self-descriptive "all" or "none" can be used.
  *
  * Returns: 0 on success, -errno on invalid input strings. Error values:
  *
@@ -640,7 +641,15 @@ int bitmap_parselist(const char *buf, unsigned long *maskp, int nmaskbits)
 	struct region r;
 	long ret;
 
+	if (!strcmp(buf, "all")) {
+		bitmap_fill(maskp, nmaskbits);
+		return 0;
+	}
+
 	bitmap_zero(maskp, nmaskbits);
+
+	if (!strcmp(buf, "none"))
+		return 0;
 
 	while (buf) {
 		buf = bitmap_find_region(buf);
