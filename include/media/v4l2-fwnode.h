@@ -25,7 +25,7 @@ struct fwnode_handle;
 struct v4l2_async_notifier;
 struct v4l2_async_subdev;
 
-#define V4L2_FWNODE_CSI2_MAX_DATA_LANES	4
+#define V4L2_FWNODE_CSI2_MAX_DATA_LANES	8
 
 /**
  * struct v4l2_fwnode_bus_mipi_csi2 - MIPI CSI-2 bus data structure
@@ -452,6 +452,10 @@ typedef int (*parse_endpoint_func)(struct device *dev,
  *		     begin at the same memory address.
  * @parse_endpoint: Driver's callback function called on each V4L2 fwnode
  *		    endpoint. Optional.
+ *
+ * DEPRECATED! This function is deprecated. Don't use it in new drivers.
+ * Instead see an example in cio2_parse_firmware() function in
+ * drivers/media/pci/intel/ipu3/ipu3-cio2.c .
  *
  * Parse the fwnode endpoints of the @dev device and populate the async sub-
  * devices list in the notifier. The @parse_endpoint callback function is

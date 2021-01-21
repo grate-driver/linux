@@ -28,6 +28,7 @@
 #include <media/v4l2-common.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
+#include <media/v4l2-event.h>
 
 #define VIDEO_NUM_DEVICES	256
 #define VIDEO_NAME              "video4linux"
@@ -338,12 +339,14 @@ static ssize_t v4l2_write(struct file *filp, const char __user *buf,
 static __poll_t v4l2_poll(struct file *filp, struct poll_table_struct *poll)
 {
 	struct video_device *vdev = video_devdata(filp);
-	__poll_t res = EPOLLERR | EPOLLHUP;
+	__poll_t res = EPOLLERR | EPOLLHUP | EPOLLPRI;
 
-	if (!vdev->fops->poll)
-		return DEFAULT_POLLMASK;
-	if (video_is_registered(vdev))
-		res = vdev->fops->poll(filp, poll);
+	if (video_is_registered(vdev)) {
+		if (!vdev->fops->poll)
+			res = DEFAULT_POLLMASK;
+		else
+			res = vdev->fops->poll(filp, poll);
+	}
 	if (vdev->dev_debug & V4L2_DEV_DEBUG_POLL)
 		dprintk("%s: poll: %08x\n",
 			video_device_node_name(vdev), res);
@@ -1086,6 +1089,8 @@ void video_unregister_device(struct video_device *vdev)
 	 */
 	clear_bit(V4L2_FL_REGISTERED, &vdev->flags);
 	mutex_unlock(&videodev_lock);
+	if (test_bit(V4L2_FL_USES_V4L2_FH, &vdev->flags))
+		v4l2_event_wake_all(vdev);
 	device_unregister(&vdev->dev);
 }
 EXPORT_SYMBOL(video_unregister_device);
