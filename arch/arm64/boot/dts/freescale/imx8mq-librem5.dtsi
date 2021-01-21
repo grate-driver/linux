@@ -99,18 +99,19 @@
 		regulator-max-microvolt = <3300000>;
 	};
 
+	reg_vdd_1v8: regulator-vdd-1v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "VDD_1V8";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&buck7_reg>;
+	};
+
 	reg_vdd_3v3: regulator-vdd-3v3 {
 		compatible = "regulator-fixed";
 		regulator-name = "VDD_3V3";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-	};
-
-	reg_vdd_1v8: regulator-vdd-1v8 {
-		compatible = "regulator-fixed";
-		regulator-name = "VCC_1V8";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
 	};
 
 	reg_vsys_3v4: regulator-vsys-3v4 {
@@ -455,6 +456,13 @@
 		fsl,pins = <
 			/* TCPC_INT */
 			MX8MQ_IOMUXC_GPIO1_IO10_GPIO1_IO10	0x01C0
+		>;
+	};
+
+	pinctrl_touch: touchgrp {
+		fsl,pins = <
+			/* TP_INT */
+			MX8MQ_IOMUXC_ENET_RD1_GPIO1_IO27	0x80
 		>;
 	};
 
@@ -879,6 +887,8 @@
 	touchscreen@38 {
 		compatible = "edt,edt-ft5506";
 		reg = <0x38>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_touch>;
 		interrupt-parent = <&gpio1>;
 		interrupts = <27 IRQ_TYPE_EDGE_FALLING>;
 		touchscreen-size-x = <720>;
@@ -1072,6 +1082,8 @@
 };
 
 &usdhc1 {
+	assigned-clocks = <&clk IMX8MQ_CLK_USDHC1>;
+	assigned-clock-rates = <400000000>;
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
@@ -1084,6 +1096,8 @@
 };
 
 &usdhc2 {
+	assigned-clocks = <&clk IMX8MQ_CLK_USDHC2>;
+	assigned-clock-rates = <200000000>;
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
 	pinctrl-0 = <&pinctrl_usdhc2>;
 	pinctrl-1 = <&pinctrl_usdhc2_100mhz>;
