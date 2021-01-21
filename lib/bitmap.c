@@ -571,7 +571,7 @@ static const char *bitmap_find_region_reverse(const char *start, const char *end
 	return end;
 }
 
-static const char *bitmap_parse_region(const char *str, struct region *r)
+static const char *bitmap_parse_region(const char *str, struct region *r, int nmaskbits)
 {
 	str = bitmap_getnum(str, &r->start);
 	if (IS_ERR(str))
@@ -583,9 +583,15 @@ static const char *bitmap_parse_region(const char *str, struct region *r)
 	if (*str != '-')
 		return ERR_PTR(-EINVAL);
 
-	str = bitmap_getnum(str + 1, &r->end);
-	if (IS_ERR(str))
-		return str;
+	str++;
+	if (*str == 'N') {
+		r->end = nmaskbits - 1;
+		str++;
+	} else {
+		str = bitmap_getnum(str, &r->end);
+		if (IS_ERR(str))
+			return str;
+	}
 
 	if (end_of_region(*str))
 		goto no_pattern;
@@ -628,6 +634,8 @@ no_pattern:
  * Syntax: range:used_size/group_size
  * Example: 0-1023:2/256 ==> 0,1,256,257,512,513,768,769
  * Optionally the self-descriptive "all" or "none" can be used.
+ * The value 'N' can be used as the end of a range to indicate the maximum
+ * allowed value; i.e (nmaskbits - 1).
  *
  * Returns: 0 on success, -errno on invalid input strings. Error values:
  *
@@ -656,7 +664,7 @@ int bitmap_parselist(const char *buf, unsigned long *maskp, int nmaskbits)
 		if (buf == NULL)
 			return 0;
 
-		buf = bitmap_parse_region(buf, &r);
+		buf = bitmap_parse_region(buf, &r, nmaskbits);
 		if (IS_ERR(buf))
 			return PTR_ERR(buf);
 
