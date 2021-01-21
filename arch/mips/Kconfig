@@ -18,6 +18,7 @@ config MIPS
 	select ARCH_USE_QUEUED_SPINLOCKS
 	select ARCH_WANT_DEFAULT_TOPDOWN_MMAP_LAYOUT if MMU
 	select ARCH_WANT_IPC_PARSE_VERSION
+	select ARCH_WANT_LD_ORPHAN_WARN
 	select BUILDTIME_TABLE_SORT
 	select CLONE_BACKWARDS
 	select CPU_NO_EFFICIENT_FFS if (TARGET_ISA_REV < 1)
@@ -491,8 +492,6 @@ config MACH_LOONGSON64
 	select SYS_SUPPORTS_ZBOOT
 	select SYS_SUPPORTS_RELOCATABLE
 	select ZONE_DMA32
-	select NUMA
-	select SMP
 	select COMMON_CLK
 	select USE_OF
 	select BUILTIN_DTB
@@ -1257,9 +1256,6 @@ config SYS_SUPPORTS_HUGETLBFS
 
 config MIPS_HUGE_TLB_SUPPORT
 	def_bool HUGETLB_PAGE || TRANSPARENT_HUGEPAGE
-
-config IRQ_CPU_RM7K
-	bool
 
 config IRQ_MSP_SLP
 	bool
@@ -2758,6 +2754,7 @@ config ARCH_SPARSEMEM_ENABLE
 config NUMA
 	bool "NUMA Support"
 	depends on SYS_SUPPORTS_NUMA
+	select SMP
 	help
 	  Say Y to compile the kernel to support NUMA (Non-Uniform Memory
 	  Access).  This option improves performance on systems with more

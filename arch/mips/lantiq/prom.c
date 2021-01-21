@@ -44,10 +44,6 @@ int ltq_soc_type(void)
 	return soc_info.type;
 }
 
-void __init prom_free_prom_memory(void)
-{
-}
-
 static void __init prom_init_cmdline(void)
 {
 	int argc = fw_arg0;
@@ -79,7 +75,7 @@ void __init plat_mem_setup(void)
 
 	if (fw_passed_dtb) /* UHI interface */
 		dtb = (void *)fw_passed_dtb;
-	else if (__dtb_start != __dtb_end)
+	else if (&__dtb_start != &__dtb_end)
 		dtb = (void *)__dtb_start;
 	else
 		panic("no dtb found");
