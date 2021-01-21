@@ -1061,9 +1061,6 @@
 			clock-names = "bus", "mod", "ram";
 			resets = <&ccu RST_BUS_CSI>;
 			status = "disabled";
-
-			csi_in: port {
-			};
 		};
 
 		hdmi: hdmi@1ee0000 {
@@ -1263,12 +1260,6 @@
 							 <&cpu103 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
-		};
-
-		gpu_thermal: gpu-thermal {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 2>;
 		};
 	};
 };
