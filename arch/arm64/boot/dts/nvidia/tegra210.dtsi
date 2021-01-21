@@ -997,6 +997,7 @@
 			 <&tegra_car 128>, /* hda2hdmi */
 			 <&tegra_car 111>; /* hda2codec_2x */
 		reset-names = "hda", "hda2hdmi", "hda2codec_2x";
+		power-domains = <&pd_sor>;
 		status = "disabled";
 	};
 
@@ -1043,6 +1044,7 @@
 		interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
 		resets = <&tegra_car 142>;
 		reset-names = "padctl";
+		nvidia,pmc =  <&tegra_pmc>;
 
 		status = "disabled";
 
