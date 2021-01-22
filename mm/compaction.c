@@ -1975,7 +1975,7 @@ static unsigned int fragmentation_score_node_zones_max(pg_data_t *pgdat)
 		struct zone *zone;
 
 		zone = &pgdat->node_zones[zoneid];
-		max = max_t(unsigned int, fragmentation_score_zone(zone), max);
+		max = max(fragmentation_score_zone(zone), max);
 	}
 
 	return max;
