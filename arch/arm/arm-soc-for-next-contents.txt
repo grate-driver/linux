@@ -11,10 +11,26 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.12-tag1
 	patch
 		dt-bindings: vendor-prefixes: Fix misordering introduced by honestar prefix
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_update_for_v5.12
+	at91/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-dt-5.12
+	patch
+		ARM: mstar: Unify common parts of BreadBee boards into a dtsi
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/ux500-dts-v5.12
+	patch
+		ARM: dts: nomadik: Fix up MMC node names
 
 arm/drivers
+	<no branch> (a90b6543bf062d65292b2c76f1630507d1c9d8ec)
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.12
 
 arm/defconfig
+	patch
+		ARM: multi_v7_defconfig: Enable Actions Semi platform and drivers
+	at91/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-defconfig-5.12
 
 arm/newsoc
 
@@ -27,6 +43,15 @@ arm/fixes
 		bus: arm-integrator-lm: Add of_node_put() before return statement
 		arm64: defconfig: Drop unused K3 SoC specific options
 		ARM: dts: ux500: Reserve memory carveouts
+	<no branch> (dcb3b06d9c34f33a249f65c08805461fb0c4325b)
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-rcu-sched-trace-for-v5.11
+	patch
+		drivers: soc: atmel: Avoid calling at91_soc_init on non AT91 SoCs
+		drivers: soc: atmel: add null entry at the end of at91_soc_allowed_list[]
+		arm64: dts: broadcom: Fix USB DMA address translation for Stingray
+		MAINTAINERS: Include bcm2835 subsequents into search
+	<no branch> (82c082784e03a9a9c043345f9bc04bc8254cf6da)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11-2
 
 arm/omap-genpd
 
@@ -36,4 +61,9 @@ arm/platform-removal
 		ARM: Remove PicoXcell platform support
 		ARM: drop efm32 platform
 		MAINTAINERS: Remove deleted platform efm32
+		c6x: remove architecture
+		ARM: remove sirf prima2/atlas platforms
+		ARM: remove zte zx platform
+		ARM: remove tango platform
+		ARM: remove u300 platform
 
