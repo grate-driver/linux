@@ -175,6 +175,8 @@ static bool create_links(
 
 	connectors_num = bios->funcs->get_connectors_number(bios);
 
+	DC_LOG_DC("BIOS object table - number of connectors: %d", connectors_num);
+
 	if (connectors_num > ENUM_ID_COUNT) {
 		dm_error(
 			"DC: Number of connectors %d exceeds maximum of %d!\n",
@@ -192,6 +194,8 @@ static bool create_links(
 	for (i = 0; i < connectors_num; i++) {
 		struct link_init_data link_init_params = {0};
 		struct dc_link *link;
+
+		DC_LOG_DC("BIOS object table - printing link object info for connector number: %d, link_index: %d", i, dc->link_count);
 
 		link_init_params.ctx = dc->ctx;
 		/* next BIOS object table connector */
@@ -224,6 +228,8 @@ static bool create_links(
 			}
 		}
 	}
+
+	DC_LOG_DC("BIOS object table - end");
 
 	for (i = 0; i < num_virtual_links; i++) {
 		struct dc_link *link = kzalloc(sizeof(*link), GFP_KERNEL);
@@ -3150,11 +3156,11 @@ void dc_lock_memory_clock_frequency(struct dc *dc)
 			core_link_enable_stream(dc->current_state, &dc->current_state->res_ctx.pipe_ctx[i]);
 }
 
-bool dc_is_plane_eligible_for_idle_optimizaitons(struct dc *dc, struct dc_plane_state *plane)
+bool dc_is_plane_eligible_for_idle_optimizations(struct dc *dc, struct dc_plane_state *plane,
+		struct dc_cursor_attributes *cursor_attr)
 {
-	if (dc->hwss.does_plane_fit_in_mall && dc->hwss.does_plane_fit_in_mall(dc, plane))
+	if (dc->hwss.does_plane_fit_in_mall && dc->hwss.does_plane_fit_in_mall(dc, plane, cursor_attr))
 		return true;
-
 	return false;
 }
 

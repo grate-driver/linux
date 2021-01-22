@@ -42,7 +42,7 @@
 #include "inc/hw/dmcu.h"
 #include "dml/display_mode_lib.h"
 
-#define DC_VER "3.2.118"
+#define DC_VER "3.2.119"
 
 #define MAX_SURFACES 3
 #define MAX_PLANES 6
@@ -502,6 +502,8 @@ struct dc_debug_options {
 #if defined(CONFIG_DRM_AMD_DC_DCN)
 	bool disable_idle_power_optimizations;
 	unsigned int mall_size_override;
+	unsigned int mall_additional_timer_percent;
+	bool mall_error_as_fatal;
 #endif
 	bool dmub_command_table; /* for testing only */
 	struct dc_bw_validation_profile bw_val_profile;
@@ -1272,8 +1274,8 @@ enum dc_status dc_set_clock(struct dc *dc, enum dc_clock_type clock_type, uint32
 void dc_get_clock(struct dc *dc, enum dc_clock_type clock_type, struct dc_clock_config *clock_cfg);
 #if defined(CONFIG_DRM_AMD_DC_DCN)
 
-bool dc_is_plane_eligible_for_idle_optimizations(struct dc *dc,
-						 struct dc_plane_state *plane);
+bool dc_is_plane_eligible_for_idle_optimizations(struct dc *dc, struct dc_plane_state *plane,
+				struct dc_cursor_attributes *cursor_attr);
 
 void dc_allow_idle_optimizations(struct dc *dc, bool allow);
 

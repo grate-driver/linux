@@ -56,8 +56,6 @@ static struct cmn2asic_msg_mapping renoir_message_map[SMU_MSG_MAX_COUNT] = {
 	MSG_MAP(PowerUpSdma,                    PPSMC_MSG_PowerUpSdma,                  1),
 	MSG_MAP(SetHardMinIspclkByFreq,         PPSMC_MSG_SetHardMinIspclkByFreq,       1),
 	MSG_MAP(SetHardMinVcn,                  PPSMC_MSG_SetHardMinVcn,                1),
-	MSG_MAP(Spare1,                         PPSMC_MSG_spare1,                       1),
-	MSG_MAP(Spare2,                         PPSMC_MSG_spare2,                       1),
 	MSG_MAP(SetAllowFclkSwitch,             PPSMC_MSG_SetAllowFclkSwitch,           1),
 	MSG_MAP(SetMinVideoGfxclkFreq,          PPSMC_MSG_SetMinVideoGfxclkFreq,        1),
 	MSG_MAP(ActiveProcessNotify,            PPSMC_MSG_ActiveProcessNotify,          1),
@@ -1308,7 +1306,7 @@ static ssize_t renoir_get_gpu_metrics(struct smu_context *smu,
 static int renoir_gfx_state_change_set(struct smu_context *smu, uint32_t state)
 {
 
-	return smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_GpuChangeState, state, NULL);
+	return 0;
 }
 
 static const struct pptable_funcs renoir_ppt_funcs = {
