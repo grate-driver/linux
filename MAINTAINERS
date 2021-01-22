@@ -11861,6 +11861,19 @@ L:	platform-driver-x86@vger.kernel.org
 S:	Supported
 F:	drivers/platform/surface/surfacepro3_button.c
 
+MICROSOFT SURFACE SYSTEM AGGREGATOR SUBSYSTEM
+M:	Maximilian Luz <luzmaximilian@gmail.com>
+S:	Maintained
+W:	https://github.com/linux-surface/surface-aggregator-module
+C:	irc://chat.freenode.net/##linux-surface
+F:	Documentation/driver-api/surface_aggregator/
+F:	drivers/platform/surface/aggregator/
+F:	drivers/platform/surface/surface_acpi_notify.c
+F:	drivers/platform/surface/surface_aggregator_cdev.c
+F:	include/linux/surface_acpi_notify.h
+F:	include/linux/surface_aggregator/
+F:	include/uapi/linux/surface_aggregator/
+
 MICROTEK X6 SCANNER
 M:	Oliver Neukum <oliver@neukum.org>
 S:	Maintained
@@ -17702,7 +17715,7 @@ F:	drivers/thermal/gov_power_allocator.c
 F:	include/trace/events/thermal_power_allocator.h
 
 THINKPAD ACPI EXTRAS DRIVER
-M:	Henrique de Moraes Holschuh <ibm-acpi@hmh.eng.br>
+M:	Henrique de Moraes Holschuh <hmh@hmh.eng.br>
 L:	ibm-acpi-devel@lists.sourceforge.net
 L:	platform-driver-x86@vger.kernel.org
 S:	Maintained
