@@ -930,10 +930,10 @@ __common_mmu_cache_on:
  * from the start of the block.  Please note this is all position
  * independent code.
  *
- *  r1  = corrupted
  *  r2  = corrupted
  *  r3  = block offset
  *  r9  = corrupted
+ *  r10 = corrupted
  *  r12 = corrupted
  */
 
@@ -953,10 +953,10 @@ call_cache_fn:	adr	r12, proc_types
 #else
 		ldr	r9, =CONFIG_PROCESSOR_ID
 #endif
-1:		ldr	r1, [r12, #0]		@ get value
+1:		ldr	r10, [r12, #0]		@ get value
 		ldr	r2, [r12, #4]		@ get mask
-		eor	r1, r1, r9		@ (real ^ match)
-		tst	r1, r2			@       & mask
+		eor	r10, r10, r9		@ (real ^ match)
+		tst	r10, r2			@       & mask
  ARM(		addeq	pc, r12, r3		) @ call cache function
  THUMB(		addeq	r12, r3			)
  THUMB(		moveq	pc, r12			) @ call cache function
@@ -1143,8 +1143,6 @@ proc_types:
  */
 		.align	5
 cache_off:	mov	r3, #12			@ cache_off function
-		mov	r10, r0
-		mov	r11, r1
 		b	call_cache_fn
 
 __armv4_mpu_cache_off:
@@ -1177,22 +1175,21 @@ __armv4_mmu_cache_off:
 		mov	pc, lr
 
 __armv7_mmu_cache_off:
-		mrc	p15, 0, r0, c1, c0
+		mrc	p15, 0, r3, c1, c0
 #ifdef CONFIG_MMU
-		bic	r0, r0, #0x000d
+		bic	r3, r3, #0x000d
 #else
-		bic	r0, r0, #0x000c
+		bic	r3, r3, #0x000c
 #endif
-		mcr	p15, 0, r0, c1, c0	@ turn MMU and cache off
-		mov	r0, #0
+		mcr	p15, 0, r3, c1, c0	@ turn MMU and cache off
+		mov	r3, #0
 #ifdef CONFIG_MMU
-		mcr	p15, 0, r0, c8, c7, 0	@ invalidate whole TLB
+		mcr	p15, 0, r3, c8, c7, 0	@ invalidate whole TLB
 #endif
-		mcr	p15, 0, r0, c7, c5, 6	@ invalidate BTC
-		mcr	p15, 0, r0, c7, c10, 4	@ DSB
-		mcr	p15, 0, r0, c7, c5, 4	@ ISB
+		mcr	p15, 0, r3, c7, c5, 6	@ invalidate BTC
+		mcr	p15, 0, r3, c7, c10, 4	@ DSB
+		mcr	p15, 0, r3, c7, c5, 4	@ ISB
 
-		mov	r0, r10
 		b	__armv7_mmu_cache_flush
 
 /*
@@ -1209,7 +1206,6 @@ __armv7_mmu_cache_off:
 		.align	5
 cache_clean_flush:
 		mov	r3, #16
-		mov	r11, r1
 		b	call_cache_fn
 
 __armv4_mpu_cache_flush:
@@ -1260,15 +1256,15 @@ __armv7_mmu_cache_flush:
 		mcr	p15, 0, r10, c7, c14, 0	@ clean+invalidate D
 		b	iflush
 hierarchical:
-		dcache_line_size r1, r2		@ r1 := dcache min line size
-		sub	r2, r1, #1		@ r2 := line size mask
+		dcache_line_size r11, r2	@ r11 := dcache min line size
+		sub	r2, r11, #1		@ r2 := line size mask
 		bic	r0, r0, r2		@ round down start to line size
-		sub	r11, r11, #1		@ end address is exclusive
-		bic	r11, r11, r2		@ round down end to line size
-0:		cmp	r0, r11			@ finished?
+		sub	r1, r1, #1		@ end address is exclusive
+		bic	r1, r1, r2		@ round down end to line size
+0:		cmp	r0, r1			@ finished?
 		bgt	iflush
 		mcr	p15, 0, r0, c7, c14, 1	@ Dcache clean/invalidate by VA
-		add	r0, r0, r1
+		add	r0, r0, r11
 		b	0b
 iflush:
 		mcr	p15, 0, r10, c7, c10, 4	@ DSB
