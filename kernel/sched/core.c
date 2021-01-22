@@ -591,6 +591,44 @@ void wake_up_q(struct wake_q_head *head)
 	}
 }
 
+#ifdef CONFIG_SCHED_DEBUG
+void noinstr sched_resched_local_allow(void)
+{
+	this_rq()->resched_local_allow = 1;
+}
+
+void noinstr sched_resched_local_forbid(void)
+{
+	this_rq()->resched_local_allow = 0;
+}
+
+void noinstr sched_resched_local_assert_allowed(void)
+{
+	if (this_rq()->resched_local_allow)
+		return;
+
+	/*
+	 * Idle interrupts break the CPU from its pause and
+	 * rescheduling happens on idle loop exit.
+	 */
+	if (in_hardirq())
+		return;
+
+	/*
+	 * What applies to hardirq also applies to softirq as
+	 * we assume they execute on hardirq tail. Ksoftirqd
+	 * shouldn't have resched_local_allow == 0.
+	 * We also assume that no local_bh_enable() call may
+	 * execute softirqs inline on fragile idle/entry
+	 * path...
+	 */
+	if (in_serving_softirq())
+		return;
+
+	WARN_ONCE(1, "Late current task rescheduling may be lost\n");
+}
+#endif
+
 /*
  * resched_curr - mark rq's current task 'to be rescheduled now'.
  *
@@ -613,6 +651,7 @@ void resched_curr(struct rq *rq)
 	if (cpu == smp_processor_id()) {
 		set_tsk_need_resched(curr);
 		set_preempt_need_resched();
+		sched_resched_local_assert_allowed();
 		return;
 	}
 
@@ -676,6 +715,26 @@ unlock:
 	return cpu;
 }
 
+static void wake_idle_assert_possible(void)
+{
+#ifdef CONFIG_SCHED_DEBUG
+	/* Timers are re-evaluated after idle IRQs */
+	if (in_hardirq())
+		return;
+	/*
+	 * Same as hardirqs, assuming they are executing
+	 * on IRQ tail. Ksoftirqd shouldn't reach here
+	 * as the timer base wouldn't be idle. And inline
+	 * softirq processing after a call to local_bh_enable()
+	 * within idle loop sound too fun to be considered here.
+	 */
+	if (in_serving_softirq())
+		return;
+
+	WARN_ON_ONCE("Late timer enqueue may be ignored\n");
+#endif
+}
+
 /*
  * When add_timer_on() enqueues a timer into the timer wheel of an
  * idle CPU then this timer might expire before the next timer event
@@ -690,8 +749,10 @@ static void wake_up_idle_cpu(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 
-	if (cpu == smp_processor_id())
+	if (cpu == smp_processor_id()) {
+		wake_idle_assert_possible();
 		return;
+	}
 
 	if (set_nr_and_not_polling(rq->idle))
 		smp_send_reschedule(cpu);
@@ -3464,7 +3525,7 @@ out:
 
 /**
  * try_invoke_on_locked_down_task - Invoke a function on task in fixed state
- * @p: Process for which the function is to be invoked.
+ * @p: Process for which the function is to be invoked, can be @current.
  * @func: Function to invoke.
  * @arg: Argument to function.
  *
@@ -3482,12 +3543,11 @@ out:
  */
 bool try_invoke_on_locked_down_task(struct task_struct *p, bool (*func)(struct task_struct *t, void *arg), void *arg)
 {
-	bool ret = false;
 	struct rq_flags rf;
+	bool ret = false;
 	struct rq *rq;
 
-	lockdep_assert_irqs_enabled();
-	raw_spin_lock_irq(&p->pi_lock);
+	raw_spin_lock_irqsave(&p->pi_lock, rf.flags);
 	if (p->on_rq) {
 		rq = __task_rq_lock(p, &rf);
 		if (task_rq(p) == rq)
@@ -3504,7 +3564,7 @@ bool try_invoke_on_locked_down_task(struct task_struct *p, bool (*func)(struct t
 				ret = func(p, arg);
 		}
 	}
-	raw_spin_unlock_irq(&p->pi_lock);
+	raw_spin_unlock_irqrestore(&p->pi_lock, rf.flags);
 	return ret;
 }
 
@@ -7915,6 +7975,9 @@ void __init sched_init(void)
 #endif /* CONFIG_SMP */
 		hrtick_rq_init(rq);
 		atomic_set(&rq->nr_iowait, 0);
+#ifdef CONFIG_SCHED_DEBUG
+		rq->resched_local_allow = 1;
+#endif
 	}
 
 	set_load_weight(&init_task, false);

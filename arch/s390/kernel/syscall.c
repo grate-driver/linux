@@ -162,6 +162,7 @@ void noinstr __do_syscall(struct pt_regs *regs, int per_trap)
 		do_syscall(regs);
 		if (!test_pt_regs_flag(regs, PIF_SYSCALL_RESTART))
 			break;
+		sched_resched_local_allow();
 		local_irq_enable();
 	}
 	exit_to_user_mode();

@@ -55,6 +55,7 @@ __setup("hlt", cpu_idle_nopoll_setup);
 static noinline int __cpuidle cpu_idle_poll(void)
 {
 	trace_cpu_idle(0, smp_processor_id());
+	rcu_nocb_flush_deferred_wakeup();
 	stop_critical_timings();
 	rcu_idle_enter();
 	local_irq_enable();
@@ -109,15 +110,21 @@ void __cpuidle default_idle_call(void)
 		rcu_idle_enter();
 		lockdep_hardirqs_on(_THIS_IP_);
 
-		arch_cpu_idle();
+		/*
+		 * Last need_resched() check must come after rcu_idle_enter()
+		 * which may wake up RCU internal tasks.
+		 */
+		if (!need_resched()) {
+			arch_cpu_idle();
+			raw_local_irq_disable();
+		}
 
 		/*
-		 * OK, so IRQs are enabled here, but RCU needs them disabled to
-		 * turn itself back on.. funny thing is that disabling IRQs
-		 * will cause tracing, which needs RCU. Jump through hoops to
-		 * make it 'work'.
+		 * OK, so IRQs are enabled after arch_cpu_idle(), but RCU needs
+		 * them disabled to turn itself back on.. funny thing is that
+		 * disabling IRQs will cause tracing, which needs RCU. Jump through
+		 * hoops to make it 'work'.
 		 */
-		raw_local_irq_disable();
 		lockdep_hardirqs_off(_THIS_IP_);
 		rcu_idle_exit();
 		lockdep_hardirqs_on(_THIS_IP_);
@@ -173,6 +180,8 @@ static void cpuidle_idle_call(void)
 	struct cpuidle_driver *drv = cpuidle_get_cpu_driver(dev);
 	int next_state, entered_state;
 
+	rcu_nocb_flush_deferred_wakeup();
+
 	/*
 	 * Check if the idle task must be rescheduled. If it is the
 	 * case, exit the function after re-enabling the local irq.
@@ -181,6 +190,8 @@ static void cpuidle_idle_call(void)
 		local_irq_enable();
 		return;
 	}
+
+	sched_resched_local_forbid();
 
 	/*
 	 * The RCU framework needs to be told that we are entering an idle
@@ -244,6 +255,7 @@ static void cpuidle_idle_call(void)
 	}
 
 exit_idle:
+	sched_resched_local_allow();
 	__current_set_polling();
 
 	/*

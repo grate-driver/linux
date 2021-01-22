@@ -134,8 +134,8 @@ int cpuidle_find_deepest_state(struct cpuidle_driver *drv,
 }
 
 #ifdef CONFIG_SUSPEND
-static void enter_s2idle_proper(struct cpuidle_driver *drv,
-				struct cpuidle_device *dev, int index)
+static int enter_s2idle_proper(struct cpuidle_driver *drv,
+			       struct cpuidle_device *dev, int index)
 {
 	ktime_t time_start, time_end;
 	struct cpuidle_state *target_state = &drv->states[index];
@@ -151,7 +151,14 @@ static void enter_s2idle_proper(struct cpuidle_driver *drv,
 	stop_critical_timings();
 	if (!(target_state->flags & CPUIDLE_FLAG_RCU_IDLE))
 		rcu_idle_enter();
-	target_state->enter_s2idle(dev, drv, index);
+	/*
+	 * Last need_resched() check must come after rcu_idle_enter()
+	 * which may wake up RCU internal tasks.
+	 */
+	if (!need_resched())
+		target_state->enter_s2idle(dev, drv, index);
+	else
+		index = -EBUSY;
 	if (WARN_ON_ONCE(!irqs_disabled()))
 		local_irq_disable();
 	if (!(target_state->flags & CPUIDLE_FLAG_RCU_IDLE))
@@ -159,10 +166,13 @@ static void enter_s2idle_proper(struct cpuidle_driver *drv,
 	tick_unfreeze();
 	start_critical_timings();
 
-	time_end = ns_to_ktime(local_clock());
+	if (index > 0) {
+		time_end = ns_to_ktime(local_clock());
+		dev->states_usage[index].s2idle_time += ktime_us_delta(time_end, time_start);
+		dev->states_usage[index].s2idle_usage++;
+	}
 
-	dev->states_usage[index].s2idle_time += ktime_us_delta(time_end, time_start);
-	dev->states_usage[index].s2idle_usage++;
+	return index;
 }
 
 /**
@@ -184,7 +194,7 @@ int cpuidle_enter_s2idle(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 	 */
 	index = find_deepest_state(drv, dev, U64_MAX, 0, true);
 	if (index > 0) {
-		enter_s2idle_proper(drv, dev, index);
+		index = enter_s2idle_proper(drv, dev, index);
 		local_irq_enable();
 	}
 	return index;
@@ -234,7 +244,14 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
 	stop_critical_timings();
 	if (!(target_state->flags & CPUIDLE_FLAG_RCU_IDLE))
 		rcu_idle_enter();
-	entered_state = target_state->enter(dev, drv, index);
+	/*
+	 * Last need_resched() check must come after rcu_idle_enter()
+	 * which may wake up RCU internal tasks.
+	 */
+	if ((target_state->flags & CPUIDLE_FLAG_COUPLED) || !need_resched())
+		entered_state = target_state->enter(dev, drv, index);
+	else
+		entered_state = -EBUSY;
 	if (!(target_state->flags & CPUIDLE_FLAG_RCU_IDLE))
 		rcu_idle_exit();
 	start_critical_timings();
