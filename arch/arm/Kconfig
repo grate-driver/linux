@@ -671,8 +671,6 @@ source "arch/arm/mach-orion5x/Kconfig"
 
 source "arch/arm/mach-oxnas/Kconfig"
 
-source "arch/arm/mach-prima2/Kconfig"
-
 source "arch/arm/mach-pxa/Kconfig"
 source "arch/arm/plat-pxa/Kconfig"
 
@@ -704,11 +702,7 @@ source "arch/arm/mach-stm32/Kconfig"
 
 source "arch/arm/mach-sunxi/Kconfig"
 
-source "arch/arm/mach-tango/Kconfig"
-
 source "arch/arm/mach-tegra/Kconfig"
-
-source "arch/arm/mach-u300/Kconfig"
 
 source "arch/arm/mach-uniphier/Kconfig"
 
@@ -719,8 +713,6 @@ source "arch/arm/mach-versatile/Kconfig"
 source "arch/arm/mach-vexpress/Kconfig"
 
 source "arch/arm/mach-vt8500/Kconfig"
-
-source "arch/arm/mach-zx/Kconfig"
 
 source "arch/arm/mach-zynq/Kconfig"
 
