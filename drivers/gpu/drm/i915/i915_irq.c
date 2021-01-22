@@ -2079,7 +2079,7 @@ static void ivb_display_irq_handler(struct drm_i915_private *dev_priv,
 		intel_opregion_asle_intr(dev_priv);
 
 	for_each_pipe(dev_priv, pipe) {
-		if (de_iir & (DE_PIPE_VBLANK_IVB(pipe)))
+		if (de_iir & DE_PIPE_VBLANK_IVB(pipe))
 			intel_handle_vblank(dev_priv, pipe);
 	}
 
@@ -2822,19 +2822,6 @@ int bdw_enable_vblank(struct drm_crtc *crtc)
 	return 0;
 }
 
-void skl_enable_flip_done(struct intel_crtc *crtc)
-{
-	struct drm_i915_private *i915 = to_i915(crtc->base.dev);
-	enum pipe pipe = crtc->pipe;
-	unsigned long irqflags;
-
-	spin_lock_irqsave(&i915->irq_lock, irqflags);
-
-	bdw_enable_pipe_irq(i915, pipe, GEN9_PIPE_PLANE1_FLIP_DONE);
-
-	spin_unlock_irqrestore(&i915->irq_lock, irqflags);
-}
-
 /* Called from drm generic code, passed 'crtc' which
  * we use as a pipe index
  */
@@ -2897,19 +2884,6 @@ void bdw_disable_vblank(struct drm_crtc *crtc)
 	spin_lock_irqsave(&dev_priv->irq_lock, irqflags);
 	bdw_disable_pipe_irq(dev_priv, pipe, GEN8_PIPE_VBLANK);
 	spin_unlock_irqrestore(&dev_priv->irq_lock, irqflags);
-}
-
-void skl_disable_flip_done(struct intel_crtc *crtc)
-{
-	struct drm_i915_private *i915 = to_i915(crtc->base.dev);
-	enum pipe pipe = crtc->pipe;
-	unsigned long irqflags;
-
-	spin_lock_irqsave(&i915->irq_lock, irqflags);
-
-	bdw_disable_pipe_irq(i915, pipe, GEN9_PIPE_PLANE1_FLIP_DONE);
-
-	spin_unlock_irqrestore(&i915->irq_lock, irqflags);
 }
 
 static void ibx_irq_reset(struct drm_i915_private *dev_priv)
