@@ -1961,6 +1961,26 @@ static unsigned int fragmentation_score_node(pg_data_t *pgdat)
 	return score;
 }
 
+/*
+ * Returns the maximum of fragmentation scores of zones in a node. This is
+ * used in taking the decission of whether to trigger the proactive compaction
+ * on the zones of this node.
+ */
+static unsigned int fragmentation_score_node_zones_max(pg_data_t *pgdat)
+{
+	int zoneid;
+	unsigned int max = 0;
+
+	for (zoneid = 0; zoneid < MAX_NR_ZONES; zoneid++) {
+		struct zone *zone;
+
+		zone = &pgdat->node_zones[zoneid];
+		max = max_t(unsigned int, fragmentation_score_zone(zone), max);
+	}
+
+	return max;
+}
+
 static unsigned int fragmentation_score_wmark(pg_data_t *pgdat, bool low)
 {
 	unsigned int wmark_low;
@@ -1976,13 +1996,16 @@ static unsigned int fragmentation_score_wmark(pg_data_t *pgdat, bool low)
 
 static bool should_proactive_compact_node(pg_data_t *pgdat)
 {
-	int wmark_high;
+	int wmark_low, wmark_high;
 
 	if (!sysctl_compaction_proactiveness || kswapd_is_running(pgdat))
 		return false;
 
 	wmark_high = fragmentation_score_wmark(pgdat, false);
-	return fragmentation_score_node(pgdat) > wmark_high;
+	wmark_low = fragmentation_score_wmark(pgdat, true);
+
+	return fragmentation_score_node(pgdat) > wmark_high &&
+		fragmentation_score_node_zones_max(pgdat) > wmark_low;
 }
 
 static enum compact_result __compact_finished(struct compact_control *cc)
