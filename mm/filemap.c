@@ -2650,7 +2650,8 @@ loff_t mapping_seek_hole_data(struct address_space *mapping, loff_t start,
 		if (page_seek_match(page, seek_data))
 			goto unlock;
 		start = pos + seek_page_size(&xas, page);
-		put_page(page);
+		if (!xa_is_value(page))
+			put_page(page);
 	}
 	rcu_read_unlock();
 
