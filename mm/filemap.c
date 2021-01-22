@@ -1967,6 +1967,8 @@ unsigned find_lock_entries(struct address_space *mapping, pgoff_t start,
 				goto put;
 			if (page->mapping != mapping || PageWriteback(page))
 				goto unlock;
+			VM_BUG_ON_PAGE(!thp_contains(page, xas.xa_index),
+					page);
 		}
 		indices[pvec->nr] = xas.xa_index;
 		if (!pagevec_add(pvec, page))
