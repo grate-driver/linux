@@ -93,6 +93,7 @@ static struct gfs2_sbd *init_sbd(struct super_block *sb)
 	init_completion(&sdp->sd_locking_init);
 	init_completion(&sdp->sd_wdack);
 	spin_lock_init(&sdp->sd_statfs_spin);
+	INIT_WORK(&sdp->sd_recovery_work, gfs2_recover_func);
 
 	spin_lock_init(&sdp->sd_rindex_spin);
 	sdp->sd_rindex_tree.rb_node = NULL;
@@ -179,7 +180,7 @@ static int gfs2_check_sb(struct gfs2_sbd *sdp, int silent)
 
 	if (sb->sb_bsize < 512 || sb->sb_bsize > PAGE_SIZE ||
 	    (sb->sb_bsize & (sb->sb_bsize - 1))) {
-		pr_warn("Invalid superblock size\n");
+		pr_warn("Invalid block size\n");
 		return -EINVAL;
 	}
 
@@ -586,7 +587,6 @@ static int gfs2_jindex_hold(struct gfs2_sbd *sdp, struct gfs2_holder *ji_gh)
 		INIT_LIST_HEAD(&jd->extent_list);
 		INIT_LIST_HEAD(&jd->jd_revoke_list);
 
-		INIT_WORK(&jd->jd_work, gfs2_recover_func);
 		jd->jd_inode = gfs2_lookupi(sdp->sd_jindex, &name, 1);
 		if (IS_ERR_OR_NULL(jd->jd_inode)) {
 			if (!jd->jd_inode)
@@ -1084,6 +1084,7 @@ static int gfs2_fill_super(struct super_block *sb, struct fs_context *fc)
 	int silent = fc->sb_flags & SB_SILENT;
 	struct gfs2_sbd *sdp;
 	struct gfs2_holder mount_gh;
+	struct gfs2_holder freeze_gh;
 	int error;
 
 	sdp = init_sbd(sb);
@@ -1195,25 +1196,18 @@ static int gfs2_fill_super(struct super_block *sb, struct fs_context *fc)
 		goto fail_per_node;
 	}
 
-	if (sb_rdonly(sb)) {
-		struct gfs2_holder freeze_gh;
+	error = gfs2_freeze_lock(sdp, &freeze_gh, 0);
+	if (error)
+		goto fail_per_node;
 
-		error = gfs2_glock_nq_init(sdp->sd_freeze_gl, LM_ST_SHARED,
-					   LM_FLAG_NOEXP | GL_EXACT,
-					   &freeze_gh);
-		if (error) {
-			fs_err(sdp, "can't make FS RO: %d\n", error);
-			goto fail_per_node;
-		}
-		gfs2_glock_dq_uninit(&freeze_gh);
-	} else {
+	if (!sb_rdonly(sb))
 		error = gfs2_make_fs_rw(sdp);
-		if (error) {
-			fs_err(sdp, "can't make FS RW: %d\n", error);
-			goto fail_per_node;
-		}
-	}
 
+	gfs2_freeze_unlock(&freeze_gh);
+	if (error) {
+		fs_err(sdp, "can't make FS RW: %d\n", error);
+		goto fail_per_node;
+	}
 	gfs2_glock_dq_uninit(&mount_gh);
 	gfs2_online_uevent(sdp);
 	return 0;
@@ -1514,6 +1508,12 @@ static int gfs2_reconfigure(struct fs_context *fc)
 		fc->sb_flags |= SB_RDONLY;
 
 	if ((sb->s_flags ^ fc->sb_flags) & SB_RDONLY) {
+		struct gfs2_holder freeze_gh;
+
+		error = gfs2_freeze_lock(sdp, &freeze_gh, 0);
+		if (error)
+			return -EINVAL;
+
 		if (fc->sb_flags & SB_RDONLY) {
 			error = gfs2_make_fs_ro(sdp);
 			if (error)
@@ -1523,6 +1523,7 @@ static int gfs2_reconfigure(struct fs_context *fc)
 			if (error)
 				errorfc(fc, "unable to remount read-write");
 		}
+		gfs2_freeze_unlock(&freeze_gh);
 	}
 	sdp->sd_args = *newargs;
 

@@ -399,9 +399,8 @@ out:
 	return;
 }
 
-void gfs2_recover_func(struct work_struct *work)
+static void gfs2_recover_one(struct gfs2_jdesc *jd)
 {
-	struct gfs2_jdesc *jd = container_of(work, struct gfs2_jdesc, jd_work);
 	struct gfs2_inode *ip = GFS2_I(jd->jd_inode);
 	struct gfs2_sbd *sdp = GFS2_SB(jd->jd_inode);
 	struct gfs2_log_header_host head;
@@ -470,9 +469,7 @@ void gfs2_recover_func(struct work_struct *work)
 
 		/* Acquire a shared hold on the freeze lock */
 
-		error = gfs2_glock_nq_init(sdp->sd_freeze_gl, LM_ST_SHARED,
-					   LM_FLAG_NOEXP | LM_FLAG_PRIORITY |
-					   GL_EXACT, &thaw_gh);
+		error = gfs2_freeze_lock(sdp, &thaw_gh, LM_FLAG_PRIORITY);
 		if (error)
 			goto fail_gunlock_ji;
 
@@ -522,7 +519,7 @@ void gfs2_recover_func(struct work_struct *work)
 		clean_journal(jd, &head);
 		up_read(&sdp->sd_log_flush_lock);
 
-		gfs2_glock_dq_uninit(&thaw_gh);
+		gfs2_freeze_unlock(&thaw_gh);
 		t_rep = ktime_get();
 		fs_info(sdp, "jid=%u: Journal replayed in %lldms [jlck:%lldms, "
 			"jhead:%lldms, tlck:%lldms, replay:%lldms]\n",
@@ -544,7 +541,7 @@ void gfs2_recover_func(struct work_struct *work)
 	goto done;
 
 fail_gunlock_thaw:
-	gfs2_glock_dq_uninit(&thaw_gh);
+	gfs2_freeze_unlock(&thaw_gh);
 fail_gunlock_ji:
 	if (jlocked) {
 		gfs2_glock_dq_uninit(&ji_gh);
@@ -562,16 +559,37 @@ done:
 	wake_up_bit(&jd->jd_flags, JDF_RECOVERY);
 }
 
+void gfs2_recover_func(struct work_struct *work)
+{
+	struct gfs2_sbd *sdp = container_of(work, struct gfs2_sbd,
+					    sd_recovery_work);
+	struct gfs2_jdesc *jd;
+
+repeat:
+	spin_lock(&sdp->sd_jindex_spin);
+	list_for_each_entry(jd, &sdp->sd_jindex_list, jd_list) {
+		if (test_bit(JDF_RECOVERY, &jd->jd_flags)) {
+			spin_unlock(&sdp->sd_jindex_spin);
+			gfs2_recover_one(jd);
+			goto repeat;
+		}
+	}
+	spin_unlock(&sdp->sd_jindex_spin);
+}
+
 int gfs2_recover_journal(struct gfs2_jdesc *jd, bool wait)
 {
-	int rv;
+	struct gfs2_sbd *sdp = GFS2_SB(jd->jd_inode);
 
 	if (test_and_set_bit(JDF_RECOVERY, &jd->jd_flags))
 		return -EBUSY;
 
-	/* we have JDF_RECOVERY, queue should always succeed */
-	rv = queue_work(gfs_recovery_wq, &jd->jd_work);
-	BUG_ON(!rv);
+	/*
+	 * If queue_work fails, work is already queued to recover a different
+	 * journal. We can safely ignore this error because that work should
+	 * loop around and recover this journal too.
+	 */
+	queue_work(gfs_recovery_wq, &sdp->sd_recovery_work);
 
 	if (wait)
 		wait_on_bit(&jd->jd_flags, JDF_RECOVERY,
