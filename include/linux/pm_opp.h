@@ -98,6 +98,9 @@ unsigned long dev_pm_opp_get_freq(struct dev_pm_opp *opp);
 
 unsigned int dev_pm_opp_get_level(struct dev_pm_opp *opp);
 
+unsigned int dev_pm_opp_get_required_pstate(struct dev_pm_opp *opp,
+					    unsigned int index);
+
 bool dev_pm_opp_is_turbo(struct dev_pm_opp *opp);
 
 int dev_pm_opp_get_opp_count(struct device *dev);
@@ -111,6 +114,8 @@ struct dev_pm_opp *dev_pm_opp_find_freq_exact(struct device *dev,
 					      bool available);
 struct dev_pm_opp *dev_pm_opp_find_level_exact(struct device *dev,
 					       unsigned int level);
+struct dev_pm_opp *dev_pm_opp_find_level_ceil(struct device *dev,
+					      unsigned int *level);
 
 struct dev_pm_opp *dev_pm_opp_find_freq_floor(struct device *dev,
 					      unsigned long *freq);
@@ -147,11 +152,13 @@ struct opp_table *dev_pm_opp_set_clkname(struct device *dev, const char * name);
 void dev_pm_opp_put_clkname(struct opp_table *opp_table);
 struct opp_table *dev_pm_opp_register_set_opp_helper(struct device *dev, int (*set_opp)(struct dev_pm_set_opp_data *data));
 void dev_pm_opp_unregister_set_opp_helper(struct opp_table *opp_table);
+struct opp_table *devm_pm_opp_register_set_opp_helper(struct device *dev, int (*set_opp)(struct dev_pm_set_opp_data *data));
 struct opp_table *dev_pm_opp_attach_genpd(struct device *dev, const char **names, struct device ***virt_devs);
 void dev_pm_opp_detach_genpd(struct opp_table *opp_table);
+struct opp_table *devm_pm_opp_attach_genpd(struct device *dev, const char **names, struct device ***virt_devs);
 int dev_pm_opp_xlate_performance_state(struct opp_table *src_table, struct opp_table *dst_table, unsigned int pstate);
 int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq);
-int dev_pm_opp_set_bw(struct device *dev, struct dev_pm_opp *opp);
+int dev_pm_opp_set_opp(struct device *dev, struct dev_pm_opp *opp);
 int dev_pm_opp_set_sharing_cpus(struct device *cpu_dev, const struct cpumask *cpumask);
 int dev_pm_opp_get_sharing_cpus(struct device *cpu_dev, struct cpumask *cpumask);
 void dev_pm_opp_remove_table(struct device *dev);
@@ -180,6 +187,13 @@ static inline unsigned long dev_pm_opp_get_freq(struct dev_pm_opp *opp)
 }
 
 static inline unsigned int dev_pm_opp_get_level(struct dev_pm_opp *opp)
+{
+	return 0;
+}
+
+static inline
+unsigned int dev_pm_opp_get_required_pstate(struct dev_pm_opp *opp,
+					    unsigned int index)
 {
 	return 0;
 }
@@ -222,6 +236,12 @@ static inline struct dev_pm_opp *dev_pm_opp_find_freq_exact(struct device *dev,
 
 static inline struct dev_pm_opp *dev_pm_opp_find_level_exact(struct device *dev,
 					unsigned int level)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline struct dev_pm_opp *dev_pm_opp_find_level_ceil(struct device *dev,
+					unsigned int *level)
 {
 	return ERR_PTR(-ENOTSUPP);
 }
@@ -305,6 +325,13 @@ static inline struct opp_table *dev_pm_opp_register_set_opp_helper(struct device
 
 static inline void dev_pm_opp_unregister_set_opp_helper(struct opp_table *opp_table) {}
 
+static inline struct opp_table *
+devm_pm_opp_register_set_opp_helper(struct device *dev,
+				    int (*set_opp)(struct dev_pm_set_opp_data *data))
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
 static inline struct opp_table *dev_pm_opp_set_prop_name(struct device *dev, const char *name)
 {
 	return ERR_PTR(-ENOTSUPP);
@@ -333,6 +360,12 @@ static inline struct opp_table *dev_pm_opp_attach_genpd(struct device *dev, cons
 
 static inline void dev_pm_opp_detach_genpd(struct opp_table *opp_table) {}
 
+static inline struct opp_table *devm_pm_opp_attach_genpd(struct device *dev,
+				const char **names, struct device ***virt_devs)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
 static inline int dev_pm_opp_xlate_performance_state(struct opp_table *src_table, struct opp_table *dst_table, unsigned int pstate)
 {
 	return -ENOTSUPP;
@@ -343,9 +376,9 @@ static inline int dev_pm_opp_set_rate(struct device *dev, unsigned long target_f
 	return -ENOTSUPP;
 }
 
-static inline int dev_pm_opp_set_bw(struct device *dev, struct dev_pm_opp *opp)
+static inline int dev_pm_opp_set_opp(struct device *dev, struct dev_pm_opp *opp)
 {
-	return -EOPNOTSUPP;
+	return -ENOTSUPP;
 }
 
 static inline int dev_pm_opp_set_sharing_cpus(struct device *cpu_dev, const struct cpumask *cpumask)
