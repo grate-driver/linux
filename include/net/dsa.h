@@ -46,6 +46,7 @@ struct phylink_link_state;
 #define DSA_TAG_PROTO_AR9331_VALUE		16
 #define DSA_TAG_PROTO_RTL4_A_VALUE		17
 #define DSA_TAG_PROTO_HELLCREEK_VALUE		18
+#define DSA_TAG_PROTO_XRS700X_VALUE		19
 
 enum dsa_tag_protocol {
 	DSA_TAG_PROTO_NONE		= DSA_TAG_PROTO_NONE_VALUE,
@@ -67,6 +68,7 @@ enum dsa_tag_protocol {
 	DSA_TAG_PROTO_AR9331		= DSA_TAG_PROTO_AR9331_VALUE,
 	DSA_TAG_PROTO_RTL4_A		= DSA_TAG_PROTO_RTL4_A_VALUE,
 	DSA_TAG_PROTO_HELLCREEK		= DSA_TAG_PROTO_HELLCREEK_VALUE,
+	DSA_TAG_PROTO_XRS700X		= DSA_TAG_PROTO_XRS700X_VALUE,
 };
 
 struct packet_type;
@@ -149,7 +151,40 @@ struct dsa_switch_tree {
 
 	/* List of DSA links composing the routing table */
 	struct list_head rtable;
+
+	/* Maps offloaded LAG netdevs to a zero-based linear ID for
+	 * drivers that need it.
+	 */
+	struct net_device **lags;
+	unsigned int lags_len;
 };
+
+#define dsa_lags_foreach_id(_id, _dst)				\
+	for ((_id) = 0; (_id) < (_dst)->lags_len; (_id)++)	\
+		if ((_dst)->lags[(_id)])
+
+#define dsa_lag_foreach_port(_dp, _dst, _lag)			\
+	list_for_each_entry((_dp), &(_dst)->ports, list)	\
+		if ((_dp)->lag_dev == (_lag))
+
+static inline struct net_device *dsa_lag_dev(struct dsa_switch_tree *dst,
+					     unsigned int id)
+{
+	return dst->lags[id];
+}
+
+static inline int dsa_lag_id(struct dsa_switch_tree *dst,
+			     struct net_device *lag)
+{
+	unsigned int id;
+
+	dsa_lags_foreach_id(id, dst) {
+		if (dsa_lag_dev(dst, id) == lag)
+			return id;
+	}
+
+	return -ENODEV;
+}
 
 /* TC matchall action types */
 enum dsa_port_mall_action_type {
@@ -220,6 +255,8 @@ struct dsa_port {
 	bool			devlink_port_setup;
 	struct phylink		*pl;
 	struct phylink_config	pl_config;
+	struct net_device	*lag_dev;
+	bool			lag_tx_enabled;
 
 	struct list_head list;
 
@@ -319,6 +356,11 @@ struct dsa_switch {
 	 */
 	bool			untag_bridge_pvid;
 
+	/* Let DSA manage the FDB entries towards the CPU, based on the
+	 * software bridge database.
+	 */
+	bool			assisted_learning_on_cpu_port;
+
 	/* In case vlan_filtering_is_global is set, the VLAN awareness state
 	 * should be retrieved from here and not from the per-port settings.
 	 */
@@ -334,6 +376,14 @@ struct dsa_switch {
 	 * interfaces is needed.
 	 */
 	bool			mtu_enforcement_ingress;
+
+	/* Drivers that benefit from having an ID associated with each
+	 * offloaded LAG should set this to the maximum number of
+	 * supported IDs. DSA will then maintain a mapping of _at
+	 * least_ these many IDs, accessible to drivers via
+	 * dsa_lag_id().
+	 */
+	unsigned int		num_lag_ids;
 
 	size_t num_ports;
 };
@@ -477,7 +527,7 @@ struct dsa_switch_ops {
 	void	(*phylink_fixed_state)(struct dsa_switch *ds, int port,
 				       struct phylink_link_state *state);
 	/*
-	 * ethtool hardware statistics.
+	 * Port statistics counters.
 	 */
 	void	(*get_strings)(struct dsa_switch *ds, int port,
 			       u32 stringset, uint8_t *data);
@@ -486,6 +536,8 @@ struct dsa_switch_ops {
 	int	(*get_sset_count)(struct dsa_switch *ds, int port, int sset);
 	void	(*get_ethtool_phy_stats)(struct dsa_switch *ds,
 					 int port, uint64_t *data);
+	void	(*get_stats64)(struct dsa_switch *ds, int port,
+				   struct rtnl_link_stats64 *s);
 
 	/*
 	 * ethtool Wake-on-LAN
@@ -560,12 +612,9 @@ struct dsa_switch_ops {
 	 * VLAN support
 	 */
 	int	(*port_vlan_filtering)(struct dsa_switch *ds, int port,
-				       bool vlan_filtering,
-				       struct switchdev_trans *trans);
-	int (*port_vlan_prepare)(struct dsa_switch *ds, int port,
+				       bool vlan_filtering);
+	int	(*port_vlan_add)(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_vlan *vlan);
-	void (*port_vlan_add)(struct dsa_switch *ds, int port,
-			      const struct switchdev_obj_port_vlan *vlan);
 	int	(*port_vlan_del)(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_vlan *vlan);
 	/*
@@ -581,10 +630,8 @@ struct dsa_switch_ops {
 	/*
 	 * Multicast database
 	 */
-	int (*port_mdb_prepare)(struct dsa_switch *ds, int port,
+	int	(*port_mdb_add)(struct dsa_switch *ds, int port,
 				const struct switchdev_obj_port_mdb *mdb);
-	void (*port_mdb_add)(struct dsa_switch *ds, int port,
-			     const struct switchdev_obj_port_mdb *mdb);
 	int	(*port_mdb_del)(struct dsa_switch *ds, int port,
 				const struct switchdev_obj_port_mdb *mdb);
 	/*
@@ -624,6 +671,13 @@ struct dsa_switch_ops {
 	void	(*crosschip_bridge_leave)(struct dsa_switch *ds, int tree_index,
 					  int sw_index, int port,
 					  struct net_device *br);
+	int	(*crosschip_lag_change)(struct dsa_switch *ds, int sw_index,
+					int port);
+	int	(*crosschip_lag_join)(struct dsa_switch *ds, int sw_index,
+				      int port, struct net_device *lag,
+				      struct netdev_lag_upper_info *info);
+	int	(*crosschip_lag_leave)(struct dsa_switch *ds, int sw_index,
+				       int port, struct net_device *lag);
 
 	/*
 	 * PTP functionality
@@ -645,6 +699,40 @@ struct dsa_switch_ops {
 	int	(*devlink_info_get)(struct dsa_switch *ds,
 				    struct devlink_info_req *req,
 				    struct netlink_ext_ack *extack);
+	int	(*devlink_sb_pool_get)(struct dsa_switch *ds,
+				       unsigned int sb_index, u16 pool_index,
+				       struct devlink_sb_pool_info *pool_info);
+	int	(*devlink_sb_pool_set)(struct dsa_switch *ds, unsigned int sb_index,
+				       u16 pool_index, u32 size,
+				       enum devlink_sb_threshold_type threshold_type,
+				       struct netlink_ext_ack *extack);
+	int	(*devlink_sb_port_pool_get)(struct dsa_switch *ds, int port,
+					    unsigned int sb_index, u16 pool_index,
+					    u32 *p_threshold);
+	int	(*devlink_sb_port_pool_set)(struct dsa_switch *ds, int port,
+					    unsigned int sb_index, u16 pool_index,
+					    u32 threshold,
+					    struct netlink_ext_ack *extack);
+	int	(*devlink_sb_tc_pool_bind_get)(struct dsa_switch *ds, int port,
+					       unsigned int sb_index, u16 tc_index,
+					       enum devlink_sb_pool_type pool_type,
+					       u16 *p_pool_index, u32 *p_threshold);
+	int	(*devlink_sb_tc_pool_bind_set)(struct dsa_switch *ds, int port,
+					       unsigned int sb_index, u16 tc_index,
+					       enum devlink_sb_pool_type pool_type,
+					       u16 pool_index, u32 threshold,
+					       struct netlink_ext_ack *extack);
+	int	(*devlink_sb_occ_snapshot)(struct dsa_switch *ds,
+					   unsigned int sb_index);
+	int	(*devlink_sb_occ_max_clear)(struct dsa_switch *ds,
+					    unsigned int sb_index);
+	int	(*devlink_sb_occ_port_pool_get)(struct dsa_switch *ds, int port,
+						unsigned int sb_index, u16 pool_index,
+						u32 *p_cur, u32 *p_max);
+	int	(*devlink_sb_occ_tc_port_bind_get)(struct dsa_switch *ds, int port,
+						   unsigned int sb_index, u16 tc_index,
+						   enum devlink_sb_pool_type pool_type,
+						   u32 *p_cur, u32 *p_max);
 
 	/*
 	 * MTU change functionality. Switches can also adjust their MRU through
@@ -655,6 +743,16 @@ struct dsa_switch_ops {
 	int	(*port_change_mtu)(struct dsa_switch *ds, int port,
 				   int new_mtu);
 	int	(*port_max_mtu)(struct dsa_switch *ds, int port);
+
+	/*
+	 * LAG integration
+	 */
+	int	(*port_lag_change)(struct dsa_switch *ds, int port);
+	int	(*port_lag_join)(struct dsa_switch *ds, int port,
+				 struct net_device *lag,
+				 struct netdev_lag_upper_info *info);
+	int	(*port_lag_leave)(struct dsa_switch *ds, int port,
+				  struct net_device *lag);
 };
 
 #define DSA_DEVLINK_PARAM_DRIVER(_id, _name, _type, _cmodes)		\
@@ -828,56 +926,14 @@ static inline int dsa_switch_resume(struct dsa_switch *ds)
 }
 #endif /* CONFIG_PM_SLEEP */
 
-enum dsa_notifier_type {
-	DSA_PORT_REGISTER,
-	DSA_PORT_UNREGISTER,
-};
-
-struct dsa_notifier_info {
-	struct net_device *dev;
-};
-
-struct dsa_notifier_register_info {
-	struct dsa_notifier_info info;	/* must be first */
-	struct net_device *master;
-	unsigned int port_number;
-	unsigned int switch_number;
-};
-
-static inline struct net_device *
-dsa_notifier_info_to_dev(const struct dsa_notifier_info *info)
-{
-	return info->dev;
-}
-
 #if IS_ENABLED(CONFIG_NET_DSA)
-int register_dsa_notifier(struct notifier_block *nb);
-int unregister_dsa_notifier(struct notifier_block *nb);
-int call_dsa_notifiers(unsigned long val, struct net_device *dev,
-		       struct dsa_notifier_info *info);
+bool dsa_slave_dev_check(const struct net_device *dev);
 #else
-static inline int register_dsa_notifier(struct notifier_block *nb)
+static inline bool dsa_slave_dev_check(const struct net_device *dev)
 {
-	return 0;
-}
-
-static inline int unregister_dsa_notifier(struct notifier_block *nb)
-{
-	return 0;
-}
-
-static inline int call_dsa_notifiers(unsigned long val, struct net_device *dev,
-				     struct dsa_notifier_info *info)
-{
-	return NOTIFY_DONE;
+	return false;
 }
 #endif
-
-/* Broadcom tag specific helpers to insert and extract queue/port number */
-#define BRCM_TAG_SET_PORT_QUEUE(p, q)	((p) << 8 | q)
-#define BRCM_TAG_GET_PORT(v)		((v) >> 8)
-#define BRCM_TAG_GET_QUEUE(v)		((v) & 0xff)
-
 
 netdev_tx_t dsa_enqueue_skb(struct sk_buff *skb, struct net_device *dev);
 int dsa_port_get_phy_strings(struct dsa_port *dp, uint8_t *data);

@@ -376,7 +376,6 @@ enum gro_result {
 	GRO_MERGED_FREE,
 	GRO_HELD,
 	GRO_NORMAL,
-	GRO_DROP,
 	GRO_CONSUMED,
 };
 typedef enum gro_result gro_result_t;
@@ -1213,19 +1212,6 @@ struct netdev_net_notifier {
  *				 struct netdev_phys_item_id *ppid)
  *	Called to get the parent ID of the physical port of this device.
  *
- * void (*ndo_udp_tunnel_add)(struct net_device *dev,
- *			      struct udp_tunnel_info *ti);
- *	Called by UDP tunnel to notify a driver about the UDP port and socket
- *	address family that a UDP tunnel is listnening to. It is called only
- *	when a new port starts listening. The operation is protected by the
- *	RTNL.
- *
- * void (*ndo_udp_tunnel_del)(struct net_device *dev,
- *			      struct udp_tunnel_info *ti);
- *	Called by UDP tunnel to notify the driver about a UDP port and socket
- *	address family that the UDP tunnel is not listening to anymore. The
- *	operation is protected by the RTNL.
- *
  * void* (*ndo_dfwd_add_station)(struct net_device *pdev,
  *				 struct net_device *dev)
  *	Called by upper layer devices to accelerate switching or other
@@ -1412,6 +1398,8 @@ struct net_device_ops {
 	struct net_device*	(*ndo_get_xmit_slave)(struct net_device *dev,
 						      struct sk_buff *skb,
 						      bool all_slaves);
+	struct net_device*	(*ndo_sk_get_lower_dev)(struct net_device *dev,
+							struct sock *sk);
 	netdev_features_t	(*ndo_fix_features)(struct net_device *dev,
 						    netdev_features_t features);
 	int			(*ndo_set_features)(struct net_device *dev,
@@ -1464,10 +1452,6 @@ struct net_device_ops {
 							  struct netdev_phys_item_id *ppid);
 	int			(*ndo_get_phys_port_name)(struct net_device *dev,
 							  char *name, size_t len);
-	void			(*ndo_udp_tunnel_add)(struct net_device *dev,
-						      struct udp_tunnel_info *ti);
-	void			(*ndo_udp_tunnel_del)(struct net_device *dev,
-						      struct udp_tunnel_info *ti);
 	void*			(*ndo_dfwd_add_station)(struct net_device *pdev,
 							struct net_device *dev);
 	void			(*ndo_dfwd_del_station)(struct net_device *pdev,
@@ -2633,6 +2617,7 @@ enum netdev_lag_hash {
 	NETDEV_LAG_HASH_L23,
 	NETDEV_LAG_HASH_E23,
 	NETDEV_LAG_HASH_E34,
+	NETDEV_LAG_HASH_VLAN_SRCMAC,
 	NETDEV_LAG_HASH_UNKNOWN,
 };
 
@@ -2876,6 +2861,8 @@ int init_dummy_netdev(struct net_device *dev);
 struct net_device *netdev_get_xmit_slave(struct net_device *dev,
 					 struct sk_buff *skb,
 					 bool all_slaves);
+struct net_device *netdev_sk_get_lowest_dev(struct net_device *dev,
+					    struct sock *sk);
 struct net_device *dev_get_by_index(struct net *net, int ifindex);
 struct net_device *__dev_get_by_index(struct net *net, int ifindex);
 struct net_device *dev_get_by_index_rcu(struct net *net, int ifindex);
