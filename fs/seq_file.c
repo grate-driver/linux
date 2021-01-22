@@ -864,6 +864,9 @@ void seq_hex_dump(struct seq_file *m, const char *prefix_str, int prefix_type,
 		remaining -= rowsize;
 
 		switch (prefix_type) {
+		case DUMP_PREFIX_UNHASHED:
+			seq_printf(m, "%s%px: ", prefix_str, ptr + i);
+			break;
 		case DUMP_PREFIX_ADDRESS:
 			seq_printf(m, "%s%p: ", prefix_str, ptr + i);
 			break;
