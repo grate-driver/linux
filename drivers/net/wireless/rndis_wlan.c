@@ -3598,6 +3598,8 @@ static const struct driver_info	bcm4320b_info = {
 	.stop =		rndis_wlan_stop,
 	.early_init =	bcm4320b_early_init,
 	.indication =	rndis_wlan_indication,
+	.register_netdev = cfg80211_register_netdev,
+	.unregister_netdev = cfg80211_unregister_netdev,
 };
 
 static const struct driver_info	bcm4320a_info = {
@@ -3613,6 +3615,8 @@ static const struct driver_info	bcm4320a_info = {
 	.stop =		rndis_wlan_stop,
 	.early_init =	bcm4320a_early_init,
 	.indication =	rndis_wlan_indication,
+	.register_netdev = cfg80211_register_netdev,
+	.unregister_netdev = cfg80211_unregister_netdev,
 };
 
 static const struct driver_info rndis_wlan_info = {
@@ -3628,6 +3632,8 @@ static const struct driver_info rndis_wlan_info = {
 	.stop =		rndis_wlan_stop,
 	.early_init =	unknown_early_init,
 	.indication =	rndis_wlan_indication,
+	.register_netdev = cfg80211_register_netdev,
+	.unregister_netdev = cfg80211_unregister_netdev,
 };
 
 /*-------------------------------------------------------------------------*/

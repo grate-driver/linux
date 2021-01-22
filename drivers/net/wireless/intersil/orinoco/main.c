@@ -2274,7 +2274,7 @@ int orinoco_if_add(struct orinoco_private *priv,
 	dev->max_mtu = ORINOCO_MAX_MTU;
 
 	SET_NETDEV_DEV(dev, priv->dev);
-	ret = register_netdev(dev);
+	ret = cfg80211_register_netdev(dev);
 	if (ret)
 		goto fail;
 
@@ -2295,7 +2295,7 @@ void orinoco_if_del(struct orinoco_private *priv)
 {
 	struct net_device *dev = priv->ndev;
 
-	unregister_netdev(dev);
+	cfg80211_unregister_netdev(dev);
 	free_netdev(dev);
 }
 EXPORT_SYMBOL(orinoco_if_del);

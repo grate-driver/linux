@@ -822,7 +822,7 @@ void wlan_unsetup(struct wlandevice *wlandev)
  */
 int register_wlandev(struct wlandevice *wlandev)
 {
-	return register_netdev(wlandev->netdev);
+	return cfg80211_register_netdev(wlandev->netdev);
 }
 
 /*----------------------------------------------------------------
@@ -847,7 +847,7 @@ int unregister_wlandev(struct wlandevice *wlandev)
 {
 	struct sk_buff *skb;
 
-	unregister_netdev(wlandev->netdev);
+	cfg80211_unregister_netdev(wlandev->netdev);
 
 	/* Now to clean out the rx queue */
 	while ((skb = skb_dequeue(&wlandev->nsd_rxq)))

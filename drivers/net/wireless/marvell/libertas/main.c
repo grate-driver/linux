@@ -1097,7 +1097,7 @@ void lbs_stop_card(struct lbs_private *priv)
 
 	lbs_debugfs_remove_one(priv);
 	lbs_deinit_mesh(priv);
-	unregister_netdev(dev);
+	cfg80211_unregister_netdev(dev);
 }
 EXPORT_SYMBOL_GPL(lbs_stop_card);
 

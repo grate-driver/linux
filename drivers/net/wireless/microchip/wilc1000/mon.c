@@ -253,6 +253,6 @@ void wilc_wfi_deinit_mon_interface(struct wilc *wl, bool rtnl_locked)
 	if (rtnl_locked)
 		unregister_netdevice(wl->monitor_dev);
 	else
-		unregister_netdev(wl->monitor_dev);
+		cfg80211_unregister_netdev(wl->monitor_dev);
 	wl->monitor_dev = NULL;
 }

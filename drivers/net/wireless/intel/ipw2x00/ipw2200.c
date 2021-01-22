@@ -11553,7 +11553,7 @@ static int ipw_prom_alloc(struct ipw_priv *priv)
 	priv->prom_priv->ieee->iw_mode = IW_MODE_MONITOR;
 	SET_NETDEV_DEV(priv->prom_net_dev, &priv->pci_dev->dev);
 
-	rc = register_netdev(priv->prom_net_dev);
+	rc = cfg80211_register_netdev(priv->prom_net_dev);
 	if (rc) {
 		free_libipw(priv->prom_net_dev, 1);
 		priv->prom_net_dev = NULL;
@@ -11568,7 +11568,7 @@ static void ipw_prom_free(struct ipw_priv *priv)
 	if (!priv->prom_net_dev)
 		return;
 
-	unregister_netdev(priv->prom_net_dev);
+	cfg80211_unregister_netdev(priv->prom_net_dev);
 	free_libipw(priv->prom_net_dev, 1);
 
 	priv->prom_net_dev = NULL;
@@ -11711,7 +11711,7 @@ static int ipw_pci_probe(struct pci_dev *pdev,
 		goto out_remove_sysfs;
 	}
 
-	err = register_netdev(net_dev);
+	err = cfg80211_register_netdev(net_dev);
 	if (err) {
 		IPW_ERROR("failed to register network device\n");
 		goto out_unregister_wiphy;
@@ -11723,7 +11723,7 @@ static int ipw_pci_probe(struct pci_dev *pdev,
 		if (err) {
 			IPW_ERROR("Failed to register promiscuous network "
 				  "device (error %d).\n", err);
-			unregister_netdev(priv->net_dev);
+			cfg80211_unregister_netdev(priv->net_dev);
 			goto out_unregister_wiphy;
 		}
 	}
@@ -11773,7 +11773,7 @@ static void ipw_pci_remove(struct pci_dev *pdev)
 
 	mutex_unlock(&priv->mutex);
 
-	unregister_netdev(priv->net_dev);
+	cfg80211_unregister_netdev(priv->net_dev);
 
 	if (priv->rxq) {
 		ipw_rx_queue_free(priv, priv->rxq);

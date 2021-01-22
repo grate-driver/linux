@@ -2133,7 +2133,7 @@ int lbs_cfg_register(struct lbs_private *priv)
 
 	priv->wiphy_registered = true;
 
-	ret = register_netdev(priv->dev);
+	ret = cfg80211_register_netdev(priv->dev);
 	if (ret)
 		pr_err("cannot register network device\n");
 

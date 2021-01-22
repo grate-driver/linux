@@ -167,6 +167,12 @@ struct driver_info {
 	/* rx mode change (device changes address list filtering) */
 	void	(*set_rx_mode)(struct usbnet *dev);
 
+	/* register netdev - defaults to register_netdev() */
+	int	(*register_netdev)(struct net_device *dev);
+
+	/* unregister netdev - defaults to unregister_netdev() */
+	void	(*unregister_netdev)(struct net_device *dev);
+
 	/* for new devices, use the descriptor-reading code instead */
 	int		in;		/* rx endpoint */
 	int		out;		/* tx endpoint */

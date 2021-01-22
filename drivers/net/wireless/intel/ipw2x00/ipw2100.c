@@ -6263,7 +6263,7 @@ static int ipw2100_pci_init_one(struct pci_dev *pci_dev,
 	 * condition with newer hotplug configurations (network was coming
 	 * up and making calls before the device was initialized).
 	 */
-	err = register_netdev(dev);
+	err = cfg80211_register_netdev(dev);
 	if (err) {
 		printk(KERN_WARNING DRV_NAME
 		       "Error calling register_netdev.\n");
@@ -6311,7 +6311,7 @@ out:
       fail:
 	if (dev) {
 		if (registered >= 2)
-			unregister_netdev(dev);
+			cfg80211_unregister_netdev(dev);
 
 		if (registered) {
 			wiphy_unregister(priv->ieee->wdev.wiphy);
@@ -6368,7 +6368,7 @@ static void ipw2100_pci_remove_one(struct pci_dev *pci_dev)
 	 * being called if the device is open.  If we free storage
 	 * first, then close() will crash.
 	 * FIXME: remove the comment above. */
-	unregister_netdev(dev);
+	cfg80211_unregister_netdev(dev);
 
 	ipw2100_kill_works(priv);
 

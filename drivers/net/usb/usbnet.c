@@ -1560,6 +1560,8 @@ void usbnet_disconnect (struct usb_interface *intf)
 	struct usbnet		*dev;
 	struct usb_device	*xdev;
 	struct net_device	*net;
+	const struct driver_info *info;
+	void (*unregdev)(struct net_device *);
 
 	dev = usb_get_intfdata(intf);
 	usb_set_intfdata(intf, NULL);
@@ -1574,7 +1576,10 @@ void usbnet_disconnect (struct usb_interface *intf)
 		   dev->driver_info->description);
 
 	net = dev->net;
-	unregister_netdev (net);
+
+	info = dev->driver_info;
+	unregdev = info->unregister_netdev ?: unregister_netdev;
+	unregdev(net);
 
 	cancel_work_sync(&dev->kevent);
 
@@ -1627,6 +1632,7 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 	int				status;
 	const char			*name;
 	struct usb_driver 	*driver = to_usb_driver(udev->dev.driver);
+	int (*regdev)(struct net_device *);
 
 	/* usbnet already took usb runtime pm, so have to enable the feature
 	 * for usb interface, otherwise usb_autopm_get_interface may return
@@ -1645,6 +1651,8 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 	}
 	xdev = interface_to_usbdev (udev);
 	interface = udev->cur_altsetting;
+
+	regdev = info->register_netdev ?: register_netdev;
 
 	status = -ENOMEM;
 
@@ -1768,7 +1776,7 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 		}
 	}
 
-	status = register_netdev (net);
+	status = regdev(net);
 	if (status)
 		goto out5;
 	netif_info(dev, probe, dev->net,

@@ -531,7 +531,7 @@ void rtw_unregister_netdevs(struct dvobj_priv *dvobj)
 	pnetdev = padapter->pnetdev;
 
 	if ((padapter->DriverState != DRIVER_DISAPPEAR) && pnetdev)
-		unregister_netdev(pnetdev); /* will call netdev_close() */
+		cfg80211_unregister_netdev(pnetdev); /* will call netdev_close() */
 	rtw_wdev_unregister(padapter->rtw_wdev);
 }
 
@@ -858,7 +858,7 @@ static int _rtw_drv_register_netdev(struct adapter *padapter, char *name)
 	memcpy(pnetdev->dev_addr, padapter->eeprompriv.mac_addr, ETH_ALEN);
 
 	/* Tell the network stack we exist */
-	if (register_netdev(pnetdev) != 0) {
+	if (cfg80211_register_netdev(pnetdev) != 0) {
 		DBG_871X(FUNC_NDEV_FMT "Failed!\n", FUNC_NDEV_ARG(pnetdev));
 		ret = _FAIL;
 		goto error_register_netdev;
