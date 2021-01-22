@@ -139,7 +139,7 @@ int hugetlb_mcopy_atomic_pte(struct mm_struct *dst_mm, pte_t *dst_pte,
 				unsigned long dst_addr,
 				unsigned long src_addr,
 				struct page **pagep);
-int hugetlb_reserve_pages(struct inode *inode, long from, long to,
+bool hugetlb_reserve_pages(struct inode *inode, long from, long to,
 						struct vm_area_struct *vma,
 						vm_flags_t vm_flags);
 long hugetlb_unreserve_pages(struct inode *inode, long start, long end,
@@ -769,6 +769,8 @@ static inline void huge_ptep_modify_prot_commit(struct vm_area_struct *vma,
 	set_huge_pte_at(vma->vm_mm, addr, ptep, pte);
 }
 #endif
+
+void set_page_huge_active(struct page *page);
 
 #else	/* CONFIG_HUGETLB_PAGE */
 struct hstate {};
