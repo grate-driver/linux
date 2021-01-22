@@ -3,6 +3,7 @@
  * Silicon Laboratories CP210x USB to RS232 serial adaptor driver
  *
  * Copyright (C) 2005 Craig Shelley (craig@microtron.org.uk)
+ * Copyright (C) 2010-2021 Johan Hovold (johan@kernel.org)
  *
  * Support to set flow control line levels using TIOCMGET and TIOCMSET
  * thanks to Karl Hiramoto karl@hiramoto.org. RTSCTS hardware flow
@@ -16,13 +17,10 @@
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/usb.h>
-#include <linux/uaccess.h>
 #include <linux/usb/serial.h>
 #include <linux/gpio/driver.h>
 #include <linux/bitops.h>
-#include <linux/mutex.h>
 
 #define DRIVER_DESC "Silicon Labs CP210x RS232 serial adaptor driver"
 
@@ -378,6 +376,16 @@ static struct usb_serial_driver * const serial_drivers[] = {
 #define CONTROL_WRITE_DTR	0x0100
 #define CONTROL_WRITE_RTS	0x0200
 
+/* CP210X_(GET|SET)_CHARS */
+struct cp210x_special_chars {
+	u8	bEofChar;
+	u8	bErrorChar;
+	u8	bBreakChar;
+	u8	bEventChar;
+	u8	bXonChar;
+	u8	bXoffChar;
+};
+
 /* CP210X_VENDOR_SPECIFIC values */
 #define CP210X_READ_2NCONFIG	0x000E
 #define CP210X_READ_LATCH	0x00C2
@@ -665,16 +673,13 @@ static int cp210x_write_reg_block(struct usb_serial_port *port, u8 req,
 
 	kfree(dmabuf);
 
-	if (result == bufsize) {
-		result = 0;
-	} else {
+	if (result < 0) {
 		dev_err(&port->dev, "failed set req 0x%x size %d status: %d\n",
 				req, bufsize, result);
-		if (result >= 0)
-			result = -EIO;
+		return result;
 	}
 
-	return result;
+	return 0;
 }
 
 /*
@@ -711,17 +716,14 @@ static int cp210x_write_vendor_block(struct usb_serial *serial, u8 type,
 
 	kfree(dmabuf);
 
-	if (result == bufsize) {
-		result = 0;
-	} else {
+	if (result < 0) {
 		dev_err(&serial->interface->dev,
 			"failed to set vendor val 0x%04x size %d: %d\n", val,
 			bufsize, result);
-		if (result >= 0)
-			result = -EIO;
+		return result;
 	}
 
-	return result;
+	return 0;
 }
 #endif
 
@@ -1075,25 +1077,72 @@ static void cp210x_disable_event_mode(struct usb_serial_port *port)
 	port_priv->event_mode = false;
 }
 
+static int cp210x_set_chars(struct usb_serial_port *port,
+		struct cp210x_special_chars *chars)
+{
+	struct cp210x_port_private *port_priv = usb_get_serial_port_data(port);
+	struct usb_serial *serial = port->serial;
+	void *dmabuf;
+	int result;
+
+	dmabuf = kmemdup(chars, sizeof(*chars), GFP_KERNEL);
+	if (!dmabuf)
+		return -ENOMEM;
+
+	result = usb_control_msg(serial->dev, usb_sndctrlpipe(serial->dev, 0),
+				CP210X_SET_CHARS, REQTYPE_HOST_TO_INTERFACE, 0,
+				port_priv->bInterfaceNumber,
+				dmabuf, sizeof(*chars), USB_CTRL_SET_TIMEOUT);
+
+	kfree(dmabuf);
+
+	if (result < 0) {
+		dev_err(&port->dev, "failed to set special chars: %d\n", result);
+		return result;
+	}
+
+	return 0;
+}
+
 static bool cp210x_termios_change(const struct ktermios *a, const struct ktermios *b)
 {
-	bool iflag_change;
+	bool iflag_change, cc_change;
 
-	iflag_change = ((a->c_iflag ^ b->c_iflag) & INPCK);
+	iflag_change = ((a->c_iflag ^ b->c_iflag) & (INPCK | IXON | IXOFF));
+	cc_change = a->c_cc[VSTART] != b->c_cc[VSTART] ||
+			a->c_cc[VSTOP] != b->c_cc[VSTOP];
 
-	return tty_termios_hw_change(a, b) || iflag_change;
+	return tty_termios_hw_change(a, b) || iflag_change || cc_change;
 }
 
 static void cp210x_set_flow_control(struct tty_struct *tty,
 		struct usb_serial_port *port, struct ktermios *old_termios)
 {
+	struct cp210x_special_chars chars;
 	struct cp210x_flow_ctl flow_ctl;
 	u32 flow_repl;
 	u32 ctl_hs;
 	int ret;
 
-	if (old_termios && C_CRTSCTS(tty) == (old_termios->c_cflag & CRTSCTS))
+	if (old_termios &&
+			C_CRTSCTS(tty) == (old_termios->c_cflag & CRTSCTS) &&
+			I_IXON(tty) == (old_termios->c_iflag & IXON) &&
+			I_IXOFF(tty) == (old_termios->c_iflag & IXOFF) &&
+			START_CHAR(tty) == old_termios->c_cc[VSTART] &&
+			STOP_CHAR(tty) == old_termios->c_cc[VSTOP]) {
 		return;
+	}
+
+	if (I_IXON(tty) || I_IXOFF(tty)) {
+		memset(&chars, 0, sizeof(chars));
+
+		chars.bXonChar = START_CHAR(tty);
+		chars.bXoffChar = STOP_CHAR(tty);
+
+		ret = cp210x_set_chars(port, &chars);
+		if (ret)
+			return;
+	}
 
 	ret = cp210x_read_reg_block(port, CP210X_GET_FLOW, &flow_ctl,
 			sizeof(flow_ctl));
@@ -1118,6 +1167,19 @@ static void cp210x_set_flow_control(struct tty_struct *tty,
 		flow_repl &= ~CP210X_SERIAL_RTS_MASK;
 		flow_repl |= CP210X_SERIAL_RTS_SHIFT(CP210X_SERIAL_RTS_ACTIVE);
 	}
+
+	if (I_IXOFF(tty))
+		flow_repl |= CP210X_SERIAL_AUTO_RECEIVE;
+	else
+		flow_repl &= ~CP210X_SERIAL_AUTO_RECEIVE;
+
+	if (I_IXON(tty))
+		flow_repl |= CP210X_SERIAL_AUTO_TRANSMIT;
+	else
+		flow_repl &= ~CP210X_SERIAL_AUTO_TRANSMIT;
+
+	flow_ctl.ulXonLimit = cpu_to_le32(128);
+	flow_ctl.ulXoffLimit = cpu_to_le32(128);
 
 	dev_dbg(&port->dev, "%s - ulControlHandshake=0x%08x, ulFlowReplace=0x%08x\n",
 			__func__, ctl_hs, flow_repl);
