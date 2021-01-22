@@ -473,34 +473,14 @@ static int stm32_spi_prepare_mbr(struct stm32_spi *spi, u32 speed_hz,
  */
 static u32 stm32h7_spi_prepare_fthlv(struct stm32_spi *spi, u32 xfer_len)
 {
-	u32 fthlv, half_fifo, packet;
+	u32 packet, bpw;
 
 	/* data packet should not exceed 1/2 of fifo space */
-	half_fifo = (spi->fifo_size / 2);
-
-	/* data_packet should not exceed transfer length */
-	if (half_fifo > xfer_len)
-		packet = xfer_len;
-	else
-		packet = half_fifo;
-
-	if (spi->cur_bpw <= 8)
-		fthlv = packet;
-	else if (spi->cur_bpw <= 16)
-		fthlv = packet / 2;
-	else
-		fthlv = packet / 4;
+	packet = clamp(xfer_len, 1U, spi->fifo_size / 2);
 
 	/* align packet size with data registers access */
-	if (spi->cur_bpw > 8)
-		fthlv += (fthlv % 2) ? 1 : 0;
-	else
-		fthlv += (fthlv % 4) ? (4 - (fthlv % 4)) : 0;
-
-	if (!fthlv)
-		fthlv = 1;
-
-	return fthlv;
+	bpw = DIV_ROUND_UP(spi->cur_bpw, 8);
+	return DIV_ROUND_UP(packet, bpw);
 }
 
 /**
@@ -1028,10 +1008,10 @@ static int stm32_spi_prepare_msg(struct spi_master *master,
 		clrb |= spi->cfg->regs->lsb_first.mask;
 
 	dev_dbg(spi->dev, "cpol=%d cpha=%d lsb_first=%d cs_high=%d\n",
-		spi_dev->mode & SPI_CPOL,
-		spi_dev->mode & SPI_CPHA,
-		spi_dev->mode & SPI_LSB_FIRST,
-		spi_dev->mode & SPI_CS_HIGH);
+		!!(spi_dev->mode & SPI_CPOL),
+		!!(spi_dev->mode & SPI_CPHA),
+		!!(spi_dev->mode & SPI_LSB_FIRST),
+		!!(spi_dev->mode & SPI_CS_HIGH));
 
 	spin_lock_irqsave(&spi->lock, flags);
 
