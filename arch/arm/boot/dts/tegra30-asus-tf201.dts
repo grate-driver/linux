@@ -23,17 +23,6 @@
 				};
 			};
 		};
-
-		hdmi: hdmi@54280000 {
-			status = "okay";
-
-			hdmi-supply = <&hdmi_5v0_sys>;
-			pll-supply = <&vdd_1v8>;
-			vdd-supply = <&vdd_3v3_sys>;
-
-			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
-			nvidia,ddc-i2c-bus = <&hdmi_ddc>;
-		};
 	};
 
 	pinmux@70000868 {
@@ -63,6 +52,20 @@
 			kb_row7_pr7 {
 				nvidia,pins = "kb_row7_pr7";
 				nvidia,function = "kbc";
+				nvidia,pull = <TEGRA_PIN_PULL_UP>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+			gmi_cs4_n_pk2 {
+				nvidia,pins = "gmi_cs4_n_pk2";
+				nvidia,function = "gmi";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+			cam_mclk_pcc0 {
+				nvidia,pins = "cam_mclk_pcc0";
+				nvidia,function = "vi_alt3";
 				nvidia,pull = <TEGRA_PIN_PULL_UP>;
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
@@ -102,18 +105,19 @@
 			reset-gpios = <&gpio TEGRA_GPIO(BB, 0) GPIO_ACTIVE_LOW>; 	// cam_sensor_rst_lo, out, lo
 		};
 
-		front_camera: camera@48 {
-			compatible = "aptina,mi1040";
+		/* Front camera Aptina MI1040 image processor */
+		front_camera: camera-sensor@48 {
+			compatible = "ovti,ov2710";
 			reg = <0x48>;
 
-			clocks = <>; 	// <&tegra_car TEGRA30_CLK_PLL_A>; CAM_MCLK
+			clocks = <&tegra_car TEGRA30_CLK_PLL_A>;
 			clock-names = "extclk";
 
-			vddio-suppy = <&vdd_1v8>;
-			vdda-suppy = <&vdd_3v3_sys>;	// 2.85V?
-			vddc-supply = <&cam_vddc>;	// PWR_DN
-
 			reset-gpios = <&gpio TEGRA_GPIO(O, 0) GPIO_ACTIVE_LOW>;
+
+			DOVDD-supply = <&vddio_1v8_cam>;
+			DVDD-supply = <&vdd_2v85_cam2>;
+			// AVDD-supply = <&cam_vddc>;		/* Analog regulator line should be here */
 		};
 
 		gyroscope@68 {
@@ -124,9 +128,9 @@
 			/* External I2C interface */
 			i2c-gate {
 				accelerometer@f {
-					mount-matrix =  "-1",  "0",  "0",
-							 "0",  "1",  "0",
-							 "0",  "0", "-1";
+					mount-matrix =   "1",  "0",  "0",
+							 "0", "-1",  "0",
+							 "0",  "0",  "1";
 				};
 			};
 		};
@@ -137,9 +141,17 @@
 		rt5631: audio-codec@1a {
 			compatible = "realtek,rt5631";
 			reg = <0x1a>;
-
-			realtek,times-of-bclk = <64>;
 		};
+	};
+
+	usb-phy@7d000000 {
+		/delete-property/ nvidia,xcvr-setup-use-fuses;
+		nvidia,xcvr-setup = <5>;      /* Based on TF201 fuse value - 48 */
+	};
+
+	usb-phy@7d008000 {
+		/delete-property/ nvidia,xcvr-setup-use-fuses;
+		nvidia,xcvr-setup = <5>;      /* Based on TF201 fuse value - 48 */
 	};
 
 	/* HannStar HSD101PWW2 Rev0-A00/A01 LCD SuperIPS+ HD panel */
@@ -149,10 +161,6 @@
 		power-supply = <&vdd_pnl>;
 		backlight = <&backlight_lvds>;
 
-		/*
-		 * The hsd101pww2 panel has same properties as hsd070pww1,
-		 * only difference is physical size.
-		 */
 		width-mm = <217>;
 		height-mm = <136>;
 
@@ -179,7 +187,6 @@
 	};
 
 	/* Texas Instruments SN75LVDS83B LVDS Transmitter */
-	/* NOTE: datasheet also mentions about THine TH133B LVDS Transmitter */
 	lvds-encoder {
 		compatible = "ti,sn75lvds83", "lvds-encoder";
 
@@ -217,7 +224,7 @@
 	sound {
 		compatible = "nvidia,tegra-audio-rt5631-tf201",
 			     "nvidia,tegra-audio-rt5631";
-		nvidia,model = "ASUS TF201 RT5631";
+		nvidia,model = "TF201 RT5631";
 
 		nvidia,audio-routing =
 			"Headphone Jack", "HPOL",
@@ -228,21 +235,7 @@
 			"MIC Bias1", "Mic Jack",
 			"DMIC", "Int Mic";
 
-		nvidia,i2s-controller = <&tegra_i2s1>;
 		nvidia,audio-codec = <&rt5631>;
-
-		nvidia,hp-det-gpios = <&gpio TEGRA_GPIO(W, 2) GPIO_ACTIVE_LOW>;
-
-		clocks = <&tegra_car TEGRA30_CLK_PLL_A>,
-			 <&tegra_car TEGRA30_CLK_PLL_A_OUT0>,
-			 <&tegra_car TEGRA30_CLK_EXTERN1>;
-		clock-names = "pll_a", "pll_a_out0", "mclk";
-
-		assigned-clocks = <&tegra_car TEGRA30_CLK_EXTERN1>,
-				  <&tegra_pmc TEGRA_PMC_CLK_OUT_1>;
-
-		assigned-clock-parents = <&tegra_car TEGRA30_CLK_PLL_A_OUT0>,
-					 <&tegra_car TEGRA30_CLK_EXTERN1>;
 	};
 
 	memory-controller@7000f000 {
