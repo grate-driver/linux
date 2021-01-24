@@ -609,11 +609,24 @@ not_relocated:	mov	r0, #0
 		mov	r3, r7
 		bl	decompress_kernel
 
-		get_inflated_image_size	r1, r2, r3
-
-		mov	r0, r4			@ start of inflated image
-		add	r1, r1, r0		@ end of inflated image
+		@
+		@ Perform a cache clean before disabling the MMU entirely.
+		@ In cases where the MMU needs to be disabled first (v7+),
+		@ the clean is performed again by cache_off(), using by-VA
+		@ operations on the range [R0, R1], making this prior call to
+		@ cache_clean_flush() redundant. In other cases, the clean is
+		@ performed by set/way and R0/R1 are ignored.
+		@
+		mov	r0, #0
+		mov	r1, #0
 		bl	cache_clean_flush
+
+		get_inflated_image_size	r1, r2, r3
+		ldr	r2, =_kernel_bss_size
+		add	r1, r1, r2
+
+		mov	r0, r4			@ start of decompressed kernel
+		add	r1, r1, r0		@ end of kernel BSS
 		bl	cache_off
 
 #ifdef CONFIG_ARM_VIRT_EXT
@@ -1124,12 +1137,14 @@ proc_types:
  * reading the control register, but ARMv4 does.
  *
  * On exit,
- *  r0, r1, r2, r3, r9, r12 corrupted
+ *  r0, r1, r2, r3, r9, r10, r11, r12 corrupted
  * This routine must preserve:
  *  r4, r7, r8
  */
 		.align	5
 cache_off:	mov	r3, #12			@ cache_off function
+		mov	r10, r0
+		mov	r11, r1
 		b	call_cache_fn
 
 __armv4_mpu_cache_off:
@@ -1176,7 +1191,9 @@ __armv7_mmu_cache_off:
 		mcr	p15, 0, r0, c7, c5, 6	@ invalidate BTC
 		mcr	p15, 0, r0, c7, c10, 4	@ DSB
 		mcr	p15, 0, r0, c7, c5, 4	@ ISB
-		mov	pc, lr
+
+		mov	r0, r10
+		b	__armv7_mmu_cache_flush
 
 /*
  * Clean and flush the cache to maintain consistency.
