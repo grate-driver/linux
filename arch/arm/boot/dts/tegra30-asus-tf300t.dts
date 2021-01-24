@@ -23,17 +23,6 @@
 				};
 			};
 		};
-
-		hdmi: hdmi@54280000 {
-			status = "okay";
-
-			hdmi-supply = <&hdmi_5v0_sys>;
-			pll-supply = <&vdd_1v8>;
-			vdd-supply = <&vdd_3v3_sys>;
-
-			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
-			nvidia,ddc-i2c-bus = <&hdmi_ddc>;
-		};
 	};
 
 	pinmux@70000868 {
@@ -67,6 +56,20 @@
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
+			gmi_cs4_n_pk2 {
+				nvidia,pins = "gmi_cs4_n_pk2";
+				nvidia,function = "gmi";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+			cam_mclk_pcc0 {
+				nvidia,pins = "cam_mclk_pcc0";
+				nvidia,function = "vi_alt3";
+				nvidia,pull = <TEGRA_PIN_PULL_UP>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
 		};
 	};
 
@@ -81,10 +84,11 @@
 			reset-gpios = <&gpio TEGRA_GPIO(H, 6) GPIO_ACTIVE_LOW>;
 			wakeup-source;
 
+			vcc33-supply = <&vdd_3v3_sys>;
+			vccio-supply = <&vdd_3v3_sys>;
+
 			touchscreen-size-x = <2240>;
 			touchscreen-size-y = <1408>;
-//			touchscreen-x-mm = <210>;
-//			touchscreen-y-mm = <132>;
 			touchscreen-inverted-y;
 		};
 	};
@@ -122,12 +126,18 @@
 
 			interrupt-parent = <&gpio>;
 			interrupts = <TEGRA_GPIO(W, 3) IRQ_TYPE_LEVEL_LOW>;
+
 			gpio-controller;
 			#gpio-cells = <2>;
 
 			micdet-cfg = <0>;
 			micdet-delay = <100>;
 			gpio-cfg = <0xffffffff 0xffffffff 0 0xffffffff 0xffffffff>;
+
+			AVDD-supply  = <&vdd_3v3_sys>;
+			CPVDD-supply = <&vdd_3v3_sys>;
+			DBVDD-supply = <&vdd_3v3_sys>;
+			DCVDD-supply = <&vdd_3v3_sys>;
 		};
 	};
 
@@ -164,7 +174,6 @@
 	};
 
 	/* Texas Instruments SN75LVDS83B LVDS Transmitter */
-	/* NOTE: datasheet also mentions about THine TH133B LVDS Transmitter */
 	lvds-encoder {
 		compatible = "ti,sn75lvds83", "lvds-encoder";
 
@@ -196,7 +205,7 @@
 	sound {
 		compatible = "nvidia,tegra-audio-wm8903-tf300t",
 			     "nvidia,tegra-audio-wm8903";
-		nvidia,model = "ASUS TF300T WM8903";
+		nvidia,model = "TF300T WM8903";
 
 		nvidia,audio-routing =
 			"Headphone Jack", "HPOUTR",
@@ -208,22 +217,8 @@
 			"Mic Jack", "MICBIAS",
 			"IN1L", "Mic Jack";
 
-		nvidia,i2s-controller = <&tegra_i2s1>;
 		nvidia,audio-codec = <&wm8903>;
-
 		nvidia,spkr-en-gpios = <&wm8903 2 GPIO_ACTIVE_HIGH>;
-		nvidia,hp-det-gpios = <&gpio TEGRA_GPIO(W, 2) GPIO_ACTIVE_LOW>;
-
-		clocks = <&tegra_car TEGRA30_CLK_PLL_A>,
-			 <&tegra_car TEGRA30_CLK_PLL_A_OUT0>,
-			 <&tegra_car TEGRA30_CLK_EXTERN1>;
-		clock-names = "pll_a", "pll_a_out0", "mclk";
-
-		assigned-clocks = <&tegra_car TEGRA30_CLK_EXTERN1>,
-				  <&tegra_pmc TEGRA_PMC_CLK_OUT_1>;
-
-		assigned-clock-parents = <&tegra_car TEGRA30_CLK_PLL_A_OUT0>,
-					 <&tegra_car TEGRA30_CLK_EXTERN1>;
 	};
 
 	memory-controller@7000f000 {
