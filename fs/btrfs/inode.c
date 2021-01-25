@@ -917,7 +917,6 @@ retry:
 						ins.objectid,
 						async_extent->ram_size,
 						ins.offset,
-						BTRFS_ORDERED_COMPRESSED,
 						async_extent->compress_type);
 		if (ret) {
 			btrfs_drop_extent_cache(inode, async_extent->start,
@@ -1127,7 +1126,8 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 		free_extent_map(em);
 
 		ret = btrfs_add_ordered_extent(inode, start, ins.objectid,
-					       ram_size, cur_alloc_size, 0);
+					       ram_size, cur_alloc_size,
+					       BTRFS_ORDERED_REGULAR);
 		if (ret)
 			goto out_drop_extent_cache;
 
@@ -3103,14 +3103,16 @@ void btrfs_run_delayed_iputs(struct btrfs_fs_info *fs_info)
 }
 
 /**
- * btrfs_wait_on_delayed_iputs - wait on the delayed iputs to be done running
- * @fs_info - the fs_info for this fs
- * @return - EINTR if we were killed, 0 if nothing's pending
+ * Wait for flushing all delayed iputs
+ *
+ * @fs_info:  the filesystem
  *
  * This will wait on any delayed iputs that are currently running with KILLABLE
  * set.  Once they are all done running we will return, unless we are killed in
  * which case we return EINTR. This helps in user operations like fallocate etc
  * that might get blocked on the iputs.
+ *
+ * Return EINTR if we were killed, 0 if nothing's pending
  */
 int btrfs_wait_on_delayed_iputs(struct btrfs_fs_info *fs_info)
 {
@@ -6371,7 +6373,7 @@ static int btrfs_mknod(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(trans))
 		return PTR_ERR(trans);
 
-	err = btrfs_find_free_objectid(root, &objectid);
+	err = btrfs_get_free_objectid(root, &objectid);
 	if (err)
 		goto out_unlock;
 
@@ -6435,7 +6437,7 @@ static int btrfs_create(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(trans))
 		return PTR_ERR(trans);
 
-	err = btrfs_find_free_objectid(root, &objectid);
+	err = btrfs_get_free_objectid(root, &objectid);
 	if (err)
 		goto out_unlock;
 
@@ -6579,7 +6581,7 @@ static int btrfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (IS_ERR(trans))
 		return PTR_ERR(trans);
 
-	err = btrfs_find_free_objectid(root, &objectid);
+	err = btrfs_get_free_objectid(root, &objectid);
 	if (err)
 		goto out_fail;
 
@@ -7797,10 +7799,8 @@ static void __endio_write_update_ordered(struct btrfs_inode *inode,
 					NULL);
 			btrfs_queue_work(wq, &ordered->work);
 		}
-		/*
-		 * If btrfs_dec_test_ordered_pending does not find any ordered
-		 * extent in the range, we can exit.
-		 */
+
+		/* No ordered extent found in the range, exit */
 		if (ordered_offset == last_offset)
 			return;
 		/*
@@ -8592,15 +8592,18 @@ out:
  */
 int btrfs_create_subvol_root(struct btrfs_trans_handle *trans,
 			     struct btrfs_root *new_root,
-			     struct btrfs_root *parent_root,
-			     u64 new_dirid)
+			     struct btrfs_root *parent_root)
 {
 	struct inode *inode;
 	int err;
 	u64 index = 0;
+	u64 ino;
 
-	inode = btrfs_new_inode(trans, new_root, NULL, "..", 2,
-				new_dirid, new_dirid,
+	err = btrfs_get_free_objectid(new_root, &ino);
+	if (err < 0)
+		return err;
+
+	inode = btrfs_new_inode(trans, new_root, NULL, "..", 2, ino, ino,
 				S_IFDIR | (~current_umask() & S_IRWXUGO),
 				&index);
 	if (IS_ERR(inode))
@@ -9079,7 +9082,7 @@ static int btrfs_whiteout_for_rename(struct btrfs_trans_handle *trans,
 	u64 objectid;
 	u64 index;
 
-	ret = btrfs_find_free_objectid(root, &objectid);
+	ret = btrfs_get_free_objectid(root, &objectid);
 	if (ret)
 		return ret;
 
@@ -9486,11 +9489,11 @@ int btrfs_start_delalloc_snapshot(struct btrfs_root *root)
 	return start_delalloc_inodes(root, &wbc, true, false);
 }
 
-int btrfs_start_delalloc_roots(struct btrfs_fs_info *fs_info, u64 nr,
+int btrfs_start_delalloc_roots(struct btrfs_fs_info *fs_info, long nr,
 			       bool in_reclaim_context)
 {
 	struct writeback_control wbc = {
-		.nr_to_write = (nr == U64_MAX) ? LONG_MAX : (unsigned long)nr,
+		.nr_to_write = nr,
 		.sync_mode = WB_SYNC_NONE,
 		.range_start = 0,
 		.range_end = LLONG_MAX,
@@ -9507,12 +9510,12 @@ int btrfs_start_delalloc_roots(struct btrfs_fs_info *fs_info, u64 nr,
 	mutex_lock(&fs_info->delalloc_root_mutex);
 	spin_lock(&fs_info->delalloc_root_lock);
 	list_splice_init(&fs_info->delalloc_roots, &splice);
-	while (!list_empty(&splice) && nr) {
+	while (!list_empty(&splice)) {
 		/*
 		 * Reset nr_to_write here so we know that we're doing a full
 		 * flush.
 		 */
-		if (nr == U64_MAX)
+		if (nr == LONG_MAX)
 			wbc.nr_to_write = LONG_MAX;
 
 		root = list_first_entry(&splice, struct btrfs_root,
@@ -9575,7 +9578,7 @@ static int btrfs_symlink(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(trans))
 		return PTR_ERR(trans);
 
-	err = btrfs_find_free_objectid(root, &objectid);
+	err = btrfs_get_free_objectid(root, &objectid);
 	if (err)
 		goto out_unlock;
 
@@ -9909,7 +9912,7 @@ static int btrfs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (IS_ERR(trans))
 		return PTR_ERR(trans);
 
-	ret = btrfs_find_free_objectid(root, &objectid);
+	ret = btrfs_get_free_objectid(root, &objectid);
 	if (ret)
 		goto out;
 

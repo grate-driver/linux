@@ -433,7 +433,7 @@ static struct btrfs_device *__alloc_device(struct btrfs_fs_info *fs_info)
 
 	atomic_set(&dev->reada_in_flight, 0);
 	atomic_set(&dev->dev_stats_ccnt, 0);
-	btrfs_device_data_ordered_init(dev, fs_info);
+	btrfs_device_data_ordered_init(dev);
 	INIT_RADIX_TREE(&dev->reada_zones, GFP_NOFS & ~__GFP_DIRECT_RECLAIM);
 	INIT_RADIX_TREE(&dev->reada_extents, GFP_NOFS & ~__GFP_DIRECT_RECLAIM);
 	extent_io_tree_init(fs_info, &dev->alloc_state,
@@ -4668,11 +4668,10 @@ again:
 		}
 
 		ret = btrfs_previous_item(root, path, 0, key.type);
-		if (ret)
-			mutex_unlock(&fs_info->delete_unused_bgs_mutex);
-		if (ret < 0)
-			goto done;
 		if (ret) {
+			mutex_unlock(&fs_info->delete_unused_bgs_mutex);
+			if (ret < 0)
+				goto done;
 			ret = 0;
 			btrfs_release_path(path);
 			break;

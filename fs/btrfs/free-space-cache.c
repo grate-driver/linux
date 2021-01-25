@@ -198,7 +198,7 @@ int create_free_space_inode(struct btrfs_trans_handle *trans,
 	int ret;
 	u64 ino;
 
-	ret = btrfs_find_free_objectid(trans->fs_info->tree_root, &ino);
+	ret = btrfs_get_free_objectid(trans->fs_info->tree_root, &ino);
 	if (ret < 0)
 		return ret;
 
@@ -775,8 +775,10 @@ static int __load_free_space_cache(struct btrfs_root *root, struct inode *inode,
 	while (num_entries) {
 		e = kmem_cache_zalloc(btrfs_free_space_cachep,
 				      GFP_NOFS);
-		if (!e)
+		if (!e) {
+			ret = -ENOMEM;
 			goto free_cache;
+		}
 
 		ret = io_ctl_read_entry(&io_ctl, e, &type);
 		if (ret) {
@@ -785,6 +787,7 @@ static int __load_free_space_cache(struct btrfs_root *root, struct inode *inode,
 		}
 
 		if (!e->bytes) {
+			ret = -1;
 			kmem_cache_free(btrfs_free_space_cachep, e);
 			goto free_cache;
 		}
@@ -805,6 +808,7 @@ static int __load_free_space_cache(struct btrfs_root *root, struct inode *inode,
 			e->bitmap = kmem_cache_zalloc(
 					btrfs_free_space_bitmap_cachep, GFP_NOFS);
 			if (!e->bitmap) {
+				ret = -ENOMEM;
 				kmem_cache_free(
 					btrfs_free_space_cachep, e);
 				goto free_cache;
@@ -1295,11 +1299,14 @@ int btrfs_wait_cache_io(struct btrfs_trans_handle *trans,
 }
 
 /**
- * __btrfs_write_out_cache - write out cached info to an inode
- * @root - the root the inode belongs to
- * @ctl - the free space cache we are going to write out
- * @block_group - the block_group for this cache if it belongs to a block_group
- * @trans - the trans handle
+ * Write out cached info to an inode
+ *
+ * @root:        root the inode belongs to
+ * @inode:       freespace inode we are writing out
+ * @ctl:         free space cache we are going to write out
+ * @block_group: block_group for this cache if it belongs to a block_group
+ * @io_ctl:      holds context for the io
+ * @trans:       the trans handle
  *
  * This function writes out a free space cache struct to disk for quick recovery
  * on mount.  This will return 0 if it was successful in writing the cache out,
