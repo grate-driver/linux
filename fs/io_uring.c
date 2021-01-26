@@ -8029,9 +8029,8 @@ static int __io_sqe_files_update(struct io_ring_ctx *ctx,
 		return -ENOMEM;
 	init_fixed_file_ref_node(ctx, ref_node);
 
-	done = 0;
 	fds = u64_to_user_ptr(up->data);
-	while (nr_args) {
+	for (done = 0; done < nr_args; done++) {
 		struct fixed_rsrc_table *table;
 		unsigned index;
 
@@ -8040,7 +8039,7 @@ static int __io_sqe_files_update(struct io_ring_ctx *ctx,
 			err = -EFAULT;
 			break;
 		}
-		i = array_index_nospec(up->offset, ctx->nr_user_files);
+		i = array_index_nospec(up->offset + done, ctx->nr_user_files);
 		table = &ctx->file_data->table[i >> IORING_FILE_TABLE_SHIFT];
 		index = i & IORING_FILE_TABLE_MASK;
 		if (table->files[index]) {
@@ -8078,9 +8077,6 @@ static int __io_sqe_files_update(struct io_ring_ctx *ctx,
 				break;
 			}
 		}
-		nr_args--;
-		done++;
-		up->offset++;
 	}
 
 	if (needs_switch) {
