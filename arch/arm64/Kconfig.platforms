@@ -13,6 +13,11 @@ config ARCH_AGILEX
 	help
 	  This enables support for Intel's Agilex SoCFPGA Family.
 
+config ARCH_N5X
+	bool "Intel's eASIC N5X SoCFPGA Family"
+	help
+	  This enables support for Intel's eASIC N5X SoCFPGA Family.
+
 config ARCH_SUNXI
 	bool "Allwinner sunxi 64-bit SoC Family"
 	select ARCH_HAS_RESET_CONTROLLER
@@ -316,12 +321,6 @@ config ARCH_XGENE
 	bool "AppliedMicro X-Gene SOC Family"
 	help
 	  This enables support for AppliedMicro X-Gene SOC Family
-
-config ARCH_ZX
-	bool "ZTE ZX SoC Family"
-	select PINCTRL
-	help
-	  This enables support for ZTE ZX SoC Family
 
 config ARCH_ZYNQMP
 	bool "Xilinx ZynqMP Family"
