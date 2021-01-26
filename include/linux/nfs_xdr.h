@@ -1607,6 +1607,7 @@ struct nfs_pgio_header {
 	const struct nfs_rw_ops	*rw_ops;
 	struct nfs_io_completion *io_completion;
 	struct nfs_direct_req	*dreq;
+	void			*fsc;
 
 	int			pnfs_error;
 	int			error;		/* merge with pnfs_error */
