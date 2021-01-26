@@ -4,6 +4,7 @@
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/qcom,gcc-msm8994.h>
+#include <dt-bindings/power/qcom-rpmpd.h>
 
 / {
 	interrupt-parent = <&intc>;
@@ -169,8 +170,51 @@
 		#size-cells = <2>;
 		ranges;
 
+		dfps_data_mem: dfps_data_mem@3400000 {
+			reg = <0 0x03400000 0 0x1000>;
+			no-map;
+		};
+
+		cont_splash_mem: memory@3800000 {
+			reg = <0 0x03800000 0 0x2400000>;
+			no-map;
+		};
+
 		smem_mem: smem_region@6a00000 {
-			reg = <0x0 0x6a00000 0x0 0x200000>;
+			reg = <0 0x06a00000 0 0x200000>;
+			no-map;
+		};
+
+		mpss_mem: memory@7000000 {
+			reg = <0 0x07000000 0 0x5a00000>;
+			no-map;
+		};
+
+		peripheral_region: memory@ca00000 {
+			reg = <0 0x0ca00000 0 0x1f00000>;
+			no-map;
+		};
+
+		rmtfs_mem: memory@c6400000 {
+			compatible = "qcom,rmtfs-mem";
+			reg = <0 0xc6400000 0 0x180000>;
+			no-map;
+
+			qcom,client-id = <1>;
+		};
+
+		mba_mem: memory@c6700000 {
+			reg = <0 0xc6700000 0 0x100000>;
+			no-map;
+		};
+
+		audio_mem: memory@c7000000 {
+			reg = <0 0xc7000000 0 0x800000>;
+			no-map;
+		};
+
+		adsp_mem: memory@c9400000 {
+			reg = <0 0xc9400000 0 0x3f00000>;
 			no-map;
 		};
 	};
@@ -191,6 +235,35 @@
 				rpmcc: rpmcc {
 					compatible = "qcom,rpmcc-msm8994";
 					#clock-cells = <1>;
+				};
+
+				rpmpd: power-controller {
+					compatible = "qcom,msm8994-rpmpd";
+					#power-domain-cells = <1>;
+					operating-points-v2 = <&rpmpd_opp_table>;
+
+					rpmpd_opp_table: opp-table {
+						compatible = "operating-points-v2";
+
+						rpmpd_opp_ret: opp1 {
+							opp-level = <1>;
+						};
+						rpmpd_opp_svs_krait: opp2 {
+							opp-level = <2>;
+						};
+						rpmpd_opp_svs_soc: opp3 {
+							opp-level = <3>;
+						};
+						rpmpd_opp_nom: opp4 {
+							opp-level = <4>;
+						};
+						rpmpd_opp_turbo: opp5 {
+							opp-level = <5>;
+						};
+						rpmpd_opp_super_turbo: opp6 {
+							opp-level = <6>;
+						};
+					};
 				};
 			};
 		};
@@ -493,7 +566,7 @@
 		blsp2_uart2: serial@f995e000 {
 			compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
 			reg = <0xf995e000 0x1000>;
-			interrupts = <GIC_SPI 146 IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
 			clock-names = "core", "iface";
 			clocks = <&gcc GCC_BLSP2_UART2_APPS_CLK>,
 					<&gcc GCC_BLSP2_AHB_CLK>;
@@ -588,16 +661,18 @@
 
 			blsp2_uart2_default: blsp2-uart2-default {
 				function = "blsp_uart8";
-				pins = "gpio45", "gpio46";
-				drive-strength = <2>;
+				pins = "gpio45", "gpio46",
+						"gpio47", "gpio48";
+				drive-strength = <16>;
 				bias-disable;
 			};
 
 			blsp2_uart2_sleep: blsp2-uart2-sleep {
 				function = "gpio";
-				pins = "gpio45", "gpio46";
+				pins = "gpio45", "gpio46",
+						"gpio47", "gpio48";
 				drive-strength = <2>;
-				bias-pull-down;
+				bias-disable;
 			};
 
 			i2c1_default: i2c1-default {
@@ -790,9 +865,9 @@
 			     <GIC_PPI 1 0xff08>;
 	};
 
-	vreg_vph_pwr: vreg-vph-pwr {
+	vph_pwr: vph-pwr-regulator {
 		compatible = "regulator-fixed";
-		regulator-name = "vph-pwr";
+		regulator-name = "vph_pwr";
 
 		regulator-min-microvolt = <3600000>;
 		regulator-max-microvolt = <3600000>;
