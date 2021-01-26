@@ -4199,7 +4199,7 @@ retry_avoidcopy:
 				make_huge_pte(vma, new_page, 1));
 		page_remove_rmap(old_page, true);
 		hugepage_add_new_anon_rmap(new_page, vma, haddr);
-		SetHPageMigratable(new_page);
+		SetHPageMigratableIfSupported(new_page);
 		/* Make the old page be freed below */
 		new_page = old_page;
 	}
@@ -4441,7 +4441,7 @@ retry:
 	 * been isolated for migration.
 	 */
 	if (new_page)
-		SetHPageMigratable(page);
+		SetHPageMigratableIfSupported(page);
 
 	unlock_page(page);
 out:
@@ -4752,7 +4752,7 @@ int hugetlb_mcopy_atomic_pte(struct mm_struct *dst_mm,
 	update_mmu_cache(dst_vma, dst_addr, dst_pte);
 
 	spin_unlock(ptl);
-	SetHPageMigratable(page);
+	SetHPageMigratableIfSupported(page);
 	if (vm_shared)
 		unlock_page(page);
 	ret = 0;
@@ -5608,7 +5608,7 @@ void putback_active_hugepage(struct page *page)
 {
 	VM_BUG_ON_PAGE(!PageHead(page), page);
 	spin_lock(&hugetlb_lock);
-	SetHPageMigratable(page);
+	SetHPageMigratableIfSupported(page);
 	list_move_tail(&page->lru, &(page_hstate(page))->hugepage_activelist);
 	spin_unlock(&hugetlb_lock);
 	put_page(page);

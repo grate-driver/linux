@@ -1275,13 +1275,12 @@ static int unmap_and_move_huge_page(new_page_t get_new_page,
 	struct address_space *mapping = NULL;
 
 	/*
-	 * Migratability of hugepages depends on architectures and their size.
-	 * This check is necessary because some callers of hugepage migration
-	 * like soft offline and memory hotremove don't walk through page
-	 * tables or check whether the hugepage is pmd-based or not before
-	 * kicking migration.
+	 * Support for migration should be checked at isolation time.
+	 * Therefore, we should never get here if migration is not supported
+	 * for the page.
 	 */
 	if (!hugepage_migration_supported(page_hstate(hpage))) {
+		VM_WARN_ON(1);
 		list_move_tail(&hpage->lru, ret);
 		return -ENOSYS;
 	}

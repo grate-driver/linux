@@ -741,6 +741,15 @@ static inline bool hugepage_migration_supported(struct hstate *h)
 }
 
 /*
+ * Only set HPageMigratable if migration supported for page
+ */
+static inline void SetHPageMigratableIfSupported(struct page *page)
+{
+	if (hugepage_migration_supported(page_hstate(page)))
+		SetHPageMigratable(page);
+}
+
+/*
  * Movability check is different as compared to migration check.
  * It determines whether or not a huge page should be placed on
  * movable zone or not. Movability of any huge page should be
