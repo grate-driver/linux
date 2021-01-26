@@ -4222,8 +4222,6 @@ static int slab_mem_going_offline_callback(void *arg)
 
 static void slab_mem_offline_callback(void *arg)
 {
-	struct kmem_cache_node *n;
-	struct kmem_cache *s;
 	struct memory_notify *marg = arg;
 	int offline_node;
 
@@ -4237,21 +4235,11 @@ static void slab_mem_offline_callback(void *arg)
 		return;
 
 	mutex_lock(&slab_mutex);
-	list_for_each_entry(s, &slab_caches, list) {
-		n = get_node(s, offline_node);
-		if (n) {
-			/*
-			 * if n->nr_slabs > 0, slabs still exist on the node
-			 * that is going down. We were unable to free them,
-			 * and offline_pages() function shouldn't call this
-			 * callback. So, we must fail.
-			 */
-			BUG_ON(slabs_node(s, offline_node));
-
-			s->node[offline_node] = NULL;
-			kmem_cache_free(kmem_cache_node, n);
-		}
-	}
+	/*
+	 * We no longer free kmem_cache_node structures here, as it would be
+	 * racy with all get_node() users, and infeasible to protect them with
+	 * slab_mutex.
+	 */
 	mutex_unlock(&slab_mutex);
 }
 
@@ -4277,6 +4265,12 @@ static int slab_mem_going_online_callback(void *arg)
 	 */
 	mutex_lock(&slab_mutex);
 	list_for_each_entry(s, &slab_caches, list) {
+		/*
+		 * The structure may already exist if the node was previously
+		 * onlined and offlined.
+		 */
+		if (get_node(s, nid))
+			continue;
 		/*
 		 * XXX: kmem_cache_alloc_node will fallback to other nodes
 		 *      since memory is not yet available from the node that
