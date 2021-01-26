@@ -75,6 +75,7 @@
 		interrupt-controller;
 		interrupt-parent = <&gic500>;
 		#interrupt-cells = <1>;
+		#address-cells = <0>;
 		ti,sci = <&dmsc>;
 		ti,sci-dev-id = <156>;
 		ti,interrupt-ranges = <0 712 16>;
@@ -89,6 +90,7 @@
 		interrupts = <60>, <61>, <62>, <63>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		#address-cells = <0>;
 		ti,ngpio = <56>;
 		ti,davinci-gpio-unbanked = <0>;
 		clocks = <&k3_clks 59 0>;
