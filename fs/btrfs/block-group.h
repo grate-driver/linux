@@ -184,6 +184,8 @@ struct btrfs_block_group {
 	/* Record locked full stripes for RAID5/6 block group */
 	struct btrfs_full_stripe_locks_tree full_stripe_locks_root;
 
+	/* Flag indicating this block-group is placed on a sequential zone */
+	bool seq_zone;
 	/*
 	 * Allocation offset for the block group to implement sequential
 	 * allocation. This is used only with ZONED mode enabled.
