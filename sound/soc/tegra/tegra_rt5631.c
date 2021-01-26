@@ -137,10 +137,9 @@ static int tegra_rt5631_init(struct snd_soc_pcm_runtime *rtd)
 
 	if (machine->gpiod_hp_det) {
 		tegra_rt5631_hp_jack_gpio.desc = machine->gpiod_hp_det;
-		snd_soc_jack_add_gpios(&tegra_rt5631_hp_jack, 1, &tegra_rt5631_hp_jack_gpio);   
-		if (ret) {
+		ret = snd_soc_jack_add_gpios(&tegra_rt5631_hp_jack, 1, &tegra_rt5631_hp_jack_gpio);   
+		if (ret)
 			dev_err(rtd->dev, "jack detection gpios not added, error %d\n", ret);
-		}
 	}
 
 	return 0;
