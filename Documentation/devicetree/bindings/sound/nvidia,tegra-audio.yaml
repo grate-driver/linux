@@ -26,6 +26,9 @@ properties:
           - pattern: '^[a-z0-9]+,tegra-audio-max98090(-[a-z0-9])+'
           - const: nvidia,tegra-audio-max98090
       - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-rt5631(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-rt5631
+      - items:
           - pattern: '^[a-z0-9]+,tegra-audio-rt56(39|40)(-[a-z0-9])+'
           - const: nvidia,tegra-audio-rt5640
       - items:
@@ -86,6 +89,11 @@ properties:
         MAXX98090:
           * Headphones
           * SPeakers
+          * Mic Jack
+          * Int Mic
+        RT5631:
+          * Int Spk
+          * Headphone Jack
           * Mic Jack
           * Int Mic
         RT5640:
