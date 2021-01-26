@@ -1739,8 +1739,8 @@ static unsigned long fast_find_migrateblock(struct compact_control *cc)
 		distance >>= 2;
 	high_pfn = pageblock_start_pfn(cc->migrate_pfn + distance);
 
-	for (order = cc->order - 1;
-	     order >= PAGE_ALLOC_COSTLY_ORDER && pfn == cc->migrate_pfn && nr_scanned < limit;
+	for (order = cc->order - 1, pfn = high_pfn;
+	     order >= PAGE_ALLOC_COSTLY_ORDER && pfn == high_pfn && nr_scanned < limit;
 	     order--) {
 		struct free_area *area = &cc->zone->free_area[order];
 		struct list_head *freelist;
@@ -1782,7 +1782,6 @@ static unsigned long fast_find_migrateblock(struct compact_control *cc)
 			}
 
 			if (nr_scanned >= limit) {
-				cc->fast_search_fail++;
 				move_freelist_tail(freelist, freepage);
 				break;
 			}
@@ -1796,9 +1795,10 @@ static unsigned long fast_find_migrateblock(struct compact_control *cc)
 	 * If fast scanning failed then use a cached entry for a page block
 	 * that had free pages as the basis for starting a linear scan.
 	 */
-	if (pfn == cc->migrate_pfn)
+	if (pfn == high_pfn) {
+		cc->fast_search_fail++;
 		pfn = reinit_migrate_pfn(cc);
-
+	}
 	return pfn;
 }
 
