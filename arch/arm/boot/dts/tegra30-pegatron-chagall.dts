@@ -446,7 +446,7 @@
 			};
 			spi2_sck_px2 {
 				nvidia,pins = "spi2_sck_px2";
-				nvidia,function = "spi2";
+				nvidia,function = "gmi";
 				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
@@ -946,7 +946,7 @@
 				nvidia,function = "dap";
 				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
 			};
 
 			clk3_req_pee1 {
