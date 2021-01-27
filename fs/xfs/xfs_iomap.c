@@ -250,6 +250,11 @@ xfs_iomap_write_direct(
 	if (error)
 		goto out_trans_cancel;
 
+	error = xfs_iext_count_may_overflow(ip, XFS_DATA_FORK,
+			XFS_IEXT_ADD_NOSPLIT_CNT);
+	if (error)
+		goto out_res_cancel;
+
 	xfs_trans_ijoin(tp, ip, 0);
 
 	/*
@@ -558,6 +563,11 @@ xfs_iomap_write_unwritten(
 
 		error = xfs_trans_reserve_quota_nblks(tp, ip, resblks, 0,
 				XFS_QMOPT_RES_REGBLKS | XFS_QMOPT_FORCE_RES);
+		if (error)
+			goto error_on_bmapi_transaction;
+
+		error = xfs_iext_count_may_overflow(ip, XFS_DATA_FORK,
+				XFS_IEXT_WRITE_UNWRITTEN_CNT);
 		if (error)
 			goto error_on_bmapi_transaction;
 
