@@ -151,7 +151,8 @@ static int ramfs_symlink(struct user_namespace *mnt_userns, struct inode *dir,
 	return error;
 }
 
-static int ramfs_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
+static int ramfs_tmpfile(struct user_namespace *mnt_userns, struct inode *dir,
+			 struct dentry *dentry, umode_t mode)
 {
 	struct inode *inode;
 
