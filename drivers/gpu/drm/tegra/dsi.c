@@ -1086,12 +1086,10 @@ static int tegra_dsi_runtime_suspend(struct host1x_client *client)
 	struct device *dev = client->dev;
 	int err;
 
-	if (dsi->rst) {
-		err = reset_control_assert(dsi->rst);
-		if (err < 0) {
-			dev_err(dev, "failed to assert reset: %d\n", err);
-			return err;
-		}
+	err = reset_control_assert(dsi->rst);
+	if (err < 0) {
+		dev_err(dev, "failed to assert reset: %d\n", err);
+		return err;
 	}
 
 	usleep_range(1000, 2000);
@@ -1137,12 +1135,10 @@ static int tegra_dsi_runtime_resume(struct host1x_client *client)
 
 	usleep_range(1000, 2000);
 
-	if (dsi->rst) {
-		err = reset_control_deassert(dsi->rst);
-		if (err < 0) {
-			dev_err(dev, "cannot assert reset: %d\n", err);
-			goto disable_clk_lp;
-		}
+	err = reset_control_deassert(dsi->rst);
+	if (err < 0) {
+		dev_err(dev, "cannot de-assert reset: %d\n", err);
+		goto disable_clk_lp;
 	}
 
 	return 0;
