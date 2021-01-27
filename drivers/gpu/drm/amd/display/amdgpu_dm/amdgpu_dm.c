@@ -5397,7 +5397,6 @@ static inline int dm_set_vblank(struct drm_crtc *crtc, bool enable)
 	if (!dc_interrupt_set(adev->dm.dc, irq_source, enable))
 		return -EBUSY;
 
-#if defined(CONFIG_DRM_AMD_DC_DCN)
 	if (amdgpu_in_reset(adev))
 		return 0;
 
@@ -5417,7 +5416,6 @@ static inline int dm_set_vblank(struct drm_crtc *crtc, bool enable)
 
 	mutex_unlock(&dm->dc_lock);
 
-#endif
 	return 0;
 }
 
@@ -9687,6 +9685,10 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
 			amdgpu_dm_connector->max_vfreq = range->max_vfreq;
 			amdgpu_dm_connector->pixel_clock_mhz =
 				range->pixel_clock_mhz * 10;
+
+			connector->display_info.monitor_range.min_vfreq = range->min_vfreq;
+			connector->display_info.monitor_range.max_vfreq = range->max_vfreq;
+
 			break;
 		}
 
