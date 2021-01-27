@@ -1065,6 +1065,17 @@ void tb_port_lane_bonding_disable(struct tb_port *port)
 	tb_port_set_link_width(port, 1);
 }
 
+static int tb_port_start_lane_initialization(struct tb_port *port)
+{
+	int ret;
+
+	if (tb_switch_is_usb4(port->sw))
+		return 0;
+
+	ret = tb_lc_start_lane_initialization(port);
+	return ret == -EINVAL ? 0 : ret;
+}
+
 /**
  * tb_port_is_enabled() - Is the adapter port enabled
  * @port: Port to check
@@ -1376,6 +1387,30 @@ static ssize_t authorized_show(struct device *dev,
 	return sprintf(buf, "%u\n", sw->authorized);
 }
 
+static int disapprove_switch(struct device *dev, void *not_used)
+{
+	struct tb_switch *sw;
+
+	sw = tb_to_switch(dev);
+	if (sw && sw->authorized) {
+		int ret;
+
+		/* First children */
+		ret = device_for_each_child_reverse(&sw->dev, NULL, disapprove_switch);
+		if (ret)
+			return ret;
+
+		ret = tb_domain_disapprove_switch(sw->tb, sw);
+		if (ret)
+			return ret;
+
+		sw->authorized = 0;
+		kobject_uevent(&sw->dev.kobj, KOBJ_CHANGE);
+	}
+
+	return 0;
+}
+
 static int tb_switch_set_authorized(struct tb_switch *sw, unsigned int val)
 {
 	int ret = -EINVAL;
@@ -1383,10 +1418,18 @@ static int tb_switch_set_authorized(struct tb_switch *sw, unsigned int val)
 	if (!mutex_trylock(&sw->tb->lock))
 		return restart_syscall();
 
-	if (sw->authorized)
+	if (!!sw->authorized == !!val)
 		goto unlock;
 
 	switch (val) {
+	/* Disapprove switch */
+	case 0:
+		if (tb_route(sw)) {
+			ret = disapprove_switch(&sw->dev, NULL);
+			goto unlock;
+		}
+		break;
+
 	/* Approve switch */
 	case 1:
 		if (sw->key)
@@ -1771,7 +1814,7 @@ static umode_t switch_attr_is_visible(struct kobject *kobj,
 	return sw->safe_mode ? 0 : attr->mode;
 }
 
-static struct attribute_group switch_group = {
+static const struct attribute_group switch_group = {
 	.is_visible = switch_attr_is_visible,
 	.attrs = switch_attrs,
 };
@@ -2694,8 +2737,22 @@ int tb_switch_resume(struct tb_switch *sw)
 
 	/* check for surviving downstream switches */
 	tb_switch_for_each_port(sw, port) {
-		if (!tb_port_has_remote(port) && !port->xdomain)
+		if (!tb_port_has_remote(port) && !port->xdomain) {
+			/*
+			 * For disconnected downstream lane adapters
+			 * start lane initialization now so we detect
+			 * future connects.
+			 */
+			if (!tb_is_upstream_port(port) && tb_port_is_null(port))
+				tb_port_start_lane_initialization(port);
 			continue;
+		} else if (port->xdomain) {
+			/*
+			 * Start lane initialization for XDomain so the
+			 * link gets re-established.
+			 */
+			tb_port_start_lane_initialization(port);
+		}
 
 		if (tb_wait_for_port(port, true) <= 0) {
 			tb_port_warn(port,
