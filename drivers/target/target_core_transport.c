@@ -1512,17 +1512,14 @@ int transport_handle_cdb_direct(
 {
 	sense_reason_t ret;
 
+	might_sleep();
+
 	if (!cmd->se_lun) {
 		dump_stack();
 		pr_err("cmd->se_lun is NULL\n");
 		return -EINVAL;
 	}
-	if (in_interrupt()) {
-		dump_stack();
-		pr_err("transport_generic_handle_cdb cannot be called"
-				" from interrupt context\n");
-		return -EINVAL;
-	}
+
 	/*
 	 * Set TRANSPORT_NEW_CMD state and CMD_T_ACTIVE to ensure that
 	 * outstanding descriptors are handled correctly during shutdown via
@@ -1613,10 +1610,11 @@ int target_submit_cmd_map_sgls(struct se_cmd *se_cmd, struct se_session *se_sess
 	sense_reason_t rc;
 	int ret;
 
+	might_sleep();
+
 	se_tpg = se_sess->se_tpg;
 	BUG_ON(!se_tpg);
 	BUG_ON(se_cmd->se_tfo || se_cmd->se_sess);
-	BUG_ON(in_interrupt());
 
 	if (flags & TARGET_SCF_USE_CPUID)
 		se_cmd->se_cmd_flags |= SCF_USE_CPUID;
