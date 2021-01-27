@@ -1708,6 +1708,10 @@
 		};
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	sound {
 		nvidia,i2s-controller = <&tegra_i2s1>;
 
