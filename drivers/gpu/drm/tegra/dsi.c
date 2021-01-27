@@ -1117,6 +1117,12 @@ static int tegra_dsi_runtime_resume(struct host1x_client *client)
 		return err;
 	}
 
+	err = reset_control_assert(dsi->rst);
+	if (err < 0) {
+		dev_err(dev, "failed to assert reset: %d\n", err);
+		return err;
+	}
+
 	err = regulator_enable(dsi->vdd);
 	if (err < 0) {
 		dev_err(dev, "failed to enable VDD supply: %d\n", err);
