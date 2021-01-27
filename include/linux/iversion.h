@@ -329,6 +329,32 @@ inode_query_iversion(struct inode *inode)
 }
 
 /*
+ * We could use i_version alone as the NFSv4 change attribute.  However,
+ * i_version can go backwards after a reboot.  On its own that doesn't
+ * necessarily cause a problem, but if i_version goes backwards and then
+ * is incremented again it could reuse a value that was previously used
+ * before boot, and a client who queried the two values might
+ * incorrectly assume nothing changed.
+ *
+ * By using both ctime and the i_version counter we guarantee that as
+ * long as time doesn't go backwards we never reuse an old value.
+ *
+ * A filesystem that has an on-disk boot counter or similar might prefer
+ * to use that to avoid the risk of the change attribute going backwards
+ * if system time is set backwards.
+ */
+static inline u64 generic_fetch_iversion(struct inode *inode)
+{
+	u64 chattr;
+
+	chattr =  inode->i_ctime.tv_sec;
+	chattr <<= 30;
+	chattr += inode->i_ctime.tv_nsec;
+	chattr += inode_query_iversion(inode);
+	return chattr;
+}
+
+/*
  * For filesystems without any sort of change attribute, the best we can
  * do is fake one up from the ctime:
  */
