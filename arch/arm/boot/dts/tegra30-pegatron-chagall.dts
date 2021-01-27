@@ -1538,15 +1538,6 @@
 		vbus-supply = <&vdd_5v0_sys>;		/* might need vdd_vbus_micro_usb fixed */
 	};
 
-	usb@7d008000 {
-		status = "okay";		
-	};
-
-	usb-phy@7d008000 {
-		status = "okay";
-		vbus-supply = <&vdd_5v0_sys>;		/* might need vdd_vbus_typea_usb fixed */
-	};
-
 	backlight_lvds: backlight-lvds {
 		compatible = "pwm-backlight";
 
