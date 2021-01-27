@@ -122,7 +122,7 @@ static const struct net_device_ops mhi_netdev_ops = {
 static void mhi_net_setup(struct net_device *ndev)
 {
 	ndev->header_ops = NULL;  /* No header */
-	ndev->type = ARPHRD_NONE; /* QMAP... */
+	ndev->type = ARPHRD_RAWIP;
 	ndev->hard_header_len = 0;
 	ndev->addr_len = 0;
 	ndev->flags = IFF_POINTOPOINT | IFF_NOARP;
@@ -158,7 +158,18 @@ static void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 		u64_stats_add(&mhi_netdev->stats.rx_bytes, mhi_res->bytes_xferd);
 		u64_stats_update_end(&mhi_netdev->stats.rx_syncp);
 
-		skb->protocol = htons(ETH_P_MAP);
+		switch (skb->data[0] & 0xf0) {
+		case 0x40:
+			skb->protocol = htons(ETH_P_IP);
+			break;
+		case 0x60:
+			skb->protocol = htons(ETH_P_IPV6);
+			break;
+		default:
+			skb->protocol = htons(ETH_P_MAP);
+			break;
+		}
+
 		skb_put(skb, mhi_res->bytes_xferd);
 		netif_rx(skb);
 	}
@@ -237,6 +248,10 @@ static void mhi_net_rx_refill_work(struct work_struct *work)
 		schedule_delayed_work(&mhi_netdev->rx_refill, HZ / 2);
 }
 
+static struct device_type wwan_type = {
+	.name = "wwan",
+};
+
 static int mhi_net_probe(struct mhi_device *mhi_dev,
 			 const struct mhi_device_id *id)
 {
@@ -256,6 +271,7 @@ static int mhi_net_probe(struct mhi_device *mhi_dev,
 	mhi_netdev->ndev = ndev;
 	mhi_netdev->mdev = mhi_dev;
 	SET_NETDEV_DEV(ndev, &mhi_dev->dev);
+	SET_NETDEV_DEVTYPE(ndev, &wwan_type);
 
 	/* All MHI net channels have 128 ring elements (at least for now) */
 	mhi_netdev->rx_queue_sz = 128;

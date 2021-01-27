@@ -1126,12 +1126,8 @@ struct sk_buff *mlx5e_build_linear_skb(struct mlx5e_rq *rq, void *va,
 static void mlx5e_fill_xdp_buff(struct mlx5e_rq *rq, void *va, u16 headroom,
 				u32 len, struct xdp_buff *xdp)
 {
-	xdp->data_hard_start = va;
-	xdp->data = va + headroom;
-	xdp_set_data_meta_invalid(xdp);
-	xdp->data_end = xdp->data + len;
-	xdp->rxq = &rq->xdp_rxq;
-	xdp->frame_sz = rq->buff.frame0_sz;
+	xdp_init_buff(xdp, rq->buff.frame0_sz, &rq->xdp_rxq);
+	xdp_prepare_buff(xdp, va, headroom, len, false);
 }
 
 static struct sk_buff *
@@ -1786,12 +1782,10 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 		rq->dealloc_wqe = mlx5e_dealloc_rx_mpwqe;
 
 		rq->handle_rx_cqe = priv->profile->rx_handlers->handle_rx_cqe_mpwqe;
-#ifdef CONFIG_MLX5_EN_IPSEC
 		if (MLX5_IPSEC_DEV(mdev)) {
 			netdev_err(netdev, "MPWQE RQ with IPSec offload not supported\n");
 			return -EINVAL;
 		}
-#endif
 		if (!rq->handle_rx_cqe) {
 			netdev_err(netdev, "RX handler of MPWQE RQ is not set\n");
 			return -EINVAL;

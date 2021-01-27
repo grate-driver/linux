@@ -219,10 +219,20 @@ static int dsa_switch_rcv(struct sk_buff *skb, struct net_device *dev,
 	}
 
 	skb = nskb;
-	p = netdev_priv(skb->dev);
 	skb_push(skb, ETH_HLEN);
 	skb->pkt_type = PACKET_HOST;
 	skb->protocol = eth_type_trans(skb, skb->dev);
+
+	if (unlikely(!dsa_slave_dev_check(skb->dev))) {
+		/* Packet is to be injected directly on an upper
+		 * device, e.g. a team/bond, so skip all DSA-port
+		 * specific actions.
+		 */
+		netif_rx(skb);
+		return 0;
+	}
+
+	p = netdev_priv(skb->dev);
 
 	if (unlikely(cpu_dp->ds->untag_bridge_pvid)) {
 		nskb = dsa_untag_bridge_pvid(skb);
@@ -308,28 +318,6 @@ bool dsa_schedule_work(struct work_struct *work)
 {
 	return queue_work(dsa_owq, work);
 }
-
-static ATOMIC_NOTIFIER_HEAD(dsa_notif_chain);
-
-int register_dsa_notifier(struct notifier_block *nb)
-{
-	return atomic_notifier_chain_register(&dsa_notif_chain, nb);
-}
-EXPORT_SYMBOL_GPL(register_dsa_notifier);
-
-int unregister_dsa_notifier(struct notifier_block *nb)
-{
-	return atomic_notifier_chain_unregister(&dsa_notif_chain, nb);
-}
-EXPORT_SYMBOL_GPL(unregister_dsa_notifier);
-
-int call_dsa_notifiers(unsigned long val, struct net_device *dev,
-		       struct dsa_notifier_info *info)
-{
-	info->dev = dev;
-	return atomic_notifier_call_chain(&dsa_notif_chain, val, info);
-}
-EXPORT_SYMBOL_GPL(call_dsa_notifiers);
 
 int dsa_devlink_param_get(struct devlink *dl, u32 id,
 			  struct devlink_param_gset_ctx *ctx)

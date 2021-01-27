@@ -1757,6 +1757,7 @@ static void rvu_dbg_npc_mcam_show_flows(struct seq_file *s,
 			seq_printf(s, "mask 0x%x\n", ntohs(rule->mask.dport));
 			break;
 		default:
+			seq_puts(s, "\n");
 			break;
 		}
 	}
@@ -1785,7 +1786,7 @@ static void rvu_dbg_npc_mcam_show_action(struct seq_file *s,
 			break;
 		default:
 			break;
-		};
+		}
 	} else {
 		switch (rule->rx_action.op) {
 		case NIX_RX_ACTIONOP_DROP:
@@ -1806,7 +1807,7 @@ static void rvu_dbg_npc_mcam_show_action(struct seq_file *s,
 			break;
 		default:
 			break;
-		};
+		}
 	}
 }
 

@@ -20,6 +20,9 @@ enum {
 	DSA_NOTIFIER_BRIDGE_LEAVE,
 	DSA_NOTIFIER_FDB_ADD,
 	DSA_NOTIFIER_FDB_DEL,
+	DSA_NOTIFIER_LAG_CHANGE,
+	DSA_NOTIFIER_LAG_JOIN,
+	DSA_NOTIFIER_LAG_LEAVE,
 	DSA_NOTIFIER_MDB_ADD,
 	DSA_NOTIFIER_MDB_DEL,
 	DSA_NOTIFIER_VLAN_ADD,
@@ -29,7 +32,6 @@ enum {
 
 /* DSA_NOTIFIER_AGEING_TIME */
 struct dsa_notifier_ageing_time_info {
-	struct switchdev_trans *trans;
 	unsigned int ageing_time;
 };
 
@@ -52,15 +54,22 @@ struct dsa_notifier_fdb_info {
 /* DSA_NOTIFIER_MDB_* */
 struct dsa_notifier_mdb_info {
 	const struct switchdev_obj_port_mdb *mdb;
-	struct switchdev_trans *trans;
 	int sw_index;
 	int port;
+};
+
+/* DSA_NOTIFIER_LAG_* */
+struct dsa_notifier_lag_info {
+	struct net_device *lag;
+	int sw_index;
+	int port;
+
+	struct netdev_lag_upper_info *info;
 };
 
 /* DSA_NOTIFIER_VLAN_* */
 struct dsa_notifier_vlan_info {
 	const struct switchdev_obj_port_vlan *vlan;
-	struct switchdev_trans *trans;
 	int sw_index;
 	int port;
 };
@@ -71,6 +80,18 @@ struct dsa_notifier_mtu_info {
 	int sw_index;
 	int port;
 	int mtu;
+};
+
+struct dsa_switchdev_event_work {
+	struct dsa_switch *ds;
+	int port;
+	struct work_struct work;
+	unsigned long event;
+	/* Specific for SWITCHDEV_FDB_ADD_TO_DEVICE and
+	 * SWITCHDEV_FDB_DEL_TO_DEVICE
+	 */
+	unsigned char addr[ETH_ALEN];
+	u16 vid;
 };
 
 struct dsa_slave_priv {
@@ -98,15 +119,6 @@ void dsa_tag_driver_put(const struct dsa_device_ops *ops);
 bool dsa_schedule_work(struct work_struct *work);
 const char *dsa_tag_protocol_to_str(const struct dsa_device_ops *ops);
 
-int dsa_legacy_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
-		       struct net_device *dev,
-		       const unsigned char *addr, u16 vid,
-		       u16 flags,
-		       struct netlink_ext_ack *extack);
-int dsa_legacy_fdb_del(struct ndmsg *ndm, struct nlattr *tb[],
-		       struct net_device *dev,
-		       const unsigned char *addr, u16 vid);
-
 /* master.c */
 int dsa_master_setup(struct net_device *dev, struct dsa_port *cpu_dp);
 void dsa_master_teardown(struct net_device *dev);
@@ -127,19 +139,21 @@ static inline struct net_device *dsa_master_find_slave(struct net_device *dev,
 }
 
 /* port.c */
-int dsa_port_set_state(struct dsa_port *dp, u8 state,
-		       struct switchdev_trans *trans);
+int dsa_port_set_state(struct dsa_port *dp, u8 state);
 int dsa_port_enable_rt(struct dsa_port *dp, struct phy_device *phy);
 int dsa_port_enable(struct dsa_port *dp, struct phy_device *phy);
 void dsa_port_disable_rt(struct dsa_port *dp);
 void dsa_port_disable(struct dsa_port *dp);
 int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br);
 void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br);
-int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
-			    struct switchdev_trans *trans);
+int dsa_port_lag_change(struct dsa_port *dp,
+			struct netdev_lag_lower_state_info *linfo);
+int dsa_port_lag_join(struct dsa_port *dp, struct net_device *lag_dev,
+		      struct netdev_lag_upper_info *uinfo);
+void dsa_port_lag_leave(struct dsa_port *dp, struct net_device *lag_dev);
+int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering);
 bool dsa_port_skip_vlan_configuration(struct dsa_port *dp);
-int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock,
-			 struct switchdev_trans *trans);
+int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock);
 int dsa_port_mtu_change(struct dsa_port *dp, int new_mtu,
 			bool propagate_upstream);
 int dsa_port_fdb_add(struct dsa_port *dp, const unsigned char *addr,
@@ -148,31 +162,41 @@ int dsa_port_fdb_del(struct dsa_port *dp, const unsigned char *addr,
 		     u16 vid);
 int dsa_port_fdb_dump(struct dsa_port *dp, dsa_fdb_dump_cb_t *cb, void *data);
 int dsa_port_mdb_add(const struct dsa_port *dp,
-		     const struct switchdev_obj_port_mdb *mdb,
-		     struct switchdev_trans *trans);
+		     const struct switchdev_obj_port_mdb *mdb);
 int dsa_port_mdb_del(const struct dsa_port *dp,
 		     const struct switchdev_obj_port_mdb *mdb);
-int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags,
-			      struct switchdev_trans *trans);
-int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags,
-			  struct switchdev_trans *trans);
-int dsa_port_mrouter(struct dsa_port *dp, bool mrouter,
-		     struct switchdev_trans *trans);
+int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags);
+int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags);
+int dsa_port_mrouter(struct dsa_port *dp, bool mrouter);
 int dsa_port_vlan_add(struct dsa_port *dp,
-		      const struct switchdev_obj_port_vlan *vlan,
-		      struct switchdev_trans *trans);
+		      const struct switchdev_obj_port_vlan *vlan);
 int dsa_port_vlan_del(struct dsa_port *dp,
 		      const struct switchdev_obj_port_vlan *vlan);
 int dsa_port_link_register_of(struct dsa_port *dp);
 void dsa_port_link_unregister_of(struct dsa_port *dp);
 extern const struct phylink_mac_ops dsa_port_phylink_mac_ops;
 
+static inline bool dsa_port_offloads_netdev(struct dsa_port *dp,
+					    struct net_device *dev)
+{
+	/* Switchdev offloading can be configured on: */
+
+	if (dev == dp->slave)
+		/* DSA ports directly connected to a bridge. */
+		return true;
+
+	if (dp->lag_dev == dev)
+		/* DSA ports connected to a bridge via a LAG */
+		return true;
+
+	return false;
+}
+
 /* slave.c */
 extern const struct dsa_device_ops notag_netdev_ops;
 void dsa_slave_mii_bus_init(struct dsa_switch *ds);
 int dsa_slave_create(struct dsa_port *dp);
 void dsa_slave_destroy(struct net_device *slave_dev);
-bool dsa_slave_dev_check(const struct net_device *dev);
 int dsa_slave_suspend(struct net_device *slave_dev);
 int dsa_slave_resume(struct net_device *slave_dev);
 int dsa_slave_register_notifier(void);
@@ -257,6 +281,9 @@ int dsa_switch_register_notifier(struct dsa_switch *ds);
 void dsa_switch_unregister_notifier(struct dsa_switch *ds);
 
 /* dsa2.c */
+void dsa_lag_map(struct dsa_switch_tree *dst, struct net_device *lag);
+void dsa_lag_unmap(struct dsa_switch_tree *dst, struct net_device *lag);
+
 extern struct list_head dsa_tree_list;
 
 #endif
