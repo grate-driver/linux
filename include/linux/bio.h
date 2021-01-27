@@ -10,6 +10,7 @@
 #include <linux/ioprio.h>
 /* struct bio, bio_vec and BIO_* flags are defined in blk_types.h */
 #include <linux/blk_types.h>
+#include <linux/uio.h>
 
 #define BIO_DEBUG
 
@@ -441,6 +442,18 @@ static inline void bio_wouldblock_error(struct bio *bio)
 	bio_endio(bio);
 }
 
+/*
+ * Calculate number of bvec segments that should be allocated to fit data
+ * pointed by @iter. If @iter is backed by bvec it's going to be reused
+ * instead of allocating a new one.
+ */
+static inline int bio_iov_vecs_to_alloc(struct iov_iter *iter, int max_segs)
+{
+	if (iov_iter_is_bvec(iter))
+		return 0;
+	return iov_iter_npages(iter, max_segs);
+}
+
 struct request_queue;
 
 extern int submit_bio_wait(struct bio *bio);
@@ -478,29 +491,26 @@ static inline void zero_fill_bio(struct bio *bio)
 	zero_fill_bio_iter(bio, bio->bi_iter);
 }
 
-extern struct bio_vec *bvec_alloc(gfp_t, int, unsigned long *, mempool_t *);
-extern void bvec_free(mempool_t *, struct bio_vec *, unsigned int);
-extern unsigned int bvec_nr_vecs(unsigned short idx);
 extern const char *bio_devname(struct bio *bio, char *buffer);
 
-#define bio_set_dev(bio, bdev) 			\
-do {						\
-	if ((bio)->bi_disk != (bdev)->bd_disk)	\
-		bio_clear_flag(bio, BIO_THROTTLED);\
-	(bio)->bi_disk = (bdev)->bd_disk;	\
-	(bio)->bi_partno = (bdev)->bd_partno;	\
-	bio_associate_blkg(bio);		\
+#define bio_set_dev(bio, bdev) 				\
+do {							\
+	bio_clear_flag(bio, BIO_REMAPPED);		\
+	if ((bio)->bi_bdev != (bdev))			\
+		bio_clear_flag(bio, BIO_THROTTLED);	\
+	(bio)->bi_bdev = (bdev);			\
+	bio_associate_blkg(bio);			\
 } while (0)
 
 #define bio_copy_dev(dst, src)			\
 do {						\
-	(dst)->bi_disk = (src)->bi_disk;	\
-	(dst)->bi_partno = (src)->bi_partno;	\
+	bio_clear_flag(dst, BIO_REMAPPED);		\
+	(dst)->bi_bdev = (src)->bi_bdev;	\
 	bio_clone_blkg_association(dst, src);	\
 } while (0)
 
 #define bio_dev(bio) \
-	disk_devt((bio)->bi_disk)
+	disk_devt((bio)->bi_bdev->bd_disk)
 
 #ifdef CONFIG_BLK_CGROUP
 void bio_associate_blkg(struct bio *bio);
@@ -703,6 +713,7 @@ struct bio_set {
 	mempool_t bvec_integrity_pool;
 #endif
 
+	unsigned int back_pad;
 	/*
 	 * Deadlock avoidance for stacking block drivers: see comments in
 	 * bio_alloc_bioset() for details
