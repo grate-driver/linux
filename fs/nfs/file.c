@@ -431,8 +431,15 @@ static int nfs_release_page(struct page *page, gfp_t gfp)
 
 	/* If PagePrivate() is set, then the page is not freeable */
 	if (PagePrivate(page))
-		return 0;
-	return nfs_fscache_release_page(page, gfp);
+		return false;
+
+	if (PageFsCache(page)) {
+		if (!(gfp & __GFP_DIRECT_RECLAIM) || !(gfp & __GFP_FS))
+			return false;
+		wait_on_page_fscache(page);
+	}
+
+	return true;
 }
 
 static void nfs_check_dirty_writeback(struct page *page,
