@@ -1,6 +1,10 @@
 arm/soc
 	samsung/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-5.12
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.12-tag1
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/soc-signed
 
 arm/dt
 	berlin/dt64
@@ -27,6 +31,14 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/iwamatsu/linux-visconti tags/visconti-arm-dt-for-v5.11-tag2
 	samsung/dt64
 		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-5.12
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-5.12v2
+	renesas/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.12-tag2
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.12-1
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/dt-signed
 
 arm/drivers
 	drivers/scmi
@@ -37,6 +49,8 @@ arm/defconfig
 		ARM: multi_v7_defconfig: Enable Actions Semi platform and drivers
 	at91/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-defconfig-5.12
+	patch
+		ARM: multi_v7_defconfig: add STM32 CEC support
 
 arm/newsoc
 
@@ -66,6 +80,14 @@ arm/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-fixes-for-5.11
 	<no branch> (5b5465dd947cb655550332d3fa509f91a768482b)
 		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-fixes-for-5.11
+	<no branch> (177d8f1f7f47fe7c18ceb1d87893890d7e9c95a7)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.11/fixes-rc5
+	<no branch> (74532de460ec664e5a725507d1b59aa9e4d40776)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.11-rockchip-dtsfixes1
+	<no branch> (19f6fe976a61f9afc289b062b7ef67f99b72e7b9)
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes-2
+	<no branch> (daf12bee07b9e2f38216f58aca7ac4e4e66a7146)
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes-3
 
 arm/omap-genpd
 
