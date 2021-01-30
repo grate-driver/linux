@@ -531,11 +531,14 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
 	return min_vruntime;
 }
 
-static inline int entity_before(struct sched_entity *a,
+static inline bool entity_before(struct sched_entity *a,
 				struct sched_entity *b)
 {
 	return (s64)(a->vruntime - b->vruntime) < 0;
 }
+
+#define __node_2_se(node) \
+	rb_entry((node), struct sched_entity, run_node)
 
 static void update_min_vruntime(struct cfs_rq *cfs_rq)
 {
@@ -552,8 +555,7 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 	}
 
 	if (leftmost) { /* non-empty tree */
-		struct sched_entity *se;
-		se = rb_entry(leftmost, struct sched_entity, run_node);
+		struct sched_entity *se = __node_2_se(leftmost);
 
 		if (!curr)
 			vruntime = se->vruntime;
@@ -569,37 +571,17 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 #endif
 }
 
+static inline bool __entity_less(struct rb_node *a, const struct rb_node *b)
+{
+	return entity_before(__node_2_se(a), __node_2_se(b));
+}
+
 /*
  * Enqueue an entity into the rb-tree:
  */
 static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	struct rb_node **link = &cfs_rq->tasks_timeline.rb_root.rb_node;
-	struct rb_node *parent = NULL;
-	struct sched_entity *entry;
-	bool leftmost = true;
-
-	/*
-	 * Find the right place in the rbtree:
-	 */
-	while (*link) {
-		parent = *link;
-		entry = rb_entry(parent, struct sched_entity, run_node);
-		/*
-		 * We dont care about collisions. Nodes with
-		 * the same key stay together.
-		 */
-		if (entity_before(se, entry)) {
-			link = &parent->rb_left;
-		} else {
-			link = &parent->rb_right;
-			leftmost = false;
-		}
-	}
-
-	rb_link_node(&se->run_node, parent, link);
-	rb_insert_color_cached(&se->run_node,
-			       &cfs_rq->tasks_timeline, leftmost);
+	rb_add_cached(&se->run_node, &cfs_rq->tasks_timeline, __entity_less);
 }
 
 static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
@@ -614,7 +596,7 @@ struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
 	if (!left)
 		return NULL;
 
-	return rb_entry(left, struct sched_entity, run_node);
+	return __node_2_se(left);
 }
 
 static struct sched_entity *__pick_next_entity(struct sched_entity *se)
@@ -624,7 +606,7 @@ static struct sched_entity *__pick_next_entity(struct sched_entity *se)
 	if (!next)
 		return NULL;
 
-	return rb_entry(next, struct sched_entity, run_node);
+	return __node_2_se(next);
 }
 
 #ifdef CONFIG_SCHED_DEBUG
@@ -635,7 +617,7 @@ struct sched_entity *__pick_last_entity(struct cfs_rq *cfs_rq)
 	if (!last)
 		return NULL;
 
-	return rb_entry(last, struct sched_entity, run_node);
+	return __node_2_se(last);
 }
 
 /**************************************************************
@@ -4060,7 +4042,7 @@ static inline void update_misfit_status(struct task_struct *p, struct rq *rq)
 	if (!static_branch_unlikely(&sched_asym_cpucapacity))
 		return;
 
-	if (!p) {
+	if (!p || p->nr_cpus_allowed == 1) {
 		rq->misfit_task_load = 0;
 		return;
 	}
@@ -6019,6 +6001,14 @@ static inline int find_idlest_cpu(struct sched_domain *sd, struct task_struct *p
 	return new_cpu;
 }
 
+static inline int __select_idle_cpu(int cpu)
+{
+	if (available_idle_cpu(cpu) || sched_idle_cpu(cpu))
+		return cpu;
+
+	return -1;
+}
+
 #ifdef CONFIG_SCHED_SMT
 DEFINE_STATIC_KEY_FALSE(sched_smt_present);
 EXPORT_SYMBOL_GPL(sched_smt_present);
@@ -6077,74 +6067,51 @@ unlock:
  * there are no idle cores left in the system; tracked through
  * sd_llc->shared->has_idle_cores and enabled through update_idle_core() above.
  */
-static int select_idle_core(struct task_struct *p, struct sched_domain *sd, int target)
+static int select_idle_core(struct task_struct *p, int core, struct cpumask *cpus, int *idle_cpu)
 {
-	struct cpumask *cpus = this_cpu_cpumask_var_ptr(select_idle_mask);
-	int core, cpu;
-
-	if (!static_branch_likely(&sched_smt_present))
-		return -1;
-
-	if (!test_idle_cores(target, false))
-		return -1;
-
-	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
-
-	for_each_cpu_wrap(core, cpus, target) {
-		bool idle = true;
-
-		for_each_cpu(cpu, cpu_smt_mask(core)) {
-			if (!available_idle_cpu(cpu)) {
-				idle = false;
-				break;
-			}
-		}
-
-		if (idle)
-			return core;
-
-		cpumask_andnot(cpus, cpus, cpu_smt_mask(core));
-	}
-
-	/*
-	 * Failed to find an idle core; stop looking for one.
-	 */
-	set_idle_cores(target, 0);
-
-	return -1;
-}
-
-/*
- * Scan the local SMT mask for idle CPUs.
- */
-static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int target)
-{
+	bool idle = true;
 	int cpu;
 
 	if (!static_branch_likely(&sched_smt_present))
-		return -1;
+		return __select_idle_cpu(core);
 
-	for_each_cpu(cpu, cpu_smt_mask(target)) {
-		if (!cpumask_test_cpu(cpu, p->cpus_ptr) ||
-		    !cpumask_test_cpu(cpu, sched_domain_span(sd)))
-			continue;
-		if (available_idle_cpu(cpu) || sched_idle_cpu(cpu))
-			return cpu;
+	for_each_cpu(cpu, cpu_smt_mask(core)) {
+		if (!available_idle_cpu(cpu)) {
+			idle = false;
+			if (*idle_cpu == -1) {
+				if (sched_idle_cpu(cpu) && cpumask_test_cpu(cpu, p->cpus_ptr)) {
+					*idle_cpu = cpu;
+					break;
+				}
+				continue;
+			}
+			break;
+		}
+		if (*idle_cpu == -1 && cpumask_test_cpu(cpu, p->cpus_ptr))
+			*idle_cpu = cpu;
 	}
 
+	if (idle)
+		return core;
+
+	cpumask_andnot(cpus, cpus, cpu_smt_mask(core));
 	return -1;
 }
 
 #else /* CONFIG_SCHED_SMT */
 
-static inline int select_idle_core(struct task_struct *p, struct sched_domain *sd, int target)
+static inline void set_idle_cores(int cpu, int val)
 {
-	return -1;
 }
 
-static inline int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int target)
+static inline bool test_idle_cores(int cpu, bool def)
 {
-	return -1;
+	return def;
+}
+
+static inline int select_idle_core(struct task_struct *p, int core, struct cpumask *cpus, int *idle_cpu)
+{
+	return __select_idle_cpu(core);
 }
 
 #endif /* CONFIG_SCHED_SMT */
@@ -6157,49 +6124,61 @@ static inline int select_idle_smt(struct task_struct *p, struct sched_domain *sd
 static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, int target)
 {
 	struct cpumask *cpus = this_cpu_cpumask_var_ptr(select_idle_mask);
-	struct sched_domain *this_sd;
-	u64 avg_cost, avg_idle;
-	u64 time;
+	int i, cpu, idle_cpu = -1, nr = INT_MAX;
+	bool smt = test_idle_cores(target, false);
 	int this = smp_processor_id();
-	int cpu, nr = INT_MAX;
+	struct sched_domain *this_sd;
+	u64 time;
 
 	this_sd = rcu_dereference(*this_cpu_ptr(&sd_llc));
 	if (!this_sd)
 		return -1;
 
-	/*
-	 * Due to large variance we need a large fuzz factor; hackbench in
-	 * particularly is sensitive here.
-	 */
-	avg_idle = this_rq()->avg_idle / 512;
-	avg_cost = this_sd->avg_scan_cost + 1;
+	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
 
-	if (sched_feat(SIS_AVG_CPU) && avg_idle < avg_cost)
-		return -1;
+	if (sched_feat(SIS_PROP) && !smt) {
+		u64 avg_cost, avg_idle, span_avg;
 
-	if (sched_feat(SIS_PROP)) {
-		u64 span_avg = sd->span_weight * avg_idle;
+		/*
+		 * Due to large variance we need a large fuzz factor;
+		 * hackbench in particularly is sensitive here.
+		 */
+		avg_idle = this_rq()->avg_idle / 512;
+		avg_cost = this_sd->avg_scan_cost + 1;
+
+		span_avg = sd->span_weight * avg_idle;
 		if (span_avg > 4*avg_cost)
 			nr = div_u64(span_avg, avg_cost);
 		else
 			nr = 4;
+
+		time = cpu_clock(this);
 	}
-
-	time = cpu_clock(this);
-
-	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
 
 	for_each_cpu_wrap(cpu, cpus, target) {
-		if (!--nr)
-			return -1;
-		if (available_idle_cpu(cpu) || sched_idle_cpu(cpu))
-			break;
+		if (smt) {
+			i = select_idle_core(p, cpu, cpus, &idle_cpu);
+			if ((unsigned int)i < nr_cpumask_bits)
+				return i;
+
+		} else {
+			if (!--nr)
+				return -1;
+			idle_cpu = __select_idle_cpu(cpu);
+			if ((unsigned int)idle_cpu < nr_cpumask_bits)
+				break;
+		}
 	}
 
-	time = cpu_clock(this) - time;
-	update_avg(&this_sd->avg_scan_cost, time);
+	if (smt)
+		set_idle_cores(this, false);
 
-	return cpu;
+	if (sched_feat(SIS_PROP) && !smt) {
+		time = cpu_clock(this) - time;
+		update_avg(&this_sd->avg_scan_cost, time);
+	}
+
+	return idle_cpu;
 }
 
 /*
@@ -6328,15 +6307,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 	if (!sd)
 		return target;
 
-	i = select_idle_core(p, sd, target);
-	if ((unsigned)i < nr_cpumask_bits)
-		return i;
-
 	i = select_idle_cpu(p, sd, target);
-	if ((unsigned)i < nr_cpumask_bits)
-		return i;
-
-	i = select_idle_smt(p, sd, target);
 	if ((unsigned)i < nr_cpumask_bits)
 		return i;
 
