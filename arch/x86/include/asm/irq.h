@@ -51,4 +51,8 @@ void arch_trigger_cpumask_backtrace(const struct cpumask *mask,
 #define arch_trigger_cpumask_backtrace arch_trigger_cpumask_backtrace
 #endif
 
+#ifdef CONFIG_X86_THERMAL_VECTOR
+void thermal_set_handler(void (*handler)(void));
+#endif
+
 #endif /* _ASM_X86_IRQ_H */

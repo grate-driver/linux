@@ -374,3 +374,32 @@ void fixup_irqs(void)
 	}
 }
 #endif
+
+#ifdef CONFIG_X86_THERMAL_VECTOR
+static void unexpected_thermal_interrupt(void)
+{
+	pr_err("CPU%d: Unexpected LVT thermal interrupt!\n",
+		smp_processor_id());
+}
+
+static void (*smp_thermal_vector)(void) = unexpected_thermal_interrupt;
+
+void thermal_set_handler(void (*handler)(void))
+{
+	if (handler) {
+		WARN_ON(smp_thermal_vector != unexpected_thermal_interrupt);
+		smp_thermal_vector = handler;
+	} else {
+		smp_thermal_vector = unexpected_thermal_interrupt;
+	}
+}
+
+DEFINE_IDTENTRY_SYSVEC(sysvec_thermal)
+{
+	trace_thermal_apic_entry(THERMAL_APIC_VECTOR);
+	inc_irq_stat(irq_thermal_count);
+	smp_thermal_vector();
+	trace_thermal_apic_exit(THERMAL_APIC_VECTOR);
+	ack_APIC_irq();
+}
+#endif
