@@ -1441,14 +1441,16 @@ static int elants_i2c_probe(struct i2c_client *client,
 
 	touchscreen_parse_properties(ts->input, true, &ts->prop);
 
-	if (ts->chip_id == EKTF3624) {
+	if (ts->chip_id == EKTF3624 && ts->phy_x && ts->phy_y) {
 		/* calculate resolution from size */
 		ts->x_res = DIV_ROUND_CLOSEST(ts->prop.max_x, ts->phy_x);
 		ts->y_res = DIV_ROUND_CLOSEST(ts->prop.max_y, ts->phy_y);
 	}
 
-	input_abs_set_res(ts->input, ABS_MT_POSITION_X, ts->x_res);
-	input_abs_set_res(ts->input, ABS_MT_POSITION_Y, ts->y_res);
+	if (ts->x_res > 0)
+		input_abs_set_res(ts->input, ABS_MT_POSITION_X, ts->x_res);
+	if (ts->y_res > 0)
+		input_abs_set_res(ts->input, ABS_MT_POSITION_Y, ts->y_res);
 	if (ts->major_res > 0)
 		input_abs_set_res(ts->input, ABS_MT_TOUCH_MAJOR, ts->major_res);
 
