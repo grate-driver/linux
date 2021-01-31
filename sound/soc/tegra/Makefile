@@ -29,6 +29,7 @@ obj-$(CONFIG_SND_SOC_TEGRA186_DSPK) += snd-soc-tegra186-dspk.o
 obj-$(CONFIG_SND_SOC_TEGRA210_ADMAIF) += snd-soc-tegra210-admaif.o
 
 # Tegra machine Support
+snd-soc-tegra-rt5631-objs := tegra_rt5631.o
 snd-soc-tegra-rt5640-objs := tegra_rt5640.o
 snd-soc-tegra-rt5677-objs := tegra_rt5677.o
 snd-soc-tegra-wm8753-objs := tegra_wm8753.o
@@ -40,6 +41,7 @@ snd-soc-tegra-max98090-objs := tegra_max98090.o
 snd-soc-tegra-sgtl5000-objs := tegra_sgtl5000.o
 snd-soc-tegra-audio-graph-card-objs := tegra_audio_graph_card.o
 
+obj-$(CONFIG_SND_SOC_TEGRA_RT5631) += snd-soc-tegra-rt5631.o
 obj-$(CONFIG_SND_SOC_TEGRA_RT5640) += snd-soc-tegra-rt5640.o
 obj-$(CONFIG_SND_SOC_TEGRA_RT5677) += snd-soc-tegra-rt5677.o
 obj-$(CONFIG_SND_SOC_TEGRA_WM8753) += snd-soc-tegra-wm8753.o
