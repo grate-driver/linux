@@ -131,10 +131,14 @@ static void stub_shutdown_connection(struct usbip_device *ud)
 
 	/* 1. stop threads */
 	if (ud->tcp_rx) {
+		if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+			pr_info("%s: stop rx %p\n", __func__, ud->tcp_rx);
 		kthread_stop_put(ud->tcp_rx);
 		ud->tcp_rx = NULL;
 	}
 	if (ud->tcp_tx) {
+		if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+			pr_info("%s: stop tx %p\n", __func__, ud->tcp_tx);
 		kthread_stop_put(ud->tcp_tx);
 		ud->tcp_tx = NULL;
 	}
@@ -146,6 +150,8 @@ static void stub_shutdown_connection(struct usbip_device *ud)
 	 * not touch NULL socket.
 	 */
 	if (ud->tcp_socket) {
+		if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+			pr_info("%s: close sock %p\n", __func__, ud->tcp_socket);
 		sockfd_put(ud->tcp_socket);
 		ud->tcp_socket = NULL;
 		ud->sockfd = -1;
