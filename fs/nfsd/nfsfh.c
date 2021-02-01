@@ -350,7 +350,7 @@ out:
 __be32
 fh_verify(struct svc_rqst *rqstp, struct svc_fh *fhp, umode_t type, int access)
 {
-	struct svc_export *exp;
+	struct svc_export *exp = NULL;
 	struct dentry	*dentry;
 	__be32		error;
 
@@ -423,7 +423,7 @@ skip_pseudoflavor_check:
 	}
 out:
 	if (error == nfserr_stale)
-		nfsdstats.fh_stale++;
+		nfsd_stats_fh_stale_inc(exp);
 	return error;
 }
 
