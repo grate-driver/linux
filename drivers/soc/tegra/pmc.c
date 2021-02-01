@@ -890,8 +890,8 @@ static int tegra_genpd_power_off(struct generic_pm_domain *domain)
 
 	err = reset_control_acquire(pg->reset);
 	if (err < 0) {
-		dev_err(dev, "failed to acquire resets for PM domain %s: %d\n",
-			pg->genpd.name, err);
+		dev_err_ratelimited(dev, "failed to acquire resets for PM domain %s: %d\n",
+				    pg->genpd.name, err);
 		return err;
 	}
 
