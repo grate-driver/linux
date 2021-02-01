@@ -122,7 +122,7 @@ static inline u8 rtas_mc_error_sub_type(const struct pseries_mc_errorlog *mlog)
  * devices or systems (e.g. hugepages) that have not been initialized at the
  * subsys stage.
  */
-int __init init_ras_hotplug_IRQ(void)
+static int __init init_ras_hotplug_IRQ(void)
 {
 	struct device_node *np;
 
@@ -315,12 +315,10 @@ static irqreturn_t ras_hotplug_interrupt(int irq, void *dev_id)
 /* Handle environmental and power warning (EPOW) interrupts. */
 static irqreturn_t ras_epow_interrupt(int irq, void *dev_id)
 {
-	int status;
 	int state;
 	int critical;
 
-	status = rtas_get_sensor_fast(EPOW_SENSOR_TOKEN, EPOW_SENSOR_INDEX,
-				      &state);
+	rtas_get_sensor_fast(EPOW_SENSOR_TOKEN, EPOW_SENSOR_INDEX, &state);
 
 	if (state > 3)
 		critical = 1;		/* Time Critical */
@@ -329,12 +327,9 @@ static irqreturn_t ras_epow_interrupt(int irq, void *dev_id)
 
 	spin_lock(&ras_log_buf_lock);
 
-	status = rtas_call(ras_check_exception_token, 6, 1, NULL,
-			   RTAS_VECTOR_EXTERNAL_INTERRUPT,
-			   virq_to_hw(irq),
-			   RTAS_EPOW_WARNING,
-			   critical, __pa(&ras_log_buf),
-				rtas_get_error_log_max());
+	rtas_call(ras_check_exception_token, 6, 1, NULL, RTAS_VECTOR_EXTERNAL_INTERRUPT,
+		  virq_to_hw(irq), RTAS_EPOW_WARNING, critical, __pa(&ras_log_buf),
+		  rtas_get_error_log_max());
 
 	log_error(ras_log_buf, ERR_TYPE_RTAS_LOG, 0);
 
