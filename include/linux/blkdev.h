@@ -948,9 +948,8 @@ extern int blk_rq_map_kern(struct request_queue *, struct request *, void *, uns
 extern int blk_rq_map_user_iov(struct request_queue *, struct request *,
 			       struct rq_map_data *, const struct iov_iter *,
 			       gfp_t);
-extern void blk_execute_rq(struct request_queue *, struct gendisk *,
-			  struct request *, int);
-extern void blk_execute_rq_nowait(struct request_queue *, struct gendisk *,
+extern void blk_execute_rq(struct gendisk *, struct request *, int);
+extern void blk_execute_rq_nowait(struct gendisk *,
 				  struct request *, int, rq_end_io_fn *);
 
 /* Helper to convert REQ_OP_XXX to its string format XXX */
@@ -1289,7 +1288,7 @@ static inline bool blk_needs_flush_plug(struct task_struct *tsk)
 		 !list_empty(&plug->cb_list));
 }
 
-int blkdev_issue_flush(struct block_device *, gfp_t);
+int blkdev_issue_flush(struct block_device *bdev);
 long nr_blockdev_pages(void);
 #else /* CONFIG_BLOCK */
 struct blk_plug {
@@ -1317,7 +1316,7 @@ static inline bool blk_needs_flush_plug(struct task_struct *tsk)
 	return false;
 }
 
-static inline int blkdev_issue_flush(struct block_device *bdev, gfp_t gfp_mask)
+static inline int blkdev_issue_flush(struct block_device *bdev)
 {
 	return 0;
 }
@@ -1954,21 +1953,9 @@ unsigned long disk_start_io_acct(struct gendisk *disk, unsigned int sectors,
 void disk_end_io_acct(struct gendisk *disk, unsigned int op,
 		unsigned long start_time);
 
-unsigned long part_start_io_acct(struct gendisk *disk,
-		struct block_device **part, struct bio *bio);
-void part_end_io_acct(struct block_device *part, struct bio *bio,
-		      unsigned long start_time);
-
-/**
- * bio_start_io_acct - start I/O accounting for bio based drivers
- * @bio:	bio to start account for
- *
- * Returns the start time that should be passed back to bio_end_io_acct().
- */
-static inline unsigned long bio_start_io_acct(struct bio *bio)
-{
-	return disk_start_io_acct(bio->bi_disk, bio_sectors(bio), bio_op(bio));
-}
+unsigned long bio_start_io_acct(struct bio *bio);
+void bio_end_io_acct_remapped(struct bio *bio, unsigned long start_time,
+		struct block_device *orig_bdev);
 
 /**
  * bio_end_io_acct - end I/O accounting for bio based drivers
@@ -1977,7 +1964,7 @@ static inline unsigned long bio_start_io_acct(struct bio *bio)
  */
 static inline void bio_end_io_acct(struct bio *bio, unsigned long start_time)
 {
-	return disk_end_io_acct(bio->bi_disk, bio_op(bio), start_time);
+	return bio_end_io_acct_remapped(bio, start_time, bio->bi_bdev);
 }
 
 int bdev_read_only(struct block_device *bdev);
@@ -2012,20 +1999,15 @@ void bdev_add(struct block_device *bdev, dev_t dev);
 struct block_device *I_BDEV(struct inode *inode);
 struct block_device *bdgrab(struct block_device *bdev);
 void bdput(struct block_device *);
+int truncate_bdev_range(struct block_device *bdev, fmode_t mode, loff_t lstart,
+		loff_t lend);
 
 #ifdef CONFIG_BLOCK
 void invalidate_bdev(struct block_device *bdev);
-int truncate_bdev_range(struct block_device *bdev, fmode_t mode, loff_t lstart,
-			loff_t lend);
 int sync_blockdev(struct block_device *bdev);
 #else
 static inline void invalidate_bdev(struct block_device *bdev)
 {
-}
-static inline int truncate_bdev_range(struct block_device *bdev, fmode_t mode,
-				      loff_t lstart, loff_t lend)
-{
-	return 0;
 }
 static inline int sync_blockdev(struct block_device *bdev)
 {
