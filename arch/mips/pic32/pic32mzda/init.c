@@ -28,7 +28,7 @@ static ulong get_fdtaddr(void)
 	if (fw_passed_dtb && !fw_arg2 && !fw_arg3)
 		return (ulong)fw_passed_dtb;
 
-	if (__dtb_start < __dtb_end)
+	if (&__dtb_start < &__dtb_end)
 		ftaddr = (ulong)__dtb_start;
 
 	return ftaddr;
@@ -89,10 +89,6 @@ static __init void pic32_init_cmdline(int argc, char *argv[])
 void __init prom_init(void)
 {
 	pic32_init_cmdline((int)fw_arg0, (char **)fw_arg1);
-}
-
-void __init prom_free_prom_memory(void)
-{
 }
 
 void __init device_tree_init(void)
