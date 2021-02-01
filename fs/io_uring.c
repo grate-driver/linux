@@ -788,8 +788,6 @@ struct io_submit_state {
 struct io_op_def {
 	/* needs req->file assigned */
 	unsigned		needs_file : 1;
-	/* don't fail if file grab fails */
-	unsigned		needs_file_no_error : 1;
 	/* hash wq insertion if file is a regular file */
 	unsigned		hash_reg_file : 1;
 	/* unbound wq insertion if file is a non-regular file */
@@ -1038,7 +1036,6 @@ static ssize_t io_import_iovec(int rw, struct io_kiocb *req,
 static int io_setup_async_rw(struct io_kiocb *req, const struct iovec *iovec,
 			     const struct iovec *fast_iov,
 			     struct iov_iter *iter, bool force);
-static void io_req_drop_files(struct io_kiocb *req);
 static void io_req_task_queue(struct io_kiocb *req);
 
 static struct kmem_cache *req_cachep;
@@ -1377,22 +1374,14 @@ static void io_req_clean_work(struct io_kiocb *req)
 	if (!(req->flags & REQ_F_WORK_INITIALIZED))
 		return;
 
-	req->flags &= ~REQ_F_WORK_INITIALIZED;
-
-	if (req->work.flags & IO_WQ_WORK_MM) {
+	if (req->work.flags & IO_WQ_WORK_MM)
 		mmdrop(req->work.identity->mm);
-		req->work.flags &= ~IO_WQ_WORK_MM;
-	}
 #ifdef CONFIG_BLK_CGROUP
-	if (req->work.flags & IO_WQ_WORK_BLKCG) {
+	if (req->work.flags & IO_WQ_WORK_BLKCG)
 		css_put(req->work.identity->blkcg_css);
-		req->work.flags &= ~IO_WQ_WORK_BLKCG;
-	}
 #endif
-	if (req->work.flags & IO_WQ_WORK_CREDS) {
+	if (req->work.flags & IO_WQ_WORK_CREDS)
 		put_cred(req->work.identity->creds);
-		req->work.flags &= ~IO_WQ_WORK_CREDS;
-	}
 	if (req->work.flags & IO_WQ_WORK_FS) {
 		struct fs_struct *fs = req->work.identity->fs;
 
@@ -1402,11 +1391,27 @@ static void io_req_clean_work(struct io_kiocb *req)
 		spin_unlock(&req->work.identity->fs->lock);
 		if (fs)
 			free_fs_struct(fs);
-		req->work.flags &= ~IO_WQ_WORK_FS;
 	}
-	if (req->flags & REQ_F_INFLIGHT)
-		io_req_drop_files(req);
+	if (req->work.flags & IO_WQ_WORK_FILES) {
+		put_files_struct(req->work.identity->files);
+		put_nsproxy(req->work.identity->nsproxy);
+	}
+	if (req->flags & REQ_F_INFLIGHT) {
+		struct io_ring_ctx *ctx = req->ctx;
+		struct io_uring_task *tctx = req->task->io_uring;
+		unsigned long flags;
 
+		spin_lock_irqsave(&ctx->inflight_lock, flags);
+		list_del(&req->inflight_entry);
+		spin_unlock_irqrestore(&ctx->inflight_lock, flags);
+		req->flags &= ~REQ_F_INFLIGHT;
+		if (atomic_read(&tctx->in_idle))
+			wake_up(&tctx->wait);
+	}
+
+	req->flags &= ~REQ_F_WORK_INITIALIZED;
+	req->work.flags &= ~(IO_WQ_WORK_MM | IO_WQ_WORK_BLKCG | IO_WQ_WORK_FS |
+			     IO_WQ_WORK_CREDS | IO_WQ_WORK_FILES);
 	io_put_identity(req->task->io_uring, req);
 }
 
@@ -1455,11 +1460,24 @@ static bool io_identity_cow(struct io_kiocb *req)
 	return true;
 }
 
+static void io_req_track_inflight(struct io_kiocb *req)
+{
+	struct io_ring_ctx *ctx = req->ctx;
+
+	if (!(req->flags & REQ_F_INFLIGHT)) {
+		io_req_init_async(req);
+		req->flags |= REQ_F_INFLIGHT;
+
+		spin_lock_irq(&ctx->inflight_lock);
+		list_add(&req->inflight_entry, &ctx->inflight_list);
+		spin_unlock_irq(&ctx->inflight_lock);
+	}
+}
+
 static bool io_grab_identity(struct io_kiocb *req)
 {
 	const struct io_op_def *def = &io_op_defs[req->opcode];
 	struct io_identity *id = req->work.identity;
-	struct io_ring_ctx *ctx = req->ctx;
 
 	if (def->work_flags & IO_WQ_WORK_FSIZE) {
 		if (id->fsize != rlimit(RLIMIT_FSIZE))
@@ -1515,15 +1533,8 @@ static bool io_grab_identity(struct io_kiocb *req)
 			return false;
 		atomic_inc(&id->files->count);
 		get_nsproxy(id->nsproxy);
-
-		if (!(req->flags & REQ_F_INFLIGHT)) {
-			req->flags |= REQ_F_INFLIGHT;
-
-			spin_lock_irq(&ctx->inflight_lock);
-			list_add(&req->inflight_entry, &ctx->inflight_list);
-			spin_unlock_irq(&ctx->inflight_lock);
-		}
 		req->work.flags |= IO_WQ_WORK_FILES;
+		io_req_track_inflight(req);
 	}
 	if (!(req->work.flags & IO_WQ_WORK_MM) &&
 	    (def->work_flags & IO_WQ_WORK_MM)) {
@@ -1886,8 +1897,8 @@ static void io_cqring_fill_event(struct io_kiocb *req, long res)
 	__io_cqring_fill_event(req, res, 0);
 }
 
-static void io_req_complete_nostate(struct io_kiocb *req, long res,
-				    unsigned int cflags)
+static void io_req_complete_post(struct io_kiocb *req, long res,
+				 unsigned int cflags)
 {
 	struct io_ring_ctx *ctx = req->ctx;
 	unsigned long flags;
@@ -1898,6 +1909,12 @@ static void io_req_complete_nostate(struct io_kiocb *req, long res,
 	spin_unlock_irqrestore(&ctx->completion_lock, flags);
 
 	io_cqring_ev_posted(ctx);
+}
+
+static inline void io_req_complete_nostate(struct io_kiocb *req, long res,
+					   unsigned int cflags)
+{
+	io_req_complete_post(req, res, cflags);
 	io_put_req(req);
 }
 
@@ -3509,7 +3526,6 @@ static int io_read(struct io_kiocb *req, bool force_nonblock,
 	else
 		kiocb->ki_flags |= IOCB_NOWAIT;
 
-
 	/* If the file doesn't support async, just async punt */
 	no_async = force_nonblock && !io_file_supports_async(req->file, READ);
 	if (no_async)
@@ -3521,9 +3537,7 @@ static int io_read(struct io_kiocb *req, bool force_nonblock,
 
 	ret = io_iter_do_read(req, iter);
 
-	if (!ret) {
-		goto done;
-	} else if (ret == -EIOCBQUEUED) {
+	if (ret == -EIOCBQUEUED) {
 		ret = 0;
 		goto out_free;
 	} else if (ret == -EAGAIN) {
@@ -3537,7 +3551,7 @@ static int io_read(struct io_kiocb *req, bool force_nonblock,
 		iov_iter_revert(iter, io_size - iov_iter_count(iter));
 		ret = 0;
 		goto copy_iov;
-	} else if (ret < 0) {
+	} else if (ret <= 0) {
 		/* make sure -ERESTARTSYS -> -EINTR is done */
 		goto done;
 	}
@@ -6160,25 +6174,6 @@ static int io_req_defer(struct io_kiocb *req, const struct io_uring_sqe *sqe)
 	return -EIOCBQUEUED;
 }
 
-static void io_req_drop_files(struct io_kiocb *req)
-{
-	struct io_ring_ctx *ctx = req->ctx;
-	struct io_uring_task *tctx = req->task->io_uring;
-	unsigned long flags;
-
-	if (req->work.flags & IO_WQ_WORK_FILES) {
-		put_files_struct(req->work.identity->files);
-		put_nsproxy(req->work.identity->nsproxy);
-	}
-	spin_lock_irqsave(&ctx->inflight_lock, flags);
-	list_del(&req->inflight_entry);
-	spin_unlock_irqrestore(&ctx->inflight_lock, flags);
-	req->flags &= ~REQ_F_INFLIGHT;
-	req->work.flags &= ~IO_WQ_WORK_FILES;
-	if (atomic_read(&tctx->in_idle))
-		wake_up(&tctx->wait);
-}
-
 static void __io_clean_op(struct io_kiocb *req)
 {
 	if (req->flags & REQ_F_BUFFER_SELECTED) {
@@ -6451,16 +6446,8 @@ static struct file *io_file_get(struct io_submit_state *state,
 		file = __io_file_get(state, fd);
 	}
 
-	if (file && file->f_op == &io_uring_fops &&
-	    !(req->flags & REQ_F_INFLIGHT)) {
-		io_req_init_async(req);
-		req->flags |= REQ_F_INFLIGHT;
-
-		spin_lock_irq(&ctx->inflight_lock);
-		list_add(&req->inflight_entry, &ctx->inflight_list);
-		spin_unlock_irq(&ctx->inflight_lock);
-	}
-
+	if (file && unlikely(file->f_op == &io_uring_fops))
+		io_req_track_inflight(req);
 	return file;
 }
 
@@ -6489,9 +6476,10 @@ static enum hrtimer_restart io_link_timeout_fn(struct hrtimer *timer)
 	if (prev) {
 		req_set_fail_links(prev);
 		io_async_find_and_cancel(ctx, req, prev->user_data, -ETIME);
-		io_put_req(prev);
+		io_put_req_deferred(prev, 1);
 	} else {
-		io_req_complete(req, -ETIME);
+		io_req_complete_post(req, -ETIME, 0);
+		io_put_req_deferred(req, 1);
 	}
 	return HRTIMER_NORESTART;
 }
@@ -6889,8 +6877,7 @@ static int io_init_req(struct io_ring_ctx *ctx, struct io_kiocb *req,
 		bool fixed = req->flags & REQ_F_FIXED_FILE;
 
 		req->file = io_file_get(state, req, READ_ONCE(sqe->fd), fixed);
-		if (unlikely(!req->file &&
-		    !io_op_defs[req->opcode].needs_file_no_error))
+		if (unlikely(!req->file))
 			ret = -EBADF;
 	}
 
