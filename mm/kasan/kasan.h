@@ -318,7 +318,7 @@ static inline u8 kasan_random_tag(void) { return 0; }
 
 #ifdef CONFIG_KASAN_HW_TAGS
 
-static inline void kasan_poison(const void *addr, size_t size, u8 value)
+static __always_inline void kasan_poison(const void *addr, size_t size, u8 value)
 {
 	addr = kasan_reset_tag(addr);
 
@@ -334,7 +334,7 @@ static inline void kasan_poison(const void *addr, size_t size, u8 value)
 	hw_set_mem_tag_range((void *)addr, size, value);
 }
 
-static inline void kasan_unpoison(const void *addr, size_t size)
+static __always_inline void kasan_unpoison(const void *addr, size_t size)
 {
 	u8 tag = get_tag(addr);
 
@@ -351,7 +351,7 @@ static inline void kasan_unpoison(const void *addr, size_t size)
 	hw_set_mem_tag_range((void *)addr, size, tag);
 }
 
-static inline bool kasan_byte_accessible(const void *addr)
+static __always_inline bool kasan_byte_accessible(const void *addr)
 {
 	u8 ptr_tag = get_tag(addr);
 	u8 mem_tag = hw_get_mem_tag((void *)addr);
