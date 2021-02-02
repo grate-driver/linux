@@ -45,6 +45,26 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm-dt
 	tegra/dt64
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm64-dt
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-dt-bindings
+	ti/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-dt-for-v5.12
+	sunxi/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-5.12
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/devicetree
+	broadcom/dt64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/devicetree-arm64
+	keystone/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_dts_for_5.12
+	patch
+		ARM: dts: ux500: Add Flash LEDs to Samsung phones
+	mediatek/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-dts64
+	mvebu/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt-5.12-1
+	mvebu/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-5.12-1
 
 arm/drivers
 	drivers/scmi
@@ -71,21 +91,6 @@ arm/newsoc
 arm/late
 
 arm/fixes
-	<no branch> (5a22747b76ca2384057d8e783265404439d31d7f)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11
-	patch
-		bus: arm-integrator-lm: Add of_node_put() before return statement
-		arm64: defconfig: Drop unused K3 SoC specific options
-		ARM: dts: ux500: Reserve memory carveouts
-	<no branch> (dcb3b06d9c34f33a249f65c08805461fb0c4325b)
-		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-rcu-sched-trace-for-v5.11
-	patch
-		drivers: soc: atmel: Avoid calling at91_soc_init on non AT91 SoCs
-		drivers: soc: atmel: add null entry at the end of at91_soc_allowed_list[]
-		arm64: dts: broadcom: Fix USB DMA address translation for Stingray
-		MAINTAINERS: Include bcm2835 subsequents into search
-	<no branch> (82c082784e03a9a9c043345f9bc04bc8254cf6da)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11-2
 	<no branch> (83d411224025ac1baab981e3d2f5d29e7761541d)
 		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.11-fixes-1
 	<no branch> (7386a559caa6414e74578172c2bc4e636d6bd0a0)
@@ -102,6 +107,12 @@ arm/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes-2
 	<no branch> (daf12bee07b9e2f38216f58aca7ac4e4e66a7146)
 		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes-3
+	<no branch> (2672b94d730c4b69a17ce297dc3fa60b980e72dc)
+		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-maintainer-for-v5.12
+	<no branch> (4e238bfd83f320b6a272a08db7b3c0fbdbc3a633)
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-5.11
+	<no branch> (aa880c6f3ee6dbd0d5ab02026a514ff8ea0a3328)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11-3
 
 arm/omap-genpd
 
