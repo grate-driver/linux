@@ -2291,8 +2291,9 @@ static int filemap_update_page(struct kiocb *iocb,
 		put_page(page);
 	return error;
 truncated:
-	error = AOP_TRUNCATED_PAGE;
+	unlock_page(page);
 	put_page(page);
+	return AOP_TRUNCATED_PAGE;
 unlock:
 	unlock_page(page);
 	return error;
