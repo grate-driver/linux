@@ -7,6 +7,8 @@ arm/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/soc-signed
 	<no branch> (680ae44526ea9b656238ac768c8b6130961a0bdb)
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm-core
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/soc
 
 arm/dt
 	berlin/dt64
@@ -86,6 +88,20 @@ arm/drivers
 		git://git.pengutronix.de/pza/linux tags/reset-for-v5.12
 	at91/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-soc-5.12-2
+	sunxi/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-drivers-for-5.12
+	drivers/memory
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.12
+	drivers/memory-tegra
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-tegra-5.12
+	broadcom/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/drivers
+	keystone/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/drivers_soc_for_5.12
+	mvebu/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-arm-5.12-1
+	mediatek/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-soc
 
 arm/defconfig
 	patch
@@ -98,6 +114,12 @@ arm/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm-defconfig
 	tegra/defconfig-64
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm64-defconfig
+	broadcom/defconfig
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/defconfig
+	broadcom/defconfig64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/defconfig-arm64
+	mediatek/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-defconfig
 
 arm/newsoc
 
@@ -122,8 +144,6 @@ arm/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes-3
 	<no branch> (2672b94d730c4b69a17ce297dc3fa60b980e72dc)
 		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-maintainer-for-v5.12
-	<no branch> (4e238bfd83f320b6a272a08db7b3c0fbdbc3a633)
-		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-5.11
 	<no branch> (aa880c6f3ee6dbd0d5ab02026a514ff8ea0a3328)
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11-3
 
