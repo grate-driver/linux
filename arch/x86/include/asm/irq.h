@@ -40,8 +40,6 @@ extern void native_init_IRQ(void);
 
 extern void __handle_irq(struct irq_desc *desc, struct pt_regs *regs);
 
-extern __visible void do_IRQ(struct pt_regs *regs, unsigned long vector);
-
 extern void init_ISA_irqs(void);
 
 extern void __init init_IRQ(void);
@@ -51,6 +49,10 @@ void arch_trigger_cpumask_backtrace(const struct cpumask *mask,
 				    bool exclude_self);
 
 #define arch_trigger_cpumask_backtrace arch_trigger_cpumask_backtrace
+#endif
+
+#ifdef CONFIG_X86_THERMAL_VECTOR
+void thermal_set_handler(void (*handler)(void));
 #endif
 
 #endif /* _ASM_X86_IRQ_H */
