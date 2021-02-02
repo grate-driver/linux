@@ -528,7 +528,7 @@ static int tb_create_usb3_tunnels(struct tb_switch *sw)
 
 static void tb_scan_port(struct tb_port *port);
 
-/**
+/*
  * tb_scan_switch() - scan for and initialize downstream switches
  */
 static void tb_scan_switch(struct tb_switch *sw)
@@ -544,7 +544,7 @@ static void tb_scan_switch(struct tb_switch *sw)
 	pm_runtime_put_autosuspend(&sw->dev);
 }
 
-/**
+/*
  * tb_scan_port() - check for and initialize switches below port
  */
 static void tb_scan_port(struct tb_port *port)
@@ -704,7 +704,7 @@ static void tb_deactivate_and_free_tunnel(struct tb_tunnel *tunnel)
 	tb_tunnel_free(tunnel);
 }
 
-/**
+/*
  * tb_free_invalid_tunnels() - destroy tunnels of devices that have gone away
  */
 static void tb_free_invalid_tunnels(struct tb *tb)
@@ -719,7 +719,7 @@ static void tb_free_invalid_tunnels(struct tb *tb)
 	}
 }
 
-/**
+/*
  * tb_free_unplugged_children() - traverse hierarchy and free unplugged switches
  */
 static void tb_free_unplugged_children(struct tb_switch *sw)
@@ -1002,6 +1002,25 @@ static void tb_disconnect_and_release_dp(struct tb *tb)
 	}
 }
 
+static int tb_disconnect_pci(struct tb *tb, struct tb_switch *sw)
+{
+	struct tb_tunnel *tunnel;
+	struct tb_port *up;
+
+	up = tb_switch_find_port(sw, TB_TYPE_PCIE_UP);
+	if (WARN_ON(!up))
+		return -ENODEV;
+
+	tunnel = tb_find_tunnel(tb, TB_TUNNEL_PCI, NULL, up);
+	if (WARN_ON(!tunnel))
+		return -ENODEV;
+
+	tb_tunnel_deactivate(tunnel);
+	list_del(&tunnel->list);
+	tb_tunnel_free(tunnel);
+	return 0;
+}
+
 static int tb_tunnel_pci(struct tb *tb, struct tb_switch *sw)
 {
 	struct tb_port *up, *down, *port;
@@ -1101,7 +1120,7 @@ static int tb_disconnect_xdomain_paths(struct tb *tb, struct tb_xdomain *xd)
 
 /* hotplug handling */
 
-/**
+/*
  * tb_handle_hotplug() - handle hotplug event
  *
  * Executes on tb->wq.
@@ -1210,7 +1229,7 @@ out:
 	kfree(ev);
 }
 
-/**
+/*
  * tb_schedule_hotplug_handler() - callback function for the control channel
  *
  * Delegates to tb_handle_hotplug.
@@ -1512,6 +1531,7 @@ static const struct tb_cm_ops tb_cm_ops = {
 	.runtime_suspend = tb_runtime_suspend,
 	.runtime_resume = tb_runtime_resume,
 	.handle_event = tb_handle_event,
+	.disapprove_switch = tb_disconnect_pci,
 	.approve_switch = tb_tunnel_pci,
 	.approve_xdomain_paths = tb_approve_xdomain_paths,
 	.disconnect_xdomain_paths = tb_disconnect_xdomain_paths,
