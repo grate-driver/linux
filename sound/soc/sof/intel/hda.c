@@ -809,13 +809,9 @@ int hda_dsp_probe(struct snd_sof_dev *sdev)
 	sdev->mailbox_bar = HDA_DSP_BAR;
 
 	/* allow 64bit DMA address if supported by H/W */
-	if (!dma_set_mask(&pci->dev, DMA_BIT_MASK(64))) {
-		dev_dbg(sdev->dev, "DMA mask is 64 bit\n");
-		dma_set_coherent_mask(&pci->dev, DMA_BIT_MASK(64));
-	} else {
+	if (dma_set_mask_and_coherent(&pci->dev, DMA_BIT_MASK(64))) {
 		dev_dbg(sdev->dev, "DMA mask is 32 bit\n");
-		dma_set_mask(&pci->dev, DMA_BIT_MASK(32));
-		dma_set_coherent_mask(&pci->dev, DMA_BIT_MASK(32));
+		dma_set_mask_and_coherent(&pci->dev, DMA_BIT_MASK(32));
 	}
 
 	/* init streams */
@@ -932,7 +928,7 @@ int hda_dsp_remove(struct snd_sof_dev *sdev)
 
 	/* disable cores */
 	if (chip)
-		hda_dsp_core_reset_power_down(sdev, chip->host_managed_cores_mask);
+		snd_sof_dsp_core_power_down(sdev, chip->host_managed_cores_mask);
 
 	/* disable DSP */
 	snd_sof_dsp_update_bits(sdev, HDA_DSP_PP_BAR, SOF_HDA_REG_PP_PPCTL,
