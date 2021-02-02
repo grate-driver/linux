@@ -35,6 +35,7 @@ TARGETS += mincore
 TARGETS += mount
 TARGETS += mount_setattr
 TARGETS += mqueue
+TARGETS += nci
 TARGETS += net
 TARGETS += net/forwarding
 TARGETS += net/mptcp

@@ -646,7 +646,7 @@ setup_vfmsix:
 	}
 
 	/* HW interprets RVU_AF_MSIXTR_BASE address as an IOVA, hence
-	 * create a IOMMU mapping for the physcial address configured by
+	 * create an IOMMU mapping for the physical address configured by
 	 * firmware and reconfig RVU_AF_MSIXTR_BASE with IOVA.
 	 */
 	cfg = rvu_read64(rvu, BLKADDR_RVUM, RVU_PRIV_CONST);
@@ -1323,7 +1323,7 @@ static int rvu_get_attach_blkaddr(struct rvu *rvu, int blktype,
 		break;
 	default:
 		return rvu_get_blkaddr(rvu, blktype, 0);
-	};
+	}
 
 	if (is_block_implemented(rvu->hw, blkaddr))
 		return blkaddr;

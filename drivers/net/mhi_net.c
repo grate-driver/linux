@@ -25,7 +25,6 @@ struct mhi_net_stats {
 	u64_stats_t tx_bytes;
 	u64_stats_t tx_errors;
 	u64_stats_t tx_dropped;
-	atomic_t rx_queued;
 	struct u64_stats_sync tx_syncp;
 	struct u64_stats_sync rx_syncp;
 };
@@ -122,7 +121,7 @@ static const struct net_device_ops mhi_netdev_ops = {
 static void mhi_net_setup(struct net_device *ndev)
 {
 	ndev->header_ops = NULL;  /* No header */
-	ndev->type = ARPHRD_NONE; /* QMAP... */
+	ndev->type = ARPHRD_RAWIP;
 	ndev->hard_header_len = 0;
 	ndev->addr_len = 0;
 	ndev->flags = IFF_POINTOPOINT | IFF_NOARP;
@@ -138,9 +137,9 @@ static void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 {
 	struct mhi_net_dev *mhi_netdev = dev_get_drvdata(&mhi_dev->dev);
 	struct sk_buff *skb = mhi_res->buf_addr;
-	int remaining;
+	int free_desc_count;
 
-	remaining = atomic_dec_return(&mhi_netdev->stats.rx_queued);
+	free_desc_count = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
 
 	if (unlikely(mhi_res->transaction_status)) {
 		dev_kfree_skb_any(skb);
@@ -158,13 +157,24 @@ static void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 		u64_stats_add(&mhi_netdev->stats.rx_bytes, mhi_res->bytes_xferd);
 		u64_stats_update_end(&mhi_netdev->stats.rx_syncp);
 
-		skb->protocol = htons(ETH_P_MAP);
+		switch (skb->data[0] & 0xf0) {
+		case 0x40:
+			skb->protocol = htons(ETH_P_IP);
+			break;
+		case 0x60:
+			skb->protocol = htons(ETH_P_IPV6);
+			break;
+		default:
+			skb->protocol = htons(ETH_P_MAP);
+			break;
+		}
+
 		skb_put(skb, mhi_res->bytes_xferd);
 		netif_rx(skb);
 	}
 
 	/* Refill if RX buffers queue becomes low */
-	if (remaining <= mhi_netdev->rx_queue_sz / 2)
+	if (free_desc_count >= mhi_netdev->rx_queue_sz / 2)
 		schedule_delayed_work(&mhi_netdev->rx_refill, 0);
 }
 
@@ -211,7 +221,7 @@ static void mhi_net_rx_refill_work(struct work_struct *work)
 	struct sk_buff *skb;
 	int err;
 
-	while (atomic_read(&mhi_netdev->stats.rx_queued) < mhi_netdev->rx_queue_sz) {
+	while (!mhi_queue_is_full(mdev, DMA_FROM_DEVICE)) {
 		skb = netdev_alloc_skb(ndev, size);
 		if (unlikely(!skb))
 			break;
@@ -224,8 +234,6 @@ static void mhi_net_rx_refill_work(struct work_struct *work)
 			break;
 		}
 
-		atomic_inc(&mhi_netdev->stats.rx_queued);
-
 		/* Do not hog the CPU if rx buffers are consumed faster than
 		 * queued (unlikely).
 		 */
@@ -233,9 +241,13 @@ static void mhi_net_rx_refill_work(struct work_struct *work)
 	}
 
 	/* If we're still starved of rx buffers, reschedule later */
-	if (unlikely(!atomic_read(&mhi_netdev->stats.rx_queued)))
+	if (mhi_get_free_desc_count(mdev, DMA_FROM_DEVICE) == mhi_netdev->rx_queue_sz)
 		schedule_delayed_work(&mhi_netdev->rx_refill, HZ / 2);
 }
+
+static struct device_type wwan_type = {
+	.name = "wwan",
+};
 
 static int mhi_net_probe(struct mhi_device *mhi_dev,
 			 const struct mhi_device_id *id)
@@ -256,9 +268,7 @@ static int mhi_net_probe(struct mhi_device *mhi_dev,
 	mhi_netdev->ndev = ndev;
 	mhi_netdev->mdev = mhi_dev;
 	SET_NETDEV_DEV(ndev, &mhi_dev->dev);
-
-	/* All MHI net channels have 128 ring elements (at least for now) */
-	mhi_netdev->rx_queue_sz = 128;
+	SET_NETDEV_DEVTYPE(ndev, &wwan_type);
 
 	INIT_DELAYED_WORK(&mhi_netdev->rx_refill, mhi_net_rx_refill_work);
 	u64_stats_init(&mhi_netdev->stats.rx_syncp);
@@ -268,6 +278,9 @@ static int mhi_net_probe(struct mhi_device *mhi_dev,
 	err = mhi_prepare_for_transfer(mhi_dev);
 	if (err)
 		goto out_err;
+
+	/* Number of transfer descriptors determines size of the queue */
+	mhi_netdev->rx_queue_sz = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
 
 	err = register_netdev(ndev);
 	if (err)

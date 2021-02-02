@@ -3882,8 +3882,6 @@ static const struct net_device_ops cxgb4_netdev_ops = {
 #endif /* CONFIG_CHELSIO_T4_FCOE */
 	.ndo_set_tx_maxrate   = cxgb_set_tx_maxrate,
 	.ndo_setup_tc         = cxgb_setup_tc,
-	.ndo_udp_tunnel_add   = udp_tunnel_nic_add_port,
-	.ndo_udp_tunnel_del   = udp_tunnel_nic_del_port,
 	.ndo_features_check   = cxgb_features_check,
 	.ndo_fix_features     = cxgb_fix_features,
 };
@@ -5139,7 +5137,7 @@ static int adap_init0(struct adapter *adap, int vpd_skip)
 
 	/* See if FW supports FW_FILTER2 work request */
 	if (is_t4(adap->params.chip)) {
-		adap->params.filter2_wr_support = 0;
+		adap->params.filter2_wr_support = false;
 	} else {
 		params[0] = FW_PARAM_DEV(FILTER2_WR);
 		ret = t4_query_params(adap, adap->mbox, adap->pf, 0,

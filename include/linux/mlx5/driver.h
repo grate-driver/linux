@@ -193,7 +193,8 @@ enum port_state_policy {
 
 enum mlx5_coredev_type {
 	MLX5_COREDEV_PF,
-	MLX5_COREDEV_VF
+	MLX5_COREDEV_VF,
+	MLX5_COREDEV_SF,
 };
 
 struct mlx5_field_desc {
@@ -507,6 +508,10 @@ struct mlx5_devcom;
 struct mlx5_fw_reset;
 struct mlx5_eq_table;
 struct mlx5_irq_table;
+struct mlx5_vhca_state_notifier;
+struct mlx5_sf_dev_table;
+struct mlx5_sf_hw_table;
+struct mlx5_sf_table;
 
 struct mlx5_rate_limit {
 	u32			rate;
@@ -564,6 +569,7 @@ struct mlx5_priv {
 	int			host_pf_pages;
 
 	struct mlx5_core_health health;
+	struct list_head	traps;
 
 	/* start: qp staff */
 	struct dentry	       *qp_debugfs;
@@ -603,6 +609,15 @@ struct mlx5_priv {
 
 	struct mlx5_bfreg_data		bfregs;
 	struct mlx5_uars_page	       *uar;
+#ifdef CONFIG_MLX5_SF
+	struct mlx5_vhca_state_notifier *vhca_state_notifier;
+	struct mlx5_sf_dev_table *sf_dev_table;
+	struct mlx5_core_dev *parent_mdev;
+#endif
+#ifdef CONFIG_MLX5_SF_MANAGER
+	struct mlx5_sf_hw_table *sf_hw_table;
+	struct mlx5_sf_table *sf_table;
+#endif
 };
 
 enum mlx5_device_state {
@@ -1072,10 +1087,25 @@ enum {
 	MAX_MR_CACHE_ENTRIES
 };
 
+/* Async-atomic event notifier used by mlx5 core to forward FW
+ * evetns recived from event queue to mlx5 consumers.
+ * Optimise event queue dipatching.
+ */
 int mlx5_notifier_register(struct mlx5_core_dev *dev, struct notifier_block *nb);
 int mlx5_notifier_unregister(struct mlx5_core_dev *dev, struct notifier_block *nb);
+
+/* Async-atomic event notifier used for forwarding
+ * evetns from the event queue into the to mlx5 events dispatcher,
+ * eswitch, clock and others.
+ */
 int mlx5_eq_notifier_register(struct mlx5_core_dev *dev, struct mlx5_nb *nb);
 int mlx5_eq_notifier_unregister(struct mlx5_core_dev *dev, struct mlx5_nb *nb);
+
+/* Blocking event notifier used to forward SW events, used for slow path */
+int mlx5_blocking_notifier_register(struct mlx5_core_dev *dev, struct notifier_block *nb);
+int mlx5_blocking_notifier_unregister(struct mlx5_core_dev *dev, struct notifier_block *nb);
+int mlx5_blocking_notifier_call_chain(struct mlx5_core_dev *dev, unsigned int event,
+				      void *data);
 
 int mlx5_core_query_vendor_id(struct mlx5_core_dev *mdev, u32 *vendor_id);
 
