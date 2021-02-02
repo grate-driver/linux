@@ -193,80 +193,81 @@ void __init free_bootmem_cpumask_var(cpumask_var_t mask)
 }
 #endif
 
-static int find_nearest_node(int node, bool *used)
+static int find_nearest_node(int node, nodemask_t nodes)
 {
 	int i, min_dist, node_id = -1;
 
 	/* Choose the first unused node to compare */
-	for (i = 0; i < nr_node_ids; i++) {
-		if (used[i] == false) {
+	for (i = 0; i < nr_node_ids; i++)
+		if (!node_isset(i, nodes)) {
 			min_dist = node_distance(node, i);
 			node_id = i;
 			break;
 		}
-	}
 
 	/* Compare and return the nearest node */
-	for (i = 0; i < nr_node_ids; i++) {
-		if (node_distance(node, i) < min_dist && used[i] == false) {
+	for (i = 0; i < nr_node_ids; i++)
+		if (!node_isset(i, nodes) &&
+			node_distance(node, i) < min_dist) {
 			min_dist = node_distance(node, i);
 			node_id = i;
 		}
-	}
 
 	return node_id;
 }
 
 /**
  * cpumask_local_spread - select the i'th cpu with local numa cpu's first
- * @i: index number
+ * @cpu_index: index number
  * @node: local numa_node
  *
  * This function selects an online CPU according to a numa aware policy;
- * local cpus are returned first, followed by the next one which is the
- * nearest unused NUMA node based on NUMA distance, then it wraps around.
+ * Loop through all the online CPUs on the system. Start with the CPUs on
+ * 'node', then fall back to CPUs on NUMA nodes which are increasingly far
+ * away.
  *
- * It's not very efficient, but useful for setup.
+ * This function is not very efficient, especially for large 'cpu_index'
+ * because it loops over the same CPUs on each call and does not remember
+ * its state from previous calls, but it is useful for setup.
  */
-unsigned int cpumask_local_spread(unsigned int i, int node)
+unsigned int cpumask_local_spread(unsigned int cpu_index, int node)
 {
-	static DEFINE_SPINLOCK(spread_lock);
-	static bool used[MAX_NUMNODES];
-	unsigned long flags;
-	int cpu, hk_flags, j, id;
+	int cpu, hk_flags, j, ncpus, id;
 	const struct cpumask *mask;
+	struct cpumask nmsk;
+	nodemask_t nodes_msk;
 
 	hk_flags = HK_FLAG_DOMAIN | HK_FLAG_MANAGED_IRQ;
 	mask = housekeeping_cpumask(hk_flags);
 	/* Wrap: we always want a cpu. */
-	i %= cpumask_weight(mask);
+	cpu_index %= cpumask_weight(mask);
 
 	if (node == NUMA_NO_NODE) {
 		for_each_cpu(cpu, mask) {
-			if (i-- == 0)
+			if (cpu_index-- == 0)
 				return cpu;
 		}
 	} else {
-		spin_lock_irqsave(&spread_lock, flags);
-		memset(used, 0, nr_node_ids * sizeof(bool));
 		/* select node according to the distance from local node */
+		nodes_clear(nodes_msk);
 		for (j = 0; j < nr_node_ids; j++) {
-			id = find_nearest_node(node, used);
+			id = find_nearest_node(node, nodes_msk);
 			if (id < 0)
 				break;
-
-			for_each_cpu_and(cpu, cpumask_of_node(id), mask)
-				if (i-- == 0) {
-					spin_unlock_irqrestore(&spread_lock,
-							       flags);
+			cpumask_and(&nmsk, mask, cpumask_of_node(id));
+			ncpus = cpumask_weight(&nmsk);
+			if (cpu_index >= ncpus) {
+				cpu_index -= ncpus;
+				node_set(id, nodes_msk);
+				continue;
+			}
+			for_each_cpu(cpu, &nmsk)
+				if (cpu_index-- == 0)
 					return cpu;
-				}
-			used[id] = true;
 		}
-		spin_unlock_irqrestore(&spread_lock, flags);
 
 		for_each_cpu(cpu, mask)
-			if (i-- == 0)
+			if (cpu_index-- == 0)
 				return cpu;
 	}
 	BUG();
