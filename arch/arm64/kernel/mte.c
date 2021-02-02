@@ -118,6 +118,8 @@ void mte_set_report_once(bool state)
 {
 	WRITE_ONCE(report_fault_once, state);
 }
+EXPORT_SYMBOL(mte_enable_kernel_sync);
+EXPORT_SYMBOL(mte_set_report_once);
 
 bool mte_report_once(void)
 {
