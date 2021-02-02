@@ -67,7 +67,7 @@ static void check_poison_mem(unsigned char *mem, size_t bytes)
 	else
 		pr_err("pagealloc: memory corruption\n");
 
-	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 16, 1, start,
+	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_UNHASHED, 16, 1, start,
 			end - start + 1, 1);
 	dump_stack();
 }
