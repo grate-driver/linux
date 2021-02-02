@@ -1433,7 +1433,7 @@ static int i801_add_mux(struct i801_priv *priv)
 	const struct i801_mux_config *mux_config;
 	struct i2c_mux_gpio_platform_data gpio_data;
 	struct gpiod_lookup_table *lookup;
-	int err, i;
+	int i;
 
 	if (!priv->mux_drvdata)
 		return 0;
@@ -1473,22 +1473,17 @@ static int i801_add_mux(struct i801_priv *priv)
 				PLATFORM_DEVID_NONE, &gpio_data,
 				sizeof(struct i2c_mux_gpio_platform_data));
 	if (IS_ERR(priv->mux_pdev)) {
-		err = PTR_ERR(priv->mux_pdev);
 		gpiod_remove_lookup_table(lookup);
-		priv->mux_pdev = NULL;
 		dev_err(dev, "Failed to register i2c-mux-gpio device\n");
-		return err;
 	}
 
-	return 0;
+	return PTR_ERR_OR_ZERO(priv->mux_pdev);
 }
 
 static void i801_del_mux(struct i801_priv *priv)
 {
-	if (priv->mux_pdev)
-		platform_device_unregister(priv->mux_pdev);
-	if (priv->lookup)
-		gpiod_remove_lookup_table(priv->lookup);
+	platform_device_unregister(priv->mux_pdev);
+	gpiod_remove_lookup_table(priv->lookup);
 }
 
 static unsigned int i801_get_adapter_class(struct i801_priv *priv)
