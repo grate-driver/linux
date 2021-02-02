@@ -760,8 +760,6 @@ static int hugetlbfs_setattr(struct dentry *dentry, struct iattr *attr)
 	unsigned int ia_valid = attr->ia_valid;
 	struct hugetlbfs_inode_info *info = HUGETLBFS_I(inode);
 
-	BUG_ON(!inode);
-
 	error = setattr_prepare(dentry, attr);
 	if (error)
 		return error;
