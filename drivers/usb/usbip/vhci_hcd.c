@@ -1016,10 +1016,14 @@ static void vhci_shutdown_connection(struct usbip_device *ud)
 
 	/* kill threads related to this sdev */
 	if (vdev->ud.tcp_rx) {
+		if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+			pr_info("%s: stop rx %p\n", __func__, vdev->ud.tcp_rx);
 		kthread_stop_put(vdev->ud.tcp_rx);
 		vdev->ud.tcp_rx = NULL;
 	}
 	if (vdev->ud.tcp_tx) {
+		if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+			pr_info("%s: stop tx %p\n", __func__, vdev->ud.tcp_tx);
 		kthread_stop_put(vdev->ud.tcp_tx);
 		vdev->ud.tcp_tx = NULL;
 	}
@@ -1027,6 +1031,8 @@ static void vhci_shutdown_connection(struct usbip_device *ud)
 
 	/* active connection is closed */
 	if (vdev->ud.tcp_socket) {
+		if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+			pr_info("%s: close sock %p\n", __func__, ud->tcp_socket);
 		sockfd_put(vdev->ud.tcp_socket);
 		vdev->ud.tcp_socket = NULL;
 		vdev->ud.sockfd = -1;
@@ -1074,6 +1080,11 @@ static void vhci_device_reset(struct usbip_device *ud)
 	vdev->udev = NULL;
 
 	if (ud->tcp_socket) {
+		if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT)) {
+			pr_info("%s: close sock %p\n", __func__, ud->tcp_socket);
+			BUG_ON(vdev->ud.tcp_tx);
+			BUG_ON(vdev->ud.tcp_rx);
+		}
 		sockfd_put(ud->tcp_socket);
 		ud->tcp_socket = NULL;
 		ud->sockfd = -1;

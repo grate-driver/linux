@@ -390,6 +390,10 @@ static ssize_t attach_store(struct device *dev, struct device_attribute *attr,
 
 	vdev->ud.tcp_rx = kthread_get_run(vhci_rx_loop, &vdev->ud, "vhci_rx");
 	vdev->ud.tcp_tx = kthread_get_run(vhci_tx_loop, &vdev->ud, "vhci_tx");
+	if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT)) {
+		BUG_ON(IS_ERR(vdev->ud.tcp_rx));
+		BUG_ON(IS_ERR(vdev->ud.tcp_tx));
+	}
 
 	rh_port_connect(vdev, speed);
 

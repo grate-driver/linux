@@ -49,7 +49,18 @@ static struct vhci_priv *dequeue_from_priv_tx(struct vhci_device *vdev)
 	return NULL;
 }
 
-static int vhci_send_cmd_submit(struct vhci_device *vdev)
+static void dump_vdev(const struct vhci_device *vdev)
+{
+	pr_err("vdev: udev=%p devid=%u priv_tx.prev=%p priv_tx.next=%p priv_rx.prev=%p priv_rx.next=%p unlink_tx.prev=%p unlink_tx.next=%p unlink_rx.prev=%p unlink_rx.next=%p\n",
+	       vdev->udev, vdev->devid, vdev->priv_tx.prev, vdev->priv_tx.next, vdev->priv_rx.prev,
+	       vdev->priv_rx.next, vdev->unlink_tx.prev, vdev->unlink_tx.next,
+	       vdev->unlink_rx.prev, vdev->unlink_rx.next);
+	pr_err("vdev->ud: side=%u status=%u sockfd=%d tcp_socket=%p tcp_rx=%p tcp_tx=%p event=%lu\n",
+	       vdev->ud.side, vdev->ud.status, vdev->ud.sockfd, vdev->ud.tcp_socket,
+	       vdev->ud.tcp_rx, vdev->ud.tcp_tx, vdev->ud.event);
+}
+
+static int vhci_send_cmd_submit(struct vhci_device *vdev, struct socket *socket)
 {
 	struct usbip_iso_packet_descriptor *iso_buffer = NULL;
 	struct vhci_priv *priv = NULL;
@@ -135,8 +146,13 @@ static int vhci_send_cmd_submit(struct vhci_device *vdev)
 			iovnum++;
 			txsize += len;
 		}
-
-		ret = kernel_sendmsg(vdev->ud.tcp_socket, &msg, iov, iovnum,
+		if (!socket || socket != vdev->ud.tcp_socket) {
+			pr_err("%s: sock changed from %p to %p\n", __func__, socket,
+			       vdev->ud.tcp_socket);
+			dump_vdev(vdev);
+			socket = vdev->ud.tcp_socket;
+		}
+		ret = kernel_sendmsg(socket, &msg, iov, iovnum,
 				     txsize);
 		if (ret != txsize) {
 			pr_err("sendmsg failed!, ret=%d for %zd\n", ret,
@@ -184,7 +200,7 @@ static struct vhci_unlink *dequeue_from_unlink_tx(struct vhci_device *vdev)
 	return NULL;
 }
 
-static int vhci_send_cmd_unlink(struct vhci_device *vdev)
+static int vhci_send_cmd_unlink(struct vhci_device *vdev, struct socket *socket)
 {
 	struct vhci_unlink *unlink = NULL;
 
@@ -216,7 +232,13 @@ static int vhci_send_cmd_unlink(struct vhci_device *vdev)
 		iov.iov_len  = sizeof(pdu_header);
 		txsize = sizeof(pdu_header);
 
-		ret = kernel_sendmsg(vdev->ud.tcp_socket, &msg, &iov, 1, txsize);
+		if (!socket || socket != vdev->ud.tcp_socket) {
+			pr_err("%s: sock changed from %p to %p\n", __func__, socket,
+			       vdev->ud.tcp_socket);
+			dump_vdev(vdev);
+			socket = vdev->ud.tcp_socket;
+		}
+		ret = kernel_sendmsg(socket, &msg, &iov, 1, txsize);
 		if (ret != txsize) {
 			pr_err("sendmsg failed!, ret=%d for %zd\n", ret,
 			       txsize);
@@ -236,12 +258,16 @@ int vhci_tx_loop(void *data)
 {
 	struct usbip_device *ud = data;
 	struct vhci_device *vdev = container_of(ud, struct vhci_device, ud);
+	struct socket *socket = vdev->ud.tcp_socket;
 
+	if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+		pr_info("%s: thread starting %p with sock %p\n", __func__, vdev->ud.tcp_tx,
+			socket);
 	while (!kthread_should_stop()) {
-		if (vhci_send_cmd_submit(vdev) < 0)
+		if (vhci_send_cmd_submit(vdev, socket) < 0)
 			break;
 
-		if (vhci_send_cmd_unlink(vdev) < 0)
+		if (vhci_send_cmd_unlink(vdev, socket) < 0)
 			break;
 
 		wait_event_interruptible(vdev->waitq_tx,
@@ -251,6 +277,9 @@ int vhci_tx_loop(void *data)
 
 		usbip_dbg_vhci_tx("pending urbs ?, now wake up\n");
 	}
+	if (IS_BUILTIN(CONFIG_DEBUG_AID_FOR_SYZBOT))
+		pr_info("%s: thread exiting %p with sock %p\n", __func__, vdev->ud.tcp_tx,
+			socket);
 
 	return 0;
 }
