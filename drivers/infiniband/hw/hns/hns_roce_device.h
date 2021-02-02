@@ -119,6 +119,9 @@
 #define SRQ_DB_REG				0x230
 
 #define HNS_ROCE_QP_BANK_NUM 8
+#define HNS_ROCE_CQ_BANK_NUM 4
+
+#define CQ_BANKID_SHIFT 2
 
 /* The chip implementation of the consumer index is calculated
  * according to twice the actual EQ depth
@@ -332,7 +335,6 @@ struct hns_roce_buf_attr {
 	} region[HNS_ROCE_MAX_BT_REGION];
 	unsigned int region_count; /* valid region count */
 	unsigned int page_shift;  /* buffer page shift */
-	bool fixed_page; /* decide page shift is fixed-size or maximum size */
 	unsigned int user_access; /* umem access flag */
 	bool mtt_only; /* only alloc buffer-required MTT memory */
 };
@@ -536,9 +538,10 @@ struct hns_roce_qp_table {
 };
 
 struct hns_roce_cq_table {
-	struct hns_roce_bitmap		bitmap;
 	struct xarray			array;
 	struct hns_roce_hem_table	table;
+	struct hns_roce_bank bank[HNS_ROCE_CQ_BANK_NUM];
+	struct mutex			bank_mutex;
 };
 
 struct hns_roce_srq_table {
@@ -779,7 +782,7 @@ struct hns_roce_caps {
 	u32		max_cqes;
 	u32		min_cqes;
 	u32		min_wqes;
-	int		reserved_cqs;
+	u32		reserved_cqs;
 	int		reserved_srqs;
 	int		num_aeq_vectors;
 	int		num_comp_vectors;
@@ -911,8 +914,7 @@ struct hns_roce_hw {
 	int (*write_mtpt)(struct hns_roce_dev *hr_dev, void *mb_buf,
 			  struct hns_roce_mr *mr, unsigned long mtpt_idx);
 	int (*rereg_write_mtpt)(struct hns_roce_dev *hr_dev,
-				struct hns_roce_mr *mr, int flags, u32 pdn,
-				int mr_access_flags, u64 iova, u64 size,
+				struct hns_roce_mr *mr, int flags,
 				void *mb_buf);
 	int (*frmr_write_mtpt)(struct hns_roce_dev *hr_dev, void *mb_buf,
 			       struct hns_roce_mr *mr);
@@ -1164,7 +1166,7 @@ int hns_roce_mtr_map(struct hns_roce_dev *hr_dev, struct hns_roce_mtr *mtr,
 
 int hns_roce_init_pd_table(struct hns_roce_dev *hr_dev);
 int hns_roce_init_mr_table(struct hns_roce_dev *hr_dev);
-int hns_roce_init_cq_table(struct hns_roce_dev *hr_dev);
+void hns_roce_init_cq_table(struct hns_roce_dev *hr_dev);
 int hns_roce_init_qp_table(struct hns_roce_dev *hr_dev);
 int hns_roce_init_srq_table(struct hns_roce_dev *hr_dev);
 
@@ -1281,7 +1283,6 @@ u8 hns_get_gid_index(struct hns_roce_dev *hr_dev, u8 port, int gid_index);
 void hns_roce_handle_device_err(struct hns_roce_dev *hr_dev);
 int hns_roce_init(struct hns_roce_dev *hr_dev);
 void hns_roce_exit(struct hns_roce_dev *hr_dev);
-
 int hns_roce_fill_res_cq_entry(struct sk_buff *msg,
 			       struct ib_cq *ib_cq);
 #endif /* _HNS_ROCE_DEVICE_H */
