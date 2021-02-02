@@ -962,6 +962,7 @@ static int zswap_writeback_entry(struct zpool *pool, unsigned long handle)
 		/* entry was invalidated */
 		spin_unlock(&tree->lock);
 		zpool_unmap_handle(pool, handle);
+		kfree(tmp);
 		return 0;
 	}
 	spin_unlock(&tree->lock);
