@@ -65,6 +65,19 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt-5.12-1
 	mvebu/dt64
 		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-5.12-1
+	patch
+		dt-bindings: gpio: mrvl-gpio: Fix the gpio-ranges property
+		media: dt-bindings: marvell,mmp2-ccic: Allow power-domains property
+		ARM: dts: mmp2-olpc-xo-1-75: Fix memory node name
+		ARM: dts: mmp2-olpc-xo-1-75: Drop linux,usable-memory from /memory
+		ARM: dts: mmp3-dell-ariel: Drop linux,usable-memory from /memory
+		ARM: dts: mmp3: Extend the MPMU reg range
+		ARM: dts: mmp2: Use symbolic names for audio clocks
+		ARM: dts: mmp2-olpc-xo-1-75: Use symbolic names for audio clocks
+		ARM: dts: mmp3-dell-ariel: Add the embedded controller
+		ARM: dts: mmp3-dell-ariel: Add the power button node
+		ARM: dts: mmp3-dell-ariel: Replace SSP2 with spi-gpio
+		ARM: dts: mmp3: Fix the CCIC interrupts
 
 arm/drivers
 	drivers/scmi
