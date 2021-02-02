@@ -1852,7 +1852,6 @@ retry:
 		put_page(page);
 		goto reset;
 	}
-	VM_BUG_ON_PAGE(!thp_contains(page, xas->xa_index), page);
 
 	return page;
 reset:
