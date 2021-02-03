@@ -102,6 +102,10 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-arm-5.12-1
 	mediatek/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-soc
+	drivers/tee
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-housekeeping-for-v5.12
+	drivers/optee
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/optee-fix-cond-resched-call-for-v5.12
 
 arm/defconfig
 	patch
@@ -146,6 +150,10 @@ arm/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-maintainer-for-v5.12
 	<no branch> (aa880c6f3ee6dbd0d5ab02026a514ff8ea0a3328)
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11-3
+	patch
+		ARM: dts: lpc32xx: Revert set default clock rate of HCLK PLL
+	<no branch> (a900cac3750b9f0b8f5ed0503d9c6359532f644d)
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-5.11-2
 
 arm/omap-genpd
 
