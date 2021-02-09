@@ -65,8 +65,16 @@ static void virtsnd_event_notify_cb(struct virtqueue *vqueue)
 	spin_lock_irqsave(&queue->lock, flags);
 	do {
 		virtqueue_disable_cb(vqueue);
-		while ((event = virtqueue_get_buf(vqueue, &length)))
+		while ((event = virtqueue_get_buf(vqueue, &length))) {
+			switch (le32_to_cpu(event->hdr.code)) {
+			case VIRTIO_SND_EVT_PCM_PERIOD_ELAPSED:
+			case VIRTIO_SND_EVT_PCM_XRUN:
+				virtsnd_pcm_event(snd, event);
+				break;
+			}
+
 			virtsnd_event_send(vqueue, event, true, GFP_ATOMIC);
+		}
 		if (unlikely(virtqueue_is_broken(vqueue)))
 			break;
 	} while (!virtqueue_enable_cb(vqueue));
@@ -87,7 +95,9 @@ static int virtsnd_find_vqs(struct virtio_snd *snd)
 	struct virtio_device *vdev = snd->vdev;
 	vq_callback_t *callbacks[VIRTIO_SND_VQ_MAX] = {
 		[VIRTIO_SND_VQ_CONTROL] = virtsnd_ctl_notify_cb,
-		[VIRTIO_SND_VQ_EVENT] = virtsnd_event_notify_cb
+		[VIRTIO_SND_VQ_EVENT] = virtsnd_event_notify_cb,
+		[VIRTIO_SND_VQ_TX] = virtsnd_pcm_tx_notify_cb,
+		[VIRTIO_SND_VQ_RX] = virtsnd_pcm_rx_notify_cb
 	};
 	const char *names[VIRTIO_SND_VQ_MAX] = {
 		[VIRTIO_SND_VQ_CONTROL] = "virtsnd-ctl",
@@ -299,6 +309,7 @@ on_exit:
 static void virtsnd_remove(struct virtio_device *vdev)
 {
 	struct virtio_snd *snd = vdev->priv;
+	unsigned int i;
 
 	/* Stop all the virtqueues. */
 	vdev->config->reset(vdev);
@@ -309,6 +320,9 @@ static void virtsnd_remove(struct virtio_device *vdev)
 		snd_card_free(snd->card);
 
 	vdev->config->del_vqs(vdev);
+
+	for (i = 0; snd->substreams && i < snd->nsubstreams; ++i)
+		virtsnd_pcm_msg_free(&snd->substreams[i]);
 
 	kfree(snd->event_msgs);
 }
