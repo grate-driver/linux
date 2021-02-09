@@ -200,6 +200,16 @@ static int virtsnd_build_devs(struct virtio_snd *snd)
 			 VIRTIO_SND_CARD_NAME " at %s/%s",
 			 dev_name(dev->parent), dev_name(dev));
 
+	rc = virtsnd_pcm_parse_cfg(snd);
+	if (rc)
+		return rc;
+
+	if (snd->nsubstreams) {
+		rc = virtsnd_pcm_build_devs(snd);
+		if (rc)
+			return rc;
+	}
+
 	return snd_card_register(snd->card);
 }
 
@@ -228,6 +238,9 @@ static int virtsnd_validate(struct virtio_device *vdev)
 		return -EINVAL;
 	}
 
+	if (virtsnd_pcm_validate(vdev))
+		return -EINVAL;
+
 	return 0;
 }
 
@@ -251,6 +264,7 @@ static int virtsnd_probe(struct virtio_device *vdev)
 	snd->vdev = vdev;
 	INIT_WORK(&snd->reset_work, virtsnd_reset_fn);
 	INIT_LIST_HEAD(&snd->ctl_msgs);
+	INIT_LIST_HEAD(&snd->pcm_list);
 
 	vdev->priv = snd;
 
