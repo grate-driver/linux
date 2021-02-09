@@ -44,6 +44,8 @@ struct virtio_snd_queue {
  * @njacks: Number of jacks.
  * @substreams: VirtIO PCM substreams.
  * @nsubstreams: Number of PCM substreams.
+ * @chmaps: VirtIO channel maps.
+ * @nchmaps: Number of channel maps.
  */
 struct virtio_snd {
 	struct virtio_device *vdev;
@@ -57,6 +59,8 @@ struct virtio_snd {
 	unsigned int njacks;
 	struct virtio_pcm_substream *substreams;
 	unsigned int nsubstreams;
+	struct virtio_snd_chmap_info *chmaps;
+	unsigned int nchmaps;
 };
 
 /* Message completion timeout in milliseconds (module parameter). */
@@ -101,5 +105,9 @@ int virtsnd_jack_build_devs(struct virtio_snd *snd);
 
 void virtsnd_jack_event(struct virtio_snd *snd,
 			struct virtio_snd_event *event);
+
+int virtsnd_chmap_parse_cfg(struct virtio_snd *snd);
+
+int virtsnd_chmap_build_devs(struct virtio_snd *snd);
 
 #endif /* VIRTIO_SND_CARD_H */
