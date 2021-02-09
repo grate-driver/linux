@@ -106,6 +106,10 @@ arm/drivers
 		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-housekeeping-for-v5.12
 	drivers/optee
 		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/optee-fix-cond-resched-call-for-v5.12
+	patch
+		drivers: soc: atmel: fix type for same7
+	drivers/optee-i2c
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-simplify-i2c-access_for-v5.12
 
 arm/defconfig
 	patch
@@ -124,36 +128,30 @@ arm/defconfig
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/defconfig-arm64
 	mediatek/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-defconfig
+	amlogic/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-soc
+	patch
+		arm64: defconfig: Enable RT5659
+	qcom/defconfig-arm64
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-5.12
+	qcom/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-defconfig-for-5.12
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-5.12
+	at91/defconfig-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-defconfig-5.11-2
+	<no branch> (3c8e5d51e4c6e5e93d31f59d4a54fb3a14358ee4)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-defconfig64-1
+	omap/defconfig-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/defconfig-signed
 
 arm/newsoc
 
 arm/late
 
 arm/fixes
-	<no branch> (83d411224025ac1baab981e3d2f5d29e7761541d)
-		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.11-fixes-1
-	<no branch> (7386a559caa6414e74578172c2bc4e636d6bd0a0)
-		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes
-	<no branch> (93f2a11580a9732c1d90f9e01a7e9facc825658f)
-		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-fixes-for-5.11
-	<no branch> (5b5465dd947cb655550332d3fa509f91a768482b)
-		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-fixes-for-5.11
-	<no branch> (177d8f1f7f47fe7c18ceb1d87893890d7e9c95a7)
-		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.11/fixes-rc5
-	<no branch> (74532de460ec664e5a725507d1b59aa9e4d40776)
-		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.11-rockchip-dtsfixes1
-	<no branch> (19f6fe976a61f9afc289b062b7ef67f99b72e7b9)
-		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes-2
-	<no branch> (daf12bee07b9e2f38216f58aca7ac4e4e66a7146)
-		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-fixes-3
-	<no branch> (2672b94d730c4b69a17ce297dc3fa60b980e72dc)
-		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-maintainer-for-v5.12
-	<no branch> (aa880c6f3ee6dbd0d5ab02026a514ff8ea0a3328)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-5.11-3
 	patch
-		ARM: dts: lpc32xx: Revert set default clock rate of HCLK PLL
-	<no branch> (a900cac3750b9f0b8f5ed0503d9c6359532f644d)
-		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-5.11-2
+		ARM: at91: use proper asm syntax in pm_suspend
 
 arm/omap-genpd
 
