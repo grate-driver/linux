@@ -220,6 +220,10 @@ static int virtsnd_pcm_hw_params(struct snd_pcm_substream *substream,
 	if (rc)
 		return rc;
 
+	/* If messages have already been allocated before, do nothing. */
+	if (runtime->status->state == SNDRV_PCM_STATE_SUSPENDED)
+		return 0;
+
 	return virtsnd_pcm_msg_alloc(vss, periods, period_bytes);
 }
 
@@ -260,19 +264,21 @@ static int virtsnd_pcm_prepare(struct snd_pcm_substream *substream)
 	}
 
 	spin_lock_irqsave(&vss->lock, flags);
-	/*
-	 * Since I/O messages are asynchronous, they can be completed
-	 * when the runtime structure no longer exists. Since each
-	 * completion implies incrementing the hw_ptr, we cache all the
-	 * current values needed to compute the new hw_ptr value.
-	 */
-	vss->frame_bytes = runtime->frame_bits >> 3;
-	vss->period_size = runtime->period_size;
-	vss->buffer_size = runtime->buffer_size;
+	if (runtime->status->state != SNDRV_PCM_STATE_SUSPENDED) {
+		/*
+		 * Since I/O messages are asynchronous, they can be completed
+		 * when the runtime structure no longer exists. Since each
+		 * completion implies incrementing the hw_ptr, we cache all the
+		 * current values needed to compute the new hw_ptr value.
+		 */
+		vss->frame_bytes = runtime->frame_bits >> 3;
+		vss->period_size = runtime->period_size;
+		vss->buffer_size = runtime->buffer_size;
 
-	vss->hw_ptr = 0;
+		vss->hw_ptr = 0;
+		vss->msg_last_enqueued = -1;
+	}
 	vss->xfer_xrun = false;
-	vss->msg_last_enqueued = -1;
 	vss->msg_count = 0;
 	spin_unlock_irqrestore(&vss->lock, flags);
 
@@ -302,6 +308,21 @@ static int virtsnd_pcm_trigger(struct snd_pcm_substream *substream, int command)
 	int rc;
 
 	switch (command) {
+	case SNDRV_PCM_TRIGGER_RESUME: {
+		/*
+		 * We restart the substream by executing the standard command
+		 * sequence.
+		 */
+		rc = virtsnd_pcm_hw_params(substream, NULL);
+		if (rc)
+			return rc;
+
+		rc = virtsnd_pcm_prepare(substream);
+		if (rc)
+			return rc;
+
+		fallthrough;
+	}
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE: {
 		struct virtio_snd_queue *queue = virtsnd_pcm_queue(vss);
@@ -328,6 +349,7 @@ static int virtsnd_pcm_trigger(struct snd_pcm_substream *substream, int command)
 
 		return virtsnd_ctl_msg_send_sync(snd, msg);
 	}
+	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH: {
 		spin_lock_irqsave(&vss->lock, flags);
