@@ -9,6 +9,10 @@ arm/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm-core
 	broadcom/soc
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/soc
+	patch
+		MAINTAINERS: Add linux-actions ML for Actions Semi Arch
+	<no branch> (579c6f925e5ae3a70ec32e936908066707dbfef5)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-5.12
 
 arm/dt
 	berlin/dt64
@@ -80,6 +84,30 @@ arm/dt
 		ARM: dts: mmp3-dell-ariel: Add the power button node
 		ARM: dts: mmp3-dell-ariel: Replace SSP2 with spi-gpio
 		ARM: dts: mmp3: Fix the CCIC interrupts
+	samsung/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.12
+	zynq/dt
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.12
+	amlogic/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt
+	amlogic/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-1
+	qcom/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-5.12
+	qcom/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-dts-for-5.12
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-5.12
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-5.12
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-5.12
+	actions/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/mani/linux-actions tags/actions-arm-dt-for-v5.12
+	rockchip/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-dts32-1
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-dts64-1
 
 arm/drivers
 	drivers/scmi
@@ -110,6 +138,10 @@ arm/drivers
 		drivers: soc: atmel: fix type for same7
 	drivers/optee-i2c
 		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-simplify-i2c-access_for-v5.12
+	qcom/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-5.12
+	<no branch> (7d981405d0fd3cfc0de052e4791f516235d8b858)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-5.12
 
 arm/defconfig
 	patch
@@ -140,10 +172,12 @@ arm/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-5.12
 	at91/defconfig-2
 		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-defconfig-5.11-2
-	<no branch> (3c8e5d51e4c6e5e93d31f59d4a54fb3a14358ee4)
+	rockchip/defconfig64
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-defconfig64-1
 	omap/defconfig-2
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/defconfig-signed
+	zynq/defconfig
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-v5.12
 
 arm/newsoc
 
@@ -152,6 +186,8 @@ arm/late
 arm/fixes
 	patch
 		ARM: at91: use proper asm syntax in pm_suspend
+	<no branch> (b7ff3a447d100c999d9848353ef8a4046831d893)
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_fix_for_v5.12
 
 arm/omap-genpd
 
