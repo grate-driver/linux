@@ -14,29 +14,12 @@
 #define IPCMSG_SOFT_RESET	0xF2
 #define IPCMSG_COLD_BOOT	0xF3
 
-#define IPCMSG_VRTC		0xFA	/* Set vRTC device */
-/* Command id associated with message IPCMSG_VRTC */
-#define IPC_CMD_VRTC_SETTIME      1	/* Set time */
-#define IPC_CMD_VRTC_SETALARM     2	/* Set alarm */
-
 /* Don't call these in new code - they will be removed eventually */
-
-/* Read single register */
-static inline int intel_scu_ipc_ioread8(u16 addr, u8 *data)
-{
-	return intel_scu_ipc_dev_ioread8(NULL, addr, data);
-}
 
 /* Read a vector */
 static inline int intel_scu_ipc_readv(u16 *addr, u8 *data, int len)
 {
 	return intel_scu_ipc_dev_readv(NULL, addr, data, len);
-}
-
-/* Write single register */
-static inline int intel_scu_ipc_iowrite8(u16 addr, u8 data)
-{
-	return intel_scu_ipc_dev_iowrite8(NULL, addr, data);
 }
 
 /* Write a vector */
