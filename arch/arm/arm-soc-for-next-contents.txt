@@ -11,8 +11,12 @@ arm/soc
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/soc
 	patch
 		MAINTAINERS: Add linux-actions ML for Actions Semi Arch
-	<no branch> (579c6f925e5ae3a70ec32e936908066707dbfef5)
+	imx/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-5.12
+	patch
+		MAINTAINERS: arm: samsung: include S3C headers in platform entry
+	samsung/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-5.12
 
 arm/dt
 	berlin/dt64
@@ -108,6 +112,12 @@ arm/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-dts32-1
 	rockchip/dt64
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-dts64-1
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.12-devicetree
+	toshiba/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/iwamatsu/linux-visconti dt-for-v5.12
+	zynq/dt-2
+		https://github.com/Xilinx/linux-xlnx tags/zynq-dt-for-v5.12-v2
 
 arm/drivers
 	drivers/scmi
@@ -140,8 +150,12 @@ arm/drivers
 		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-simplify-i2c-access_for-v5.12
 	qcom/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-5.12
-	<no branch> (7d981405d0fd3cfc0de052e4791f516235d8b858)
+	imx/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-5.12
+	drivers/memory-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.12-2
+	aspeed/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.12-soc
 
 arm/defconfig
 	patch
