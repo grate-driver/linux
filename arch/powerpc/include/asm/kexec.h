@@ -112,11 +112,6 @@ struct kimage_arch {
 	unsigned long elf_headers_sz;
 	void *elf_headers;
 	void *fdt;
-
-#ifdef CONFIG_IMA_KEXEC
-	phys_addr_t ima_buffer_addr;
-	size_t ima_buffer_size;
-#endif
 };
 
 char *setup_kdump_cmdline(struct kimage *image, char *cmdline,
