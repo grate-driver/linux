@@ -111,6 +111,7 @@ struct kimage_arch {
 	unsigned long elf_load_addr;
 	unsigned long elf_headers_sz;
 	void *elf_headers;
+	void *fdt;
 
 #ifdef CONFIG_IMA_KEXEC
 	phys_addr_t ima_buffer_addr;
