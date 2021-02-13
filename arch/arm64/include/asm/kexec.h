@@ -98,7 +98,7 @@ struct kimage_arch {
 	unsigned long dtb_mem;
 	/* Core ELF header buffer */
 	void *elf_headers;
-	unsigned long elf_headers_mem;
+	unsigned long elf_load_addr;
 	unsigned long elf_headers_sz;
 };
 

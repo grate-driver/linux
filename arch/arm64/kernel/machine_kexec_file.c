@@ -73,7 +73,7 @@ static int setup_dtb(struct kimage *image,
 		/* add linux,elfcorehdr */
 		ret = fdt_appendprop_addrrange(dtb, 0, off,
 				FDT_PROP_KEXEC_ELFHDR,
-				image->arch.elf_headers_mem,
+				image->arch.elf_load_addr,
 				image->arch.elf_headers_sz);
 		if (ret)
 			return (ret == -FDT_ERR_NOSPACE ? -ENOMEM : -EINVAL);
@@ -283,11 +283,11 @@ int load_other_segments(struct kimage *image,
 			goto out_err;
 		}
 		image->arch.elf_headers = headers;
-		image->arch.elf_headers_mem = kbuf.mem;
+		image->arch.elf_load_addr = kbuf.mem;
 		image->arch.elf_headers_sz = headers_sz;
 
 		pr_debug("Loaded elf core header at 0x%lx bufsz=0x%lx memsz=0x%lx\n",
-			 image->arch.elf_headers_mem, kbuf.bufsz, kbuf.memsz);
+			 image->arch.elf_load_addr, kbuf.bufsz, kbuf.memsz);
 	}
 
 	/* load initrd */
