@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * intel-mid.c: Intel MID platform setup code
+ * Intel MID platform setup code
  *
- * (C) Copyright 2008, 2012 Intel Corporation
+ * (C) Copyright 2008, 2012, 2021 Intel Corporation
  * Author: Jacob Pan (jacob.jun.pan@intel.com)
  * Author: Sathyanarayanan Kuppuswamy <sathyanarayanan.kuppuswamy@intel.com>
  */
@@ -14,7 +14,6 @@
 #include <linux/interrupt.h>
 #include <linux/regulator/machine.h>
 #include <linux/scatterlist.h>
-#include <linux/sfi.h>
 #include <linux/irq.h>
 #include <linux/export.h>
 #include <linux/notifier.h>
@@ -30,8 +29,8 @@
 #include <asm/intel_scu_ipc.h>
 #include <asm/reboot.h>
 
-enum intel_mid_cpu_type __intel_mid_cpu_chip;
-EXPORT_SYMBOL_GPL(__intel_mid_cpu_chip);
+#define IPCMSG_COLD_OFF		0x80	/* Only for Tangier */
+#define IPCMSG_COLD_RESET	0xF1
 
 static void intel_mid_power_off(void)
 {
@@ -39,12 +38,12 @@ static void intel_mid_power_off(void)
 	intel_mid_pwr_power_off();
 
 	/* Only for Tangier, the rest will ignore this command */
-	intel_scu_ipc_simple_command(IPCMSG_COLD_OFF, 1);
+	intel_scu_ipc_dev_simple_command(NULL, IPCMSG_COLD_OFF, 1);
 };
 
 static void intel_mid_reboot(void)
 {
-	intel_scu_ipc_simple_command(IPCMSG_COLD_RESET, 0);
+	intel_scu_ipc_dev_simple_command(NULL, IPCMSG_COLD_RESET, 0);
 }
 
 static void __init intel_mid_time_init(void)
@@ -56,29 +55,15 @@ static void __init intel_mid_time_init(void)
 
 static void intel_mid_arch_setup(void)
 {
-	if (boot_cpu_data.x86 != 6) {
-		pr_err("Unknown Intel MID CPU (%d:%d), default to Penwell\n",
-			boot_cpu_data.x86, boot_cpu_data.x86_model);
-		__intel_mid_cpu_chip = INTEL_MID_CPU_CHIP_PENWELL;
-		goto out;
-	}
-
 	switch (boot_cpu_data.x86_model) {
-	case 0x35:
-		__intel_mid_cpu_chip = INTEL_MID_CPU_CHIP_CLOVERVIEW;
-		break;
 	case 0x3C:
 	case 0x4A:
-		__intel_mid_cpu_chip = INTEL_MID_CPU_CHIP_TANGIER;
 		x86_platform.legacy.rtc = 1;
 		break;
-	case 0x27:
 	default:
-		__intel_mid_cpu_chip = INTEL_MID_CPU_CHIP_PENWELL;
 		break;
 	}
 
-out:
 	/*
 	 * Intel MID platforms are using explicitly defined regulators.
 	 *
