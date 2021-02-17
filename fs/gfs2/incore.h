@@ -490,7 +490,7 @@ struct gfs2_quota_data {
 enum {
 	TR_TOUCHED = 1,
 	TR_ATTACHED = 2,
-	TR_ALLOCED = 3,
+	TR_ONSTACK = 3,
 };
 
 struct gfs2_trans {
@@ -506,7 +506,6 @@ struct gfs2_trans {
 	unsigned int tr_num_buf_rm;
 	unsigned int tr_num_databuf_rm;
 	unsigned int tr_num_revoke;
-	unsigned int tr_num_revoke_rm;
 
 	struct list_head tr_list;
 	struct list_head tr_databuf;
@@ -823,7 +822,6 @@ struct gfs2_sbd {
 
 	struct gfs2_trans *sd_log_tr;
 	unsigned int sd_log_blks_reserved;
-	int sd_log_committed_revoke;
 
 	atomic_t sd_log_pinned;
 	unsigned int sd_log_num_revoke;
@@ -836,12 +834,11 @@ struct gfs2_sbd {
 	atomic_t sd_log_thresh2;
 	atomic_t sd_log_blks_free;
 	atomic_t sd_log_blks_needed;
+	atomic_t sd_log_revokes_available;
 	wait_queue_head_t sd_log_waitq;
 	wait_queue_head_t sd_logd_waitq;
 
 	u64 sd_log_sequence;
-	unsigned int sd_log_head;
-	unsigned int sd_log_tail;
 	int sd_log_idle;
 
 	struct rw_semaphore sd_log_flush_lock;
@@ -850,9 +847,9 @@ struct gfs2_sbd {
 	int sd_log_error; /* First log error */
 	wait_queue_head_t sd_withdraw_wait;
 
-	atomic_t sd_reserving_log;
-	wait_queue_head_t sd_reserving_log_wait;
-
+	unsigned int sd_log_tail;
+	unsigned int sd_log_flush_tail;
+	unsigned int sd_log_head;
 	unsigned int sd_log_flush_head;
 
 	spinlock_t sd_ail_lock;
