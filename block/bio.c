@@ -608,13 +608,13 @@ void bio_truncate(struct bio *bio, unsigned new_size)
 void guard_bio_eod(struct bio *bio)
 {
 	sector_t maxsector;
-	struct hd_struct *part;
+	struct block_device *part;
 
 	rcu_read_lock();
 	part = __disk_get_part(bio->bi_disk, bio->bi_partno);
 	if (part)
-		maxsector = part_nr_sects_read(part);
-	else
+		maxsector = bdev_nr_sectors(part);
+	else	
 		maxsector = get_capacity(bio->bi_disk);
 	rcu_read_unlock();
 
@@ -850,6 +850,39 @@ int bio_add_pc_page(struct request_queue *q, struct bio *bio,
 			queue_max_hw_sectors(q), &same_page);
 }
 EXPORT_SYMBOL(bio_add_pc_page);
+
+/**
+ * bio_add_zone_append_page - attempt to add page to zone-append bio
+ * @bio: destination bio
+ * @page: page to add
+ * @len: vec entry length
+ * @offset: vec entry offset
+ *
+ * Attempt to add a page to the bio_vec maplist of a bio that will be submitted
+ * for a zone-append request. This can fail for a number of reasons, such as the
+ * bio being full or the target block device is not a zoned block device or
+ * other limitations of the target block device. The target block device must
+ * allow bio's up to PAGE_SIZE, so it is always possible to add a single page
+ * to an empty bio.
+ *
+ * Returns: number of bytes added to the bio, or 0 in case of a failure.
+ */
+int bio_add_zone_append_page(struct bio *bio, struct page *page,
+			     unsigned int len, unsigned int offset)
+{
+	struct request_queue *q = bio->bi_disk->queue;
+	bool same_page = false;
+
+	if (WARN_ON_ONCE(bio_op(bio) != REQ_OP_ZONE_APPEND))
+		return 0;
+
+	if (WARN_ON_ONCE(!blk_queue_is_zoned(q)))
+		return 0;
+
+	return bio_add_hw_page(q, bio, page, len, offset,
+			       queue_max_zone_append_sectors(q), &same_page);
+}
+EXPORT_SYMBOL_GPL(bio_add_zone_append_page);
 
 /**
  * __bio_try_merge_page - try appending data to an existing bvec.
@@ -1212,8 +1245,8 @@ void bio_copy_data_iter(struct bio *dst, struct bvec_iter *dst_iter,
 
 		flush_dcache_page(dst_bv.bv_page);
 
-		bio_advance_iter(src, src_iter, bytes);
-		bio_advance_iter(dst, dst_iter, bytes);
+		bio_advance_iter_single(src, src_iter, bytes);
+		bio_advance_iter_single(dst, dst_iter, bytes);
 	}
 }
 EXPORT_SYMBOL(bio_copy_data_iter);

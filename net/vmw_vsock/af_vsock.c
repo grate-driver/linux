@@ -421,7 +421,8 @@ static void vsock_deassign_transport(struct vsock_sock *vsk)
  * The vsk->remote_addr is used to decide which transport to use:
  *  - remote CID == VMADDR_CID_LOCAL or g2h->local_cid or VMADDR_CID_HOST if
  *    g2h is not loaded, will use local transport;
- *  - remote CID <= VMADDR_CID_HOST will use guest->host transport;
+ *  - remote CID <= VMADDR_CID_HOST or h2g is not loaded or remote flags field
+ *    includes VMADDR_FLAG_TO_HOST flag value, will use guest->host transport;
  *  - remote CID > VMADDR_CID_HOST will use host->guest transport;
  */
 int vsock_assign_transport(struct vsock_sock *vsk, struct vsock_sock *psk)
@@ -429,7 +430,22 @@ int vsock_assign_transport(struct vsock_sock *vsk, struct vsock_sock *psk)
 	const struct vsock_transport *new_transport;
 	struct sock *sk = sk_vsock(vsk);
 	unsigned int remote_cid = vsk->remote_addr.svm_cid;
+	__u8 remote_flags;
 	int ret;
+
+	/* If the packet is coming with the source and destination CIDs higher
+	 * than VMADDR_CID_HOST, then a vsock channel where all the packets are
+	 * forwarded to the host should be established. Then the host will
+	 * need to forward the packets to the guest.
+	 *
+	 * The flag is set on the (listen) receive path (psk is not NULL). On
+	 * the connect path the flag can be set by the user space application.
+	 */
+	if (psk && vsk->local_addr.svm_cid > VMADDR_CID_HOST &&
+	    vsk->remote_addr.svm_cid > VMADDR_CID_HOST)
+		vsk->remote_addr.svm_flags |= VMADDR_FLAG_TO_HOST;
+
+	remote_flags = vsk->remote_addr.svm_flags;
 
 	switch (sk->sk_type) {
 	case SOCK_DGRAM:
@@ -438,7 +454,8 @@ int vsock_assign_transport(struct vsock_sock *vsk, struct vsock_sock *psk)
 	case SOCK_STREAM:
 		if (vsock_use_local_transport(remote_cid))
 			new_transport = transport_local;
-		else if (remote_cid <= VMADDR_CID_HOST || !transport_h2g)
+		else if (remote_cid <= VMADDR_CID_HOST || !transport_h2g ||
+			 (remote_flags & VMADDR_FLAG_TO_HOST))
 			new_transport = transport_g2h;
 		else
 			new_transport = transport_h2g;
@@ -997,8 +1014,11 @@ static __poll_t vsock_poll(struct file *file, struct socket *sock,
 			mask |= EPOLLOUT | EPOLLWRNORM | EPOLLWRBAND;
 
 	} else if (sock->type == SOCK_STREAM) {
-		const struct vsock_transport *transport = vsk->transport;
+		const struct vsock_transport *transport;
+
 		lock_sock(sk);
+
+		transport = vsk->transport;
 
 		/* Listening sockets that have connections in their accept
 		 * queue can be read.
@@ -1082,9 +1102,10 @@ static int vsock_dgram_sendmsg(struct socket *sock, struct msghdr *msg,
 	err = 0;
 	sk = sock->sk;
 	vsk = vsock_sk(sk);
-	transport = vsk->transport;
 
 	lock_sock(sk);
+
+	transport = vsk->transport;
 
 	err = vsock_auto_bind(vsk);
 	if (err)
@@ -1544,9 +1565,10 @@ static int vsock_stream_setsockopt(struct socket *sock,
 	err = 0;
 	sk = sock->sk;
 	vsk = vsock_sk(sk);
-	transport = vsk->transport;
 
 	lock_sock(sk);
+
+	transport = vsk->transport;
 
 	switch (optname) {
 	case SO_VM_SOCKETS_BUFFER_SIZE:
@@ -1680,7 +1702,6 @@ static int vsock_stream_sendmsg(struct socket *sock, struct msghdr *msg,
 
 	sk = sock->sk;
 	vsk = vsock_sk(sk);
-	transport = vsk->transport;
 	total_written = 0;
 	err = 0;
 
@@ -1688,6 +1709,8 @@ static int vsock_stream_sendmsg(struct socket *sock, struct msghdr *msg,
 		return -EOPNOTSUPP;
 
 	lock_sock(sk);
+
+	transport = vsk->transport;
 
 	/* Callers should not provide a destination with stream sockets. */
 	if (msg->msg_namelen) {
@@ -1823,10 +1846,11 @@ vsock_stream_recvmsg(struct socket *sock, struct msghdr *msg, size_t len,
 
 	sk = sock->sk;
 	vsk = vsock_sk(sk);
-	transport = vsk->transport;
 	err = 0;
 
 	lock_sock(sk);
+
+	transport = vsk->transport;
 
 	if (!transport || sk->sk_state != TCP_ESTABLISHED) {
 		/* Recvmsg is supposed to return 0 if a peer performs an
@@ -2072,8 +2096,7 @@ static long vsock_dev_do_ioctl(struct file *filp,
 		break;
 
 	default:
-		pr_err("Unknown ioctl %d\n", cmd);
-		retval = -EINVAL;
+		retval = -ENOIOCTLCMD;
 	}
 
 	return retval;
