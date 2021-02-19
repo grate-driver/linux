@@ -113,7 +113,7 @@ struct mem_cgroup_per_node {
 
 	/*
 	 * Legacy local VM stats. This should be struct lruvec_stat and
-	 * cannot be optimized to struct batched_lruvec_stat. Becasue
+	 * cannot be optimized to struct batched_lruvec_stat. Because
 	 * the threshold of the lruvec_stat_cpu can be as big as
 	 * MEMCG_CHARGE_BATCH * PAGE_SIZE. It can fit into s32. But this
 	 * filed has no upper limit.
