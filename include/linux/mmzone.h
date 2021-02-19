@@ -530,7 +530,9 @@ struct zone {
 	atomic_long_t		managed_pages;
 	unsigned long		spanned_pages;
 	unsigned long		present_pages;
+#ifdef CONFIG_CMA
 	unsigned long		cma_pages;
+#endif
 
 	const char		*name;
 
