@@ -361,6 +361,9 @@ struct io_ring_ctx {
 		unsigned		cached_cq_overflow;
 		unsigned long		sq_check_overflow;
 
+		/* hashed buffered write serialization */
+		unsigned long		hash_map;
+
 		struct list_head	defer_list;
 		struct list_head	timeout_list;
 		struct list_head	cq_overflow_list;
@@ -7768,6 +7771,7 @@ static struct io_wq *io_init_wq_offload(struct io_ring_ctx *ctx)
 	unsigned int concurrency;
 
 	data.user = ctx->user;
+	data.hash_map = &ctx->hash_map;
 	data.free_work = io_free_work;
 	data.do_work = io_wq_submit_work;
 

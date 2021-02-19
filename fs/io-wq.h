@@ -96,6 +96,8 @@ typedef void (io_wq_work_fn)(struct io_wq_work *);
 struct io_wq_data {
 	struct user_struct *user;
 
+	unsigned long *hash_map;
+
 	io_wq_work_fn *do_work;
 	free_work_fn *free_work;
 };

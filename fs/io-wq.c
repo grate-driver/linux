@@ -85,7 +85,6 @@ struct io_wqe {
 	struct {
 		raw_spinlock_t lock;
 		struct io_wq_work_list work_list;
-		unsigned long hash_map;
 		unsigned flags;
 	} ____cacheline_aligned_in_smp;
 
@@ -111,6 +110,9 @@ struct io_wq {
 
 	struct task_struct *manager;
 	struct user_struct *user;
+
+	unsigned long *hash_map;
+
 	refcount_t refs;
 	struct completion done;
 
@@ -353,8 +355,7 @@ static struct io_wq_work *io_get_next_work(struct io_wqe *wqe)
 
 		/* hashed, can run if not already running */
 		hash = io_get_work_hash(work);
-		if (!(wqe->hash_map & BIT(hash))) {
-			wqe->hash_map |= BIT(hash);
+		if (!test_and_set_bit(hash, wqe->wq->hash_map)) {
 			/* all items with this hash lie in [work, tail] */
 			tail = wqe->hash_tail[hash];
 			wqe->hash_tail[hash] = NULL;
@@ -452,7 +453,7 @@ get_next:
 
 			if (hash != -1U && !next_hashed) {
 				raw_spin_lock_irq(&wqe->lock);
-				wqe->hash_map &= ~BIT_ULL(hash);
+				clear_bit(hash, wq->hash_map);
 				wqe->flags &= ~IO_WQE_FLAG_STALLED;
 				/* skip unnecessary unlock-lock wqe->lock */
 				if (!work)
@@ -975,6 +976,7 @@ struct io_wq *io_wq_create(unsigned bounded, struct io_wq_data *data)
 	if (ret)
 		goto err_wqes;
 
+	wq->hash_map = data->hash_map;
 	wq->free_work = data->free_work;
 	wq->do_work = data->do_work;
 
