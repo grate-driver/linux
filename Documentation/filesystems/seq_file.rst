@@ -218,7 +218,7 @@ is a reasonable thing to do. The seq_file code will also avoid taking any
 other locks while the iterator is active.
 
 The iterater value returned by start() or next() is guaranteed to be
-passed to a subsequenct next() or stop() call.  This allows resources
+passed to a subsequent next() or stop() call.  This allows resources
 such as locks that were taken to be reliably released.  There is *no*
 guarantee that the iterator will be passed to show(), though in practice
 it often will be.
