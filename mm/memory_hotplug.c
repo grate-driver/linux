@@ -769,7 +769,7 @@ void __ref move_pfn_range_to_zone(struct zone *zone, unsigned long start_pfn,
 	 * ZONE_DEVICE pages in an otherwise  ZONE_{NORMAL,MOVABLE}
 	 * section.
 	 */
-	if (zone_idx(zone) == ZONE_DEVICE) {
+	if (zone_is_zone_device(zone)) {
 		if (!IS_ALIGNED(start_pfn, PAGES_PER_SECTION))
 			section_taint_zone_device(start_pfn);
 		if (!IS_ALIGNED(start_pfn + nr_pages, PAGES_PER_SECTION))
