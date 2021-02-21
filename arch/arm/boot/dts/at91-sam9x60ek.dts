@@ -336,9 +336,9 @@
 &pinctrl {
 	atmel,mux-mask = <
 			 /*	A	B	C	*/
-			 0xFFFFFE7F 0xC0E0397F 0xEF00019D	/* pioA */
-			 0x03FFFFFF 0x02FC7E68 0x00780000	/* pioB */
-			 0xffffffff 0xF83FFFFF 0xB800F3FC	/* pioC */
+			 0xFFFFFFFF 0xFFE03FFF 0xEF00019D	/* pioA */
+			 0x03FFFFFF 0x02FC7E7F 0x00780000	/* pioB */
+			 0xffffffff 0xFFFFFFFF 0xF83FFFFF	/* pioC */
 			 0x003FFFFF 0x003F8000 0x00000000	/* pioD */
 			 >;
 
