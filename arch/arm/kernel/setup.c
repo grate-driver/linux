@@ -40,6 +40,7 @@
 #include <asm/fixmap.h>
 #include <asm/procinfo.h>
 #include <asm/psci.h>
+#include <asm/acpi_parking_protocol.h>
 #include <asm/sections.h>
 #include <asm/setup.h>
 #include <asm/smp_plat.h>
@@ -1170,6 +1171,8 @@ void __init setup_arch(char **cmdline_p)
 		if (!mdesc->smp_init || !mdesc->smp_init()) {
 			if (psci_smp_available())
 				smp_set_ops(&psci_smp_ops);
+			else if (acpi_parking_protocol_available())
+				smp_set_ops(&acpi_parking_protocol_ops);
 			else if (mdesc->smp)
 				smp_set_ops(mdesc->smp);
 		}
