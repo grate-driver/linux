@@ -242,7 +242,7 @@ cifs_reconnect(struct TCP_Server_Info *server)
 	server->max_read = 0;
 
 	cifs_dbg(FYI, "Mark tcp session as need reconnect\n");
-	trace_smb3_reconnect(server->CurrentMid, server->hostname);
+	trace_smb3_reconnect(server->CurrentMid, server->conn_id, server->hostname);
 
 	/* before reconnecting the tcp session, mark the smb session (uid)
 		and the tid bad so they are not used until reconnected */
@@ -846,7 +846,7 @@ static void
 smb2_add_credits_from_hdr(char *buffer, struct TCP_Server_Info *server)
 {
 	struct smb2_sync_hdr *shdr = (struct smb2_sync_hdr *)buffer;
-	int scredits = server->credits;
+	int scredits, in_flight;
 
 	/*
 	 * SMB1 does not use credits.
@@ -857,12 +857,14 @@ smb2_add_credits_from_hdr(char *buffer, struct TCP_Server_Info *server)
 	if (shdr->CreditRequest) {
 		spin_lock(&server->req_lock);
 		server->credits += le16_to_cpu(shdr->CreditRequest);
+		scredits = server->credits;
+		in_flight = server->in_flight;
 		spin_unlock(&server->req_lock);
 		wake_up(&server->request_q);
 
 		trace_smb3_add_credits(server->CurrentMid,
-				server->hostname, scredits,
-				le16_to_cpu(shdr->CreditRequest));
+				server->conn_id, server->hostname, scredits,
+				le16_to_cpu(shdr->CreditRequest), in_flight);
 		cifs_server_dbg(FYI, "%s: added %u credits total=%d\n",
 				__func__, le16_to_cpu(shdr->CreditRequest),
 				scredits);
@@ -992,6 +994,10 @@ next_pdu:
 		for (i = 0; i < num_mids; i++) {
 			if (mids[i] != NULL) {
 				mids[i]->resp_buf_size = server->pdu_size;
+
+				if (server->ops->is_network_name_deleted)
+					server->ops->is_network_name_deleted(bufs[i],
+									     server);
 
 				if (!mids[i]->multiRsp || mids[i]->multiEnd)
 					mids[i]->callback(mids[i]);
@@ -1317,6 +1323,7 @@ cifs_get_tcp_session(struct smb3_fs_context *ctx)
 		goto out_err_crypto_release;
 	}
 
+	tcp_ses->conn_id = atomic_inc_return(&tcpSesNextId);
 	tcp_ses->noblockcnt = ctx->rootfs;
 	tcp_ses->noblocksnd = ctx->noblocksnd || ctx->rootfs;
 	tcp_ses->noautotune = ctx->noautotune;
@@ -1838,9 +1845,9 @@ cifs_get_smb_ses(struct TCP_Server_Info *server, struct smb3_fs_context *ctx)
 	/* new SMB session uses our server ref */
 	ses->server = server;
 	if (server->dstaddr.ss_family == AF_INET6)
-		sprintf(ses->serverName, "%pI6", &addr6->sin6_addr);
+		sprintf(ses->ip_addr, "%pI6", &addr6->sin6_addr);
 	else
-		sprintf(ses->serverName, "%pI4", &addr->sin_addr);
+		sprintf(ses->ip_addr, "%pI4", &addr->sin_addr);
 
 	if (ctx->username) {
 		ses->user_name = kstrdup(ctx->username, GFP_KERNEL);
@@ -2911,7 +2918,7 @@ static int mount_setup_tlink(struct cifs_sb_info *cifs_sb, struct cifs_ses *ses,
 #ifdef CONFIG_CIFS_DFS_UPCALL
 /*
  * cifs_build_path_to_root returns full path to root when we do not have an
- * exiting connection (tcon)
+ * existing connection (tcon)
  */
 static char *
 build_unc_path_to_root(const struct smb3_fs_context *ctx,
