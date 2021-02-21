@@ -872,6 +872,13 @@ its result is kern_unmount() or kern_unmount_array().
 
 **mandatory**
 
+mnt_want_write_file() can now only be paired with mnt_drop_write_file(),
+whereas previously it could be paired with mnt_drop_write() as well.
+
+---
+
+**mandatory**
+
 zero-length bvec segments are disallowed, they must be filtered out before
 passed on to an iterator.
 
