@@ -1,0 +1,219 @@
+arm/soc
+	samsung/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-5.12
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v5.12-tag1
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/soc-signed
+	<no branch> (680ae44526ea9b656238ac768c8b6130961a0bdb)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm-core
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/soc
+	patch
+		MAINTAINERS: Add linux-actions ML for Actions Semi Arch
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-5.12
+	patch
+		MAINTAINERS: arm: samsung: include S3C headers in platform entry
+	samsung/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-5.12
+
+arm/dt
+	berlin/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/jszhang/linux-berlin tags/v5.11-berlin-dts64
+	berlin/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/jszhang/linux-berlin tags/v5.11-berlin-dts
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.12-tag1
+	renesas/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v5.12-tag1
+	patch
+		dt-bindings: vendor-prefixes: Fix misordering introduced by honestar prefix
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_update_for_v5.12
+	at91/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-dt-5.12
+	patch
+		ARM: mstar: Unify common parts of BreadBee boards into a dtsi
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/ux500-dts-v5.12
+	patch
+		ARM: dts: nomadik: Fix up MMC node names
+	toshiba/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/iwamatsu/linux-visconti tags/visconti-arm-dt-for-v5.11-tag2
+	samsung/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-5.12
+	hisi/dt64
+		git://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-5.12v2
+	renesas/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v5.12-tag2
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v5.12-1
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/dt-signed
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm-dt
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm64-dt
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-dt-bindings
+	ti/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/nmenon/linux tags/ti-k3-dt-for-v5.12
+	sunxi/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-5.12
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/devicetree
+	broadcom/dt64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/devicetree-arm64
+	keystone/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone_dts_for_5.12
+	patch
+		ARM: dts: ux500: Add Flash LEDs to Samsung phones
+	mediatek/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-dts64
+	mvebu/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt-5.12-1
+	mvebu/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-5.12-1
+	patch
+		dt-bindings: gpio: mrvl-gpio: Fix the gpio-ranges property
+		media: dt-bindings: marvell,mmp2-ccic: Allow power-domains property
+		ARM: dts: mmp2-olpc-xo-1-75: Fix memory node name
+		ARM: dts: mmp2-olpc-xo-1-75: Drop linux,usable-memory from /memory
+		ARM: dts: mmp3-dell-ariel: Drop linux,usable-memory from /memory
+		ARM: dts: mmp3: Extend the MPMU reg range
+		ARM: dts: mmp2: Use symbolic names for audio clocks
+		ARM: dts: mmp2-olpc-xo-1-75: Use symbolic names for audio clocks
+		ARM: dts: mmp3-dell-ariel: Add the embedded controller
+		ARM: dts: mmp3-dell-ariel: Add the power button node
+		ARM: dts: mmp3-dell-ariel: Replace SSP2 with spi-gpio
+		ARM: dts: mmp3: Fix the CCIC interrupts
+	samsung/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-5.12
+	zynq/dt
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-v5.12
+	amlogic/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt
+	amlogic/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-dt64-1
+	qcom/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-5.12
+	qcom/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-dts-for-5.12
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-5.12
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-5.12
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-5.12
+	actions/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/mani/linux-actions tags/actions-arm-dt-for-v5.12
+	rockchip/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-dts32-1
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-dts64-1
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.12-devicetree
+	toshiba/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/iwamatsu/linux-visconti dt-for-v5.12
+	zynq/dt-2
+		https://github.com/Xilinx/linux-xlnx tags/zynq-dt-for-v5.12-v2
+
+arm/drivers
+	drivers/scmi
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-5.12
+	drivers/reset
+		git://git.pengutronix.de/pza/linux tags/reset-for-v5.12
+	at91/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-soc-5.12-2
+	sunxi/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-drivers-for-5.12
+	drivers/memory
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.12
+	drivers/memory-tegra
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-tegra-5.12
+	broadcom/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/drivers
+	keystone/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/drivers_soc_for_5.12
+	mvebu/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-arm-5.12-1
+	mediatek/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-soc
+	drivers/tee
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/tee-housekeeping-for-v5.12
+	drivers/optee
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/optee-fix-cond-resched-call-for-v5.12
+	patch
+		drivers: soc: atmel: fix type for same7
+	drivers/optee-i2c
+		git://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-simplify-i2c-access_for-v5.12
+	qcom/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-5.12
+	imx/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-5.12
+	drivers/memory-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-5.12-2
+	aspeed/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/aspeed tags/aspeed-5.12-soc
+
+arm/defconfig
+	patch
+		ARM: multi_v7_defconfig: Enable Actions Semi platform and drivers
+	at91/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-defconfig-5.12
+	patch
+		ARM: multi_v7_defconfig: add STM32 CEC support
+	tegra/defconfig-32
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm-defconfig
+	tegra/defconfig-64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-5.12-arm64-defconfig
+	broadcom/defconfig
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/defconfig
+	broadcom/defconfig64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-5.12/defconfig-arm64
+	mediatek/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v5.11-next-defconfig
+	amlogic/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/khilman/linux-amlogic tags/amlogic-soc
+	patch
+		arm64: defconfig: Enable RT5659
+	qcom/defconfig-arm64
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-5.12
+	qcom/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-defconfig-for-5.12
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-5.12
+	at91/defconfig-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-defconfig-5.11-2
+	rockchip/defconfig64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v5.12-rockchip-defconfig64-1
+	omap/defconfig-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v5.12/defconfig-signed
+	zynq/defconfig
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-v5.12
+
+arm/newsoc
+
+arm/late
+
+arm/fixes
+	patch
+		ARM: at91: use proper asm syntax in pm_suspend
+	<no branch> (b7ff3a447d100c999d9848353ef8a4046831d893)
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_fix_for_v5.12
+
+arm/omap-genpd
+
+arm/platform-removal
+	patch
+		ARM: dts: Remove PicoXcell platforms
+		ARM: Remove PicoXcell platform support
+		ARM: drop efm32 platform
+		MAINTAINERS: Remove deleted platform efm32
+		c6x: remove architecture
+		ARM: remove sirf prima2/atlas platforms
+		ARM: remove zte zx platform
+		ARM: remove tango platform
+		ARM: remove u300 platform
+
