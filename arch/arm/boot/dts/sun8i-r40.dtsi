@@ -111,22 +111,6 @@
 		status = "disabled";
 	};
 
-	thermal-zones {
-		cpu_thermal: cpu0-thermal {
-			/* milliseconds */
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 0>;
-		};
-
-		gpu_thermal: gpu-thermal {
-			/* milliseconds */
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&ths 1>;
-		};
-	};
-
 	soc {
 		compatible = "simple-bus";
 		#address-cells = <1>;
