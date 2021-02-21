@@ -631,7 +631,6 @@ int zstd_decompress(struct list_head *ws, unsigned char *data_in,
 	size_t ret2;
 	unsigned long total_out = 0;
 	unsigned long pg_offset = 0;
-	char *kaddr;
 
 	stream = ZSTD_initDStream(
 			ZSTD_BTRFS_MAX_INPUT, workspace->mem, workspace->size);
@@ -688,19 +687,15 @@ int zstd_decompress(struct list_head *ws, unsigned char *data_in,
 		bytes = min_t(unsigned long, destlen - pg_offset,
 				workspace->out_buf.size - buf_offset);
 
-		kaddr = kmap_atomic(dest_page);
-		memcpy(kaddr + pg_offset, workspace->out_buf.dst + buf_offset,
-				bytes);
-		kunmap_atomic(kaddr);
+		memcpy_to_page(dest_page, pg_offset,
+			       workspace->out_buf.dst + buf_offset, bytes);
 
 		pg_offset += bytes;
 	}
 	ret = 0;
 finish:
 	if (pg_offset < destlen) {
-		kaddr = kmap_atomic(dest_page);
-		memset(kaddr + pg_offset, 0, destlen - pg_offset);
-		kunmap_atomic(kaddr);
+		zero_user(dest_page, pg_offset, destlen - pg_offset);
 	}
 	return ret;
 }

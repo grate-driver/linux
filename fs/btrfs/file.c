@@ -3585,7 +3585,7 @@ static loff_t btrfs_file_llseek(struct file *file, loff_t offset, int whence)
 
 static int btrfs_file_open(struct inode *inode, struct file *filp)
 {
-	filp->f_mode |= FMODE_NOWAIT | FMODE_BUF_RASYNC;
+	filp->f_mode |= FMODE_NOWAIT;
 	return generic_file_open(inode, filp);
 }
 
@@ -3634,7 +3634,18 @@ static ssize_t btrfs_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 			return ret;
 	}
 
-	return generic_file_buffered_read(iocb, to, ret);
+	if (iocb->ki_flags & IOCB_NOWAIT)
+		iocb->ki_flags |= IOCB_NOIO;
+
+	ret = generic_file_buffered_read(iocb, to, ret);
+
+	if (iocb->ki_flags & IOCB_NOWAIT) {
+		iocb->ki_flags &= ~IOCB_NOIO;
+		if (ret == 0)
+			ret = -EAGAIN;
+	}
+
+	return ret;
 }
 
 const struct file_operations btrfs_file_operations = {
