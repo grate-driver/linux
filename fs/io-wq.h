@@ -11,13 +11,6 @@ enum {
 	IO_WQ_WORK_UNBOUND	= 4,
 	IO_WQ_WORK_CONCURRENT	= 16,
 
-	IO_WQ_WORK_FILES	= 32,
-	IO_WQ_WORK_FS		= 64,
-	IO_WQ_WORK_MM		= 128,
-	IO_WQ_WORK_CREDS	= 256,
-	IO_WQ_WORK_BLKCG	= 512,
-	IO_WQ_WORK_FSIZE	= 1024,
-
 	IO_WQ_HASH_SHIFT	= 24,	/* upper 8 bits are used for hash key */
 };
 
@@ -85,7 +78,7 @@ static inline void wq_list_del(struct io_wq_work_list *list,
 
 struct io_wq_work {
 	struct io_wq_work_node list;
-	struct io_identity *identity;
+	const struct cred *creds;
 	unsigned flags;
 };
 
@@ -101,18 +94,19 @@ typedef struct io_wq_work *(free_work_fn)(struct io_wq_work *);
 typedef void (io_wq_work_fn)(struct io_wq_work *);
 
 struct io_wq_data {
-	struct user_struct *user;
+	unsigned long *hash_map;
 
 	io_wq_work_fn *do_work;
 	free_work_fn *free_work;
 };
 
 struct io_wq *io_wq_create(unsigned bounded, struct io_wq_data *data);
-bool io_wq_get(struct io_wq *wq, struct io_wq_data *data);
 void io_wq_destroy(struct io_wq *wq);
 
 void io_wq_enqueue(struct io_wq *wq, struct io_wq_work *work);
 void io_wq_hash_work(struct io_wq_work *work, void *val);
+
+pid_t io_wq_fork_thread(int (*fn)(void *), void *arg);
 
 static inline bool io_wq_is_hashed(struct io_wq_work *work)
 {
@@ -123,8 +117,6 @@ typedef bool (work_cancel_fn)(struct io_wq_work *, void *);
 
 enum io_wq_cancel io_wq_cancel_cb(struct io_wq *wq, work_cancel_fn *cancel,
 					void *data, bool cancel_all);
-
-struct task_struct *io_wq_get_task(struct io_wq *wq);
 
 #if defined(CONFIG_IO_WQ)
 extern void io_wq_worker_sleeping(struct task_struct *);
@@ -140,6 +132,7 @@ static inline void io_wq_worker_running(struct task_struct *tsk)
 
 static inline bool io_wq_current_is_worker(void)
 {
-	return in_task() && (current->flags & PF_IO_WORKER);
+	return in_task() && (current->flags & PF_IO_WORKER) &&
+		current->pf_io_worker;
 }
 #endif
