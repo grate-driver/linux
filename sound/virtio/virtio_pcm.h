@@ -35,6 +35,7 @@ struct virtio_pcm_msg;
  * @msg_last_enqueued: Index of the last I/O message added to the virtqueue.
  * @msg_count: Number of pending I/O messages in the virtqueue.
  * @msg_empty: Notify when msg_count is zero.
+ * @msg_flushing: True if the I/O queue is in flushing state.
  */
 struct virtio_pcm_substream {
 	struct virtio_snd *snd;
@@ -56,6 +57,7 @@ struct virtio_pcm_substream {
 	int msg_last_enqueued;
 	unsigned int msg_count;
 	wait_queue_head_t msg_empty;
+	bool msg_flushing;
 };
 
 /**
@@ -81,6 +83,8 @@ struct virtio_pcm {
 	struct snd_pcm *pcm;
 	struct virtio_pcm_stream streams[SNDRV_PCM_STREAM_LAST + 1];
 };
+
+extern const struct snd_pcm_ops virtsnd_pcm_ops;
 
 int virtsnd_pcm_validate(struct virtio_device *vdev);
 
