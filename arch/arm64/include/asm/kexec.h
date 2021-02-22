@@ -98,7 +98,7 @@ struct kimage_arch {
 	phys_addr_t kern_reloc;
 	/* Core ELF header buffer */
 	void *elf_headers;
-	unsigned long elf_headers_mem;
+	unsigned long elf_load_addr;
 	unsigned long elf_headers_sz;
 };
 

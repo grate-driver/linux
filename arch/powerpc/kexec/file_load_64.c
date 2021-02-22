@@ -816,7 +816,7 @@ static int load_elfcorehdr_segment(struct kimage *image, struct kexec_buf *kbuf)
 		goto out;
 	}
 
-	image->arch.elfcorehdr_addr = kbuf->mem;
+	image->arch.elf_load_addr = kbuf->mem;
 	image->arch.elf_headers_sz = headers_sz;
 	image->arch.elf_headers = headers;
 out:
@@ -852,7 +852,7 @@ int load_crashdump_segments_ppc64(struct kimage *image,
 		return ret;
 	}
 	pr_debug("Loaded elf core header at 0x%lx, bufsz=0x%lx memsz=0x%lx\n",
-		 image->arch.elfcorehdr_addr, kbuf->bufsz, kbuf->memsz);
+		 image->arch.elf_load_addr, kbuf->bufsz, kbuf->memsz);
 
 	return 0;
 }
@@ -978,10 +978,6 @@ int setup_new_fdt_ppc64(const struct kimage *image, void *fdt,
 {
 	struct crash_mem *umem = NULL, *rmem = NULL;
 	int i, nr_ranges, ret;
-
-	ret = setup_new_fdt(image, fdt, initrd_load_addr, initrd_len, cmdline);
-	if (ret)
-		goto out;
 
 	/*
 	 * Restrict memory usage for kdump kernel by setting up
@@ -1145,6 +1141,9 @@ int arch_kimage_file_post_load_cleanup(struct kimage *image)
 	vfree(image->arch.elf_headers);
 	image->arch.elf_headers = NULL;
 	image->arch.elf_headers_sz = 0;
+
+	kvfree(image->arch.fdt);
+	image->arch.fdt = NULL;
 
 	return kexec_image_post_load_cleanup_default(image);
 }
