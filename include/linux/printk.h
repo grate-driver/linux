@@ -567,7 +567,8 @@ extern const struct file_operations kmsg_fops;
 enum {
 	DUMP_PREFIX_NONE,
 	DUMP_PREFIX_ADDRESS,
-	DUMP_PREFIX_OFFSET
+	DUMP_PREFIX_OFFSET,
+	DUMP_PREFIX_UNHASHED,
 };
 extern int hex_dump_to_buffer(const void *buf, size_t len, int rowsize,
 			      int groupsize, char *linebuf, size_t linebuflen,
@@ -612,8 +613,9 @@ static inline void print_hex_dump_debug(const char *prefix_str, int prefix_type,
  * print_hex_dump_bytes - shorthand form of print_hex_dump() with default params
  * @prefix_str: string to prefix each line with;
  *  caller supplies trailing spaces for alignment if desired
- * @prefix_type: controls whether prefix of an offset, address, or none
- *  is printed (%DUMP_PREFIX_OFFSET, %DUMP_PREFIX_ADDRESS, %DUMP_PREFIX_NONE)
+ * @prefix_type: controls whether prefix of an offset, hashed address,
+ *  unhashed address, or none is printed (%DUMP_PREFIX_OFFSET,
+ *  %DUMP_PREFIX_ADDRESS, %DUMP_PREFIX_UNHASHED, %DUMP_PREFIX_NONE)
  * @buf: data blob to dump
  * @len: number of bytes in the @buf
  *

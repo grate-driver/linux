@@ -3637,7 +3637,7 @@ static ssize_t btrfs_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	if (iocb->ki_flags & IOCB_NOWAIT)
 		iocb->ki_flags |= IOCB_NOIO;
 
-	ret = generic_file_buffered_read(iocb, to, ret);
+	ret = filemap_read(iocb, to, ret);
 
 	if (iocb->ki_flags & IOCB_NOWAIT) {
 		iocb->ki_flags &= ~IOCB_NOIO;
