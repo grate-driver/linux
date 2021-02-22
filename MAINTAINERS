@@ -8938,7 +8938,6 @@ L:	linux-gpio@vger.kernel.org
 S:	Maintained
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/andy/linux-gpio-intel.git
 F:	drivers/gpio/gpio-ich.c
-F:	drivers/gpio/gpio-intel-mid.c
 F:	drivers/gpio/gpio-merrifield.c
 F:	drivers/gpio/gpio-ml-ioh.c
 F:	drivers/gpio/gpio-pch.c
@@ -9110,14 +9109,11 @@ M:	Andy Shevchenko <andy@kernel.org>
 S:	Maintained
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/andy/linux-gpio-intel.git
 F:	drivers/gpio/gpio-*cove.c
-F:	drivers/gpio/gpio-msic.c
 
 INTEL PMIC MULTIFUNCTION DEVICE DRIVERS
 M:	Andy Shevchenko <andy@kernel.org>
 S:	Maintained
-F:	drivers/mfd/intel_msic.c
 F:	drivers/mfd/intel_soc_pmic*
-F:	include/linux/mfd/intel_msic.h
 F:	include/linux/mfd/intel_soc_pmic*
 
 INTEL PMT DRIVER
@@ -16290,13 +16286,6 @@ L:	linux-i3c@lists.infradead.org
 S:	Maintained
 F:	Documentation/devicetree/bindings/i3c/silvaco,i3c-master.yaml
 F:	drivers/i3c/master/svc-i3c-master.c
-
-SIMPLE FIRMWARE INTERFACE (SFI)
-S:	Obsolete
-W:	http://simplefirmware.org/
-F:	arch/x86/platform/sfi/
-F:	drivers/sfi/
-F:	include/linux/sfi*.h
 
 SIMPLEFB FB DRIVER
 M:	Hans de Goede <hdegoede@redhat.com>
