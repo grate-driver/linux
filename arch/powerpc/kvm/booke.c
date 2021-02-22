@@ -699,7 +699,7 @@ int kvmppc_core_prepare_to_enter(struct kvm_vcpu *vcpu)
 
 		kvmppc_set_exit_type(vcpu, EMULATED_MTMSRWE_EXITS);
 		r = 1;
-	};
+	}
 
 	return r;
 }
