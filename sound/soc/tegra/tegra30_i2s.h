@@ -235,6 +235,7 @@ struct tegra30_i2s {
 	struct snd_dmaengine_dai_dma_data playback_dma_data;
 	struct regmap *regmap;
 	struct snd_dmaengine_pcm_config dma_config;
+	struct reset_control *reset;
 };
 
 #endif

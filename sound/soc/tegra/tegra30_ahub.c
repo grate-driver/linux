@@ -65,13 +65,17 @@ static int tegra30_ahub_runtime_resume(struct device *dev)
 {
 	int ret;
 
-	ret = reset_control_assert(ahub->reset);
+	ret = reset_control_acquire(ahub->reset);
 	if (ret)
 		return ret;
 
+	ret = reset_control_assert(ahub->reset);
+	if (ret)
+		goto release_reset;
+
 	ret = clk_bulk_prepare_enable(ahub->nclocks, ahub->clocks);
 	if (ret)
-		return ret;
+		goto release_reset;
 
 	usleep_range(10, 100);
 
@@ -92,10 +96,14 @@ static int tegra30_ahub_runtime_resume(struct device *dev)
 	if (ret)
 		goto disable_clocks;
 
+	reset_control_release(ahub->reset);
+
 	return 0;
 
 disable_clocks:
 	clk_bulk_disable_unprepare(ahub->nclocks, ahub->clocks);
+release_reset:
+	reset_control_release(ahub->reset);
 
 	return ret;
 }
@@ -579,7 +587,7 @@ static int tegra30_ahub_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ahub->reset = devm_reset_control_array_get_exclusive(&pdev->dev);
+	ahub->reset = devm_reset_control_array_get_exclusive_released(&pdev->dev);
 	if (IS_ERR(ahub->reset)) {
 		dev_err(&pdev->dev, "Can't get resets: %pe\n", ahub->reset);
 		return PTR_ERR(ahub->reset);
