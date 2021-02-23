@@ -33,7 +33,8 @@ struct reset_control *__devm_reset_control_get(struct device *dev,
 				     bool optional, bool acquired);
 
 struct reset_control *devm_reset_control_array_get(struct device *dev,
-						   bool shared, bool optional);
+						   bool shared, bool optional,
+						   bool acquired);
 struct reset_control *of_reset_control_array_get(struct device_node *np,
 						 bool shared, bool optional,
 						 bool acquired);
@@ -105,7 +106,8 @@ static inline struct reset_control *__devm_reset_control_get(
 }
 
 static inline struct reset_control *
-devm_reset_control_array_get(struct device *dev, bool shared, bool optional)
+devm_reset_control_array_get(struct device *dev, bool shared, bool optional,
+			     bool acquired)
 {
 	return optional ? NULL : ERR_PTR(-ENOTSUPP);
 }
@@ -511,25 +513,25 @@ static inline struct reset_control *devm_reset_control_get_by_index(
 static inline struct reset_control *
 devm_reset_control_array_get_exclusive(struct device *dev)
 {
-	return devm_reset_control_array_get(dev, false, false);
+	return devm_reset_control_array_get(dev, false, false, true);
 }
 
 static inline struct reset_control *
 devm_reset_control_array_get_shared(struct device *dev)
 {
-	return devm_reset_control_array_get(dev, true, false);
+	return devm_reset_control_array_get(dev, true, false, true);
 }
 
 static inline struct reset_control *
 devm_reset_control_array_get_optional_exclusive(struct device *dev)
 {
-	return devm_reset_control_array_get(dev, false, true);
+	return devm_reset_control_array_get(dev, false, true, true);
 }
 
 static inline struct reset_control *
 devm_reset_control_array_get_optional_shared(struct device *dev)
 {
-	return devm_reset_control_array_get(dev, true, true);
+	return devm_reset_control_array_get(dev, true, true, true);
 }
 
 static inline struct reset_control *
