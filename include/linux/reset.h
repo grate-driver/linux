@@ -535,6 +535,12 @@ devm_reset_control_array_get_optional_shared(struct device *dev)
 }
 
 static inline struct reset_control *
+devm_reset_control_array_get_exclusive_released(struct device *dev)
+{
+	return devm_reset_control_array_get(dev, false, false, false);
+}
+
+static inline struct reset_control *
 of_reset_control_array_get_exclusive(struct device_node *node)
 {
 	return of_reset_control_array_get(node, false, false, true);
