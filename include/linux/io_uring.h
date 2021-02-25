@@ -35,7 +35,13 @@ struct sock *io_uring_get_socket(struct file *file);
 void __io_uring_task_cancel(void);
 void __io_uring_files_cancel(struct files_struct *files);
 void __io_uring_free(struct task_struct *tsk);
+void __io_uring_unshare(void);
 
+static inline void io_uring_unshare(void)
+{
+	if (current->io_uring)
+		__io_uring_unshare();
+}
 static inline void io_uring_task_cancel(void)
 {
 	if (current->io_uring && !xa_empty(&current->io_uring->xa))
@@ -55,6 +61,9 @@ static inline void io_uring_free(struct task_struct *tsk)
 static inline struct sock *io_uring_get_socket(struct file *file)
 {
 	return NULL;
+}
+static inline void io_uring_unshare(void)
+{
 }
 static inline void io_uring_task_cancel(void)
 {

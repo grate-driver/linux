@@ -744,6 +744,7 @@ static int io_wq_manager(void *data)
 {
 	struct io_wq *wq = data;
 	char buf[TASK_COMM_LEN];
+	int node;
 
 	sprintf(buf, "iou-mgr-%d", wq->task_pid);
 	set_task_comm(current, buf);
@@ -761,6 +762,12 @@ static int io_wq_manager(void *data)
 	} while (!test_bit(IO_WQ_BIT_EXIT, &wq->state));
 
 	io_wq_check_workers(wq);
+
+	rcu_read_lock();
+	for_each_node(node)
+		io_wq_for_each_worker(wq->wqes[node], io_wq_worker_wake, NULL);
+	rcu_read_unlock();
+
 	/* we might not ever have created any workers */
 	if (atomic_read(&wq->worker_refs))
 		wait_for_completion(&wq->worker_done);
@@ -1097,11 +1104,6 @@ static void io_wq_destroy(struct io_wq *wq)
 	set_bit(IO_WQ_BIT_EXIT, &wq->state);
 	io_wq_destroy_manager(wq);
 
-	rcu_read_lock();
-	for_each_node(node)
-		io_wq_for_each_worker(wq->wqes[node], io_wq_worker_wake, NULL);
-	rcu_read_unlock();
-
 	spin_lock_irq(&wq->hash->wait.lock);
 	for_each_node(node) {
 		struct io_wqe *wqe = wq->wqes[node];
@@ -1165,3 +1167,12 @@ static __init int io_wq_init(void)
 	return 0;
 }
 subsys_initcall(io_wq_init);
+
+void io_wq_unshare(struct io_wq *wq)
+{
+	refcount_inc(&wq->refs);
+	set_bit(IO_WQ_BIT_EXIT, &wq->state);
+	io_wq_destroy_manager(wq);
+	clear_bit(IO_WQ_BIT_EXIT, &wq->state);
+	io_wq_put(wq);
+}

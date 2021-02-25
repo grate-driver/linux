@@ -16,6 +16,7 @@
 #include <linux/binfmts.h>
 #include <linux/cn_proc.h>
 #include <linux/uidgid.h>
+#include <linux/io_uring.h>
 
 #if 0
 #define kdebug(FMT, ...)						\
@@ -509,6 +510,7 @@ int commit_creds(struct cred *new)
 	/* release the old obj and subj refs both */
 	put_cred(old);
 	put_cred(old);
+	io_uring_unshare();
 	return 0;
 }
 EXPORT_SYMBOL(commit_creds);

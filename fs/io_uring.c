@@ -8955,6 +8955,24 @@ void __io_uring_task_cancel(void)
 	io_uring_remove_task_files(tctx);
 }
 
+void __io_uring_unshare(void)
+{
+	struct io_uring_task *tctx = current->io_uring;
+	struct file *file;
+	unsigned long index;
+
+	io_wq_unshare(tctx->io_wq);
+	if (!tctx->sqpoll)
+		return;
+
+	xa_for_each(&tctx->xa, index, file) {
+		struct io_ring_ctx *ctx = file->private_data;
+
+		if (ctx->sq_data)
+			io_sq_thread_stop(ctx->sq_data);
+	}
+}
+
 static int io_uring_flush(struct file *file, void *data)
 {
 	struct io_uring_task *tctx = current->io_uring;
@@ -9170,10 +9188,14 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 		io_cqring_overflow_flush(ctx, false, NULL, NULL);
 
 		if (unlikely(ctx->sqo_exec)) {
-			ret = io_sq_thread_fork(ctx->sq_data, ctx);
+			struct io_sq_data *sqd = ctx->sq_data;
+
+			ret = io_sq_thread_fork(sqd, ctx);
+			if (ret)
+				set_bit(IO_SQ_THREAD_SHOULD_STOP, &sqd->state);
+			complete(&sqd->startup);
 			if (ret)
 				goto out;
-			ctx->sqo_exec = 0;
 		}
 		ret = -EOWNERDEAD;
 		if (unlikely(ctx->sqo_dead))
