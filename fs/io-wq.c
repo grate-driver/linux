@@ -748,7 +748,7 @@ static int io_wq_manager(void *data)
 	sprintf(buf, "iou-mgr-%d", wq->task_pid);
 	set_task_comm(current, buf);
 	current->flags |= PF_IO_WORKER;
-	wq->manager = current;
+	wq->manager = get_task_struct(current);
 
 	complete(&wq->started);
 
@@ -764,9 +764,7 @@ static int io_wq_manager(void *data)
 	/* we might not ever have created any workers */
 	if (atomic_read(&wq->worker_refs))
 		wait_for_completion(&wq->worker_done);
-	wq->manager = NULL;
 	complete(&wq->exited);
-	io_wq_put(wq);
 	do_exit(0);
 }
 
@@ -809,8 +807,6 @@ static int io_wq_fork_manager(struct io_wq *wq)
 		return 0;
 
 	reinit_completion(&wq->worker_done);
-	clear_bit(IO_WQ_BIT_EXIT, &wq->state);
-	refcount_inc(&wq->refs);
 	current->flags |= PF_IO_WORKER;
 	ret = io_wq_fork_thread(io_wq_manager, wq);
 	current->flags &= ~PF_IO_WORKER;
@@ -1082,6 +1078,16 @@ err_wq:
 	return ERR_PTR(ret);
 }
 
+static void io_wq_destroy_manager(struct io_wq *wq)
+{
+	if (wq->manager) {
+		wake_up_process(wq->manager);
+		wait_for_completion(&wq->exited);
+		put_task_struct(wq->manager);
+		wq->manager = NULL;
+	}
+}
+
 static void io_wq_destroy(struct io_wq *wq)
 {
 	int node;
@@ -1089,10 +1095,7 @@ static void io_wq_destroy(struct io_wq *wq)
 	cpuhp_state_remove_instance_nocalls(io_wq_online, &wq->cpuhp_node);
 
 	set_bit(IO_WQ_BIT_EXIT, &wq->state);
-	if (wq->manager) {
-		wake_up_process(wq->manager);
-		wait_for_completion(&wq->exited);
-	}
+	io_wq_destroy_manager(wq);
 
 	rcu_read_lock();
 	for_each_node(node)
@@ -1110,13 +1113,19 @@ static void io_wq_destroy(struct io_wq *wq)
 	io_wq_put_hash(wq->hash);
 	kfree(wq->wqes);
 	kfree(wq);
-
 }
 
 void io_wq_put(struct io_wq *wq)
 {
 	if (refcount_dec_and_test(&wq->refs))
 		io_wq_destroy(wq);
+}
+
+void io_wq_put_and_exit(struct io_wq *wq)
+{
+	set_bit(IO_WQ_BIT_EXIT, &wq->state);
+	io_wq_destroy_manager(wq);
+	io_wq_put(wq);
 }
 
 static bool io_wq_worker_affinity(struct io_worker *worker, void *data)
