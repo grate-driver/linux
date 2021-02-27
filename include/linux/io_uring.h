@@ -44,7 +44,7 @@ static inline void io_uring_unshare(void)
 }
 static inline void io_uring_task_cancel(void)
 {
-	if (current->io_uring && !xa_empty(&current->io_uring->xa))
+	if (current->io_uring)
 		__io_uring_task_cancel();
 }
 static inline void io_uring_files_cancel(struct files_struct *files)
