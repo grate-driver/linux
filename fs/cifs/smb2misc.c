@@ -476,13 +476,17 @@ cifs_convert_path_to_utf16(const char *from, struct cifs_sb_info *cifs_sb)
 	if (from[0] == '\\')
 		start_of_path = from + 1;
 
-	/* SMB311 POSIX extensions paths do not include leading slash */
-	else if (cifs_sb_master_tlink(cifs_sb) &&
-		 cifs_sb_master_tcon(cifs_sb)->posix_extensions &&
-		 (from[0] == '/')) {
-		start_of_path = from + 1;
-	} else
-		start_of_path = from;
+	start_of_path = from;
+	/*
+	 * Only old CIFS Unix extensions paths include leading slash
+	 * Need to skip if for SMB3.1.1 POSIX Extensions and SMB1/2/3
+	 */
+	if (from[0] == '/') {
+		if (((cifs_sb->mnt_cifs_flags & CIFS_MOUNT_POSIX_PATHS) == false) ||
+		    (cifs_sb_master_tlink(cifs_sb) &&
+		     (cifs_sb_master_tcon(cifs_sb)->posix_extensions)))
+			start_of_path = from + 1;
+	}
 
 	to = cifs_strndup_to_utf16(start_of_path, PATH_MAX, &len,
 				   cifs_sb->local_nls, map_type);

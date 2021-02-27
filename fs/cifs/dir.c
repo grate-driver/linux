@@ -209,12 +209,18 @@ check_name(struct dentry *direntry, struct cifs_tcon *tcon)
 		     le32_to_cpu(tcon->fsAttrInfo.MaxPathNameComponentLength)))
 		return -ENAMETOOLONG;
 
-	if (!(cifs_sb->mnt_cifs_flags & CIFS_MOUNT_POSIX_PATHS)) {
-		for (i = 0; i < direntry->d_name.len; i++) {
-			if (direntry->d_name.name[i] == '\\') {
-				cifs_dbg(FYI, "Invalid file name\n");
-				return -EINVAL;
-			}
+	/*
+	 * SMB3.1.1 POSIX Extensions, CIFS Unix Extensions and SFM mappings
+	 * allow \ in paths (or in latter case remaps \ to 0xF026)
+	 */
+	if ((cifs_sb->mnt_cifs_flags & CIFS_MOUNT_POSIX_PATHS) ||
+	    (cifs_sb->mnt_cifs_flags & CIFS_MOUNT_MAP_SFM_CHR))
+		return 0;
+
+	for (i = 0; i < direntry->d_name.len; i++) {
+		if (direntry->d_name.name[i] == '\\') {
+			cifs_dbg(FYI, "Invalid file name\n");
+			return -EINVAL;
 		}
 	}
 	return 0;

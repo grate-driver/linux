@@ -24,6 +24,9 @@
 
 #define  UNIUPR_NOLOWER		/* Example to not expand lower case tables */
 
+/* Unicode encoding of backslash character */
+#define UCS2_SLASH 0x005C
+
 /*
  * Windows maps these to the user defined 16 bit Unicode range since they are
  * reserved symbols (along with \ and /), otherwise illegal to store
