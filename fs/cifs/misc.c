@@ -1186,7 +1186,7 @@ int update_super_prepath(struct cifs_tcon *tcon, char *prefix)
 			goto out;
 		}
 
-		convert_delimiter(cifs_sb->prepath, CIFS_DIR_SEP(cifs_sb));
+		convert_delimiter(cifs_sb->prepath, CIFS_DIR_SEP(cifs_sb)); /* BB Check this */
 	} else
 		cifs_sb->prepath = NULL;
 
