@@ -5396,7 +5396,7 @@ ibmvnic_init_fail:
 	return rc;
 }
 
-static int ibmvnic_remove(struct vio_dev *dev)
+static void ibmvnic_remove(struct vio_dev *dev)
 {
 	struct net_device *netdev = dev_get_drvdata(&dev->dev);
 	struct ibmvnic_adapter *adapter = netdev_priv(netdev);
@@ -5437,8 +5437,6 @@ static int ibmvnic_remove(struct vio_dev *dev)
 	device_remove_file(&dev->dev, &dev_attr_failover);
 	free_netdev(netdev);
 	dev_set_drvdata(&dev->dev, NULL);
-
-	return 0;
 }
 
 static ssize_t failover_store(struct device *dev, struct device_attribute *attr,
