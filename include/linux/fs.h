@@ -2878,6 +2878,7 @@ static inline int path_permission(const struct path *path, int mask)
 }
 int __check_sticky(struct user_namespace *mnt_userns, struct inode *dir,
 		   struct inode *inode);
+extern int rw_verify_area(int, struct file *, const loff_t *, size_t);
 
 static inline bool execute_ok(struct inode *inode)
 {
