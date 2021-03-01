@@ -2999,6 +2999,8 @@ int ksys_unshare(unsigned long unshare_flags)
 			commit_creds(new_cred);
 			new_cred = NULL;
 		}
+
+		io_uring_unshare();
 	}
 
 	perf_event_namespaces(current);
