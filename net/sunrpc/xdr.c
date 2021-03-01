@@ -978,7 +978,7 @@ static __be32 *xdr_get_next_encode_buffer(struct xdr_stream *xdr,
 	 * shifted this one back:
 	 */
 	xdr->p = (void *)p + frag2bytes;
-	space_left = xdr->buf->buflen - xdr->buf->len;
+	space_left = xdr->buf->buflen - xdr->buf->len - frag1bytes;
 	xdr->end = (void *)p + min_t(int, space_left, PAGE_SIZE);
 	xdr->buf->page_len += frag2bytes;
 	xdr->buf->len += nbytes;
