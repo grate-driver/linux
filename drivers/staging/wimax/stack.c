@@ -56,20 +56,6 @@ MODULE_PARM_DESC(debug,
 		 "initial debug value to set.");
 
 /*
- * Authoritative source for the RE_STATE_CHANGE attribute policy
- *
- * We don't really use it here, but /me likes to keep the definition
- * close to where the data is generated.
- */
-/*
-static const struct nla_policy wimax_gnl_re_status_change[WIMAX_GNL_ATTR_MAX + 1] = {
-	[WIMAX_GNL_STCH_STATE_OLD] = { .type = NLA_U8 },
-	[WIMAX_GNL_STCH_STATE_NEW] = { .type = NLA_U8 },
-};
-*/
-
-
-/*
  * Allocate a Report State Change message
  *
  * @header: save it, you need it for _send()
@@ -156,6 +142,7 @@ int wimax_gnl_re_state_change_send(
 {
 	int result = 0;
 	struct device *dev = wimax_dev_to_dev(wimax_dev);
+
 	d_fnstart(3, dev, "(wimax_dev %p report_skb %p)\n",
 		  wimax_dev, report_skb);
 	if (report_skb == NULL) {
@@ -362,6 +349,7 @@ EXPORT_SYMBOL_GPL(wimax_state_change);
 enum wimax_st wimax_state_get(struct wimax_dev *wimax_dev)
 {
 	enum wimax_st state;
+
 	mutex_lock(&wimax_dev->mutex);
 	state = wimax_dev->state;
 	mutex_unlock(&wimax_dev->mutex);

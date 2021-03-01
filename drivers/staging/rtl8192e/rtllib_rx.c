@@ -1850,19 +1850,20 @@ static void rtllib_parse_mife_generic(struct rtllib_device *ieee,
 			*tmp_htcap_len = min_t(u8, info_element->len,
 					       MAX_IE_LEN);
 			if (*tmp_htcap_len != 0) {
-				network->bssht.bdHTSpecVer = HT_SPEC_VER_EWC;
-				network->bssht.bdHTCapLen = min_t(u16, *tmp_htcap_len, sizeof(network->bssht.bdHTCapBuf));
-				memcpy(network->bssht.bdHTCapBuf,
+				network->bssht.bd_ht_spec_ver = HT_SPEC_VER_EWC;
+				network->bssht.bd_ht_cap_len = min_t(u16, *tmp_htcap_len,
+								  sizeof(network->bssht.bd_ht_cap_buf));
+				memcpy(network->bssht.bd_ht_cap_buf,
 				       info_element->data,
-				       network->bssht.bdHTCapLen);
+				       network->bssht.bd_ht_cap_len);
 			}
 		}
 		if (*tmp_htcap_len != 0) {
-			network->bssht.bdSupportHT = true;
-			network->bssht.bdHT1R = ((((struct ht_capab_ele *)(network->bssht.bdHTCapBuf))->MCS[1]) == 0);
+			network->bssht.bd_support_ht = true;
+			network->bssht.bd_ht_1r = ((((struct ht_capab_ele *)(network->bssht.bd_ht_cap_buf))->MCS[1]) == 0);
 		} else {
-			network->bssht.bdSupportHT = false;
-			network->bssht.bdHT1R = false;
+			network->bssht.bd_support_ht = false;
+			network->bssht.bd_ht_1r = false;
 		}
 	}
 
@@ -1876,16 +1877,17 @@ static void rtllib_parse_mife_generic(struct rtllib_device *ieee,
 			*tmp_htinfo_len = min_t(u8, info_element->len,
 						MAX_IE_LEN);
 			if (*tmp_htinfo_len != 0) {
-				network->bssht.bdHTSpecVer = HT_SPEC_VER_EWC;
-				network->bssht.bdHTInfoLen = min_t(u16, *tmp_htinfo_len, sizeof(network->bssht.bdHTInfoBuf));
-				memcpy(network->bssht.bdHTInfoBuf,
+				network->bssht.bd_ht_spec_ver = HT_SPEC_VER_EWC;
+				network->bssht.bd_ht_info_len = min_t(u16, *tmp_htinfo_len,
+								      sizeof(network->bssht.bd_ht_info_buf));
+				memcpy(network->bssht.bd_ht_info_buf,
 				       info_element->data,
-				       network->bssht.bdHTInfoLen);
+				       network->bssht.bd_ht_info_len);
 			}
 		}
 	}
 
-	if (network->bssht.bdSupportHT) {
+	if (network->bssht.bd_support_ht) {
 		if (info_element->len >= 4 &&
 		    info_element->data[0] == 0x00 &&
 		    info_element->data[1] == 0xe0 &&
@@ -1898,20 +1900,20 @@ static void rtllib_parse_mife_generic(struct rtllib_device *ieee,
 		}
 		if (ht_realtek_agg_len >= 5) {
 			network->realtek_cap_exit = true;
-			network->bssht.bdRT2RTAggregation = true;
+			network->bssht.bd_rt2rt_aggregation = true;
 
 			if ((ht_realtek_agg_buf[4] == 1) &&
 			    (ht_realtek_agg_buf[5] & 0x02))
-				network->bssht.bdRT2RTLongSlotTime = true;
+				network->bssht.bd_rt2rt_long_slot_time = true;
 
 			if ((ht_realtek_agg_buf[4] == 1) &&
 			    (ht_realtek_agg_buf[5] & RT_HT_CAP_USE_92SE))
-				network->bssht.RT2RT_HT_Mode |= RT_HT_CAP_USE_92SE;
+				network->bssht.rt2rt_ht_mode |= RT_HT_CAP_USE_92SE;
 		}
 	}
 	if (ht_realtek_agg_len >= 5) {
 		if ((ht_realtek_agg_buf[5] & RT_HT_CAP_USE_SOFTAP))
-			network->bssht.RT2RT_HT_Mode |= RT_HT_CAP_USE_SOFTAP;
+			network->bssht.rt2rt_ht_mode |= RT_HT_CAP_USE_SOFTAP;
 	}
 
 	if ((info_element->len >= 3 &&
@@ -2020,22 +2022,22 @@ static void rtllib_parse_mfie_ht_cap(struct rtllib_info_element *info_element,
 
 	*tmp_htcap_len = min_t(u8, info_element->len, MAX_IE_LEN);
 	if (*tmp_htcap_len != 0) {
-		ht->bdHTSpecVer = HT_SPEC_VER_EWC;
-		ht->bdHTCapLen = min_t(u16, *tmp_htcap_len,
-				       sizeof(ht->bdHTCapBuf));
-		memcpy(ht->bdHTCapBuf, info_element->data, ht->bdHTCapLen);
+		ht->bd_ht_spec_ver = HT_SPEC_VER_EWC;
+		ht->bd_ht_cap_len = min_t(u16, *tmp_htcap_len,
+				       sizeof(ht->bd_ht_cap_buf));
+		memcpy(ht->bd_ht_cap_buf, info_element->data, ht->bd_ht_cap_len);
 
-		ht->bdSupportHT = true;
-		ht->bdHT1R = ((((struct ht_capab_ele *)
-				ht->bdHTCapBuf))->MCS[1]) == 0;
+		ht->bd_support_ht = true;
+		ht->bd_ht_1r = ((((struct ht_capab_ele *)
+				ht->bd_ht_cap_buf))->MCS[1]) == 0;
 
-		ht->bdBandWidth = (enum ht_channel_width)
+		ht->bd_bandwidth = (enum ht_channel_width)
 					     (((struct ht_capab_ele *)
-					     (ht->bdHTCapBuf))->ChlWidth);
+					     (ht->bd_ht_cap_buf))->ChlWidth);
 	} else {
-		ht->bdSupportHT = false;
-		ht->bdHT1R = false;
-		ht->bdBandWidth = HT_CHANNEL_WIDTH_20;
+		ht->bd_support_ht = false;
+		ht->bd_ht_1r = false;
+		ht->bd_bandwidth = HT_CHANNEL_WIDTH_20;
 	}
 }
 
@@ -2232,14 +2234,14 @@ int rtllib_parse_info_param(struct rtllib_device *ieee,
 			tmp_htinfo_len = min_t(u8, info_element->len,
 					       MAX_IE_LEN);
 			if (tmp_htinfo_len) {
-				network->bssht.bdHTSpecVer = HT_SPEC_VER_IEEE;
-				network->bssht.bdHTInfoLen = tmp_htinfo_len >
-					sizeof(network->bssht.bdHTInfoBuf) ?
-					sizeof(network->bssht.bdHTInfoBuf) :
+				network->bssht.bd_ht_spec_ver = HT_SPEC_VER_IEEE;
+				network->bssht.bd_ht_info_len = tmp_htinfo_len >
+					sizeof(network->bssht.bd_ht_info_buf) ?
+					sizeof(network->bssht.bd_ht_info_buf) :
 					tmp_htinfo_len;
-				memcpy(network->bssht.bdHTInfoBuf,
+				memcpy(network->bssht.bd_ht_info_buf,
 				       info_element->data,
-				       network->bssht.bdHTInfoLen);
+				       network->bssht.bd_ht_info_len);
 			}
 			break;
 
@@ -2289,7 +2291,7 @@ int rtllib_parse_info_param(struct rtllib_device *ieee,
 
 	if (!network->atheros_cap_exist && !network->broadcom_cap_exist &&
 	    !network->cisco_cap_exist && !network->ralink_cap_exist &&
-	    !network->bssht.bdRT2RTAggregation)
+	    !network->bssht.bd_rt2rt_aggregation)
 		network->unknown_cap_exist = true;
 	else
 		network->unknown_cap_exist = false;
@@ -2380,7 +2382,7 @@ static inline int rtllib_network_init(
 		return 1;
 	}
 
-	if (network->bssht.bdSupportHT) {
+	if (network->bssht.bd_support_ht) {
 		if (network->mode == IEEE_A)
 			network->mode = IEEE_N_5G;
 		else if (network->mode & (IEEE_G | IEEE_B))
@@ -2456,16 +2458,16 @@ static inline void update_network(struct rtllib_device *ieee,
 	dst->last_dtim_sta_time = src->last_dtim_sta_time;
 	memcpy(&dst->tim, &src->tim, sizeof(struct rtllib_tim_parameters));
 
-	dst->bssht.bdSupportHT = src->bssht.bdSupportHT;
-	dst->bssht.bdRT2RTAggregation = src->bssht.bdRT2RTAggregation;
-	dst->bssht.bdHTCapLen = src->bssht.bdHTCapLen;
-	memcpy(dst->bssht.bdHTCapBuf, src->bssht.bdHTCapBuf,
-	       src->bssht.bdHTCapLen);
-	dst->bssht.bdHTInfoLen = src->bssht.bdHTInfoLen;
-	memcpy(dst->bssht.bdHTInfoBuf, src->bssht.bdHTInfoBuf,
-	       src->bssht.bdHTInfoLen);
-	dst->bssht.bdHTSpecVer = src->bssht.bdHTSpecVer;
-	dst->bssht.bdRT2RTLongSlotTime = src->bssht.bdRT2RTLongSlotTime;
+	dst->bssht.bd_support_ht = src->bssht.bd_support_ht;
+	dst->bssht.bd_rt2rt_aggregation = src->bssht.bd_rt2rt_aggregation;
+	dst->bssht.bd_ht_cap_len = src->bssht.bd_ht_cap_len;
+	memcpy(dst->bssht.bd_ht_cap_buf, src->bssht.bd_ht_cap_buf,
+	       src->bssht.bd_ht_cap_len);
+	dst->bssht.bd_ht_info_len = src->bssht.bd_ht_info_len;
+	memcpy(dst->bssht.bd_ht_info_buf, src->bssht.bd_ht_info_buf,
+	       src->bssht.bd_ht_info_len);
+	dst->bssht.bd_ht_spec_ver = src->bssht.bd_ht_spec_ver;
+	dst->bssht.bd_rt2rt_long_slot_time = src->bssht.bd_rt2rt_long_slot_time;
 	dst->broadcom_cap_exist = src->broadcom_cap_exist;
 	dst->ralink_cap_exist = src->ralink_cap_exist;
 	dst->atheros_cap_exist = src->atheros_cap_exist;
