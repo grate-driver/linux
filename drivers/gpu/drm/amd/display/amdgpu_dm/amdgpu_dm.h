@@ -440,6 +440,8 @@ struct amdgpu_dm_connector {
 #endif
 	bool force_yuv420_output;
 	struct dsc_preferred_settings dsc_settings;
+	/* Cached display modes */
+	struct drm_display_mode freesync_vid_base;
 };
 
 #define to_amdgpu_dm_connector(x) container_of(x, struct amdgpu_dm_connector, base)
@@ -500,6 +502,14 @@ struct dm_connector_state {
 	int vcpi_slots;
 	uint64_t pbn;
 };
+
+struct amdgpu_hdmi_vsdb_info {
+	unsigned int amd_vsdb_version;		/* VSDB version, should be used to determine which VSIF to send */
+	bool freesync_supported;		/* FreeSync Supported */
+	unsigned int min_refresh_rate_hz;	/* FreeSync Minimum Refresh Rate in Hz */
+	unsigned int max_refresh_rate_hz;	/* FreeSync Maximum Refresh Rate in Hz */
+};
+
 
 #define to_dm_connector_state(x)\
 	container_of((x), struct dm_connector_state, base)

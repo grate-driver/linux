@@ -48,6 +48,8 @@ struct amdgpu_vram_mgr {
 	spinlock_t lock;
 	struct list_head reservations_pending;
 	struct list_head reserved_pages;
+	struct list_head backup_pages;
+	uint32_t num_backup_pages;
 	atomic64_t usage;
 	atomic64_t vis_usage;
 };
@@ -63,10 +65,6 @@ struct amdgpu_mman {
 	struct ttm_bo_device		bdev;
 	bool				initialized;
 	void __iomem			*aper_base_kaddr;
-
-#if defined(CONFIG_DEBUG_FS)
-	struct dentry			*debugfs_entries[8];
-#endif
 
 	/* buffer handling */
 	const struct amdgpu_buffer_funcs	*buffer_funcs;
@@ -119,14 +117,15 @@ int amdgpu_vram_mgr_alloc_sgt(struct amdgpu_device *adev,
 			      struct device *dev,
 			      enum dma_data_direction dir,
 			      struct sg_table **sgt);
-void amdgpu_vram_mgr_free_sgt(struct amdgpu_device *adev,
-			      struct device *dev,
+void amdgpu_vram_mgr_free_sgt(struct device *dev,
 			      enum dma_data_direction dir,
 			      struct sg_table *sgt);
 uint64_t amdgpu_vram_mgr_usage(struct ttm_resource_manager *man);
 uint64_t amdgpu_vram_mgr_vis_usage(struct ttm_resource_manager *man);
 int amdgpu_vram_mgr_reserve_range(struct ttm_resource_manager *man,
 				  uint64_t start, uint64_t size);
+int amdgpu_vram_mgr_reserve_backup_pages(struct ttm_resource_manager *man,
+					 uint32_t num_pages);
 int amdgpu_vram_mgr_query_page_status(struct ttm_resource_manager *man,
 				      uint64_t start);
 
@@ -186,6 +185,6 @@ uint64_t amdgpu_ttm_tt_pde_flags(struct ttm_tt *ttm, struct ttm_resource *mem);
 uint64_t amdgpu_ttm_tt_pte_flags(struct amdgpu_device *adev, struct ttm_tt *ttm,
 				 struct ttm_resource *mem);
 
-int amdgpu_ttm_debugfs_init(struct amdgpu_device *adev);
+void amdgpu_ttm_debugfs_init(struct amdgpu_device *adev);
 
 #endif

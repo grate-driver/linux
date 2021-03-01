@@ -211,18 +211,18 @@ static DEVICE_ATTR(serial_number, S_IRUGO,
 		amdgpu_device_get_serial_number, NULL);
 
 /**
- * amdgpu_device_supports_atpx - Is the device a dGPU with HG/PX power control
+ * amdgpu_device_supports_px - Is the device a dGPU with ATPX power control
  *
  * @dev: drm_device pointer
  *
- * Returns true if the device is a dGPU with HG/PX power control,
+ * Returns true if the device is a dGPU with ATPX power control,
  * otherwise return false.
  */
-bool amdgpu_device_supports_atpx(struct drm_device *dev)
+bool amdgpu_device_supports_px(struct drm_device *dev)
 {
 	struct amdgpu_device *adev = drm_to_adev(dev);
 
-	if (adev->flags & AMD_IS_PX)
+	if ((adev->flags & AMD_IS_PX) && !amdgpu_is_atpx_hybrid())
 		return true;
 	return false;
 }
@@ -232,14 +232,15 @@ bool amdgpu_device_supports_atpx(struct drm_device *dev)
  *
  * @dev: drm_device pointer
  *
- * Returns true if the device is a dGPU with HG/PX power control,
+ * Returns true if the device is a dGPU with ACPI power control,
  * otherwise return false.
  */
 bool amdgpu_device_supports_boco(struct drm_device *dev)
 {
 	struct amdgpu_device *adev = drm_to_adev(dev);
 
-	if (adev->has_pr3)
+	if (adev->has_pr3 ||
+	    ((adev->flags & AMD_IS_PX) && amdgpu_is_atpx_hybrid()))
 		return true;
 	return false;
 }
@@ -1429,7 +1430,7 @@ static void amdgpu_switcheroo_set_state(struct pci_dev *pdev,
 	struct drm_device *dev = pci_get_drvdata(pdev);
 	int r;
 
-	if (amdgpu_device_supports_atpx(dev) && state == VGA_SWITCHEROO_OFF)
+	if (amdgpu_device_supports_px(dev) && state == VGA_SWITCHEROO_OFF)
 		return;
 
 	if (state == VGA_SWITCHEROO_ON) {
@@ -3209,7 +3210,7 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 	struct drm_device *ddev = adev_to_drm(adev);
 	struct pci_dev *pdev = adev->pdev;
 	int r, i;
-	bool atpx = false;
+	bool px = false;
 	u32 max_MBps;
 
 	adev->shutdown = false;
@@ -3381,16 +3382,12 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 	if ((adev->pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA)
 		vga_client_register(adev->pdev, adev, NULL, amdgpu_device_vga_set_decode);
 
-	if (amdgpu_device_supports_atpx(ddev))
-		atpx = true;
-	if (amdgpu_has_atpx() &&
-	    (amdgpu_is_atpx_hybrid() ||
-	     amdgpu_has_atpx_dgpu_power_cntl()) &&
-	    !pci_is_thunderbolt_attached(adev->pdev))
+	if (amdgpu_device_supports_px(ddev)) {
+		px = true;
 		vga_switcheroo_register_client(adev->pdev,
-					       &amdgpu_switcheroo_ops, atpx);
-	if (atpx)
+					       &amdgpu_switcheroo_ops, px);
 		vga_switcheroo_init_domain_pm_ops(adev->dev, &adev->vga_pm_domain);
+	}
 
 	if (amdgpu_emu_mode == 1) {
 		/* post the asic on emulation mode */
@@ -3572,7 +3569,7 @@ fence_driver_init:
 
 failed:
 	amdgpu_vf_error_trans_all(adev);
-	if (atpx)
+	if (px)
 		vga_switcheroo_fini_domain_pm_ops(adev->dev);
 
 failed_unmap:
@@ -3631,13 +3628,10 @@ void amdgpu_device_fini(struct amdgpu_device *adev)
 
 	kfree(adev->bios);
 	adev->bios = NULL;
-	if (amdgpu_has_atpx() &&
-	    (amdgpu_is_atpx_hybrid() ||
-	     amdgpu_has_atpx_dgpu_power_cntl()) &&
-	    !pci_is_thunderbolt_attached(adev->pdev))
+	if (amdgpu_device_supports_px(adev_to_drm(adev))) {
 		vga_switcheroo_unregister_client(adev->pdev);
-	if (amdgpu_device_supports_atpx(adev_to_drm(adev)))
 		vga_switcheroo_fini_domain_pm_ops(adev->dev);
+	}
 	if ((adev->pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA)
 		vga_client_register(adev->pdev, NULL, NULL, NULL);
 	if (adev->rio_mem)
@@ -4399,7 +4393,7 @@ static int amdgpu_do_asic_reset(struct amdgpu_hive_info *hive,
 				 * bad_page_threshold value to fix this once
 				 * probing driver again.
 				 */
-				if (!amdgpu_ras_check_err_threshold(tmp_adev)) {
+				if (!amdgpu_ras_eeprom_check_err_threshold(tmp_adev)) {
 					/* must succeed. */
 					amdgpu_ras_resume(tmp_adev);
 				} else {
@@ -4449,7 +4443,6 @@ static bool amdgpu_device_lock_adev(struct amdgpu_device *adev,
 		down_write(&adev->reset_sem);
 	}
 
-	atomic_inc(&adev->gpu_reset_counter);
 	switch (amdgpu_asic_reset_method(adev)) {
 	case AMD_RESET_METHOD_MODE1:
 		adev->mp1_state = PP_MP1_STATE_SHUTDOWN;
@@ -4710,6 +4703,7 @@ int amdgpu_device_gpu_recover(struct amdgpu_device *adev,
 			if (need_emergency_restart)
 				amdgpu_job_stop_all_jobs_on_sched(&ring->sched);
 		}
+		atomic_inc(&tmp_adev->gpu_reset_counter);
 	}
 
 	if (need_emergency_restart)
@@ -5052,6 +5046,7 @@ pci_ers_result_t amdgpu_pci_error_detected(struct pci_dev *pdev, pci_channel_sta
 
 			drm_sched_stop(&ring->sched, NULL);
 		}
+		atomic_inc(&adev->gpu_reset_counter);
 		return PCI_ERS_RESULT_NEED_RESET;
 	case pci_channel_io_perm_failure:
 		/* Permanent error, prepare for device removal */
