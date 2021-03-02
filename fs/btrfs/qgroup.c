@@ -3617,8 +3617,7 @@ cleanup:
 	qgroup_unreserve_range(inode, reserved, start, len);
 out:
 	if (new_reserved) {
-		extent_changeset_release(reserved);
-		kfree(reserved);
+		extent_changeset_free(reserved);
 		*reserved_ret = NULL;
 	}
 	return ret;
