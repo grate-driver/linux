@@ -1172,9 +1172,9 @@
 			vcc1-supply = <&vdd_5v0_bat>;
 			vcc2-supply = <&vdd_5v0_bat>;
 			vcc3-supply = <&vdd_1v8_vio>;
-			vcc4-supply = <&vdd_5v0_bat>;
+			vcc4-supply = <&vdd_5v0_sys>;
 			vcc5-supply = <&vdd_5v0_bat>;
-			vcc6-supply = <&vddio_ddr>;
+			vcc6-supply = <&vdd_3v3_sys>;
 			vcc7-supply = <&vdd_5v0_bat>;
 			vccio-supply = <&vdd_5v0_bat>;
 
@@ -1185,7 +1185,7 @@
 			};
 
 			regulators {
-				/* vdd1 is not used by transformers */
+				/* VDD1 is not used by Transformers */
 
 				vddio_ddr: vdd2 {
 					regulator-name = "vddio_ddr";
@@ -1247,7 +1247,7 @@
 					regulator-always-on;
 				};
 
-				/* ldo5 is not used by transformers */
+				/* LDO5 is not used by Transformers */
 
 				ldo6 {
 					regulator-name = "avdd_dsi_csi,pwrdet_mipi";
@@ -1473,7 +1473,7 @@
 		vmmc-supply = <&vdd_3v3_com>;
 		vqmmc-supply = <&vdd_1v8_vio>;
 
-		/* Azurewave AW-NH615 BCM4329 or AW-NH665 BCM4330 */
+		/* Azurewave AW-NH615 BCM4329B1 or AW-NH665 BCM4330B1 */
 		wifi@1 {
 			compatible = "brcm,bcm4329-fmac";
 			reg = <1>;
