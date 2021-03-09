@@ -1512,6 +1512,9 @@
 	sdmmc1: mmc@78000000 {
 		status = "okay";
 
+		/* Mainline does not support SDR104 mode on transformers */
+		max-frequency = <104000000>;
+
 		cd-gpios = <&gpio TEGRA_GPIO(I, 5) GPIO_ACTIVE_LOW>;
 		bus-width = <4>;
 
