@@ -21,6 +21,7 @@ struct btrfs_subpage {
 	u16 uptodate_bitmap;
 	u16 error_bitmap;
 	u16 dirty_bitmap;
+	u16 writeback_bitmap;
 	union {
 		/*
 		 * Structures only used by metadata
@@ -89,6 +90,7 @@ bool btrfs_page_test_##name(const struct btrfs_fs_info *fs_info,	\
 DECLARE_BTRFS_SUBPAGE_OPS(uptodate);
 DECLARE_BTRFS_SUBPAGE_OPS(error);
 DECLARE_BTRFS_SUBPAGE_OPS(dirty);
+DECLARE_BTRFS_SUBPAGE_OPS(writeback);
 
 /*
  * Extra clear_and_test function for subpage dirty bitmap.
