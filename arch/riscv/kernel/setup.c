@@ -50,7 +50,11 @@ struct screen_info screen_info __section(".data") = {
  * This is used before the kernel initializes the BSS so it can't be in the
  * BSS.
  */
-atomic_t hart_lottery __section(".sdata");
+atomic_t hart_lottery __section(".sdata")
+#ifdef CONFIG_XIP_KERNEL
+= ATOMIC_INIT(0xC001BEEF)
+#endif
+;
 unsigned long boot_cpu_hartid;
 static DEFINE_PER_CPU(struct cpu, cpu_devices);
 
@@ -254,7 +258,7 @@ void __init setup_arch(char **cmdline_p)
 #if IS_ENABLED(CONFIG_BUILTIN_DTB)
 	unflatten_and_copy_device_tree();
 #else
-	if (early_init_dt_verify(__va(dtb_early_pa)))
+	if (early_init_dt_verify(dtb_early_va))
 		unflatten_device_tree();
 	else
 		pr_err("No DTB found in kernel mappings\n");

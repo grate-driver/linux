@@ -53,10 +53,20 @@ static int sbi_hsm_hart_get_status(unsigned long hartid)
 }
 #endif
 
+static inline unsigned long get_secondary_start_phys(void)
+{
+#ifdef CONFIG_XIP_KERNEL
+	return XIP_PHYS_ADDR(secondary_start_sbi);
+#else
+	return __pa_symbol(secondary_start_sbi);
+#endif
+}
+
+
 static int sbi_cpu_start(unsigned int cpuid, struct task_struct *tidle)
 {
 	int rc;
-	unsigned long boot_addr = __pa_symbol(secondary_start_sbi);
+	unsigned long boot_addr = get_secondary_start_phys();
 	int hartid = cpuid_to_hartid_map(cpuid);
 
 	cpu_update_secondary_bootdata(cpuid, tidle);
