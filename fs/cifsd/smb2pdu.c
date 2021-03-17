@@ -1709,7 +1709,7 @@ int smb2_tree_connect(struct ksmbd_work *work)
 		goto out_err1;
 	}
 
-	name = extract_sharename(treename);
+	name = ksmbd_extract_sharename(treename);
 	if (IS_ERR(name)) {
 		status.ret = KSMBD_TREE_CONN_STATUS_ERROR;
 		goto out_err1;
@@ -2508,7 +2508,7 @@ int smb2_open(struct ksmbd_work *work)
 	if (req->NameLength) {
 		if ((req->CreateOptions & FILE_DIRECTORY_FILE_LE) &&
 			*(char *)req->Buffer == '\\') {
-			ksmbd_err("not allow directory name included leadning slash\n");
+			ksmbd_err("not allow directory name included leading slash\n");
 			rc = -EINVAL;
 			goto err_out1;
 		}
@@ -2636,7 +2636,7 @@ int smb2_open(struct ksmbd_work *work)
 	}
 
 	if (!(req->DesiredAccess & DESIRED_ACCESS_MASK)) {
-		ksmbd_err("Invalid disired access : 0x%x\n",
+		ksmbd_err("Invalid desired access : 0x%x\n",
 			le32_to_cpu(req->DesiredAccess));
 		rc = -EACCES;
 		goto err_out1;
