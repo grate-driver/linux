@@ -2123,6 +2123,10 @@ config TEST_KSTRTOX
 config TEST_PRINTF
 	tristate "Test printf() family of functions at runtime"
 
+config TEST_SLUB
+	tristate "Test SLUB cache errors at runtime"
+	depends on SLUB_DEBUG
+
 config TEST_BITMAP
 	tristate "Test bitmap_*() family of functions at runtime"
 	help
