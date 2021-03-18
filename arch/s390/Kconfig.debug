@@ -5,3 +5,13 @@ config TRACE_IRQFLAGS_SUPPORT
 
 config EARLY_PRINTK
 	def_bool y
+
+config DEBUG_ENTRY
+	bool "Debug low-level entry code"
+	depends on DEBUG_KERNEL
+	help
+	  This option enables sanity checks in s390 low-level entry code.
+	  Some of these sanity checks may slow down kernel entries and
+	  exits or otherwise impact performance.
+
+	  If unsure, say N.

@@ -50,21 +50,13 @@
 #include <asm/rtas.h>
 #include <asm/kasan.h>
 #include <asm/svm.h>
+#include <asm/mmzone.h>
 
 #include <mm/mmu_decl.h>
 
-#ifndef CPU_FTR_COHERENT_ICACHE
-#define CPU_FTR_COHERENT_ICACHE	0	/* XXX for now */
-#define CPU_FTR_NOEXECUTE	0
-#endif
-
+static DEFINE_MUTEX(linear_mapping_mutex);
 unsigned long long memory_limit;
 bool init_mem_is_free;
-
-#ifdef CONFIG_HIGHMEM
-pte_t *kmap_pte;
-EXPORT_SYMBOL(kmap_pte);
-#endif
 
 pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
 			      unsigned long size, pgprot_t vma_prot)
@@ -99,25 +91,42 @@ int __weak remove_section_mapping(unsigned long start, unsigned long end)
 	return -ENODEV;
 }
 
-#define FLUSH_CHUNK_SIZE SZ_1G
-/**
- * flush_dcache_range_chunked(): Write any modified data cache blocks out to
- * memory and invalidate them, in chunks of up to FLUSH_CHUNK_SIZE
- * Does not invalidate the corresponding instruction cache blocks.
- *
- * @start: the start address
- * @stop: the stop address (exclusive)
- * @chunk: the max size of the chunks
- */
-static void flush_dcache_range_chunked(unsigned long start, unsigned long stop,
-				       unsigned long chunk)
+int __ref arch_create_linear_mapping(int nid, u64 start, u64 size,
+				     struct mhp_params *params)
 {
-	unsigned long i;
+	int rc;
 
-	for (i = start; i < stop; i += chunk) {
-		flush_dcache_range(i, min(stop, i + chunk));
-		cond_resched();
+	start = (unsigned long)__va(start);
+	mutex_lock(&linear_mapping_mutex);
+	rc = create_section_mapping(start, start + size, nid,
+				    params->pgprot);
+	mutex_unlock(&linear_mapping_mutex);
+	if (rc) {
+		pr_warn("Unable to create linear mapping for 0x%llx..0x%llx: %d\n",
+			start, start + size, rc);
+		return -EFAULT;
 	}
+	return 0;
+}
+
+void __ref arch_remove_linear_mapping(u64 start, u64 size)
+{
+	int ret;
+
+	/* Remove htab bolted mappings for this section of memory */
+	start = (unsigned long)__va(start);
+
+	mutex_lock(&linear_mapping_mutex);
+	ret = remove_section_mapping(start, start + size);
+	mutex_unlock(&linear_mapping_mutex);
+	if (ret)
+		pr_warn("Unable to remove linear mapping for 0x%llx..0x%llx: %d\n",
+			start, start + size, ret);
+
+	/* Ensure all vmalloc mappings are flushed in case they also
+	 * hit that section of memory
+	 */
+	vm_unmap_aliases();
 }
 
 int __ref arch_add_memory(int nid, u64 start, u64 size,
@@ -127,38 +136,23 @@ int __ref arch_add_memory(int nid, u64 start, u64 size,
 	unsigned long nr_pages = size >> PAGE_SHIFT;
 	int rc;
 
-	start = (unsigned long)__va(start);
-	rc = create_section_mapping(start, start + size, nid,
-				    params->pgprot);
-	if (rc) {
-		pr_warn("Unable to create mapping for hot added memory 0x%llx..0x%llx: %d\n",
-			start, start + size, rc);
-		return -EFAULT;
-	}
-
-	return __add_pages(nid, start_pfn, nr_pages, params);
+	rc = arch_create_linear_mapping(nid, start, size, params);
+	if (rc)
+		return rc;
+	rc = __add_pages(nid, start_pfn, nr_pages, params);
+	if (rc)
+		arch_remove_linear_mapping(start, size);
+	return rc;
 }
 
 void __ref arch_remove_memory(int nid, u64 start, u64 size,
-			     struct vmem_altmap *altmap)
+			      struct vmem_altmap *altmap)
 {
 	unsigned long start_pfn = start >> PAGE_SHIFT;
 	unsigned long nr_pages = size >> PAGE_SHIFT;
-	int ret;
 
 	__remove_pages(start_pfn, nr_pages, altmap);
-
-	/* Remove htab bolted mappings for this section of memory */
-	start = (unsigned long)__va(start);
-	flush_dcache_range_chunked(start, start + size, FLUSH_CHUNK_SIZE);
-
-	ret = remove_section_mapping(start, start + size);
-	WARN_ON_ONCE(ret);
-
-	/* Ensure all vmalloc mappings are flushed in case they also
-	 * hit that section of memory
-	 */
-	vm_unmap_aliases();
+	arch_remove_linear_mapping(start, size);
 }
 #endif
 
@@ -235,8 +229,6 @@ void __init paging_init(void)
 
 	map_kernel_page(PKMAP_BASE, 0, __pgprot(0));	/* XXX gross */
 	pkmap_page_table = virt_to_kpte(PKMAP_BASE);
-
-	kmap_pte = virt_to_kpte(__fix_to_virt(FIX_KMAP_BEGIN));
 #endif /* CONFIG_HIGHMEM */
 
 	printk(KERN_DEBUG "Top of RAM: 0x%llx, Total RAM: 0x%llx\n",
@@ -475,19 +467,35 @@ void flush_dcache_page(struct page *page)
 	if (cpu_has_feature(CPU_FTR_COHERENT_ICACHE))
 		return;
 	/* avoid an atomic op if possible */
-	if (test_bit(PG_arch_1, &page->flags))
-		clear_bit(PG_arch_1, &page->flags);
+	if (test_bit(PG_dcache_clean, &page->flags))
+		clear_bit(PG_dcache_clean, &page->flags);
 }
 EXPORT_SYMBOL(flush_dcache_page);
 
+static void flush_dcache_icache_hugepage(struct page *page)
+{
+	int i;
+	void *start;
+
+	BUG_ON(!PageCompound(page));
+
+	for (i = 0; i < compound_nr(page); i++) {
+		if (!PageHighMem(page)) {
+			__flush_dcache_icache(page_address(page+i));
+		} else {
+			start = kmap_atomic(page+i);
+			__flush_dcache_icache(start);
+			kunmap_atomic(start);
+		}
+	}
+}
+
 void flush_dcache_icache_page(struct page *page)
 {
-#ifdef CONFIG_HUGETLB_PAGE
-	if (PageCompound(page)) {
-		flush_dcache_icache_hugepage(page);
-		return;
-	}
-#endif
+
+	if (PageCompound(page))
+		return flush_dcache_icache_hugepage(page);
+
 #if defined(CONFIG_PPC_8xx) || defined(CONFIG_PPC64)
 	/* On 8xx there is no need to kmap since highmem is not supported */
 	__flush_dcache_icache(page_address(page));
@@ -531,7 +539,7 @@ void __flush_dcache_icache(void *p)
 	 * space occurs, before returning to user space.
 	 */
 
-	if (cpu_has_feature(MMU_FTR_TYPE_44x))
+	if (mmu_has_feature(MMU_FTR_TYPE_44x))
 		return;
 
 	invalidate_icache_range(addr, addr + PAGE_SIZE);

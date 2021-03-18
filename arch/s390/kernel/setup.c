@@ -49,6 +49,7 @@
 #include <linux/memory.h>
 #include <linux/compat.h>
 #include <linux/start_kernel.h>
+#include <linux/hugetlb.h>
 
 #include <asm/boot_data.h>
 #include <asm/ipl.h>
@@ -94,10 +95,8 @@ char elf_platform[ELF_PLATFORM_SIZE];
 unsigned long int_hwcap = 0;
 
 int __bootdata(noexec_disabled);
-int __bootdata(memory_end_set);
-unsigned long __bootdata(memory_end);
+unsigned long __bootdata(ident_map_size);
 unsigned long __bootdata(vmalloc_size);
-unsigned long __bootdata(max_physmem_end);
 struct mem_detect_info __bootdata(mem_detect);
 
 struct exception_table_entry *__bootdata_preserved(__start_dma_ex_table);
@@ -339,7 +338,7 @@ int __init arch_early_irq_init(void)
 	return 0;
 }
 
-static int __init async_stack_realloc(void)
+static int __init stack_realloc(void)
 {
 	unsigned long old, new;
 
@@ -347,11 +346,18 @@ static int __init async_stack_realloc(void)
 	new = stack_alloc();
 	if (!new)
 		panic("Couldn't allocate async stack");
-	S390_lowcore.async_stack = new + STACK_INIT_OFFSET;
+	WRITE_ONCE(S390_lowcore.async_stack, new + STACK_INIT_OFFSET);
 	free_pages(old, THREAD_SIZE_ORDER);
+
+	old = S390_lowcore.mcck_stack - STACK_INIT_OFFSET;
+	new = stack_alloc();
+	if (!new)
+		panic("Couldn't allocate machine check stack");
+	WRITE_ONCE(S390_lowcore.mcck_stack, new + STACK_INIT_OFFSET);
+	memblock_free(old, THREAD_SIZE);
 	return 0;
 }
-early_initcall(async_stack_realloc);
+early_initcall(stack_realloc);
 
 void __init arch_call_rest_init(void)
 {
@@ -373,6 +379,7 @@ void __init arch_call_rest_init(void)
 static void __init setup_lowcore_dat_off(void)
 {
 	unsigned long int_psw_mask = PSW_KERNEL_BITS;
+	unsigned long mcck_stack;
 	struct lowcore *lc;
 
 	if (IS_ENABLED(CONFIG_KASAN))
@@ -412,8 +419,7 @@ static void __init setup_lowcore_dat_off(void)
 	memcpy(lc->alt_stfle_fac_list, S390_lowcore.alt_stfle_fac_list,
 	       sizeof(lc->alt_stfle_fac_list));
 	nmi_alloc_boot_cpu(lc);
-	lc->sync_enter_timer = S390_lowcore.sync_enter_timer;
-	lc->async_enter_timer = S390_lowcore.async_enter_timer;
+	lc->sys_enter_timer = S390_lowcore.sys_enter_timer;
 	lc->exit_timer = S390_lowcore.exit_timer;
 	lc->user_timer = S390_lowcore.user_timer;
 	lc->system_timer = S390_lowcore.system_timer;
@@ -440,6 +446,12 @@ static void __init setup_lowcore_dat_off(void)
 	lc->restart_fn = (unsigned long) do_restart;
 	lc->restart_data = 0;
 	lc->restart_source = -1UL;
+
+	mcck_stack = (unsigned long)memblock_alloc(THREAD_SIZE, THREAD_SIZE);
+	if (!mcck_stack)
+		panic("%s: Failed to allocate %lu bytes align=0x%lx\n",
+		      __func__, THREAD_SIZE, THREAD_SIZE);
+	lc->mcck_stack = mcck_stack + STACK_INIT_OFFSET;
 
 	/* Setup absolute zero lowcore */
 	mem_assign_absolute(S390_lowcore.restart_stack, lc->restart_stack);
@@ -556,24 +568,25 @@ static void __init setup_resources(void)
 #endif
 }
 
-static void __init setup_memory_end(void)
+static void __init setup_ident_map_size(void)
 {
 	unsigned long vmax, tmp;
 
 	/* Choose kernel address space layout: 3 or 4 levels. */
-	tmp = (memory_end ?: max_physmem_end) / PAGE_SIZE;
+	tmp = ident_map_size / PAGE_SIZE;
 	tmp = tmp * (sizeof(struct page) + PAGE_SIZE);
 	if (tmp + vmalloc_size + MODULES_LEN <= _REGION2_SIZE)
 		vmax = _REGION2_SIZE; /* 3-level kernel page table */
 	else
 		vmax = _REGION1_SIZE; /* 4-level kernel page table */
-	if (is_prot_virt_host())
-		adjust_to_uv_max(&vmax);
-#ifdef CONFIG_KASAN
-	vmax = kasan_vmax;
-#endif
 	/* module area is at the end of the kernel address space. */
 	MODULES_END = vmax;
+	if (is_prot_virt_host())
+		adjust_to_uv_max(&MODULES_END);
+#ifdef CONFIG_KASAN
+	vmax = _REGION1_SIZE;
+	MODULES_END = kasan_vmax;
+#endif
 	MODULES_VADDR = MODULES_END - MODULES_LEN;
 	VMALLOC_END = MODULES_VADDR;
 	VMALLOC_START = VMALLOC_END - vmalloc_size;
@@ -587,22 +600,22 @@ static void __init setup_memory_end(void)
 	tmp = min(tmp, 1UL << MAX_PHYSMEM_BITS);
 	vmemmap = (struct page *) tmp;
 
-	/* Take care that memory_end is set and <= vmemmap */
-	memory_end = min(memory_end ?: max_physmem_end, (unsigned long)vmemmap);
+	/* Take care that ident_map_size <= vmemmap */
+	ident_map_size = min(ident_map_size, (unsigned long)vmemmap);
 #ifdef CONFIG_KASAN
-	memory_end = min(memory_end, KASAN_SHADOW_START);
+	ident_map_size = min(ident_map_size, KASAN_SHADOW_START);
 #endif
-	vmemmap_size = SECTION_ALIGN_UP(memory_end / PAGE_SIZE) * sizeof(struct page);
+	vmemmap_size = SECTION_ALIGN_UP(ident_map_size / PAGE_SIZE) * sizeof(struct page);
 #ifdef CONFIG_KASAN
 	/* move vmemmap above kasan shadow only if stands in a way */
 	if (KASAN_SHADOW_END > (unsigned long)vmemmap &&
 	    (unsigned long)vmemmap + vmemmap_size > KASAN_SHADOW_START)
 		vmemmap = max(vmemmap, (struct page *)KASAN_SHADOW_END);
 #endif
-	max_pfn = max_low_pfn = PFN_DOWN(memory_end);
-	memblock_remove(memory_end, ULONG_MAX);
+	max_pfn = max_low_pfn = PFN_DOWN(ident_map_size);
+	memblock_remove(ident_map_size, ULONG_MAX);
 
-	pr_notice("The maximum memory size is %luMB\n", memory_end >> 20);
+	pr_notice("The maximum memory size is %luMB\n", ident_map_size >> 20);
 }
 
 #ifdef CONFIG_CRASH_DUMP
@@ -632,12 +645,11 @@ static struct notifier_block kdump_mem_nb = {
 #endif
 
 /*
- * Make sure that the area behind memory_end is protected
+ * Make sure that the area above identity mapping is protected
  */
-static void __init reserve_memory_end(void)
+static void __init reserve_above_ident_map(void)
 {
-	if (memory_end_set)
-		memblock_reserve(memory_end, ULONG_MAX);
+	memblock_reserve(ident_map_size, ULONG_MAX);
 }
 
 /*
@@ -674,7 +686,7 @@ static void __init reserve_crashkernel(void)
 	phys_addr_t low, high;
 	int rc;
 
-	rc = parse_crashkernel(boot_command_line, memory_end, &crash_size,
+	rc = parse_crashkernel(boot_command_line, ident_map_size, &crash_size,
 			       &crash_base);
 
 	crash_base = ALIGN(crash_base, KEXEC_CRASH_MEM_ALIGN);
@@ -1128,7 +1140,7 @@ void __init setup_arch(char **cmdline_p)
 	setup_control_program_code();
 
 	/* Do some memory reservations *before* memory is added to memblock */
-	reserve_memory_end();
+	reserve_above_ident_map();
 	reserve_oldmem();
 	reserve_kernel();
 	reserve_initrd();
@@ -1143,10 +1155,12 @@ void __init setup_arch(char **cmdline_p)
 	remove_oldmem();
 
 	setup_uv();
-	setup_memory_end();
+	setup_ident_map_size();
 	setup_memory();
-	dma_contiguous_reserve(memory_end);
+	dma_contiguous_reserve(ident_map_size);
 	vmcp_cma_reserve();
+	if (MACHINE_HAS_EDAT2)
+		hugetlb_cma_reserve(PUD_SHIFT - PAGE_SHIFT);
 
 	check_initrd();
 	reserve_crashkernel();

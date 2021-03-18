@@ -4,6 +4,7 @@
 
 #include <linux/atomic.h>
 #include <linux/list.h>
+#include <linux/math.h>
 #include <linux/rculist.h>
 #include <linux/rculist_bl.h>
 #include <linux/spinlock.h>
@@ -260,6 +261,8 @@ extern void d_tmpfile(struct dentry *, struct inode *);
 
 extern struct dentry *d_find_alias(struct inode *);
 extern void d_prune_aliases(struct inode *);
+
+extern struct dentry *d_find_alias_rcu(struct inode *);
 
 /* test whether we have any submounts in a subdir tree */
 extern int path_has_submounts(const struct path *);

@@ -463,7 +463,7 @@ void pseries_little_endian_exceptions(void)
 }
 #endif
 
-static void __init find_and_init_phbs(void)
+static void __init pSeries_discover_phbs(void)
 {
 	struct device_node *node;
 	struct pci_controller *phb;
@@ -481,6 +481,9 @@ static void __init find_and_init_phbs(void)
 		pci_process_bridge_OF_ranges(phb, node, 0);
 		isa_bridge_find_early(phb);
 		phb->controller_ops = pseries_pci_controller_ops;
+
+		/* create pci_dn's for DT nodes under this PHB */
+		pci_devs_phb_init_dynamic(phb);
 	}
 
 	of_node_put(root);
@@ -542,7 +545,7 @@ static void init_cpu_char_feature_flags(struct h_cpu_char_result *result)
 		security_ftr_clear(SEC_FTR_BNDS_CHK_SPEC_BAR);
 }
 
-void pseries_setup_rfi_flush(void)
+void pseries_setup_security_mitigations(void)
 {
 	struct h_cpu_char_result result;
 	enum l1d_flush_type types;
@@ -579,6 +582,16 @@ void pseries_setup_rfi_flush(void)
 
 	setup_rfi_flush(types, enable);
 	setup_count_cache_flush();
+
+	enable = security_ftr_enabled(SEC_FTR_FAVOUR_SECURITY) &&
+		 security_ftr_enabled(SEC_FTR_L1D_FLUSH_ENTRY);
+	setup_entry_flush(enable);
+
+	enable = security_ftr_enabled(SEC_FTR_FAVOUR_SECURITY) &&
+		 security_ftr_enabled(SEC_FTR_L1D_FLUSH_UACCESS);
+	setup_uaccess_flush(enable);
+
+	setup_stf_barrier();
 }
 
 #ifdef CONFIG_PCI_IOV
@@ -597,8 +610,8 @@ enum get_iov_fw_value_index {
 	WDW_SIZE      = 3     /*  Get Window Size */
 };
 
-resource_size_t pseries_get_iov_fw_value(struct pci_dev *dev, int resno,
-					 enum get_iov_fw_value_index value)
+static resource_size_t pseries_get_iov_fw_value(struct pci_dev *dev, int resno,
+						enum get_iov_fw_value_index value)
 {
 	const int *indexes;
 	struct device_node *dn = pci_device_to_OF_node(dev);
@@ -633,7 +646,7 @@ resource_size_t pseries_get_iov_fw_value(struct pci_dev *dev, int resno,
 	return ret;
 }
 
-void of_pci_set_vf_bar_size(struct pci_dev *dev, const int *indexes)
+static void of_pci_set_vf_bar_size(struct pci_dev *dev, const int *indexes)
 {
 	struct resource *res;
 	resource_size_t base, size;
@@ -655,7 +668,7 @@ void of_pci_set_vf_bar_size(struct pci_dev *dev, const int *indexes)
 	}
 }
 
-void of_pci_parse_iov_addrs(struct pci_dev *dev, const int *indexes)
+static void of_pci_parse_iov_addrs(struct pci_dev *dev, const int *indexes)
 {
 	struct resource *res, *root, *conflict;
 	resource_size_t base, size;
@@ -768,8 +781,7 @@ static void __init pSeries_setup_arch(void)
 
 	fwnmi_init();
 
-	pseries_setup_rfi_flush();
-	setup_stf_barrier();
+	pseries_setup_security_mitigations();
 	pseries_lpar_read_hblkrm_characteristics();
 
 	/* By default, only probe PCI (can be overridden by rtas_pci) */
@@ -777,7 +789,6 @@ static void __init pSeries_setup_arch(void)
 
 	/* Find and initialize PCI host bridges */
 	init_pci_config_tokens();
-	find_and_init_phbs();
 	of_reconfig_notifier_register(&pci_dn_reconfig_nb);
 
 	pSeries_nvram_init();
@@ -1041,6 +1052,7 @@ define_machine(pseries) {
 	.init_IRQ		= pseries_init_irq,
 	.show_cpuinfo		= pSeries_show_cpuinfo,
 	.log_error		= pSeries_log_error,
+	.discover_phbs		= pSeries_discover_phbs,
 	.pcibios_fixup		= pSeries_final_fixup,
 	.restart		= rtas_restart,
 	.halt			= rtas_halt,

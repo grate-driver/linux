@@ -173,12 +173,13 @@ static int xgene_pcie_config_read32(struct pci_bus *bus, unsigned int devfn,
 
 	/*
 	 * The v1 controller has a bug in its Configuration Request
-	 * Retry Status (CRS) logic: when CRS is enabled and we read the
-	 * Vendor and Device ID of a non-existent device, the controller
-	 * fabricates return data of 0xFFFF0001 ("device exists but is not
-	 * ready") instead of 0xFFFFFFFF ("device does not exist").  This
-	 * causes the PCI core to retry the read until it times out.
-	 * Avoid this by not claiming to support CRS.
+	 * Retry Status (CRS) logic: when CRS Software Visibility is
+	 * enabled and we read the Vendor and Device ID of a non-existent
+	 * device, the controller fabricates return data of 0xFFFF0001
+	 * ("device exists but is not ready") instead of 0xFFFFFFFF
+	 * ("device does not exist").  This causes the PCI core to retry
+	 * the read until it times out.  Avoid this by not claiming to
+	 * support CRS SV.
 	 */
 	if (pci_is_root_bus(bus) && (port->version == XGENE_PCIE_IP_VER_1) &&
 	    ((where & ~0x3) == XGENE_V1_PCI_EXP_CAP + PCI_EXP_RTCTL))
@@ -257,7 +258,6 @@ static int xgene_v1_pcie_ecam_init(struct pci_config_window *cfg)
 }
 
 const struct pci_ecam_ops xgene_v1_pcie_ecam_ops = {
-	.bus_shift	= 16,
 	.init		= xgene_v1_pcie_ecam_init,
 	.pci_ops	= {
 		.map_bus	= xgene_pcie_map_bus,
@@ -272,7 +272,6 @@ static int xgene_v2_pcie_ecam_init(struct pci_config_window *cfg)
 }
 
 const struct pci_ecam_ops xgene_v2_pcie_ecam_ops = {
-	.bus_shift	= 16,
 	.init		= xgene_v2_pcie_ecam_init,
 	.pci_ops	= {
 		.map_bus	= xgene_pcie_map_bus,

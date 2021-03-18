@@ -55,12 +55,17 @@ int nvme_update_zone_info(struct nvme_ns *ns, unsigned lbaf)
 	int status;
 
 	/* Driver requires zone append support */
-	if (!(le32_to_cpu(log->iocs[nvme_cmd_zone_append]) &
+	if ((le32_to_cpu(log->iocs[nvme_cmd_zone_append]) &
 			NVME_CMD_EFFECTS_CSUPP)) {
+		if (test_and_clear_bit(NVME_NS_FORCE_RO, &ns->flags))
+			dev_warn(ns->ctrl->device,
+				 "Zone Append supported for zoned namespace:%d. Remove read-only mode\n",
+				 ns->head->ns_id);
+	} else {
+		set_bit(NVME_NS_FORCE_RO, &ns->flags);
 		dev_warn(ns->ctrl->device,
-			"append not supported for zoned namespace:%d\n",
-			ns->head->ns_id);
-		return -EINVAL;
+			 "Zone Append not supported for zoned namespace:%d. Forcing to read-only mode\n",
+			 ns->head->ns_id);
 	}
 
 	/* Lazily query controller append limit for the first zoned namespace */
@@ -104,7 +109,7 @@ int nvme_update_zone_info(struct nvme_ns *ns, unsigned lbaf)
 		goto free_data;
 	}
 
-	q->limits.zoned = BLK_ZONED_HM;
+	blk_queue_set_zoned(ns->disk, BLK_ZONED_HM);
 	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, q);
 	blk_queue_max_open_zones(q, le32_to_cpu(id->mor) + 1);
 	blk_queue_max_active_zones(q, le32_to_cpu(id->mar) + 1);

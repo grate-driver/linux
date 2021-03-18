@@ -147,9 +147,8 @@ struct enetc_msg_swbd {
 
 #define ENETC_REV1	0x1
 enum enetc_errata {
-	ENETC_ERR_TXCSUM	= BIT(0),
-	ENETC_ERR_VLAN_ISOL	= BIT(1),
-	ENETC_ERR_UCMCSWP	= BIT(2),
+	ENETC_ERR_VLAN_ISOL	= BIT(0),
+	ENETC_ERR_UCMCSWP	= BIT(1),
 };
 
 #define ENETC_SI_F_QBV BIT(0)
@@ -293,6 +292,7 @@ void enetc_get_si_caps(struct enetc_si *si);
 void enetc_init_si_rings_params(struct enetc_ndev_priv *priv);
 int enetc_alloc_si_resources(struct enetc_ndev_priv *priv);
 void enetc_free_si_resources(struct enetc_ndev_priv *priv);
+int enetc_configure_si(struct enetc_ndev_priv *priv);
 
 int enetc_open(struct net_device *ndev);
 int enetc_close(struct net_device *ndev);
@@ -310,6 +310,10 @@ int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
 /* control buffer descriptor ring (CBDR) */
+int enetc_alloc_cbdr(struct device *dev, struct enetc_cbdr *cbdr);
+void enetc_free_cbdr(struct device *dev, struct enetc_cbdr *cbdr);
+void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr);
+void enetc_clear_cbdr(struct enetc_hw *hw);
 int enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 			    char *mac_addr, int si_map);
 int enetc_clear_mac_flt_entry(struct enetc_si *si, int index);

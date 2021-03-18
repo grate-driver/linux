@@ -12,8 +12,10 @@
 
 #define IONIC_MAX_TX_DESC		8192
 #define IONIC_MAX_RX_DESC		16384
-#define IONIC_MIN_TXRX_DESC		16
+#define IONIC_MIN_TXRX_DESC		64
 #define IONIC_DEF_TXRX_DESC		4096
+#define IONIC_RX_FILL_THRESHOLD		16
+#define IONIC_RX_FILL_DIV		8
 #define IONIC_LIFS_MAX			1024
 #define IONIC_WATCHDOG_SECS		5
 #define IONIC_ITR_COAL_USEC_DEFAULT	64
@@ -29,6 +31,7 @@ struct ionic_dev_bar {
 	int res_index;
 };
 
+#ifndef __CHECKER__
 /* Registers */
 static_assert(sizeof(struct ionic_intr) == 32);
 
@@ -119,6 +122,7 @@ static_assert(sizeof(struct ionic_vf_setattr_cmd) == 64);
 static_assert(sizeof(struct ionic_vf_setattr_comp) == 16);
 static_assert(sizeof(struct ionic_vf_getattr_cmd) == 64);
 static_assert(sizeof(struct ionic_vf_getattr_comp) == 16);
+#endif /* __CHECKER__ */
 
 struct ionic_devinfo {
 	u8 asic_type;

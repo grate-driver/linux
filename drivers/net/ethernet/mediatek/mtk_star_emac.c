@@ -966,6 +966,7 @@ static int mtk_star_enable(struct net_device *ndev)
 				      mtk_star_adjust_link, 0, priv->phy_intf);
 	if (!priv->phydev) {
 		netdev_err(ndev, "failed to connect to PHY\n");
+		ret = -ENODEV;
 		goto err_free_irq;
 	}
 
@@ -1053,7 +1054,7 @@ static int mtk_star_netdev_start_xmit(struct sk_buff *skb,
 err_drop_packet:
 	dev_kfree_skb(skb);
 	ndev->stats.tx_dropped++;
-	return NETDEV_TX_BUSY;
+	return NETDEV_TX_OK;
 }
 
 /* Returns the number of bytes sent or a negative number on the first
@@ -1224,8 +1225,6 @@ static int mtk_star_receive_packet(struct mtk_star_priv *priv)
 		goto push_new_skb;
 	}
 
-	desc_data.dma_addr = new_dma_addr;
-
 	/* We can't fail anymore at this point: it's safe to unmap the skb. */
 	mtk_star_dma_unmap_rx(priv, &desc_data);
 
@@ -1234,6 +1233,9 @@ static int mtk_star_receive_packet(struct mtk_star_priv *priv)
 	desc_data.skb->protocol = eth_type_trans(desc_data.skb, ndev);
 	desc_data.skb->dev = ndev;
 	netif_receive_skb(desc_data.skb);
+
+	/* update dma_addr for new skb */
+	desc_data.dma_addr = new_dma_addr;
 
 push_new_skb:
 	desc_data.len = skb_tailroom(new_skb);

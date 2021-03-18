@@ -106,12 +106,12 @@ static enum rdma_link_layer rxe_get_link_layer(struct ib_device *dev,
 	return IB_LINK_LAYER_ETHERNET;
 }
 
-static int rxe_alloc_ucontext(struct ib_ucontext *uctx, struct ib_udata *udata)
+static int rxe_alloc_ucontext(struct ib_ucontext *ibuc, struct ib_udata *udata)
 {
-	struct rxe_dev *rxe = to_rdev(uctx->device);
-	struct rxe_ucontext *uc = to_ruc(uctx);
+	struct rxe_dev *rxe = to_rdev(ibuc->device);
+	struct rxe_ucontext *uc = to_ruc(ibuc);
 
-	return rxe_add_to_pool(&rxe->uc_pool, &uc->pelem);
+	return rxe_add_to_pool(&rxe->uc_pool, uc);
 }
 
 static void rxe_dealloc_ucontext(struct ib_ucontext *ibuc)
@@ -145,7 +145,7 @@ static int rxe_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 	struct rxe_dev *rxe = to_rdev(ibpd->device);
 	struct rxe_pd *pd = to_rpd(ibpd);
 
-	return rxe_add_to_pool(&rxe->pd_pool, &pd->pelem);
+	return rxe_add_to_pool(&rxe->pd_pool, pd);
 }
 
 static int rxe_dealloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
@@ -169,7 +169,7 @@ static int rxe_create_ah(struct ib_ah *ibah,
 	if (err)
 		return err;
 
-	err = rxe_add_to_pool(&rxe->ah_pool, &ah->pelem);
+	err = rxe_add_to_pool(&rxe->ah_pool, ah);
 	if (err)
 		return err;
 
@@ -244,11 +244,6 @@ static int post_one_recv(struct rxe_rq *rq, const struct ib_recv_wr *ibwr)
 	recv_wqe->dma.cur_sge		= 0;
 	recv_wqe->dma.sge_offset	= 0;
 
-	/* make sure all changes to the work queue are written before we
-	 * update the producer pointer
-	 */
-	smp_wmb();
-
 	advance_producer(rq->queue);
 	return 0;
 
@@ -265,6 +260,9 @@ static int rxe_create_srq(struct ib_srq *ibsrq, struct ib_srq_init_attr *init,
 	struct rxe_srq *srq = to_rsrq(ibsrq);
 	struct rxe_create_srq_resp __user *uresp = NULL;
 
+	if (init->srq_type != IB_SRQT_BASIC)
+		return -EOPNOTSUPP;
+
 	if (udata) {
 		if (udata->outlen < sizeof(*uresp))
 			return -EINVAL;
@@ -275,7 +273,7 @@ static int rxe_create_srq(struct ib_srq *ibsrq, struct ib_srq_init_attr *init,
 	if (err)
 		goto err1;
 
-	err = rxe_add_to_pool(&rxe->srq_pool, &srq->pelem);
+	err = rxe_add_to_pool(&rxe->srq_pool, srq);
 	if (err)
 		goto err1;
 
@@ -392,6 +390,9 @@ static struct ib_qp *rxe_create_qp(struct ib_pd *ibpd,
 		uresp = udata->outbuf;
 	}
 
+	if (init->create_flags)
+		return ERR_PTR(-EOPNOTSUPP);
+
 	err = rxe_qp_chk_init(rxe, init);
 	if (err)
 		goto err1;
@@ -432,6 +433,9 @@ static int rxe_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	int err;
 	struct rxe_dev *rxe = to_rdev(ibqp->device);
 	struct rxe_qp *qp = to_rqp(ibqp);
+
+	if (mask & ~IB_QP_ATTR_STANDARD_BITS)
+		return -EOPNOTSUPP;
 
 	err = rxe_qp_chk_attr(rxe, qp, attr, mask);
 	if (err)
@@ -551,37 +555,42 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 	}
 }
 
-static int init_send_wqe(struct rxe_qp *qp, const struct ib_send_wr *ibwr,
+static void copy_inline_data_to_wqe(struct rxe_send_wqe *wqe,
+				    const struct ib_send_wr *ibwr)
+{
+	struct ib_sge *sge = ibwr->sg_list;
+	u8 *p = wqe->dma.inline_data;
+	int i;
+
+	for (i = 0; i < ibwr->num_sge; i++, sge++) {
+		memcpy(p, (void *)(uintptr_t)sge->addr, sge->length);
+		p += sge->length;
+	}
+}
+
+static void init_send_wqe(struct rxe_qp *qp, const struct ib_send_wr *ibwr,
 			 unsigned int mask, unsigned int length,
 			 struct rxe_send_wqe *wqe)
 {
 	int num_sge = ibwr->num_sge;
-	struct ib_sge *sge;
-	int i;
-	u8 *p;
 
 	init_send_wr(qp, &wqe->wr, ibwr);
+
+	/* local operation */
+	if (unlikely(mask & WR_REG_MASK)) {
+		wqe->mask = mask;
+		wqe->state = wqe_state_posted;
+		return;
+	}
 
 	if (qp_type(qp) == IB_QPT_UD ||
 	    qp_type(qp) == IB_QPT_SMI ||
 	    qp_type(qp) == IB_QPT_GSI)
 		memcpy(&wqe->av, &to_rah(ud_wr(ibwr)->ah)->av, sizeof(wqe->av));
 
-	if (unlikely(ibwr->send_flags & IB_SEND_INLINE)) {
-		p = wqe->dma.inline_data;
-
-		sge = ibwr->sg_list;
-		for (i = 0; i < num_sge; i++, sge++) {
-			memcpy(p, (void *)(uintptr_t)sge->addr,
-					sge->length);
-
-			p += sge->length;
-		}
-	} else if (mask & WR_REG_MASK) {
-		wqe->mask = mask;
-		wqe->state = wqe_state_posted;
-		return 0;
-	} else
+	if (unlikely(ibwr->send_flags & IB_SEND_INLINE))
+		copy_inline_data_to_wqe(wqe, ibwr);
+	else
 		memcpy(wqe->dma.sge, ibwr->sg_list,
 		       num_sge * sizeof(struct ib_sge));
 
@@ -595,8 +604,6 @@ static int init_send_wqe(struct rxe_qp *qp, const struct ib_send_wr *ibwr,
 	wqe->dma.sge_offset	= 0;
 	wqe->state		= wqe_state_posted;
 	wqe->ssn		= atomic_add_return(1, &qp->ssn);
-
-	return 0;
 }
 
 static int post_one_send(struct rxe_qp *qp, const struct ib_send_wr *ibwr,
@@ -619,16 +626,7 @@ static int post_one_send(struct rxe_qp *qp, const struct ib_send_wr *ibwr,
 	}
 
 	send_wqe = producer_addr(sq->queue);
-
-	err = init_send_wqe(qp, ibwr, mask, length, send_wqe);
-	if (unlikely(err))
-		goto err1;
-
-	/*
-	 * make sure all changes to the work queue are
-	 * written before we update the producer pointer
-	 */
-	smp_wmb();
+	init_send_wqe(qp, ibwr, mask, length, send_wqe);
 
 	advance_producer(sq->queue);
 	spin_unlock_irqrestore(&qp->sq.sq_lock, flags);
@@ -765,7 +763,7 @@ static int rxe_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 	}
 
 	if (attr->flags)
-		return -EINVAL;
+		return -EOPNOTSUPP;
 
 	err = rxe_cq_chk_attr(rxe, NULL, attr->cqe, attr->comp_vector);
 	if (err)
@@ -776,7 +774,7 @@ static int rxe_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 	if (err)
 		return err;
 
-	return rxe_add_to_pool(&rxe->cq_pool, &cq->pelem);
+	return rxe_add_to_pool(&rxe->cq_pool, cq);
 }
 
 static int rxe_destroy_cq(struct ib_cq *ibcq, struct ib_udata *udata)
@@ -1033,7 +1031,7 @@ static ssize_t parent_show(struct device *device,
 	struct rxe_dev *rxe =
 		rdma_device_to_drv_device(device, struct rxe_dev, ib_dev);
 
-	return scnprintf(buf, PAGE_SIZE, "%s\n", rxe_parent_name(rxe, 1));
+	return sysfs_emit(buf, "%s\n", rxe_parent_name(rxe, 1));
 }
 
 static DEVICE_ATTR_RO(parent);
@@ -1070,6 +1068,7 @@ static const struct ib_device_ops rxe_dev_ops = {
 	.create_cq = rxe_create_cq,
 	.create_qp = rxe_create_qp,
 	.create_srq = rxe_create_srq,
+	.create_user_ah = rxe_create_ah,
 	.dealloc_driver = rxe_dealloc,
 	.dealloc_pd = rxe_dealloc_pd,
 	.dealloc_ucontext = rxe_dealloc_ucontext,
@@ -1119,51 +1118,17 @@ int rxe_register_device(struct rxe_dev *rxe, const char *ibdev_name)
 	struct ib_device *dev = &rxe->ib_dev;
 	struct crypto_shash *tfm;
 
-	strlcpy(dev->node_desc, "rxe", sizeof(dev->node_desc));
+	strscpy(dev->node_desc, "rxe", sizeof(dev->node_desc));
 
 	dev->node_type = RDMA_NODE_IB_CA;
 	dev->phys_port_cnt = 1;
 	dev->num_comp_vectors = num_possible_cpus();
-	dev->dev.parent = rxe_dma_device(rxe);
 	dev->local_dma_lkey = 0;
 	addrconf_addr_eui48((unsigned char *)&dev->node_guid,
 			    rxe->ndev->dev_addr);
-	dev->dev.dma_parms = &rxe->dma_parms;
-	dma_set_max_seg_size(&dev->dev, UINT_MAX);
-	dma_set_coherent_mask(&dev->dev, dma_get_required_mask(&dev->dev));
 
-	dev->uverbs_cmd_mask = BIT_ULL(IB_USER_VERBS_CMD_GET_CONTEXT)
-	    | BIT_ULL(IB_USER_VERBS_CMD_CREATE_COMP_CHANNEL)
-	    | BIT_ULL(IB_USER_VERBS_CMD_QUERY_DEVICE)
-	    | BIT_ULL(IB_USER_VERBS_CMD_QUERY_PORT)
-	    | BIT_ULL(IB_USER_VERBS_CMD_ALLOC_PD)
-	    | BIT_ULL(IB_USER_VERBS_CMD_DEALLOC_PD)
-	    | BIT_ULL(IB_USER_VERBS_CMD_CREATE_SRQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_MODIFY_SRQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_QUERY_SRQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_DESTROY_SRQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_POST_SRQ_RECV)
-	    | BIT_ULL(IB_USER_VERBS_CMD_CREATE_QP)
-	    | BIT_ULL(IB_USER_VERBS_CMD_MODIFY_QP)
-	    | BIT_ULL(IB_USER_VERBS_CMD_QUERY_QP)
-	    | BIT_ULL(IB_USER_VERBS_CMD_DESTROY_QP)
-	    | BIT_ULL(IB_USER_VERBS_CMD_POST_SEND)
-	    | BIT_ULL(IB_USER_VERBS_CMD_POST_RECV)
-	    | BIT_ULL(IB_USER_VERBS_CMD_CREATE_CQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_RESIZE_CQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_DESTROY_CQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_POLL_CQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_PEEK_CQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_REQ_NOTIFY_CQ)
-	    | BIT_ULL(IB_USER_VERBS_CMD_REG_MR)
-	    | BIT_ULL(IB_USER_VERBS_CMD_DEREG_MR)
-	    | BIT_ULL(IB_USER_VERBS_CMD_CREATE_AH)
-	    | BIT_ULL(IB_USER_VERBS_CMD_MODIFY_AH)
-	    | BIT_ULL(IB_USER_VERBS_CMD_QUERY_AH)
-	    | BIT_ULL(IB_USER_VERBS_CMD_DESTROY_AH)
-	    | BIT_ULL(IB_USER_VERBS_CMD_ATTACH_MCAST)
-	    | BIT_ULL(IB_USER_VERBS_CMD_DETACH_MCAST)
-	    ;
+	dev->uverbs_cmd_mask |= BIT_ULL(IB_USER_VERBS_CMD_POST_SEND) |
+				BIT_ULL(IB_USER_VERBS_CMD_REQ_NOTIFY_CQ);
 
 	ib_set_device_ops(dev, &rxe_dev_ops);
 	err = ib_device_set_netdev(&rxe->ib_dev, rxe->ndev, 1);

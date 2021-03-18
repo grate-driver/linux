@@ -23,10 +23,10 @@ static void tracing_start_function_trace(struct trace_array *tr);
 static void tracing_stop_function_trace(struct trace_array *tr);
 static void
 function_trace_call(unsigned long ip, unsigned long parent_ip,
-		    struct ftrace_ops *op, struct pt_regs *pt_regs);
+		    struct ftrace_ops *op, struct ftrace_regs *fregs);
 static void
 function_stack_trace_call(unsigned long ip, unsigned long parent_ip,
-			  struct ftrace_ops *op, struct pt_regs *pt_regs);
+			  struct ftrace_ops *op, struct ftrace_regs *fregs);
 static struct tracer_flags func_flags;
 
 /* Our option */
@@ -48,7 +48,7 @@ int ftrace_allocate_ftrace_ops(struct trace_array *tr)
 
 	/* Currently only the non stack version is supported */
 	ops->func = function_trace_call;
-	ops->flags = FTRACE_OPS_FL_RECURSION_SAFE | FTRACE_OPS_FL_PID;
+	ops->flags = FTRACE_OPS_FL_PID;
 
 	tr->ops = ops;
 	ops->private = tr;
@@ -89,7 +89,6 @@ void ftrace_destroy_function_files(struct trace_array *tr)
 static int function_trace_init(struct trace_array *tr)
 {
 	ftrace_func_t func;
-
 	/*
 	 * Instance trace_arrays get their ops allocated
 	 * at instance creation. Unless it failed
@@ -107,8 +106,7 @@ static int function_trace_init(struct trace_array *tr)
 
 	ftrace_init_array_ops(tr, func);
 
-	tr->array_buffer.cpu = get_cpu();
-	put_cpu();
+	tr->array_buffer.cpu = raw_smp_processor_id();
 
 	tracing_start_cmdline_record();
 	tracing_start_function_trace(tr);
@@ -129,34 +127,30 @@ static void function_trace_start(struct trace_array *tr)
 
 static void
 function_trace_call(unsigned long ip, unsigned long parent_ip,
-		    struct ftrace_ops *op, struct pt_regs *pt_regs)
+		    struct ftrace_ops *op, struct ftrace_regs *fregs)
 {
 	struct trace_array *tr = op->private;
 	struct trace_array_cpu *data;
-	unsigned long flags;
+	unsigned int trace_ctx;
 	int bit;
 	int cpu;
-	int pc;
 
 	if (unlikely(!tr->function_enabled))
 		return;
 
-	pc = preempt_count();
-	preempt_disable_notrace();
-
-	bit = trace_test_and_set_recursion(TRACE_FTRACE_START, TRACE_FTRACE_MAX);
+	bit = ftrace_test_recursion_trylock(ip, parent_ip);
 	if (bit < 0)
-		goto out;
+		return;
+
+	trace_ctx = tracing_gen_ctx();
+	preempt_disable_notrace();
 
 	cpu = smp_processor_id();
 	data = per_cpu_ptr(tr->array_buffer.data, cpu);
-	if (!atomic_read(&data->disabled)) {
-		local_save_flags(flags);
-		trace_function(tr, ip, parent_ip, flags, pc);
-	}
-	trace_clear_recursion(bit);
+	if (!atomic_read(&data->disabled))
+		trace_function(tr, ip, parent_ip, trace_ctx);
 
- out:
+	ftrace_test_recursion_unlock(bit);
 	preempt_enable_notrace();
 }
 
@@ -180,14 +174,14 @@ function_trace_call(unsigned long ip, unsigned long parent_ip,
 
 static void
 function_stack_trace_call(unsigned long ip, unsigned long parent_ip,
-			  struct ftrace_ops *op, struct pt_regs *pt_regs)
+			  struct ftrace_ops *op, struct ftrace_regs *fregs)
 {
 	struct trace_array *tr = op->private;
 	struct trace_array_cpu *data;
 	unsigned long flags;
 	long disabled;
 	int cpu;
-	int pc;
+	unsigned int trace_ctx;
 
 	if (unlikely(!tr->function_enabled))
 		return;
@@ -202,9 +196,9 @@ function_stack_trace_call(unsigned long ip, unsigned long parent_ip,
 	disabled = atomic_inc_return(&data->disabled);
 
 	if (likely(disabled == 1)) {
-		pc = preempt_count();
-		trace_function(tr, ip, parent_ip, flags, pc);
-		__trace_stack(tr, flags, STACK_SKIP, pc);
+		trace_ctx = tracing_gen_ctx_flags(flags);
+		trace_function(tr, ip, parent_ip, trace_ctx);
+		__trace_stack(tr, trace_ctx, STACK_SKIP);
 	}
 
 	atomic_dec(&data->disabled);
@@ -407,13 +401,11 @@ ftrace_traceoff(unsigned long ip, unsigned long parent_ip,
 
 static __always_inline void trace_stack(struct trace_array *tr)
 {
-	unsigned long flags;
-	int pc;
+	unsigned int trace_ctx;
 
-	local_save_flags(flags);
-	pc = preempt_count();
+	trace_ctx = tracing_gen_ctx();
 
-	__trace_stack(tr, flags, FTRACE_STACK_SKIP, pc);
+	__trace_stack(tr, trace_ctx, FTRACE_STACK_SKIP);
 }
 
 static void

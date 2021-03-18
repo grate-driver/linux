@@ -313,9 +313,23 @@ void gfs2_glock_put(struct gfs2_glock *gl)
 static inline int may_grant(const struct gfs2_glock *gl, const struct gfs2_holder *gh)
 {
 	const struct gfs2_holder *gh_head = list_first_entry(&gl->gl_holders, const struct gfs2_holder, gh_list);
-	if ((gh->gh_state == LM_ST_EXCLUSIVE ||
-	     gh_head->gh_state == LM_ST_EXCLUSIVE) && gh != gh_head)
-		return 0;
+
+	if (gh != gh_head) {
+		/**
+		 * Here we make a special exception to grant holders who agree
+		 * to share the EX lock with other holders who also have the
+		 * bit set. If the original holder has the LM_FLAG_NODE_SCOPE bit
+		 * is set, we grant more holders with the bit set.
+		 */
+		if (gh_head->gh_state == LM_ST_EXCLUSIVE &&
+		    (gh_head->gh_flags & LM_FLAG_NODE_SCOPE) &&
+		    gh->gh_state == LM_ST_EXCLUSIVE &&
+		    (gh->gh_flags & LM_FLAG_NODE_SCOPE))
+			return 1;
+		if ((gh->gh_state == LM_ST_EXCLUSIVE ||
+		     gh_head->gh_state == LM_ST_EXCLUSIVE))
+			return 0;
+	}
 	if (gl->gl_state == gh->gh_state)
 		return 1;
 	if (gh->gh_flags & GL_EXACT)
@@ -857,12 +871,6 @@ static void delete_work_func(struct work_struct *work)
 	clear_bit(GLF_PENDING_DELETE, &gl->gl_flags);
 	spin_unlock(&gl->gl_lockref.lock);
 
-	/* If someone's using this glock to create a new dinode, the block must
-	   have been freed by another node, then re-used, in which case our
-	   iopen callback is too late after the fact. Ignore it. */
-	if (test_bit(GLF_INODE_CREATING, &gl->gl_flags))
-		goto out;
-
 	if (test_bit(GLF_DEMOTE, &gl->gl_flags)) {
 		/*
 		 * If we can evict the inode, give the remote node trying to
@@ -1035,6 +1043,7 @@ int gfs2_glock_get(struct gfs2_sbd *sdp, u64 number,
 	gl->gl_node.next = NULL;
 	gl->gl_flags = 0;
 	gl->gl_name = name;
+	lockdep_set_subclass(&gl->gl_lockref.lock, glops->go_subclass);
 	gl->gl_lockref.count = 1;
 	gl->gl_state = LM_ST_UNLOCKED;
 	gl->gl_target = LM_ST_UNLOCKED;
@@ -1078,7 +1087,8 @@ int gfs2_glock_get(struct gfs2_sbd *sdp, u64 number,
 out_free:
 	kfree(gl->gl_lksb.sb_lvbptr);
 	kmem_cache_free(cachep, gl);
-	atomic_dec(&sdp->sd_glock_disposal);
+	if (atomic_dec_and_test(&sdp->sd_glock_disposal))
+		wake_up(&sdp->sd_glock_wait);
 
 out:
 	return ret;
@@ -2034,6 +2044,8 @@ static const char *hflags2str(char *buf, u16 flags, unsigned long iflags)
 		*p++ = 'A';
 	if (flags & LM_FLAG_PRIORITY)
 		*p++ = 'p';
+	if (flags & LM_FLAG_NODE_SCOPE)
+		*p++ = 'n';
 	if (flags & GL_ASYNC)
 		*p++ = 'a';
 	if (flags & GL_EXACT)
@@ -2110,8 +2122,6 @@ static const char *gflags2str(char *buf, const struct gfs2_glock *gl)
 		*p++ = 'o';
 	if (test_bit(GLF_BLOCKING, gflags))
 		*p++ = 'b';
-	if (test_bit(GLF_INODE_CREATING, gflags))
-		*p++ = 'c';
 	if (test_bit(GLF_PENDING_DELETE, gflags))
 		*p++ = 'P';
 	if (test_bit(GLF_FREEING, gflags))

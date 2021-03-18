@@ -1230,6 +1230,9 @@ static int gfs2_iomap_end(struct inode *inode, loff_t pos, loff_t length,
 
 	gfs2_inplace_release(ip);
 
+	if (ip->i_qadata && ip->i_qadata->qa_qd_num)
+		gfs2_quota_unlock(ip);
+
 	if (length != written && (iomap->flags & IOMAP_F_NEW)) {
 		/* Deallocate blocks that were just allocated. */
 		loff_t blockmask = i_blocksize(inode) - 1;
@@ -1241,9 +1244,6 @@ static int gfs2_iomap_end(struct inode *inode, loff_t pos, loff_t length,
 			punch_hole(ip, pos, end - pos);
 		}
 	}
-
-	if (ip->i_qadata && ip->i_qadata->qa_qd_num)
-		gfs2_quota_unlock(ip);
 
 	if (unlikely(!written))
 		goto out_unlock;
@@ -1301,12 +1301,8 @@ int gfs2_block_map(struct inode *inode, sector_t lblock,
 	trace_gfs2_bmap(ip, bh_map, lblock, create, 1);
 
 	ret = gfs2_iomap_get(inode, pos, length, flags, &iomap, &mp);
-	if (!ret && iomap.type == IOMAP_HOLE) {
-		if (create)
-			ret = gfs2_iomap_alloc(inode, &iomap, &mp);
-		else
-			ret = -ENODATA;
-	}
+	if (create && !ret && iomap.type == IOMAP_HOLE)
+		ret = gfs2_iomap_alloc(inode, &iomap, &mp);
 	release_metapath(&mp);
 	if (ret)
 		goto out;
@@ -1542,13 +1538,13 @@ more_rgrps:
 				goto out;
 			}
 			ret = gfs2_glock_nq_init(rgd->rd_gl, LM_ST_EXCLUSIVE,
-						 0, rd_gh);
+						 LM_FLAG_NODE_SCOPE, rd_gh);
 			if (ret)
 				goto out;
 
 			/* Must be done with the rgrp glock held: */
 			if (gfs2_rs_active(&ip->i_res) &&
-			    rgd == ip->i_res.rs_rbm.rgd)
+			    rgd == ip->i_res.rs_rgd)
 				gfs2_rs_deltree(&ip->i_res);
 		}
 

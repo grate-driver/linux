@@ -211,7 +211,7 @@ int rvt_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 	int err;
 
 	if (attr->flags)
-		return -EINVAL;
+		return -EOPNOTSUPP;
 
 	if (entries < 1 || entries > rdi->dparms.props.max_cqe)
 		return -EINVAL;
@@ -371,7 +371,7 @@ int rvt_req_notify_cq(struct ib_cq *ibcq, enum ib_cq_notify_flags notify_flags)
 	return ret;
 }
 
-/**
+/*
  * rvt_resize_cq - change the size of the CQ
  * @ibcq: the completion queue
  *

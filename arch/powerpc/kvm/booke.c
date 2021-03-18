@@ -20,6 +20,7 @@
 
 #include <asm/cputable.h>
 #include <linux/uaccess.h>
+#include <asm/interrupt.h>
 #include <asm/kvm_ppc.h>
 #include <asm/cacheflush.h>
 #include <asm/dbell.h>
@@ -500,11 +501,11 @@ static int kvmppc_booke_irqprio_deliver(struct kvm_vcpu *vcpu,
 
 		vcpu->arch.regs.nip = vcpu->arch.ivpr |
 					vcpu->arch.ivor[priority];
-		if (update_esr == true)
+		if (update_esr)
 			kvmppc_set_esr(vcpu, vcpu->arch.queued_esr);
-		if (update_dear == true)
+		if (update_dear)
 			kvmppc_set_dar(vcpu, vcpu->arch.queued_dear);
-		if (update_epr == true) {
+		if (update_epr) {
 			if (vcpu->arch.epr_flags & KVMPPC_EPR_USER)
 				kvm_make_request(KVM_REQ_EPR_EXIT, vcpu);
 			else if (vcpu->arch.epr_flags & KVMPPC_EPR_KERNEL) {
@@ -698,7 +699,7 @@ int kvmppc_core_prepare_to_enter(struct kvm_vcpu *vcpu)
 
 		kvmppc_set_exit_type(vcpu, EMULATED_MTMSRWE_EXITS);
 		r = 1;
-	};
+	}
 
 	return r;
 }

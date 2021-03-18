@@ -487,10 +487,7 @@ static int orangefs_file_mmap(struct file *file, struct vm_area_struct *vma)
 		return ret;
 
 	gossip_debug(GOSSIP_FILE_DEBUG,
-		     "orangefs_file_mmap: called on %s\n",
-		     (file ?
-			(char *)file->f_path.dentry->d_name.name :
-			(char *)"Unknown"));
+		     "orangefs_file_mmap: called on %pD\n", file);
 
 	/* set the sequential readahead hint */
 	vma->vm_flags |= VM_SEQ_READ;
@@ -663,6 +660,8 @@ const struct file_operations orangefs_file_operations = {
 	.unlocked_ioctl	= orangefs_ioctl,
 	.mmap		= orangefs_file_mmap,
 	.open		= generic_file_open,
+	.splice_read    = generic_file_splice_read,
+	.splice_write   = iter_file_splice_write,
 	.flush		= orangefs_flush,
 	.release	= orangefs_file_release,
 	.fsync		= orangefs_fsync,

@@ -29,17 +29,17 @@ struct dyn_event;
  * @show: Showing method. This is invoked when user reads the event definitions
  *  via dynamic_events interface.
  * @is_busy: Check whether given event is busy so that it can not be deleted.
- *  Return true if it is busy, otherwides false.
- * @free: Delete the given event. Return 0 if success, otherwides error.
+ *  Return true if it is busy, otherwise false.
+ * @free: Delete the given event. Return 0 if success, otherwise error.
  * @match: Check whether given event and system name match this event. The argc
- *  and argv is used for exact match. Return true if it matches, otherwides
+ *  and argv is used for exact match. Return true if it matches, otherwise
  *  false.
  *
  * Except for @create, these methods are called under holding event_mutex.
  */
 struct dyn_event_operations {
 	struct list_head	list;
-	int (*create)(int argc, const char *argv[]);
+	int (*create)(const char *raw_command);
 	int (*show)(struct seq_file *m, struct dyn_event *ev);
 	bool (*is_busy)(struct dyn_event *ev);
 	int (*free)(struct dyn_event *ev);
@@ -97,7 +97,7 @@ void *dyn_event_seq_start(struct seq_file *m, loff_t *pos);
 void *dyn_event_seq_next(struct seq_file *m, void *v, loff_t *pos);
 void dyn_event_seq_stop(struct seq_file *m, void *v);
 int dyn_events_release_all(struct dyn_event_operations *type);
-int dyn_event_release(int argc, char **argv, struct dyn_event_operations *type);
+int dyn_event_release(const char *raw_command, struct dyn_event_operations *type);
 
 /*
  * for_each_dyn_event	-	iterate over the dyn_event list
