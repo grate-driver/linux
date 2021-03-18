@@ -1537,6 +1537,7 @@ static noinline void __init kernel_init_freeable(void)
 
 	kunit_run_all_tests();
 
+	wait_for_initramfs();
 	console_on_rootfs();
 
 	/*
