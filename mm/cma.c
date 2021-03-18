@@ -512,7 +512,8 @@ out:
 		cma_sysfs_alloc_pages_count(cma, count);
 	} else {
 		count_vm_event(CMA_ALLOC_FAIL);
-		cma_sysfs_fail_pages_count(cma, count);
+		if (cma)
+			cma_sysfs_fail_pages_count(cma, count);
 	}
 
 	return page;
