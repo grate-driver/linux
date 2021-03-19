@@ -1022,7 +1022,6 @@ static bool io_rw_reissue(struct io_kiocb *req);
 static void io_cqring_fill_event(struct io_kiocb *req, long res);
 static void io_put_req(struct io_kiocb *req);
 static void io_put_req_deferred(struct io_kiocb *req, int nr);
-static void io_double_put_req(struct io_kiocb *req);
 static void io_dismantle_req(struct io_kiocb *req);
 static void io_put_task(struct task_struct *task, int nr);
 static void io_queue_next(struct io_kiocb *req);
@@ -2039,20 +2038,6 @@ static void io_req_task_work_add_fallback(struct io_kiocb *req,
 	io_task_work_add_head(&req->ctx->exit_task_work, &req->task_work);
 }
 
-static void __io_req_task_cancel(struct io_kiocb *req, int error)
-{
-	struct io_ring_ctx *ctx = req->ctx;
-
-	spin_lock_irq(&ctx->completion_lock);
-	io_cqring_fill_event(req, error);
-	io_commit_cqring(ctx);
-	spin_unlock_irq(&ctx->completion_lock);
-
-	io_cqring_ev_posted(ctx);
-	req_set_fail_links(req);
-	io_double_put_req(req);
-}
-
 static void io_req_task_cancel(struct callback_head *cb)
 {
 	struct io_kiocb *req = container_of(cb, struct io_kiocb, task_work);
@@ -2060,7 +2045,7 @@ static void io_req_task_cancel(struct callback_head *cb)
 
 	/* ctx is guaranteed to stay alive while we hold uring_lock */
 	mutex_lock(&ctx->uring_lock);
-	__io_req_task_cancel(req, req->result);
+	io_req_complete_failed(req, req->result);
 	mutex_unlock(&ctx->uring_lock);
 }
 
@@ -2073,7 +2058,7 @@ static void __io_req_task_submit(struct io_kiocb *req)
 	if (!(current->flags & PF_EXITING) && !current->in_execve)
 		__io_queue_sqe(req);
 	else
-		__io_req_task_cancel(req, -EFAULT);
+		io_req_complete_failed(req, -EFAULT);
 	mutex_unlock(&ctx->uring_lock);
 }
 
@@ -2226,13 +2211,6 @@ static inline void io_put_req_deferred(struct io_kiocb *req, int refs)
 {
 	if (req_ref_sub_and_test(req, refs))
 		io_free_req_deferred(req);
-}
-
-static void io_double_put_req(struct io_kiocb *req)
-{
-	/* drop both submit and complete references */
-	if (req_ref_sub_and_test(req, 2))
-		io_free_req(req);
 }
 
 static unsigned io_cqring_events(struct io_ring_ctx *ctx)
@@ -5105,7 +5083,7 @@ static void io_async_task_func(struct callback_head *cb)
 	if (!READ_ONCE(apoll->poll.canceled))
 		__io_req_task_submit(req);
 	else
-		__io_req_task_cancel(req, -ECANCELED);
+		io_req_complete_failed(req, -ECANCELED);
 
 	kfree(apoll->double_poll);
 	kfree(apoll);
