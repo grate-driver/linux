@@ -97,9 +97,6 @@ static void __init test_clobber_redzone_free(void)
 
 static void __init resiliency_test(void)
 {
-
-	BUILD_BUG_ON(KMALLOC_MIN_SIZE > 16 || KMALLOC_SHIFT_HIGH < 10);
-
 	pr_err("SLUB resiliency testing\n");
 	pr_err("-----------------------\n");
 	pr_err("A. Corruption after allocation\n");
