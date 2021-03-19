@@ -15,6 +15,9 @@ static struct cma_stat *cma_stats;
 
 void cma_sysfs_alloc_pages_count(struct cma *cma, size_t count)
 {
+	if (!cma->stat)
+		return;
+
 	spin_lock(&cma->stat->lock);
 	cma->stat->nr_pages_succeeded += count;
 	spin_unlock(&cma->stat->lock);
@@ -22,6 +25,9 @@ void cma_sysfs_alloc_pages_count(struct cma *cma, size_t count)
 
 void cma_sysfs_fail_pages_count(struct cma *cma, size_t count)
 {
+	if (!cma->stat)
+		return;
+
 	spin_lock(&cma->stat->lock);
 	cma->stat->nr_pages_failed += count;
 	spin_unlock(&cma->stat->lock);
