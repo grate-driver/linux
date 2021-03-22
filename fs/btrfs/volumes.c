@@ -1458,8 +1458,8 @@ static bool dev_extent_hole_check_zoned(struct btrfs_device *device,
 		/* Given hole range was invalid (outside of device) */
 		if (ret == -ERANGE) {
 			*hole_start += *hole_size;
-			*hole_size = 0;
-			return 1;
+			*hole_size = false;
+			return true;
 		}
 
 		*hole_start += zone_size;
@@ -7447,6 +7447,9 @@ static int btrfs_device_init_dev_stats(struct btrfs_device *device,
 	struct btrfs_key key;
 	int item_size;
 	int i, ret, slot;
+
+	if (!device->fs_info->dev_root)
+		return 0;
 
 	key.objectid = BTRFS_DEV_STATS_OBJECTID;
 	key.type = BTRFS_PERSISTENT_ITEM_KEY;
