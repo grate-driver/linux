@@ -1077,12 +1077,8 @@ static bool io_match_task(struct io_kiocb *head,
 {
 	struct io_kiocb *req;
 
-	if (task && head->task != task) {
-		/* in terms of cancelation, always match if req task is dead */
-		if (head->task->flags & PF_EXITING)
-			return true;
+	if (task && head->task != task)
 		return false;
-	}
 	if (!files)
 		return true;
 
