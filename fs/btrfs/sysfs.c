@@ -360,11 +360,45 @@ static ssize_t supported_rescue_options_show(struct kobject *kobj,
 BTRFS_ATTR(static_feature, supported_rescue_options,
 	   supported_rescue_options_show);
 
+static ssize_t supported_ro_sectorsize_show(struct kobject *kobj,
+					    struct kobj_attribute *a,
+					    char *buf)
+{
+	ssize_t ret = 0;
+	int i = 0;
+
+	/* For 64K page size, 4K sector size is supported */
+	if (PAGE_SIZE == SZ_64K) {
+		ret += scnprintf(buf + ret, PAGE_SIZE - ret, "%u", SZ_4K);
+		i++;
+	}
+	/* Other than above subpage, only support PAGE_SIZE as sectorsize yet */
+	ret += scnprintf(buf + ret, PAGE_SIZE - ret, "%s%lu\n",
+			 (i ? " " : ""), PAGE_SIZE);
+	return ret;
+}
+BTRFS_ATTR(static_feature, supported_ro_sectorsize,
+	   supported_ro_sectorsize_show);
+
+static ssize_t supported_rw_sectorsize_show(struct kobject *kobj,
+					    struct kobj_attribute *a,
+					    char *buf)
+{
+	ssize_t ret = 0;
+
+	/* Only PAGE_SIZE as sectorsize is supported */
+	ret += scnprintf(buf + ret, PAGE_SIZE - ret, "%lu\n", PAGE_SIZE);
+	return ret;
+}
+BTRFS_ATTR(static_feature, supported_rw_sectorsize,
+	   supported_rw_sectorsize_show);
 static struct attribute *btrfs_supported_static_feature_attrs[] = {
 	BTRFS_ATTR_PTR(static_feature, rmdir_subvol),
 	BTRFS_ATTR_PTR(static_feature, supported_checksums),
 	BTRFS_ATTR_PTR(static_feature, send_stream_version),
 	BTRFS_ATTR_PTR(static_feature, supported_rescue_options),
+	BTRFS_ATTR_PTR(static_feature, supported_ro_sectorsize),
+	BTRFS_ATTR_PTR(static_feature, supported_rw_sectorsize),
 	NULL
 };
 
@@ -965,6 +999,40 @@ static ssize_t btrfs_read_policy_store(struct kobject *kobj,
 }
 BTRFS_ATTR_RW(, read_policy, btrfs_read_policy_show, btrfs_read_policy_store);
 
+static ssize_t btrfs_bg_reclaim_threshold_show(struct kobject *kobj,
+					       struct kobj_attribute *a,
+					       char *buf)
+{
+	struct btrfs_fs_info *fs_info = to_fs_info(kobj);
+	ssize_t ret;
+
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", fs_info->bg_reclaim_threshold);
+
+	return ret;
+}
+
+static ssize_t btrfs_bg_reclaim_threshold_store(struct kobject *kobj,
+						struct kobj_attribute *a,
+						const char *buf, size_t len)
+{
+	struct btrfs_fs_info *fs_info = to_fs_info(kobj);
+	int thresh;
+	int ret;
+
+	ret = kstrtoint(buf, 10, &thresh);
+	if (ret)
+		return ret;
+
+	if (thresh <= 50 || thresh > 100)
+		return -EINVAL;
+
+	fs_info->bg_reclaim_threshold = thresh;
+
+	return len;
+}
+BTRFS_ATTR_RW(, bg_reclaim_threshold, btrfs_bg_reclaim_threshold_show,
+	      btrfs_bg_reclaim_threshold_store);
+
 static const struct attribute *btrfs_attrs[] = {
 	BTRFS_ATTR_PTR(, label),
 	BTRFS_ATTR_PTR(, nodesize),
@@ -976,6 +1044,7 @@ static const struct attribute *btrfs_attrs[] = {
 	BTRFS_ATTR_PTR(, exclusive_operation),
 	BTRFS_ATTR_PTR(, generation),
 	BTRFS_ATTR_PTR(, read_policy),
+	BTRFS_ATTR_PTR(, bg_reclaim_threshold),
 	NULL,
 };
 
