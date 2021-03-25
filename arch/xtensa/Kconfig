@@ -84,6 +84,12 @@ config KASAN_SHADOW_OFFSET
 	hex
 	default 0x6e400000
 
+config CPU_BIG_ENDIAN
+	def_bool $(success,test "$(shell,echo __XTENSA_EB__ | $(CC) -E -P -)" = 1)
+
+config CPU_LITTLE_ENDIAN
+	def_bool !CPU_BIG_ENDIAN
+
 menu "Processor type and features"
 
 choice
@@ -466,7 +472,7 @@ config INITIALIZE_XTENSA_MMU_INSIDE_VMLINUX
 	  then enter your normal kernel breakpoints once the MMU was mapped
 	  to the kernel mappings (0XC0000000).
 
-	  This unfortunately won't work for U-Boot and likely also wont
+	  This unfortunately won't work for U-Boot and likely also won't
 	  work for using KEXEC to have a hot kernel ready for doing a
 	  KDUMP.
 
