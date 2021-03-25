@@ -292,9 +292,9 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 			memcpy(pkey_inf.auth_key, tcon->ses->auth_key.response,
 					16 /* SMB2_NTLMV2_SESSKEY_SIZE */);
 			memcpy(pkey_inf.smb3decryptionkey,
-			      tcon->ses->smb3decryptionkey, SMB3_SIGN_KEY_SIZE);
+			      tcon->ses->smb3decryptionkey, SMB3_ENC_DEC_KEY_SIZE);
 			memcpy(pkey_inf.smb3encryptionkey,
-			      tcon->ses->smb3encryptionkey, SMB3_SIGN_KEY_SIZE);
+			      tcon->ses->smb3encryptionkey, SMB3_ENC_DEC_KEY_SIZE);
 			if (copy_to_user((void __user *)arg, &pkey_inf,
 					sizeof(struct smb3_key_debug_info)))
 				rc = -EFAULT;

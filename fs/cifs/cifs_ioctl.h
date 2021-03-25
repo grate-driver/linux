@@ -61,8 +61,8 @@ struct smb3_key_debug_info {
 	__u64	Suid;
 	__u16	cipher_type;
 	__u8	auth_key[16]; /* SMB2_NTLMV2_SESSKEY_SIZE */
-	__u8	smb3encryptionkey[SMB3_SIGN_KEY_SIZE];
-	__u8	smb3decryptionkey[SMB3_SIGN_KEY_SIZE];
+	__u8	smb3encryptionkey[SMB3_ENC_DEC_KEY_SIZE];
+	__u8	smb3decryptionkey[SMB3_ENC_DEC_KEY_SIZE];
 } __packed;
 
 struct smb3_notify {
