@@ -1239,10 +1239,10 @@ static void io_queue_async_work(struct io_kiocb *req)
 	BUG_ON(!tctx);
 	BUG_ON(!tctx->io_wq);
 
-	trace_io_uring_queue_async_work(ctx, io_wq_is_hashed(&req->work), req,
-					&req->work, req->flags);
 	/* init ->work of the whole link before punting */
 	io_prep_async_link(req);
+	trace_io_uring_queue_async_work(ctx, io_wq_is_hashed(&req->work), req,
+					&req->work, req->flags);
 	io_wq_enqueue(tctx->io_wq, &req->work);
 	if (link)
 		io_queue_linked_timeout(link);
@@ -2524,13 +2524,12 @@ static void __io_complete_rw(struct io_kiocb *req, long res, long res2,
 {
 	int cflags = 0;
 
+	if (req->rw.kiocb.ki_flags & IOCB_WRITE)
+		kiocb_end_write(req);
 	if ((res == -EAGAIN || res == -EOPNOTSUPP) && io_rw_reissue(req))
 		return;
 	if (res != req->result)
 		req_set_fail_links(req);
-
-	if (req->rw.kiocb.ki_flags & IOCB_WRITE)
-		kiocb_end_write(req);
 	if (req->flags & REQ_F_BUFFER_SELECTED)
 		cflags = io_put_rw_kbuf(req);
 	__io_req_complete(req, issue_flags, res, cflags);
@@ -3978,6 +3977,7 @@ static int io_remove_buffers(struct io_kiocb *req, unsigned int issue_flags)
 static int io_provide_buffers_prep(struct io_kiocb *req,
 				   const struct io_uring_sqe *sqe)
 {
+	unsigned long size;
 	struct io_provide_buf *p = &req->pbuf;
 	u64 tmp;
 
@@ -3991,7 +3991,8 @@ static int io_provide_buffers_prep(struct io_kiocb *req,
 	p->addr = READ_ONCE(sqe->addr);
 	p->len = READ_ONCE(sqe->len);
 
-	if (!access_ok(u64_to_user_ptr(p->addr), (p->len * p->nbufs)))
+	size = (unsigned long)p->len * p->nbufs;
+	if (!access_ok(u64_to_user_ptr(p->addr), size))
 		return -EFAULT;
 
 	p->bgid = READ_ONCE(sqe->buf_group);
@@ -6873,7 +6874,7 @@ static int io_run_task_work_sig(void)
 		return 1;
 	if (!signal_pending(current))
 		return 0;
-	if (test_tsk_thread_flag(current, TIF_NOTIFY_SIGNAL))
+	if (test_thread_flag(TIF_NOTIFY_SIGNAL))
 		return -ERESTARTSYS;
 	return -EINTR;
 }
@@ -8563,6 +8564,14 @@ static void io_ring_exit_work(struct work_struct *work)
 	struct io_tctx_node *node;
 	int ret;
 
+	/* prevent SQPOLL from submitting new requests */
+	if (ctx->sq_data) {
+		io_sq_thread_park(ctx->sq_data);
+		list_del_init(&ctx->sqd_list);
+		io_sqd_update_thread_idle(ctx->sq_data);
+		io_sq_thread_unpark(ctx->sq_data);
+	}
+
 	/*
 	 * If we're doing polled IO and end up having requests being
 	 * submitted async (out-of-line), then completions can come in while
@@ -8613,14 +8622,6 @@ static void io_ring_ctx_wait_and_kill(struct io_ring_ctx *ctx)
 	xa_for_each(&ctx->personalities, index, creds)
 		io_unregister_personality(ctx, index);
 	mutex_unlock(&ctx->uring_lock);
-
-	/* prevent SQPOLL from submitting new requests */
-	if (ctx->sq_data) {
-		io_sq_thread_park(ctx->sq_data);
-		list_del_init(&ctx->sqd_list);
-		io_sqd_update_thread_idle(ctx->sq_data);
-		io_sq_thread_unpark(ctx->sq_data);
-	}
 
 	io_kill_timeouts(ctx, NULL, NULL);
 	io_poll_remove_all(ctx, NULL, NULL);
