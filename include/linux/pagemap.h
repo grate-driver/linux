@@ -590,6 +590,7 @@ extern int __lock_page_async(struct page *page, struct wait_page_queue *wait);
 extern int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
 				unsigned int flags);
 extern void unlock_page(struct page *page);
+void unlock_page_private_2(struct page *page);
 
 /*
  * Return true if the page was successfully locked
@@ -817,6 +818,8 @@ void page_cache_sync_ra(struct readahead_control *, struct file_ra_state *,
 		unsigned long req_count);
 void page_cache_async_ra(struct readahead_control *, struct file_ra_state *,
 		struct page *, unsigned long req_count);
+void readahead_expand(struct readahead_control *ractl,
+		      loff_t new_start, size_t new_len);
 
 /**
  * page_cache_sync_readahead - generic file readahead
