@@ -1262,6 +1262,7 @@ dtb-$(CONFIG_ARCH_TEGRA_2x_SOC) += \
 	tegra20-qemu.dtb \
 	tegra20-seaboard.dtb \
 	tegra20-tec.dtb \
+	tegra20-tf101.dtb \
 	tegra20-trimslice.dtb \
 	tegra20-ventana.dtb \
 	tegra20-glide.dtb
