@@ -353,6 +353,14 @@
 			interrupt-parent = <&gpio>;
 			interrupts = <TEGRA_GPIO(Z, 2) IRQ_TYPE_LEVEL_HIGH>;
 		};
+
+		/* Atmel MXT1386 Touchscreen */
+		mxt1386@5b {
+			compatible = "atmel,maxtouch", "atmel_mxt_ts";
+			reg = <0x5b>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(V, 6) IRQ_TYPE_LEVEL_LOW>;
+		};
 	};
 
 	i2c@7000c400 {
