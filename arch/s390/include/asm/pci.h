@@ -85,7 +85,6 @@ enum zpci_state {
 	ZPCI_FN_STATE_STANDBY = 0,
 	ZPCI_FN_STATE_CONFIGURED = 1,
 	ZPCI_FN_STATE_RESERVED = 2,
-	ZPCI_FN_STATE_ONLINE = 3,
 };
 
 struct zpci_bar_struct {
@@ -202,9 +201,11 @@ extern unsigned int s390_pci_no_rid;
 ----------------------------------------------------------------------------- */
 /* Base stuff */
 int zpci_create_device(u32 fid, u32 fh, enum zpci_state state);
-void zpci_remove_device(struct zpci_dev *zdev, bool set_error);
 int zpci_enable_device(struct zpci_dev *);
 int zpci_disable_device(struct zpci_dev *);
+int zpci_configure_device(struct zpci_dev *zdev, u32 fh);
+int zpci_deconfigure_device(struct zpci_dev *zdev);
+
 int zpci_register_ioat(struct zpci_dev *, u8, u64, u64, u64);
 int zpci_unregister_ioat(struct zpci_dev *, u8);
 void zpci_remove_reserved_devices(void);
