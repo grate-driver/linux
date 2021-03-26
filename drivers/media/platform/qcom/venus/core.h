@@ -172,6 +172,8 @@ struct vdec_controls {
 	u32 post_loop_deb_mode;
 	u32 profile;
 	u32 level;
+	u32 display_delay;
+	u32 display_delay_enable;
 };
 
 struct venc_controls {
@@ -222,6 +224,7 @@ struct venc_controls {
 	u32 multi_slice_max_mb;
 
 	u32 header_mode;
+	bool aud_enable;
 
 	struct {
 		u32 h264;
