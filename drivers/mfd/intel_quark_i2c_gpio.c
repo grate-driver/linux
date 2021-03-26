@@ -16,6 +16,7 @@
 #include <linux/clkdev.h>
 #include <linux/clk-provider.h>
 #include <linux/dmi.h>
+#include <linux/i2c.h>
 #include <linux/platform_data/gpio-dwapb.h>
 #include <linux/platform_data/i2c-designware.h>
 
@@ -45,7 +46,6 @@
 #define INTEL_QUARK_I2C_CLK_HZ	33000000
 
 struct intel_quark_mfd {
-	struct device		*dev;
 	struct clk		*i2c_clk;
 	struct clk_lookup	*i2c_clk_lookup;
 };
@@ -55,19 +55,19 @@ static const struct dmi_system_id dmi_platform_info[] = {
 		.matches = {
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "Galileo"),
 		},
-		.driver_data = (void *)100000,
+		.driver_data = (void *)I2C_MAX_STANDARD_MODE_FREQ,
 	},
 	{
 		.matches = {
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "GalileoGen2"),
 		},
-		.driver_data = (void *)400000,
+		.driver_data = (void *)I2C_MAX_FAST_MODE_FREQ,
 	},
 	{
 		.matches = {
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "SIMATIC IOT2000"),
 		},
-		.driver_data = (void *)400000,
+		.driver_data = (void *)I2C_MAX_FAST_MODE_FREQ,
 	},
 	{}
 };
@@ -98,20 +98,20 @@ static struct mfd_cell_acpi_match intel_quark_acpi_match_gpio = {
 };
 
 static struct mfd_cell intel_quark_mfd_cells[] = {
-	{
-		.id = MFD_GPIO_BAR,
-		.name = "gpio-dwapb",
-		.acpi_match = &intel_quark_acpi_match_gpio,
-		.num_resources = ARRAY_SIZE(intel_quark_gpio_res),
-		.resources = intel_quark_gpio_res,
-		.ignore_resource_conflicts = true,
-	},
-	{
+	[MFD_I2C_BAR] = {
 		.id = MFD_I2C_BAR,
 		.name = "i2c_designware",
 		.acpi_match = &intel_quark_acpi_match_i2c,
 		.num_resources = ARRAY_SIZE(intel_quark_i2c_res),
 		.resources = intel_quark_i2c_res,
+		.ignore_resource_conflicts = true,
+	},
+	[MFD_GPIO_BAR] = {
+		.id = MFD_GPIO_BAR,
+		.name = "gpio-dwapb",
+		.acpi_match = &intel_quark_acpi_match_gpio,
+		.num_resources = ARRAY_SIZE(intel_quark_gpio_res),
+		.resources = intel_quark_gpio_res,
 		.ignore_resource_conflicts = true,
 	},
 };
@@ -177,7 +177,7 @@ static int intel_quark_i2c_setup(struct pci_dev *pdev, struct mfd_cell *cell)
 		return -ENOMEM;
 
 	/* Normal mode by default */
-	pdata->i2c_scl_freq = 100000;
+	pdata->i2c_scl_freq = I2C_MAX_STANDARD_MODE_FREQ;
 
 	dmi_id = dmi_first_match(dmi_platform_info);
 	if (dmi_id)
@@ -240,18 +240,17 @@ static int intel_quark_mfd_probe(struct pci_dev *pdev,
 	if (!quark_mfd)
 		return -ENOMEM;
 
-	quark_mfd->dev = &pdev->dev;
 	dev_set_drvdata(&pdev->dev, quark_mfd);
 
 	ret = intel_quark_register_i2c_clk(&pdev->dev);
 	if (ret)
 		return ret;
 
-	ret = intel_quark_i2c_setup(pdev, &intel_quark_mfd_cells[1]);
+	ret = intel_quark_i2c_setup(pdev, &intel_quark_mfd_cells[MFD_I2C_BAR]);
 	if (ret)
 		goto err_unregister_i2c_clk;
 
-	ret = intel_quark_gpio_setup(pdev, &intel_quark_mfd_cells[0]);
+	ret = intel_quark_gpio_setup(pdev, &intel_quark_mfd_cells[MFD_GPIO_BAR]);
 	if (ret)
 		goto err_unregister_i2c_clk;
 
@@ -270,8 +269,8 @@ err_unregister_i2c_clk:
 
 static void intel_quark_mfd_remove(struct pci_dev *pdev)
 {
-	intel_quark_unregister_i2c_clk(&pdev->dev);
 	mfd_remove_devices(&pdev->dev);
+	intel_quark_unregister_i2c_clk(&pdev->dev);
 }
 
 static struct pci_driver intel_quark_mfd_driver = {
