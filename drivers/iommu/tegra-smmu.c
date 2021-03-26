@@ -60,6 +60,8 @@ struct tegra_smmu_as {
 	dma_addr_t pd_dma;
 	unsigned id;
 	u32 attr;
+	bool display_attached[2];
+	bool attached_devices_need_sync;
 };
 
 static struct tegra_smmu_as *to_smmu_as(struct iommu_domain *dom)
@@ -77,6 +79,10 @@ static inline u32 smmu_readl(struct tegra_smmu *smmu, unsigned long offset)
 {
 	return readl(smmu->regs + offset);
 }
+
+/* all Tegra SoCs use the same group IDs for displays */
+#define SMMU_SWGROUP_DC		1
+#define SMMU_SWGROUP_DCB	2
 
 #define SMMU_CONFIG 0x010
 #define  SMMU_CONFIG_ENABLE (1 << 0)
@@ -253,6 +259,20 @@ static inline void smmu_flush(struct tegra_smmu *smmu)
 	smmu_readl(smmu, SMMU_PTB_ASID);
 }
 
+static int smmu_swgroup_to_display_id(unsigned int swgroup)
+{
+	switch (swgroup) {
+	case SMMU_SWGROUP_DC:
+		return 0;
+
+	case SMMU_SWGROUP_DCB:
+		return 1;
+
+	default:
+		return -1;
+	}
+}
+
 static int tegra_smmu_alloc_asid(struct tegra_smmu *smmu, unsigned int *idp)
 {
 	unsigned long id;
@@ -317,6 +337,9 @@ static struct iommu_domain *tegra_smmu_domain_alloc(unsigned type)
 	as->domain.geometry.aperture_start = 0;
 	as->domain.geometry.aperture_end = 0xffffffff;
 	as->domain.geometry.force_aperture = true;
+
+	/* work around implicit attachment of devices with active DMA */
+	as->attached_devices_need_sync = true;
 
 	return &as->domain;
 }
@@ -410,6 +433,31 @@ static void tegra_smmu_disable(struct tegra_smmu *smmu, unsigned int swgroup,
 	}
 }
 
+static void tegra_smmu_attach_deferred_devices(struct iommu_domain *domain)
+{
+	struct tegra_smmu_as *as = to_smmu_as(domain);
+
+	if (!as->attached_devices_need_sync)
+		return;
+
+	if (as->display_attached[0] || as->display_attached[1]) {
+		struct tegra_smmu *smmu = as->smmu;
+		unsigned int i;
+
+		for (i = 0; i < smmu->soc->num_clients; i++) {
+			const struct tegra_mc_client *client = &smmu->soc->clients[i];
+			const int disp_id = smmu_swgroup_to_display_id(client->swgroup);
+
+			if (disp_id < 0 || !as->display_attached[disp_id])
+				continue;
+
+			tegra_smmu_enable(smmu, client->swgroup, as->id);
+		}
+	}
+
+	as->attached_devices_need_sync = false;
+}
+
 static int tegra_smmu_as_prepare(struct tegra_smmu *smmu,
 				 struct tegra_smmu_as *as)
 {
@@ -495,9 +543,25 @@ static int tegra_smmu_attach_dev(struct iommu_domain *domain,
 		return -ENOENT;
 
 	for (index = 0; index < fwspec->num_ids; index++) {
+		const unsigned int swgroup = fwspec->ids[index];
+		const int disp_id = smmu_swgroup_to_display_id(swgroup);
+
 		err = tegra_smmu_as_prepare(smmu, as);
 		if (err)
 			goto disable;
+
+		if (disp_id >= 0) {
+			as->display_attached[disp_id] = true;
+
+			/*
+			 * In most cases display is performing DMA before
+			 * driver is initialized by showing a splash screen
+			 * and in this case we should defer the h/w attachment
+			 * until the first mapping is created by display driver.
+			 */
+			if (as->attached_devices_need_sync)
+				continue;
+		}
 
 		tegra_smmu_enable(smmu, fwspec->ids[index], as->id);
 	}
@@ -527,6 +591,12 @@ static void tegra_smmu_detach_dev(struct iommu_domain *domain, struct device *de
 		return;
 
 	for (index = 0; index < fwspec->num_ids; index++) {
+		const unsigned int swgroup = fwspec->ids[index];
+		const int disp_id = smmu_swgroup_to_display_id(swgroup);
+
+		if (disp_id >= 0)
+			as->display_attached[disp_id] = false;
+
 		tegra_smmu_disable(smmu, fwspec->ids[index], as->id);
 		tegra_smmu_as_unprepare(smmu, as);
 	}
@@ -762,6 +832,7 @@ static int tegra_smmu_map(struct iommu_domain *domain, unsigned long iova,
 	int ret;
 
 	spin_lock_irqsave(&as->lock, flags);
+	tegra_smmu_attach_deferred_devices(domain);
 	ret = __tegra_smmu_map(domain, iova, paddr, size, prot, gfp, &flags);
 	spin_unlock_irqrestore(&as->lock, flags);
 
