@@ -176,7 +176,7 @@ static void fdp_nci_set_data_pkt_counter(struct nci_dev *ndev,
  *
  * The firmware will be analyzed and applied when we send NCI_OP_PROP_PATCH_CMD
  * command with NCI_PATCH_TYPE_EOT parameter. The device will send a
- * NFCC_PATCH_NTF packaet and a NCI_OP_CORE_RESET_NTF packet.
+ * NFCC_PATCH_NTF packet and a NCI_OP_CORE_RESET_NTF packet.
  */
 static int fdp_nci_send_patch(struct nci_dev *ndev, u8 conn_id, u8 type)
 {
@@ -236,15 +236,12 @@ static int fdp_nci_send_patch(struct nci_dev *ndev, u8 conn_id, u8 type)
 
 static int fdp_nci_open(struct nci_dev *ndev)
 {
-	int r;
 	struct fdp_nci_info *info = nci_get_drvdata(ndev);
 	struct device *dev = &info->phy->i2c_dev->dev;
 
 	dev_dbg(dev, "%s\n", __func__);
 
-	r = info->phy_ops->enable(info->phy);
-
-	return r;
+	return info->phy_ops->enable(info->phy);
 }
 
 static int fdp_nci_close(struct nci_dev *ndev)

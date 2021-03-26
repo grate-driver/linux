@@ -147,9 +147,9 @@ struct stmmac_flow_entry {
 
 struct stmmac_priv {
 	/* Frequently used values are kept adjacent for cache effect */
-	u32 tx_coal_frames;
-	u32 tx_coal_timer;
-	u32 rx_coal_frames;
+	u32 tx_coal_frames[MTL_MAX_TX_QUEUES];
+	u32 tx_coal_timer[MTL_MAX_TX_QUEUES];
+	u32 rx_coal_frames[MTL_MAX_TX_QUEUES];
 
 	int tx_coalesce;
 	int hwts_tx_en;
@@ -160,7 +160,7 @@ struct stmmac_priv {
 
 	unsigned int dma_buf_sz;
 	unsigned int rx_copybreak;
-	u32 rx_riwt;
+	u32 rx_riwt[MTL_MAX_TX_QUEUES];
 	int hwts_rx_en;
 
 	void __iomem *ioaddr;
@@ -234,6 +234,12 @@ struct stmmac_priv {
 	struct workqueue_struct *wq;
 	struct work_struct service_task;
 
+	/* Workqueue for handling FPE hand-shaking */
+	unsigned long fpe_task_state;
+	struct workqueue_struct *fpe_wq;
+	struct work_struct fpe_task;
+	char wq_name[IFNAMSIZ + 4];
+
 	/* TC Handling */
 	unsigned int tc_entries_max;
 	unsigned int tc_off_max;
@@ -272,6 +278,8 @@ void stmmac_disable_eee_mode(struct stmmac_priv *priv);
 bool stmmac_eee_init(struct stmmac_priv *priv);
 int stmmac_reinit_queues(struct net_device *dev, u32 rx_cnt, u32 tx_cnt);
 int stmmac_reinit_ringparam(struct net_device *dev, u32 rx_size, u32 tx_size);
+int stmmac_bus_clks_config(struct stmmac_priv *priv, bool enabled);
+void stmmac_fpe_handshake(struct stmmac_priv *priv, bool enable);
 
 #if IS_ENABLED(CONFIG_STMMAC_SELFTESTS)
 void stmmac_selftest_run(struct net_device *dev,

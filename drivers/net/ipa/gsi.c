@@ -351,7 +351,7 @@ void *gsi_ring_virt(struct gsi_ring *ring, u32 index)
 /* Return the 32-bit DMA address associated with a ring index */
 static u32 gsi_ring_addr(struct gsi_ring *ring, u32 index)
 {
-	return (ring->addr & GENMASK(31, 0)) + index * GSI_RING_ELEMENT_SIZE;
+	return lower_32_bits(ring->addr) + index * GSI_RING_ELEMENT_SIZE;
 }
 
 /* Return the ring index of a 32-bit ring offset */
@@ -701,17 +701,16 @@ static void gsi_evt_ring_program(struct gsi *gsi, u32 evt_ring_id)
 	val |= u32_encode_bits(GSI_RING_ELEMENT_SIZE, EV_ELEMENT_SIZE_FMASK);
 	iowrite32(val, gsi->virt + GSI_EV_CH_E_CNTXT_0_OFFSET(evt_ring_id));
 
-	val = u32_encode_bits(size, EV_R_LENGTH_FMASK);
+	val = ev_r_length_encoded(gsi->version, size);
 	iowrite32(val, gsi->virt + GSI_EV_CH_E_CNTXT_1_OFFSET(evt_ring_id));
 
 	/* The context 2 and 3 registers store the low-order and
 	 * high-order 32 bits of the address of the event ring,
 	 * respectively.
 	 */
-	val = evt_ring->ring.addr & GENMASK(31, 0);
+	val = lower_32_bits(evt_ring->ring.addr);
 	iowrite32(val, gsi->virt + GSI_EV_CH_E_CNTXT_2_OFFSET(evt_ring_id));
-
-	val = evt_ring->ring.addr >> 32;
+	val = upper_32_bits(evt_ring->ring.addr);
 	iowrite32(val, gsi->virt + GSI_EV_CH_E_CNTXT_3_OFFSET(evt_ring_id));
 
 	/* Enable interrupt moderation by setting the moderation delay */
@@ -802,24 +801,23 @@ static void gsi_channel_program(struct gsi_channel *channel, bool doorbell)
 	channel->tre_ring.index = 0;
 
 	/* We program all channels as GPI type/protocol */
-	val = u32_encode_bits(GSI_CHANNEL_TYPE_GPI, CHTYPE_PROTOCOL_FMASK);
+	val = chtype_protocol_encoded(gsi->version, GSI_CHANNEL_TYPE_GPI);
 	if (channel->toward_ipa)
 		val |= CHTYPE_DIR_FMASK;
 	val |= u32_encode_bits(channel->evt_ring_id, ERINDEX_FMASK);
 	val |= u32_encode_bits(GSI_RING_ELEMENT_SIZE, ELEMENT_SIZE_FMASK);
 	iowrite32(val, gsi->virt + GSI_CH_C_CNTXT_0_OFFSET(channel_id));
 
-	val = u32_encode_bits(size, R_LENGTH_FMASK);
+	val = r_length_encoded(gsi->version, size);
 	iowrite32(val, gsi->virt + GSI_CH_C_CNTXT_1_OFFSET(channel_id));
 
 	/* The context 2 and 3 registers store the low-order and
 	 * high-order 32 bits of the address of the channel ring,
 	 * respectively.
 	 */
-	val = channel->tre_ring.addr & GENMASK(31, 0);
+	val = lower_32_bits(channel->tre_ring.addr);
 	iowrite32(val, gsi->virt + GSI_CH_C_CNTXT_2_OFFSET(channel_id));
-
-	val = channel->tre_ring.addr >> 32;
+	val = upper_32_bits(channel->tre_ring.addr);
 	iowrite32(val, gsi->virt + GSI_CH_C_CNTXT_3_OFFSET(channel_id));
 
 	/* Command channel gets low weighted round-robin priority */
@@ -829,14 +827,14 @@ static void gsi_channel_program(struct gsi_channel *channel, bool doorbell)
 
 	/* Max prefetch is 1 segment (do not set MAX_PREFETCH_FMASK) */
 
-	/* We enable the doorbell engine for IPA v3.5.1 */
-	if (gsi->version == IPA_VERSION_3_5_1 && doorbell)
+	/* No need to use the doorbell engine starting at IPA v4.0 */
+	if (gsi->version < IPA_VERSION_4_0 && doorbell)
 		val |= USE_DB_ENG_FMASK;
 
 	/* v4.0 introduces an escape buffer for prefetch.  We use it
 	 * on all but the AP command channel.
 	 */
-	if (gsi->version != IPA_VERSION_3_5_1 && !channel->command) {
+	if (gsi->version >= IPA_VERSION_4_0 && !channel->command) {
 		/* If not otherwise set, prefetch buffers are used */
 		if (gsi->version < IPA_VERSION_4_5)
 			val |= USE_ESCAPE_BUF_ONLY_FMASK;
@@ -844,6 +842,9 @@ static void gsi_channel_program(struct gsi_channel *channel, bool doorbell)
 			val |= u32_encode_bits(GSI_ESCAPE_BUF_ONLY,
 					       PREFETCH_MODE_FMASK);
 	}
+	/* All channels set DB_IN_BYTES */
+	if (gsi->version >= IPA_VERSION_4_9)
+		val |= DB_IN_BYTES;
 
 	iowrite32(val, gsi->virt + GSI_CH_C_QOS_OFFSET(channel_id));
 
@@ -975,7 +976,7 @@ void gsi_channel_reset(struct gsi *gsi, u32 channel_id, bool doorbell)
 
 	gsi_channel_reset_command(channel);
 	/* Due to a hardware quirk we may need to reset RX channels twice. */
-	if (gsi->version == IPA_VERSION_3_5_1 && !channel->toward_ipa)
+	if (gsi->version < IPA_VERSION_4_0 && !channel->toward_ipa)
 		gsi_channel_reset_command(channel);
 
 	gsi_channel_program(channel, doorbell);
@@ -1337,10 +1338,9 @@ static int gsi_irq_init(struct gsi *gsi, struct platform_device *pdev)
 	int ret;
 
 	ret = platform_get_irq_byname(pdev, "gsi");
-	if (ret <= 0) {
-		dev_err(dev, "DT error %d getting \"gsi\" IRQ property\n", ret);
+	if (ret <= 0)
 		return ret ? : -EINVAL;
-	}
+
 	irq = ret;
 
 	ret = request_irq(irq, gsi_isr, 0, "gsi", gsi);
@@ -1366,7 +1366,7 @@ static struct gsi_trans *gsi_event_trans(struct gsi_channel *channel,
 	u32 tre_index;
 
 	/* Event xfer_ptr records the TRE it's associated with */
-	tre_offset = le64_to_cpu(event->xfer_ptr) & GENMASK(31, 0);
+	tre_offset = lower_32_bits(le64_to_cpu(event->xfer_ptr));
 	tre_index = gsi_ring_index(&channel->tre_ring, tre_offset);
 
 	return gsi_channel_trans_mapped(channel, tre_index);
@@ -1439,15 +1439,18 @@ static void gsi_evt_ring_rx_update(struct gsi_evt_ring *evt_ring, u32 index)
 /* Initialize a ring, including allocating DMA memory for its entries */
 static int gsi_ring_alloc(struct gsi *gsi, struct gsi_ring *ring, u32 count)
 {
-	size_t size = count * GSI_RING_ELEMENT_SIZE;
+	u32 size = count * GSI_RING_ELEMENT_SIZE;
 	struct device *dev = gsi->dev;
 	dma_addr_t addr;
 
-	/* Hardware requires a 2^n ring size, with alignment equal to size */
+	/* Hardware requires a 2^n ring size, with alignment equal to size.
+	 * The size is a power of 2, so we can check alignment using just
+	 * the bottom 32 bits for a DMA address of any size.
+	 */
 	ring->virt = dma_alloc_coherent(dev, size, &addr, GFP_KERNEL);
-	if (ring->virt && addr % size) {
+	if (ring->virt && lower_32_bits(addr) % size) {
 		dma_free_coherent(dev, size, ring->virt, addr);
-		dev_err(dev, "unable to alloc 0x%zx-aligned ring buffer\n",
+		dev_err(dev, "unable to alloc 0x%x-aligned ring buffer\n",
 			size);
 		return -EINVAL;	/* Not a good error value, but distinct */
 	} else if (!ring->virt) {
