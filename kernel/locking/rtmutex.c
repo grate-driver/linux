@@ -706,7 +706,7 @@ static int rt_mutex_adjust_prio_chain(struct task_struct *task,
 	} else if (prerequeue_top_waiter == waiter) {
 		/*
 		 * The waiter was the top waiter on the lock, but is
-		 * no longer the top prority waiter. Replace waiter in
+		 * no longer the top priority waiter. Replace waiter in
 		 * the owner tasks pi waiters tree with the new top
 		 * (highest priority) waiter and adjust the priority
 		 * of the owner.
@@ -1194,7 +1194,7 @@ static void rt_mutex_handle_deadlock(int res, int detect_deadlock,
 		return;
 
 	/*
-	 * Yell lowdly and stop the task right here.
+	 * Yell loudly and stop the task right here.
 	 */
 	rt_mutex_print_deadlock(w);
 	while (1) {
@@ -1790,26 +1790,6 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
 	raw_spin_unlock_irq(&lock->wait_lock);
 
 	return ret;
-}
-
-/**
- * rt_mutex_next_owner - return the next owner of the lock
- *
- * @lock: the rt lock query
- *
- * Returns the next owner of the lock or NULL
- *
- * Caller has to serialize against other accessors to the lock
- * itself.
- *
- * Special API call for PI-futex support
- */
-struct task_struct *rt_mutex_next_owner(struct rt_mutex *lock)
-{
-	if (!rt_mutex_has_waiters(lock))
-		return NULL;
-
-	return rt_mutex_top_waiter(lock)->task;
 }
 
 /**
