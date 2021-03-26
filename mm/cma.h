@@ -3,6 +3,16 @@
 #define __MM_CMA_H__
 
 #include <linux/debugfs.h>
+#include <linux/kobject.h>
+
+struct cma_stat {
+	spinlock_t lock;
+	/* the number of CMA page successful allocations */
+	unsigned long nr_pages_succeeded;
+	/* the number of CMA page allocation failures */
+	unsigned long nr_pages_failed;
+	struct kobject kobj;
+};
 
 struct cma {
 	unsigned long   base_pfn;
@@ -16,6 +26,9 @@ struct cma {
 	struct debugfs_u32_array dfs_bitmap;
 #endif
 	char name[CMA_MAX_NAME];
+#ifdef CONFIG_CMA_SYSFS
+	struct cma_stat	*stat;
+#endif
 };
 
 extern struct cma cma_areas[MAX_CMA_AREAS];
@@ -26,4 +39,11 @@ static inline unsigned long cma_bitmap_maxno(struct cma *cma)
 	return cma->count >> cma->order_per_bit;
 }
 
+#ifdef CONFIG_CMA_SYSFS
+void cma_sysfs_alloc_pages_count(struct cma *cma, size_t count);
+void cma_sysfs_fail_pages_count(struct cma *cma, size_t count);
+#else
+static inline void cma_sysfs_alloc_pages_count(struct cma *cma, size_t count) {};
+static inline void cma_sysfs_fail_pages_count(struct cma *cma, size_t count) {};
+#endif
 #endif

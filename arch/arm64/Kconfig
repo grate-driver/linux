@@ -208,6 +208,7 @@ config ARM64
 	select SWIOTLB
 	select SYSCTL_EXCEPTION_TRACE
 	select THREAD_INFO_IN_TASK
+	select HAVE_ARCH_USERFAULTFD_MINOR if USERFAULTFD
 	help
 	  ARM 64-bit (AArch64) Linux support.
 
@@ -307,6 +308,9 @@ config ARCH_ENABLE_MEMORY_HOTPLUG
 	def_bool y
 
 config ARCH_ENABLE_MEMORY_HOTREMOVE
+	def_bool y
+
+config ARCH_MHP_MEMMAP_ON_MEMORY_ENABLE
 	def_bool y
 
 config SMP
