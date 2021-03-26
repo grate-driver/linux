@@ -1294,8 +1294,6 @@ static int nand_exec_prog_page_op(struct nand_chip *chip, unsigned int page,
 	};
 	struct nand_operation op = NAND_OPERATION(chip->cur_cs, instrs);
 	int naddrs = nand_fill_column_cycles(chip, addrs, offset_in_page);
-	int ret;
-	u8 status;
 
 	if (naddrs < 0)
 		return naddrs;
@@ -1335,15 +1333,7 @@ static int nand_exec_prog_page_op(struct nand_chip *chip, unsigned int page,
 		op.ninstrs--;
 	}
 
-	ret = nand_exec_op(chip, &op);
-	if (!prog || ret)
-		return ret;
-
-	ret = nand_status_op(chip, &status);
-	if (ret)
-		return ret;
-
-	return status;
+	return nand_exec_op(chip, &op);
 }
 
 /**
@@ -1449,7 +1439,8 @@ int nand_prog_page_op(struct nand_chip *chip, unsigned int page,
 		      unsigned int len)
 {
 	struct mtd_info *mtd = nand_to_mtd(chip);
-	int status;
+	u8 status;
+	int ret;
 
 	if (!len || !buf)
 		return -EINVAL;
@@ -1458,14 +1449,24 @@ int nand_prog_page_op(struct nand_chip *chip, unsigned int page,
 		return -EINVAL;
 
 	if (nand_has_exec_op(chip)) {
-		status = nand_exec_prog_page_op(chip, page, offset_in_page, buf,
+		ret = nand_exec_prog_page_op(chip, page, offset_in_page, buf,
 						len, true);
+		if (ret)
+			return ret;
+
+		ret = nand_status_op(chip, &status);
+		if (ret)
+			return ret;
 	} else {
 		chip->legacy.cmdfunc(chip, NAND_CMD_SEQIN, offset_in_page,
 				     page);
 		chip->legacy.write_buf(chip, buf, len);
 		chip->legacy.cmdfunc(chip, NAND_CMD_PAGEPROG, -1, -1);
-		status = chip->legacy.waitfunc(chip);
+		ret = chip->legacy.waitfunc(chip);
+		if (ret < 0)
+			return ret;
+
+		status = ret;
 	}
 
 	if (status & NAND_STATUS_FAIL)
@@ -5162,8 +5163,8 @@ int rawnand_sw_hamming_init(struct nand_chip *chip)
 	chip->ecc.size = base->ecc.ctx.conf.step_size;
 	chip->ecc.strength = base->ecc.ctx.conf.strength;
 	chip->ecc.total = base->ecc.ctx.total;
-	chip->ecc.steps = engine_conf->nsteps;
-	chip->ecc.bytes = engine_conf->code_size;
+	chip->ecc.steps = nanddev_get_ecc_nsteps(base);
+	chip->ecc.bytes = base->ecc.ctx.total / nanddev_get_ecc_nsteps(base);
 
 	return 0;
 }
@@ -5201,7 +5202,7 @@ EXPORT_SYMBOL(rawnand_sw_hamming_cleanup);
 int rawnand_sw_bch_init(struct nand_chip *chip)
 {
 	struct nand_device *base = &chip->base;
-	struct nand_ecc_sw_bch_conf *engine_conf;
+	const struct nand_ecc_props *ecc_conf = nanddev_get_ecc_conf(base);
 	int ret;
 
 	base->ecc.user_conf.engine_type = NAND_ECC_ENGINE_TYPE_SOFT;
@@ -5213,13 +5214,11 @@ int rawnand_sw_bch_init(struct nand_chip *chip)
 	if (ret)
 		return ret;
 
-	engine_conf = base->ecc.ctx.priv;
-
-	chip->ecc.size = base->ecc.ctx.conf.step_size;
-	chip->ecc.strength = base->ecc.ctx.conf.strength;
+	chip->ecc.size = ecc_conf->step_size;
+	chip->ecc.strength = ecc_conf->strength;
 	chip->ecc.total = base->ecc.ctx.total;
-	chip->ecc.steps = engine_conf->nsteps;
-	chip->ecc.bytes = engine_conf->code_size;
+	chip->ecc.steps = nanddev_get_ecc_nsteps(base);
+	chip->ecc.bytes = base->ecc.ctx.total / nanddev_get_ecc_nsteps(base);
 
 	return 0;
 }
