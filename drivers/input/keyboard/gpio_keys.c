@@ -8,6 +8,7 @@
 
 #include <linux/module.h>
 
+#include <linux/hrtimer.h>
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/interrupt.h>
@@ -36,10 +37,11 @@ struct gpio_button_data {
 
 	unsigned short *code;
 
-	struct timer_list release_timer;
+	struct hrtimer release_timer;
 	unsigned int release_delay;	/* in msecs, for IRQ-only buttons */
 
 	struct delayed_work work;
+	struct hrtimer debounce_timer;
 	unsigned int software_debounce;	/* in msecs, for GPIO-driven buttons */
 
 	unsigned int irq;
@@ -48,6 +50,7 @@ struct gpio_button_data {
 	bool disabled;
 	bool key_pressed;
 	bool suspended;
+	bool debounce_use_hrtimer;
 };
 
 struct gpio_keys_drvdata {
@@ -143,10 +146,10 @@ static void gpio_keys_disable_button(struct gpio_button_data *bdata)
 		 */
 		disable_irq(bdata->irq);
 
-		if (bdata->gpiod)
-			cancel_delayed_work_sync(&bdata->work);
+		if (bdata->debounce_use_hrtimer)
+			hrtimer_cancel(&bdata->release_timer);
 		else
-			del_timer_sync(&bdata->release_timer);
+			cancel_delayed_work_sync(&bdata->work);
 
 		bdata->disabled = true;
 	}
@@ -360,7 +363,9 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 	unsigned int type = button->type ?: EV_KEY;
 	int state;
 
-	state = gpiod_get_value_cansleep(bdata->gpiod);
+	state = bdata->debounce_use_hrtimer ?
+			gpiod_get_value(bdata->gpiod) :
+			gpiod_get_value_cansleep(bdata->gpiod);
 	if (state < 0) {
 		dev_err(input->dev.parent,
 			"failed to get gpio state: %d\n", state);
@@ -373,7 +378,15 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 	} else {
 		input_event(input, type, *bdata->code, state);
 	}
-	input_sync(input);
+}
+
+static void gpio_keys_debounce_event(struct gpio_button_data *bdata)
+{
+	gpio_keys_gpio_report_event(bdata);
+	input_sync(bdata->input);
+
+	if (bdata->button->wakeup)
+		pm_relax(bdata->input->dev.parent);
 }
 
 static void gpio_keys_gpio_work_func(struct work_struct *work)
@@ -381,10 +394,17 @@ static void gpio_keys_gpio_work_func(struct work_struct *work)
 	struct gpio_button_data *bdata =
 		container_of(work, struct gpio_button_data, work.work);
 
-	gpio_keys_gpio_report_event(bdata);
+	gpio_keys_debounce_event(bdata);
+}
 
-	if (bdata->button->wakeup)
-		pm_relax(bdata->input->dev.parent);
+static enum hrtimer_restart gpio_keys_debounce_timer(struct hrtimer *t)
+{
+	struct gpio_button_data *bdata =
+		container_of(t, struct gpio_button_data, debounce_timer);
+
+	gpio_keys_debounce_event(bdata);
+
+	return HRTIMER_NORESTART;
 }
 
 static irqreturn_t gpio_keys_gpio_isr(int irq, void *dev_id)
@@ -408,26 +428,33 @@ static irqreturn_t gpio_keys_gpio_isr(int irq, void *dev_id)
 		}
 	}
 
-	mod_delayed_work(system_wq,
-			 &bdata->work,
-			 msecs_to_jiffies(bdata->software_debounce));
+	if (bdata->debounce_use_hrtimer) {
+		hrtimer_start(&bdata->debounce_timer,
+			      ms_to_ktime(bdata->software_debounce),
+			      HRTIMER_MODE_REL);
+	} else {
+		mod_delayed_work(system_wq,
+				 &bdata->work,
+				 msecs_to_jiffies(bdata->software_debounce));
+	}
 
 	return IRQ_HANDLED;
 }
 
-static void gpio_keys_irq_timer(struct timer_list *t)
+static enum hrtimer_restart gpio_keys_irq_timer(struct hrtimer *t)
 {
-	struct gpio_button_data *bdata = from_timer(bdata, t, release_timer);
+	struct gpio_button_data *bdata = container_of(t,
+						      struct gpio_button_data,
+						      release_timer);
 	struct input_dev *input = bdata->input;
-	unsigned long flags;
 
-	spin_lock_irqsave(&bdata->lock, flags);
 	if (bdata->key_pressed) {
 		input_event(input, EV_KEY, *bdata->code, 0);
 		input_sync(input);
 		bdata->key_pressed = false;
 	}
-	spin_unlock_irqrestore(&bdata->lock, flags);
+
+	return HRTIMER_NORESTART;
 }
 
 static irqreturn_t gpio_keys_irq_isr(int irq, void *dev_id)
@@ -457,8 +484,9 @@ static irqreturn_t gpio_keys_irq_isr(int irq, void *dev_id)
 	}
 
 	if (bdata->release_delay)
-		mod_timer(&bdata->release_timer,
-			jiffies + msecs_to_jiffies(bdata->release_delay));
+		hrtimer_start(&bdata->release_timer,
+			      ms_to_ktime(bdata->release_delay),
+			      HRTIMER_MODE_REL_HARD);
 out:
 	spin_unlock_irqrestore(&bdata->lock, flags);
 	return IRQ_HANDLED;
@@ -468,10 +496,10 @@ static void gpio_keys_quiesce_key(void *data)
 {
 	struct gpio_button_data *bdata = data;
 
-	if (bdata->gpiod)
-		cancel_delayed_work_sync(&bdata->work);
+	if (bdata->debounce_use_hrtimer)
+		hrtimer_cancel(&bdata->debounce_timer);
 	else
-		del_timer_sync(&bdata->release_timer);
+		cancel_delayed_work_sync(&bdata->work);
 }
 
 static int gpio_keys_setup_key(struct platform_device *pdev,
@@ -543,6 +571,14 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 			if (error < 0)
 				bdata->software_debounce =
 						button->debounce_interval;
+
+			/*
+			 * If reading the GPIO won't sleep, we can use a
+			 * hrtimer instead of a standard timer for the software
+			 * debounce, to reduce the latency as much as possible.
+			 */
+			bdata->debounce_use_hrtimer =
+					!gpiod_cansleep(bdata->gpiod);
 		}
 
 		if (button->irq) {
@@ -560,6 +596,10 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 		}
 
 		INIT_DELAYED_WORK(&bdata->work, gpio_keys_gpio_work_func);
+
+		hrtimer_init(&bdata->debounce_timer,
+			     CLOCK_REALTIME, HRTIMER_MODE_REL);
+		bdata->debounce_timer.function = gpio_keys_debounce_timer;
 
 		isr = gpio_keys_gpio_isr;
 		irqflags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
@@ -595,7 +635,10 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 		}
 
 		bdata->release_delay = button->debounce_interval;
-		timer_setup(&bdata->release_timer, gpio_keys_irq_timer, 0);
+		bdata->debounce_use_hrtimer = true;
+		hrtimer_init(&bdata->release_timer,
+			     CLOCK_REALTIME, HRTIMER_MODE_REL_HARD);
+		bdata->release_timer.function = gpio_keys_irq_timer;
 
 		isr = gpio_keys_irq_isr;
 		irqflags = 0;
