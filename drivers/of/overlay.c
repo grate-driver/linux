@@ -140,7 +140,7 @@ int of_overlay_notifier_register(struct notifier_block *nb)
 EXPORT_SYMBOL_GPL(of_overlay_notifier_register);
 
 /**
- * of_overlay_notifier_register() - Unregister notifier for overlay operations
+ * of_overlay_notifier_unregister() - Unregister notifier for overlay operations
  * @nb:		Notifier block to unregister
  */
 int of_overlay_notifier_unregister(struct notifier_block *nb)
@@ -796,6 +796,7 @@ static int init_overlay_changeset(struct overlay_changeset *ovcs,
 		if (!fragment->target) {
 			of_node_put(fragment->overlay);
 			ret = -EINVAL;
+			of_node_put(node);
 			goto err_free_fragments;
 		}
 
