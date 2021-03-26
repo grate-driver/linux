@@ -974,7 +974,6 @@ void sd_int_dpc(struct adapter *adapter)
 
 	if (hal->sdio_hisr & SDIO_HISR_TXBCNERR)
 		DBG_8192C("%s: SDIO_HISR_TXBCNERR\n", __func__);
-#ifndef CONFIG_C2H_PACKET_EN
 	if (hal->sdio_hisr & SDIO_HISR_C2HCMD) {
 		struct c2h_evt_hdr_88xx *c2h_evt;
 
@@ -997,7 +996,6 @@ void sd_int_dpc(struct adapter *adapter)
 			_set_workitem(&adapter->evtpriv.c2h_wk);
 		}
 	}
-#endif
 
 	if (hal->sdio_hisr & SDIO_HISR_RXFOVW)
 		DBG_8192C("%s: Rx Overflow\n", __func__);
@@ -1114,39 +1112,4 @@ void HalQueryTxOQTBufferStatus8723BSdio(struct adapter *adapter)
 	haldata->SdioTxOQTFreeSpace = SdioLocalCmd52Read1Byte(adapter, SDIO_REG_OQT_FREE_PG);
 }
 
-#if defined(CONFIG_WOWLAN) || defined(CONFIG_AP_WOWLAN)
-u8 RecvOnePkt(struct adapter *adapter, u32 size)
-{
-	struct recv_buf *recvbuf;
-	struct dvobj_priv *sddev;
-	struct sdio_func *func;
 
-	u8 res = false;
-
-	DBG_871X("+%s: size: %d+\n", __func__, size);
-
-	if (!adapter) {
-		DBG_871X(KERN_ERR "%s: adapter is NULL!\n", __func__);
-		return false;
-	}
-
-	sddev = adapter_to_dvobj(adapter);
-	psdio_data = &sddev->intf_data;
-	func = psdio_data->func;
-
-	if (size) {
-		sdio_claim_host(func);
-		recvbuf = sd_recv_rxfifo(adapter, size);
-
-		if (recvbuf) {
-			sd_rxhandler(adapter, recvbuf);
-			res = true;
-		} else {
-			res = false;
-		}
-		sdio_release_host(func);
-	}
-	DBG_871X("-%s-\n", __func__);
-	return res;
-}
-#endif /* CONFIG_WOWLAN */

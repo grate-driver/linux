@@ -15,7 +15,7 @@
 /*  */
 /*  <Roger_Notes> For RTL8723 WiFi/BT/GPS multi-function configuration. 2010.10.06. */
 /*  */
-enum RT_MULTI_FUNC {
+enum rt_multi_func {
 	RT_MULTI_FUNC_NONE	= 0x00,
 	RT_MULTI_FUNC_WIFI	= 0x01,
 	RT_MULTI_FUNC_BT		= 0x02,
@@ -24,18 +24,18 @@ enum RT_MULTI_FUNC {
 /*  */
 /*  <Roger_Notes> For RTL8723 WiFi PDn/GPIO polarity control configuration. 2010.10.08. */
 /*  */
-enum RT_POLARITY_CTL {
+enum rt_polarity_ctl {
 	RT_POLARITY_LOW_ACT	= 0,
 	RT_POLARITY_HIGH_ACT	= 1,
 };
 
 /*  For RTL8723 regulator mode. by tynli. 2011.01.14. */
-enum RT_REGULATOR_MODE {
+enum rt_regulator_mode {
 	RT_SWITCHING_REGULATOR	= 0,
 	RT_LDO_REGULATOR	= 1,
 };
 
-enum RT_AMPDU_BURST {
+enum rt_ampdu_burst {
 	RT_AMPDU_BURST_NONE	= 0,
 	RT_AMPDU_BURST_92D	= 1,
 	RT_AMPDU_BURST_88E	= 2,
@@ -176,10 +176,10 @@ struct dm_priv {
 
 
 struct hal_com_data {
-	HAL_VERSION VersionID;
-	enum RT_MULTI_FUNC MultiFunc; /*  For multi-function consideration. */
-	enum RT_POLARITY_CTL PolarityCtl; /*  For Wifi PDn Polarity control. */
-	enum RT_REGULATOR_MODE	RegulatorMode; /*  switching regulator or LDO */
+	struct hal_version VersionID;
+	enum rt_multi_func MultiFunc; /*  For multi-function consideration. */
+	enum rt_polarity_ctl PolarityCtl; /*  For Wifi PDn Polarity control. */
+	enum rt_regulator_mode	RegulatorMode; /*  switching regulator or LDO */
 
 	u16 FirmwareVersion;
 	u16 FirmwareVersionRev;
@@ -187,10 +187,10 @@ struct hal_com_data {
 	u16 FirmwareSignature;
 
 	/* current WIFI_PHY values */
-	enum WIRELESS_MODE CurrentWirelessMode;
-	enum CHANNEL_WIDTH CurrentChannelBW;
-	enum BAND_TYPE CurrentBandType;	/* 0:2.4G, 1:5G */
-	enum BAND_TYPE BandSet;
+	enum wireless_mode CurrentWirelessMode;
+	enum channel_width CurrentChannelBW;
+	enum band_type CurrentBandType;	/* 0:2.4G, 1:5G */
+	enum band_type BandSet;
 	u8 CurrentChannel;
 	u8 CurrentCenterFrequencyIndex1;
 	u8 nCur40MhzPrimeSC;/*  Control channel sub-carrier */
@@ -233,7 +233,7 @@ struct hal_com_data {
 	bool		EepromOrEfuse;
 	u8 		EfuseUsedPercentage;
 	u16 			EfuseUsedBytes;
-	EFUSE_HAL		EfuseHal;
+	struct efuse_hal		EfuseHal;
 
 	/* 3 [2.4G] */
 	u8 Index24G_CCK_Base[MAX_RF_PATH][CHANNEL_MAX_NUMBER];
@@ -411,7 +411,7 @@ struct hal_com_data {
 	u8 RegIQKFWOffload;
 	struct submit_ctx	iqk_sctx;
 
-	enum RT_AMPDU_BURST	AMPDUBurstMode; /* 92C maybe not use, but for compile successfully */
+	enum rt_ampdu_burst	AMPDUBurstMode; /* 92C maybe not use, but for compile successfully */
 
 	u32 		sdio_himr;
 	u32 		sdio_hisr;
@@ -419,7 +419,7 @@ struct hal_com_data {
 	/*  SDIO Tx FIFO related. */
 	/*  HIQ, MID, LOW, PUB free pages; padapter->xmitpriv.free_txpg */
 	u8 	SdioTxFIFOFreePage[SDIO_TX_FREE_PG_QUEUE];
-	_lock		SdioTxFIFOFreePageLock;
+	spinlock_t		SdioTxFIFOFreePageLock;
 	u8 	SdioTxOQTMaxFreeSpace;
 	u8 	SdioTxOQTFreeSpace;
 
@@ -431,19 +431,14 @@ struct hal_com_data {
 	u32 		sdio_tx_max_len[SDIO_MAX_TX_QUEUE];/*  H, N, L, used for sdio tx aggregation max length per queue */
 
 	struct dm_priv dmpriv;
-	DM_ODM_T		odmpriv;
+	struct dm_odm_t		odmpriv;
 
 	/*  For bluetooth co-existance */
-	BT_COEXIST		bt_coexist;
+	struct bt_coexist		bt_coexist;
 
 	/*  Interrupt related register information. */
 	u32 		SysIntrStatus;
 	u32 		SysIntrMask;
-
-#ifdef CONFIG_BACKGROUND_NOISE_MONITOR
-	s16 noise[ODM_MAX_CHANNEL_NUM];
-#endif
-
 };
 
 #define GET_HAL_DATA(__padapter)	((struct hal_com_data *)((__padapter)->HalData))

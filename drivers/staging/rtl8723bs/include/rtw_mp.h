@@ -15,7 +15,7 @@ struct mp_xmit_frame {
 
 	struct pkt_attrib attrib;
 
-	_pkt *pkt;
+	struct sk_buff *pkt;
 
 	int frame_tag;
 
@@ -30,8 +30,6 @@ struct mp_wiparam {
 	u32 io_offset;
 	u32 io_value;
 };
-
-typedef void(*wi_act_func)(void *padapter);
 
 struct mp_tx {
 	u8 stop;
@@ -51,14 +49,14 @@ struct mp_tx {
 #define MP_MAX_LINES_BYTES	256
 
 typedef void (*MPT_WORK_ITEM_HANDLER)(void *Adapter);
-typedef struct _MPT_CONTEXT {
+struct mpt_context {
 	/*  Indicate if we have started Mass Production Test. */
 	bool			bMassProdTest;
 
 	/*  Indicate if the driver is unloading or unloaded. */
 	bool			bMptDrvUnload;
 
-	_timer			MPh2c_timeout_timer;
+	struct timer_list			MPh2c_timeout_timer;
 /*  Event used to sync H2c for BT control */
 
 	bool		MptH2cRspEvent;
@@ -91,7 +89,7 @@ typedef struct _MPT_CONTEXT {
 	/*  The RfPath of IO operation is depend of MptActType. */
 	u32 		MptRfPath;
 
-	enum WIRELESS_MODE		MptWirelessModeToSw;	/*  Wireless mode to switch. */
+	enum wireless_mode		MptWirelessModeToSw;	/*  Wireless mode to switch. */
 	u8 	MptChannelToSw;		/*  Channel to switch. */
 	u8 	MptInitGainToSet;	/*  Initial gain to set. */
 	u32 		MptBandWidth;		/*  bandwidth to switch. */
@@ -150,7 +148,7 @@ typedef struct _MPT_CONTEXT {
 	u32 		mptOutLen;
     u8          mptOutBuf[100];
 
-} MPT_CONTEXT, *PMPT_CONTEXT;
+};
 /* endif */
 
 /* E-Fuse */
@@ -191,12 +189,6 @@ enum {
 	CTA_TEST,
 	MP_DISABLE_BT_COEXIST,
 	MP_PwrCtlDM,
-#ifdef CONFIG_WOWLAN
-	MP_WOW_ENABLE,
-#endif
-#ifdef CONFIG_AP_WOWLAN
-	MP_AP_WOW_ENABLE,
-#endif
 	MP_NULL,
 	MP_GET_TXPOWER_INX,
 };
@@ -262,26 +254,9 @@ struct mp_priv {
 	bool bSetRxBssid;
 	bool bTxBufCkFail;
 
-	MPT_CONTEXT MptCtx;
+	struct mpt_context MptCtx;
 
 	u8 *TXradomBuffer;
-};
-
-typedef struct _IOCMD_STRUCT_ {
-	u8 cmdclass;
-	u16 value;
-	u8 index;
-} IOCMD_STRUCT;
-
-struct rf_reg_param {
-	u32 path;
-	u32 offset;
-	u32 value;
-};
-
-struct bb_reg_param {
-	u32 offset;
-	u32 value;
 };
 
 #define LOWER	true
@@ -291,7 +266,7 @@ struct bb_reg_param {
 #define BB_REG_BASE_ADDR		0x800
 
 /* MP variables */
-enum MP_MODE {
+enum mp_mode {
 	MP_OFF,
 	MP_ON,
 	MP_ERR,
@@ -308,7 +283,7 @@ enum MP_MODE {
 extern u8 mpdatarate[NumRates];
 
 /* MP set force data rate base on the definition. */
-enum MPT_RATE_INDEX {
+enum mpt_rate_index {
 	/* CCK rate. */
 	MPT_RATE_1M = 0,	/* 0 */
 	MPT_RATE_2M,
@@ -368,13 +343,13 @@ enum MPT_RATE_INDEX {
 
 #define MAX_TX_PWR_INDEX_N_MODE 64	/*  0x3F */
 
-enum POWER_MODE {
+enum power_mode {
 	POWER_LOW = 0,
 	POWER_NORMAL
 };
 
 /*  The following enumeration is used to define the value of Reg0xD00[30:28] or JaguarReg0x914[18:16]. */
-enum OFDM_TX_MODE {
+enum ofdm_tx_mode {
 	OFDM_ALL_OFF		= 0,
 	OFDM_ContinuousTx	= 1,
 	OFDM_SingleCarrier	= 2,
@@ -396,14 +371,14 @@ enum OFDM_TX_MODE {
 #define Mac_HT_FasleAlarm		0x90000000
 #define Mac_DropPacket			0xA0000000
 
-enum ENCRY_CTRL_STATE {
+enum encry_ctrl_state {
 	HW_CONTROL,		/* hw encryption& decryption */
 	SW_CONTROL,		/* sw encryption& decryption */
 	HW_ENCRY_SW_DECRY,	/* hw encryption & sw decryption */
 	SW_ENCRY_HW_DECRY	/* sw encryption & hw decryption */
 };
 
-enum MPT_TXPWR_DEF {
+enum mpt_txpwr_def {
 	MPT_CCK,
 	MPT_OFDM, /*  L and HT OFDM */
 	MPT_VHT_OFDM

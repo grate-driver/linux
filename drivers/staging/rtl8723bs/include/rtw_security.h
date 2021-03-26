@@ -84,14 +84,14 @@ union Keytype {
 };
 
 
-typedef struct _RT_PMKID_LIST {
+struct rt_pmkid_list {
 	u8 				bUsed;
 	u8 				Bssid[6];
 	u8 				PMKID[16];
 	u8 				SsidBuf[33];
 	u8 *ssid_octet;
 	u16 					ssid_length;
-} RT_PMKID_LIST, *PRT_PMKID_LIST;
+};
 
 
 struct security_priv {
@@ -129,9 +129,6 @@ struct security_priv {
 
 
 	u8 binstallGrpkey;
-#ifdef CONFIG_GTK_OL
-	u8 binstallKCK_KEK;
-#endif /* CONFIG_GTK_OL */
 	u8 binstallBIPkey;
 	u8 busetkipkey;
 	/* _timer tkip_timer; */
@@ -145,7 +142,7 @@ struct security_priv {
 
 
 	/* keeps the auth_type & enc_status from upper layer ioctl(wpa_supplicant or wzc) */
-	u32 ndisauthtype;	/*  enum NDIS_802_11_AUTHENTICATION_MODE */
+	u32 ndisauthtype;	/*  enum ndis_802_11_authentication_mode */
 	u32 ndisencryptstatus;	/*  NDIS_802_11_ENCRYPTION_STATUS */
 
 	struct wlan_bssid_ex sec_bss;  /* for joinbss (h2c buffer) usage */
@@ -166,7 +163,7 @@ struct security_priv {
 	u32 btkip_countermeasure_time;
 
 	/*  For WPA2 Pre-Authentication. */
-	RT_PMKID_LIST		PMKIDList[NUM_PMKID_CACHE];	/*  Renamed from PreAuthKey[NUM_PRE_AUTH_KEY]. Annie, 2006-10-13. */
+	struct rt_pmkid_list		PMKIDList[NUM_PMKID_CACHE];	/*  Renamed from PreAuthKey[NUM_PRE_AUTH_KEY]. Annie, 2006-10-13. */
 	u8 		PMKIDIndex;
 
 	u8 bWepDefaultKeyIdxSet;
@@ -194,12 +191,6 @@ struct security_priv {
 	u64 aes_sw_dec_cnt_mc;
 	u64 aes_sw_dec_cnt_uc;
 #endif /* DBG_SW_SEC_CNT */
-};
-
-struct sha256_state {
-	u64 length;
-	u32 state[8], curlen;
-	u8 buf[64];
 };
 
 #define GET_ENCRY_ALGO(psecuritypriv, psta, encry_algo, bmcst)\

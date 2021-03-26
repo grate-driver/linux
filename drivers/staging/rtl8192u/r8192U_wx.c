@@ -276,7 +276,7 @@ static int rtl8180_wx_get_range(struct net_device *dev,
 	range->min_pmp = 0;
 	range->max_pmp = 5000000;
 	range->min_pmt = 0;
-	range->max_pmt = 65535*1000;
+	range->max_pmt = 65535 * 1000;
 	range->pmp_flags = IW_POWER_PERIOD;
 	range->pmt_flags = IW_POWER_TIMEOUT;
 	range->pm_capa = IW_POWER_PERIOD | IW_POWER_TIMEOUT | IW_POWER_ALL_R;
@@ -519,14 +519,14 @@ static int r8192_wx_set_enc(struct net_device *dev,
 	/* sometimes, the length is zero while we do not type key value */
 	if (wrqu->encoding.length != 0) {
 		for (i = 0; i < 4; i++) {
-			hwkey[i] |=  key[4*i+0]&mask;
-			if (i == 1 && (4*i+1) == wrqu->encoding.length)
+			hwkey[i] |=  key[4 * i + 0] & mask;
+			if (i == 1 && (4 * i + 1) == wrqu->encoding.length)
 				mask = 0x00;
-			if (i == 3 && (4*i+1) == wrqu->encoding.length)
+			if (i == 3 && (4 * i + 1) == wrqu->encoding.length)
 				mask = 0x00;
-			hwkey[i] |= (key[4*i+1]&mask)<<8;
-			hwkey[i] |= (key[4*i+2]&mask)<<16;
-			hwkey[i] |= (key[4*i+3]&mask)<<24;
+			hwkey[i] |= (key[4 * i + 1] & mask) << 8;
+			hwkey[i] |= (key[4 * i + 2] & mask) << 16;
+			hwkey[i] |= (key[4 * i + 3] & mask) << 24;
 		}
 
 		#define CONF_WEP40  0x4
@@ -728,7 +728,7 @@ static int r8192_wx_set_enc_ext(struct net_device *dev,
 			idx--;
 		group = ext->ext_flags & IW_ENCODE_EXT_GROUP_KEY;
 
-		if ((!group) || (IW_MODE_ADHOC == ieee->iw_mode) || (alg ==  KEY_TYPE_WEP40)) {
+		if ((!group) || (ieee->iw_mode == IW_MODE_ADHOC) || (alg ==  KEY_TYPE_WEP40)) {
 			if ((ext->key_len == 13) && (alg == KEY_TYPE_WEP40))
 				alg = KEY_TYPE_WEP104;
 			ieee->pairwise_key_type = alg;
@@ -879,12 +879,10 @@ static iw_handler r8192_wx_handlers[] = {
 
 
 static const struct iw_priv_args r8192_private_args[] = {
-
 	{
 		SIOCIWFIRSTPRIV + 0x0,
 		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0, "badcrc"
 	},
-
 	{
 		SIOCIWFIRSTPRIV + 0x1,
 		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0, "activescan"
@@ -897,9 +895,7 @@ static const struct iw_priv_args r8192_private_args[] = {
 	{
 		SIOCIWFIRSTPRIV + 0x3,
 		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0, "forcereset"
-
 	}
-
 };
 
 static iw_handler r8192_private_handler[] = {

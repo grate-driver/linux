@@ -108,7 +108,7 @@ void PHY_SetBBReg_8723B(
 /*  */
 
 static u32 phy_RFSerialRead_8723B(
-	struct adapter *Adapter, enum RF_PATH eRFPath, u32 Offset
+	struct adapter *Adapter, enum rf_path eRFPath, u32 Offset
 )
 {
 	u32 retValue = 0;
@@ -202,7 +202,7 @@ static u32 phy_RFSerialRead_8723B(
  */
 static void phy_RFSerialWrite_8723B(
 	struct adapter *Adapter,
-	enum RF_PATH eRFPath,
+	enum rf_path eRFPath,
 	u32 Offset,
 	u32 Data
 )
@@ -559,7 +559,7 @@ u8 PHY_GetTxPowerIndex(
 	struct adapter *padapter,
 	u8 RFPath,
 	u8 Rate,
-	enum CHANNEL_WIDTH BandWidth,
+	enum channel_width BandWidth,
 	u8 Channel
 )
 {
@@ -594,8 +594,8 @@ u8 PHY_GetTxPowerIndex(
 void PHY_SetTxPowerLevel8723B(struct adapter *Adapter, u8 Channel)
 {
 	struct hal_com_data *pHalData = GET_HAL_DATA(Adapter);
-	PDM_ODM_T pDM_Odm = &pHalData->odmpriv;
-	pFAT_T pDM_FatTable = &pDM_Odm->DM_FatTable;
+	struct dm_odm_t *pDM_Odm = &pHalData->odmpriv;
+	struct fat_t *pDM_FatTable = &pDM_Odm->DM_FatTable;
 	u8 RFPath = ODM_RF_PATH_A;
 
 	if (pHalData->AntDivCfg) {/*  antenna diversity Enable */
@@ -616,7 +616,7 @@ void PHY_GetTxPowerLevel8723B(struct adapter *Adapter, s32 *powerlevel)
 }
 
 static void phy_SetRegBW_8723B(
-	struct adapter *Adapter, enum CHANNEL_WIDTH CurrentBW
+	struct adapter *Adapter, enum channel_width CurrentBW
 )
 {
 	u16 RegRfMod_BW, u2tmp = 0;
@@ -806,16 +806,16 @@ static void PHY_HandleSwChnlAndSetBW8723B(
 	bool bSwitchChannel,
 	bool bSetBandWidth,
 	u8 ChannelNum,
-	enum CHANNEL_WIDTH ChnlWidth,
-	enum EXTCHNL_OFFSET ExtChnlOffsetOf40MHz,
-	enum EXTCHNL_OFFSET ExtChnlOffsetOf80MHz,
+	enum channel_width ChnlWidth,
+	enum extchnl_offset ExtChnlOffsetOf40MHz,
+	enum extchnl_offset ExtChnlOffsetOf80MHz,
 	u8 CenterFrequencyIndex1
 )
 {
 	/* static bool		bInitialzed = false; */
 	struct hal_com_data *pHalData = GET_HAL_DATA(Adapter);
 	u8 tmpChannel = pHalData->CurrentChannel;
-	enum CHANNEL_WIDTH tmpBW = pHalData->CurrentChannelBW;
+	enum channel_width tmpBW = pHalData->CurrentChannelBW;
 	u8 tmpnCur40MhzPrimeSC = pHalData->nCur40MhzPrimeSC;
 	u8 tmpnCur80MhzPrimeSC = pHalData->nCur80MhzPrimeSC;
 	u8 tmpCenterFrequencyIndex1 = pHalData->CurrentCenterFrequencyIndex1;
@@ -874,7 +874,7 @@ static void PHY_HandleSwChnlAndSetBW8723B(
 
 void PHY_SetBWMode8723B(
 	struct adapter *Adapter,
-	enum CHANNEL_WIDTH Bandwidth, /*  20M or 40M */
+	enum channel_width Bandwidth, /*  20M or 40M */
 	unsigned char Offset /*  Upper, Lower, or Don't care */
 )
 {
@@ -892,7 +892,7 @@ void PHY_SwChnl8723B(struct adapter *Adapter, u8 channel)
 void PHY_SetSwChnlBWMode8723B(
 	struct adapter *Adapter,
 	u8 channel,
-	enum CHANNEL_WIDTH Bandwidth,
+	enum channel_width Bandwidth,
 	u8 Offset40,
 	u8 Offset80
 )

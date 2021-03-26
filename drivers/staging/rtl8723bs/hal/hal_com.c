@@ -38,49 +38,52 @@ void rtw_hal_data_deinit(struct adapter *padapter)
 }
 
 
-void dump_chip_info(HAL_VERSION	ChipVersion)
+void dump_chip_info(struct hal_version	ChipVersion)
 {
-	int cnt = 0;
-	u8 buf[128];
+	char buf[128];
+	size_t cnt = 0;
 
-	cnt += sprintf((buf+cnt), "Chip Version Info: CHIP_8723B_");
-	cnt += sprintf((buf+cnt), "%s_", IS_NORMAL_CHIP(ChipVersion) ? "Normal_Chip" : "Test_Chip");
+	cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "Chip Version Info: CHIP_8723B_%s_",
+			IS_NORMAL_CHIP(ChipVersion) ? "Normal_Chip" : "Test_Chip");
+
 	if (IS_CHIP_VENDOR_TSMC(ChipVersion))
-		cnt += sprintf((buf+cnt), "%s_", "TSMC");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "TSMC_");
 	else if (IS_CHIP_VENDOR_UMC(ChipVersion))
-		cnt += sprintf((buf+cnt), "%s_", "UMC");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "UMC_");
 	else if (IS_CHIP_VENDOR_SMIC(ChipVersion))
-		cnt += sprintf((buf+cnt), "%s_", "SMIC");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "SMIC_");
 
 	if (IS_A_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "A_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "A_CUT_");
 	else if (IS_B_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "B_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "B_CUT_");
 	else if (IS_C_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "C_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "C_CUT_");
 	else if (IS_D_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "D_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "D_CUT_");
 	else if (IS_E_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "E_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "E_CUT_");
 	else if (IS_I_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "I_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "I_CUT_");
 	else if (IS_J_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "J_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "J_CUT_");
 	else if (IS_K_CUT(ChipVersion))
-		cnt += sprintf((buf+cnt), "K_CUT_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "K_CUT_");
 	else
-		cnt += sprintf((buf+cnt), "UNKNOWN_CUT(%d)_", ChipVersion.CUTVersion);
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt,
+				"UNKNOWN_CUT(%d)_", ChipVersion.CUTVersion);
 
 	if (IS_1T1R(ChipVersion))
-		cnt += sprintf((buf+cnt), "1T1R_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "1T1R_");
 	else if (IS_1T2R(ChipVersion))
-		cnt += sprintf((buf+cnt), "1T2R_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "1T2R_");
 	else if (IS_2T2R(ChipVersion))
-		cnt += sprintf((buf+cnt), "2T2R_");
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "2T2R_");
 	else
-		cnt += sprintf((buf+cnt), "UNKNOWN_RFTYPE(%d)_", ChipVersion.RFType);
+		cnt += scnprintf(buf + cnt, sizeof(buf) - cnt,
+				"UNKNOWN_RFTYPE(%d)_", ChipVersion.RFType);
 
-	cnt += sprintf((buf+cnt), "RomVer(%d)\n", ChipVersion.ROMVer);
+	cnt += scnprintf(buf + cnt, sizeof(buf) - cnt, "RomVer(%d)\n", ChipVersion.ROMVer);
 
 	DBG_871X("%s", buf);
 }
@@ -129,10 +132,8 @@ u8 hal_com_config_channel_plan(
 
 		hw_chnlPlan = hw_channel_plan & (~EEPROM_CHANNEL_PLAN_BY_HW_MASK);
 		if (rtw_is_channel_plan_valid(hw_chnlPlan)) {
-#ifndef CONFIG_SW_CHANNEL_PLAN
 			if (hw_channel_plan & EEPROM_CHANNEL_PLAN_BY_HW_MASK)
 				pHalData->bDisableSWChannelPlan = true;
-#endif /*  !CONFIG_SW_CHANNEL_PLAN */
 
 			chnlPlan = hw_chnlPlan;
 		}
@@ -1005,7 +1006,7 @@ void hw_var_port_switch(struct adapter *adapter)
 void SetHwReg(struct adapter *adapter, u8 variable, u8 *val)
 {
 	struct hal_com_data *hal_data = GET_HAL_DATA(adapter);
-	DM_ODM_T *odm = &(hal_data->odmpriv);
+	struct dm_odm_t *odm = &(hal_data->odmpriv);
 
 	switch (variable) {
 	case HW_VAR_PORT_SWITCH:
@@ -1085,7 +1086,7 @@ void SetHwReg(struct adapter *adapter, u8 variable, u8 *val)
 void GetHwReg(struct adapter *adapter, u8 variable, u8 *val)
 {
 	struct hal_com_data *hal_data = GET_HAL_DATA(adapter);
-	DM_ODM_T *odm = &(hal_data->odmpriv);
+	struct dm_odm_t *odm = &(hal_data->odmpriv);
 
 	switch (variable) {
 	case HW_VAR_BASIC_RATE:
@@ -1112,11 +1113,11 @@ void GetHwReg(struct adapter *adapter, u8 variable, u8 *val)
 
 
 u8 SetHalDefVar(
-	struct adapter *adapter, enum HAL_DEF_VARIABLE variable, void *value
+	struct adapter *adapter, enum hal_def_variable variable, void *value
 )
 {
 	struct hal_com_data *hal_data = GET_HAL_DATA(adapter);
-	DM_ODM_T *odm = &(hal_data->odmpriv);
+	struct dm_odm_t *odm = &(hal_data->odmpriv);
 	u8 bResult = _SUCCESS;
 
 	switch (variable) {
@@ -1169,7 +1170,7 @@ u8 SetHalDefVar(
 			odm->SupportAbility  &= (~DYNAMIC_BB_ANT_DIV);
 		} else if (dm_func == 6) {/* turn on all dynamic func */
 			if (!(odm->SupportAbility  & DYNAMIC_BB_DIG)) {
-				DIG_T	*pDigTable = &odm->DM_DigTable;
+				struct dig_t	*pDigTable = &odm->DM_DigTable;
 				pDigTable->CurIGValue = rtw_read8(adapter, 0xc50);
 			}
 			dm->DMFlag |= DYNAMIC_FUNC_BT;
@@ -1197,11 +1198,11 @@ u8 SetHalDefVar(
 }
 
 u8 GetHalDefVar(
-	struct adapter *adapter, enum HAL_DEF_VARIABLE variable, void *value
+	struct adapter *adapter, enum hal_def_variable variable, void *value
 )
 {
 	struct hal_com_data *hal_data = GET_HAL_DATA(adapter);
-	DM_ODM_T *odm = &(hal_data->odmpriv);
+	struct dm_odm_t *odm = &(hal_data->odmpriv);
 	u8 bResult = _SUCCESS;
 
 	switch (variable) {
@@ -1253,26 +1254,12 @@ u8 GetHalDefVar(
 
 void GetHalODMVar(
 	struct adapter *Adapter,
-	enum HAL_ODM_VARIABLE eVariable,
+	enum hal_odm_variable eVariable,
 	void *pValue1,
 	void *pValue2
 )
 {
 	switch (eVariable) {
-#if defined(CONFIG_SIGNAL_DISPLAY_DBM) && defined(CONFIG_BACKGROUND_NOISE_MONITOR)
-	case HAL_ODM_NOISE_MONITOR:
-		{
-			struct hal_com_data	*pHalData = GET_HAL_DATA(Adapter);
-			u8 chan = *(u8 *)pValue1;
-			*(s16 *)pValue2 = pHalData->noise[chan];
-			#ifdef DBG_NOISE_MONITOR
-			DBG_8192C("### Noise monitor chan(%d)-noise:%d (dBm) ###\n",
-				chan, pHalData->noise[chan]);
-			#endif
-
-		}
-		break;
-#endif/* ifdef CONFIG_BACKGROUND_NOISE_MONITOR */
 	default:
 		break;
 	}
@@ -1280,13 +1267,13 @@ void GetHalODMVar(
 
 void SetHalODMVar(
 	struct adapter *Adapter,
-	enum HAL_ODM_VARIABLE eVariable,
+	enum hal_odm_variable eVariable,
 	void *pValue1,
 	bool bSet
 )
 {
 	struct hal_com_data	*pHalData = GET_HAL_DATA(Adapter);
-	PDM_ODM_T podmpriv = &pHalData->odmpriv;
+	struct dm_odm_t *podmpriv = &pHalData->odmpriv;
 	/* _irqL irqL; */
 	switch (eVariable) {
 	case HAL_ODM_STA_INFO:
@@ -1310,27 +1297,6 @@ void SetHalODMVar(
 	case HAL_ODM_WIFI_DISPLAY_STATE:
 			ODM_CmnInfoUpdate(podmpriv, ODM_CMNINFO_WIFI_DISPLAY, bSet);
 		break;
-	#if defined(CONFIG_SIGNAL_DISPLAY_DBM) && defined(CONFIG_BACKGROUND_NOISE_MONITOR)
-	case HAL_ODM_NOISE_MONITOR:
-		{
-			struct noise_info *pinfo = pValue1;
-
-			#ifdef DBG_NOISE_MONITOR
-			DBG_8192C("### Noise monitor chan(%d)-bPauseDIG:%d, IGIValue:0x%02x, max_time:%d (ms) ###\n",
-				pinfo->chan, pinfo->bPauseDIG, pinfo->IGIValue, pinfo->max_time);
-			#endif
-
-			pHalData->noise[pinfo->chan] = ODM_InbandNoise_Monitor(podmpriv, pinfo->bPauseDIG, pinfo->IGIValue, pinfo->max_time);
-			DBG_871X("chan_%d, noise = %d (dBm)\n", pinfo->chan, pHalData->noise[pinfo->chan]);
-			#ifdef DBG_NOISE_MONITOR
-			DBG_871X("noise_a = %d, noise_b = %d  noise_all:%d\n",
-				podmpriv->noise_level.noise[ODM_RF_PATH_A],
-				podmpriv->noise_level.noise[ODM_RF_PATH_B],
-				podmpriv->noise_level.noise_all);
-			#endif
-		}
-		break;
-	#endif/* ifdef CONFIG_BACKGROUND_NOISE_MONITOR */
 
 	default:
 		break;

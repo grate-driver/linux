@@ -12,8 +12,6 @@
 #include <hal_btcoex.h>
 #include <linux/jiffies.h>
 
-extern u8 rtw_do_join(struct adapter *padapter);
-
 int	rtw_init_mlme_priv(struct adapter *padapter)
 {
 	int	i;
@@ -67,9 +65,6 @@ int	rtw_init_mlme_priv(struct adapter *padapter)
 	pmlmepriv->roam_flags = 0
 		| RTW_ROAM_ON_EXPIRED
 		| RTW_ROAM_ON_RESUME
-		#ifdef CONFIG_LAYER2_ROAMING_ACTIVE /* FIXME */
-		| RTW_ROAM_ACTIVE
-		#endif
 		;
 
 	pmlmepriv->roam_scanr_exp_ms = RTW_ROAM_SCAN_RESULT_EXP_MS;
@@ -298,9 +293,9 @@ void rtw_free_network_queue(struct adapter *padapter, u8 isfreeall)
 	spin_unlock_bh(&scanned_queue->lock);
 }
 
-sint rtw_if_up(struct adapter *padapter)
+signed int rtw_if_up(struct adapter *padapter)
 {
-	sint res;
+	signed int res;
 
 	if (padapter->bDriverStopped || padapter->bSurpriseRemoved ||
 		(check_fwstate(&padapter->mlmepriv, _FW_LINKED) == false)) {
@@ -599,7 +594,7 @@ void rtw_update_scanned_network(struct adapter *adapter, struct wlan_bssid_ex *t
 		}
 
 		if (rtw_roam_flags(adapter)) {
-			/* TODO: don't  select netowrk in the same ess as oldest if it's new enough*/
+			/* TODO: don't select network in the same ess as oldest if it's new enough*/
 		}
 
 		if (oldest == NULL || time_after(oldest->last_scanned, pnetwork->last_scanned))
@@ -1131,8 +1126,6 @@ static struct sta_info *rtw_joinbss_update_stainfo(struct adapter *padapter, str
 
 	if (psta) { /* update ptarget_sta */
 
-		DBG_871X("%s\n", __func__);
-
 		psta->aid  = pnetwork->join_res;
 
 		update_sta_info(padapter, psta);
@@ -1219,8 +1212,6 @@ static void rtw_joinbss_update_network(struct adapter *padapter, struct wlan_net
 {
 	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);
 	struct wlan_network  *cur_network = &(pmlmepriv->cur_network);
-
-	DBG_871X("%s\n", __func__);
 
 	RT_TRACE(_module_rtl871x_mlme_c_, _drv_info_, ("\nfw_state:%x, BSSID:%pM\n"
 		, get_fwstate(pmlmepriv), MAC_ARG(pnetwork->network.MacAddress)));
@@ -1478,8 +1469,6 @@ void rtw_stassoc_event_callback(struct adapter *adapter, u8 *pbuf)
 
 			rtw_sta_media_status_rpt(adapter, psta, 1);
 
-#ifndef CONFIG_AUTO_AP_MODE
-
 			ap_sta_info_defer_update(adapter, psta);
 
 			/* report to upper layer */
@@ -1503,7 +1492,6 @@ void rtw_stassoc_event_callback(struct adapter *adapter, u8 *pbuf)
 
 				kfree(passoc_req);
 			}
-#endif /* CONFIG_AUTO_AP_MODE */
 		}
 		return;
 	}
@@ -1528,7 +1516,7 @@ void rtw_stassoc_event_callback(struct adapter *adapter, u8 *pbuf)
 	psta->qos_option = 0;
 	psta->mac_id = (uint)pstassoc->cam_id;
 	/* psta->aid = (uint)pstassoc->cam_id; */
-	DBG_871X("%s\n", __func__);
+
 	/* for ad-hoc mode */
 	rtw_hal_set_odm_var(adapter, HAL_ODM_STA_INFO, psta, true);
 
@@ -2098,9 +2086,6 @@ int rtw_select_and_join_from_scanned_queue(struct mlme_priv *pmlmepriv)
 
 	if (!candidate) {
 		DBG_871X("%s: return _FAIL(candidate == NULL)\n", __func__);
-#ifdef CONFIG_WOWLAN
-		_clr_fwstate_(pmlmepriv, _FW_LINKED|_FW_UNDER_LINKING);
-#endif
 		ret = _FAIL;
 		goto exit;
 	} else {
@@ -2129,12 +2114,12 @@ exit:
 	return ret;
 }
 
-sint rtw_set_auth(struct adapter *adapter, struct security_priv *psecuritypriv)
+signed int rtw_set_auth(struct adapter *adapter, struct security_priv *psecuritypriv)
 {
 	struct	cmd_obj *pcmd;
 	struct	setauth_parm *psetauthparm;
 	struct	cmd_priv *pcmdpriv = &(adapter->cmdpriv);
-	sint		res = _SUCCESS;
+	signed int		res = _SUCCESS;
 
 	pcmd = rtw_zmalloc(sizeof(struct cmd_obj));
 	if (!pcmd) {
@@ -2167,13 +2152,13 @@ exit:
 	return res;
 }
 
-sint rtw_set_key(struct adapter *adapter, struct security_priv *psecuritypriv, sint keyid, u8 set_tx, bool enqueue)
+signed int rtw_set_key(struct adapter *adapter, struct security_priv *psecuritypriv, signed int keyid, u8 set_tx, bool enqueue)
 {
 	u8 keylen;
 	struct cmd_obj		*pcmd;
 	struct setkey_parm	*psetkeyparm;
 	struct cmd_priv 	*pcmdpriv = &(adapter->cmdpriv);
-	sint	res = _SUCCESS;
+	signed int	res = _SUCCESS;
 
 	psetkeyparm = rtw_zmalloc(sizeof(struct setkey_parm));
 	if (!psetkeyparm) {
@@ -2342,7 +2327,7 @@ static int rtw_append_pmkid(struct adapter *Adapter, int iEntry, u8 *ie, uint ie
 	return ie_len;
 }
 
-sint rtw_restruct_sec_ie(struct adapter *adapter, u8 *in_ie, u8 *out_ie, uint in_len)
+signed int rtw_restruct_sec_ie(struct adapter *adapter, u8 *in_ie, u8 *out_ie, uint in_len)
 {
 	u8 authmode = 0x0;
 	uint	ielength;
@@ -2685,14 +2670,7 @@ unsigned int rtw_restructure_ht_ie(struct adapter *padapter, u8 *in_ie, u8 *out_
 		if (stbc_rx_enable)
 			ht_capie.cap_info |= cpu_to_le16(IEEE80211_HT_CAP_RX_STBC_2R);/* RX STBC two spatial stream */
 
-		#ifdef CONFIG_DISABLE_MCS13TO15
-		if (((cbw40_enable == 1) && (operation_bw == CHANNEL_WIDTH_40)) && (pregistrypriv->wifi_spec != 1))
-				set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_2R_13TO15_OFF);
-		else
-				set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_2R);
-		#else /* CONFIG_DISABLE_MCS13TO15 */
-			set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_2R);
-		#endif /* CONFIG_DISABLE_MCS13TO15 */
+		set_mcs_rate_by_mask(ht_capie.mcs.rx_mask, MCS_RATE_2R);
 		break;
 	}
 
@@ -2815,14 +2793,7 @@ void rtw_update_ht_cap(struct adapter *padapter, u8 *pie, uint ie_len, u8 channe
 			break;
 		case RF_2T2R:
 		default:
-#ifdef CONFIG_DISABLE_MCS13TO15
-			if (pmlmeext->cur_bwmode == CHANNEL_WIDTH_40 && pregistrypriv->wifi_spec != 1)
-				set_mcs_rate_by_mask(pmlmeinfo->HT_caps.u.HT_cap_element.MCS_rate, MCS_RATE_2R_13TO15_OFF);
-			else
-				set_mcs_rate_by_mask(pmlmeinfo->HT_caps.u.HT_cap_element.MCS_rate, MCS_RATE_2R);
-#else /* CONFIG_DISABLE_MCS13TO15 */
 			set_mcs_rate_by_mask(pmlmeinfo->HT_caps.u.HT_cap_element.MCS_rate, MCS_RATE_2R);
-#endif /* CONFIG_DISABLE_MCS13TO15 */
 		}
 
 		/* switch to the 40M Hz mode according to the AP */
@@ -2976,7 +2947,7 @@ void _rtw_roaming(struct adapter *padapter, struct wlan_network *tgt_network)
 
 }
 
-sint rtw_linked_check(struct adapter *padapter)
+signed int rtw_linked_check(struct adapter *padapter)
 {
 	if ((check_fwstate(&padapter->mlmepriv, WIFI_AP_STATE) == true) ||
 			(check_fwstate(&padapter->mlmepriv, WIFI_ADHOC_STATE|WIFI_ADHOC_MASTER_STATE) == true)) {

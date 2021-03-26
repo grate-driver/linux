@@ -113,11 +113,7 @@ static int rtw_enusbss;/* 0:disable, 1:enable */
 
 static int rtw_hwpdn_mode = 2;/* 0:disable, 1:enable, 2: by EFUSE config */
 
-#ifdef CONFIG_HW_PWRP_DETECTION
-static int rtw_hwpwrp_detect = 1;
-#else
 static int rtw_hwpwrp_detect; /* HW power  ping detect 0:disable , 1:enable */
-#endif
 
 static int rtw_hw_wps_pbc;
 
@@ -125,11 +121,7 @@ int rtw_mc2u_disable = 0;
 
 static int rtw_80211d;
 
-#ifdef CONFIG_QOS_OPTIMIZATION
-static int rtw_qos_opt_enable = 1;/* 0: disable, 1:enable */
-#else
 static int rtw_qos_opt_enable;/* 0: disable, 1:enable */
-#endif
 module_param(rtw_qos_opt_enable, int, 0644);
 
 static char *ifname = "wlan%d";
@@ -201,11 +193,9 @@ MODULE_PARM_DESC(rtw_tx_pwr_lmt_enable, "0:Disable, 1:Enable, 2: Depend on efuse
 module_param(rtw_tx_pwr_by_rate, int, 0644);
 MODULE_PARM_DESC(rtw_tx_pwr_by_rate, "0:Disable, 1:Enable, 2: Depend on efuse");
 
-int _netdev_open(struct net_device *pnetdev);
-int netdev_open(struct net_device *pnetdev);
 static int netdev_close(struct net_device *pnetdev);
 
-static void loadparam(struct adapter *padapter, _nic_hdl pnetdev)
+static void loadparam(struct adapter *padapter, struct net_device *pnetdev)
 {
 	struct registry_priv  *registry_par = &padapter->registrypriv;
 
@@ -596,9 +586,6 @@ static void rtw_init_default_value(struct adapter *padapter)
 	/* security_priv */
 	/* rtw_get_encrypt_decrypt_from_registrypriv(padapter); */
 	psecuritypriv->binstallGrpkey = _FAIL;
-#ifdef CONFIG_GTK_OL
-	psecuritypriv->binstallKCK_KEK = _FAIL;
-#endif /* CONFIG_GTK_OL */
 	psecuritypriv->sw_encrypt = pregistrypriv->software_encrypt;
 	psecuritypriv->sw_decrypt = pregistrypriv->software_decrypt;
 
@@ -886,7 +873,7 @@ int rtw_drv_register_netdev(struct adapter *if1)
 	return _rtw_drv_register_netdev(padapter, name);
 }
 
-int _netdev_open(struct net_device *pnetdev)
+static int _netdev_open(struct net_device *pnetdev)
 {
 	uint status;
 	struct adapter *padapter = rtw_netdev_priv(pnetdev);
@@ -985,9 +972,6 @@ static int  ips_netdrv_open(struct adapter *padapter)
 
 	padapter->net_closed = false;
 
-	DBG_871X("===> %s.........\n", __func__);
-
-
 	padapter->bDriverStopped = false;
 	padapter->bCardDisableWOHSM = false;
 	/* padapter->bup = true; */
@@ -1038,13 +1022,10 @@ void rtw_ips_pwr_down(struct adapter *padapter)
 
 void rtw_ips_dev_unload(struct adapter *padapter)
 {
-	DBG_871X("====> %s...\n", __func__);
-
 
 	if (!padapter->bSurpriseRemoved)
 		rtw_hal_deinit(padapter);
 }
-
 
 static int pm_netdev_open(struct net_device *pnetdev, u8 bnormal)
 {
@@ -1135,7 +1116,6 @@ void rtw_dev_unload(struct adapter *padapter)
 	RT_TRACE(_module_hci_intfs_c_, _drv_notice_, ("+%s\n", __func__));
 
 	if (padapter->bup) {
-		DBG_871X("===> %s\n", __func__);
 
 		padapter->bDriverStopped = true;
 		if (padapter->xmitpriv.ack_tx)
@@ -1174,16 +1154,10 @@ void rtw_dev_unload(struct adapter *padapter)
 
 		if (!padapter->bSurpriseRemoved) {
 			hal_btcoex_IpsNotify(padapter, pwrctl->ips_mode_req);
-#ifdef CONFIG_WOWLAN
-			if (pwrctl->bSupportRemoteWakeup && pwrctl->wowlan_mode) {
-				DBG_871X_LEVEL(_drv_always_, "%s bSupportRemoteWakeup ==true  do not run rtw_hal_deinit()\n", __func__);
-			}
-			else
-#endif
-			{
-				/* amy modify 20120221 for power seq is different between driver open and ips */
-				rtw_hal_deinit(padapter);
-			}
+
+			/* amy modify 20120221 for power seq is different between driver open and ips */
+			rtw_hal_deinit(padapter);
+
 			padapter->bSurpriseRemoved = true;
 		}
 		RT_TRACE(_module_hci_intfs_c_, _drv_notice_,
@@ -1191,7 +1165,6 @@ void rtw_dev_unload(struct adapter *padapter)
 
 		padapter->bup = false;
 
-		DBG_871X("<=== %s\n", __func__);
 	} else {
 		RT_TRACE(_module_hci_intfs_c_, _drv_notice_, ("%s: bup ==false\n", __func__));
 		DBG_871X("%s: bup ==false\n", __func__);
@@ -1243,133 +1216,6 @@ static int rtw_suspend_free_assoc_resource(struct adapter *padapter)
 	DBG_871X("<== " FUNC_ADPT_FMT " exit....\n", FUNC_ADPT_ARG(padapter));
 	return _SUCCESS;
 }
-
-#ifdef CONFIG_WOWLAN
-void rtw_suspend_wow(struct adapter *padapter)
-{
-	u8 ch, bw, offset;
-	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
-	struct net_device *pnetdev = padapter->pnetdev;
-	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
-	struct wowlan_ioctl_param poidparam;
-
-	DBG_871X("==> " FUNC_ADPT_FMT " entry....\n", FUNC_ADPT_ARG(padapter));
-
-
-	DBG_871X("wowlan_mode: %d\n", pwrpriv->wowlan_mode);
-	DBG_871X("wowlan_pno_enable: %d\n", pwrpriv->wowlan_pno_enable);
-
-	if (pwrpriv->wowlan_mode) {
-		if (pnetdev)
-			rtw_netif_stop_queue(pnetdev);
-		/*  1. stop thread */
-		padapter->bDriverStopped = true;	/* for stop thread */
-		rtw_stop_drv_threads(padapter);
-		padapter->bDriverStopped = false;	/* for 32k command */
-
-		/*  2. disable interrupt */
-		if (padapter->intf_stop)
-			padapter->intf_stop(padapter);
-
-		/*  2.1 clean interrupt */
-		if (padapter->HalFunc.clear_interrupt)
-			padapter->HalFunc.clear_interrupt(padapter);
-
-		/*  2.2 free irq */
-		/* sdio_free_irq(adapter_to_dvobj(padapter)); */
-		if (padapter->intf_free_irq)
-			padapter->intf_free_irq(adapter_to_dvobj(padapter));
-
-		poidparam.subcode = WOWLAN_ENABLE;
-		padapter->HalFunc.SetHwRegHandler(padapter, HW_VAR_WOWLAN, (u8 *)&poidparam);
-		if (rtw_chk_roam_flags(padapter, RTW_ROAM_ON_RESUME)) {
-			if (check_fwstate(pmlmepriv, WIFI_STATION_STATE) && check_fwstate(pmlmepriv, _FW_LINKED)) {
-				DBG_871X("%s %s(%pM), length:%d assoc_ssid.length:%d\n", __func__,
-						pmlmepriv->cur_network.network.Ssid.Ssid,
-						MAC_ARG(pmlmepriv->cur_network.network.MacAddress),
-						pmlmepriv->cur_network.network.Ssid.SsidLength,
-						pmlmepriv->assoc_ssid.SsidLength);
-
-				rtw_set_to_roam(padapter, 0);
-			}
-		}
-
-		DBG_871X_LEVEL(_drv_always_, "%s: wowmode suspending\n", __func__);
-
-		if (check_fwstate(pmlmepriv, _FW_UNDER_SURVEY)) {
-			DBG_871X_LEVEL(_drv_always_, "%s: fw_under_survey\n", __func__);
-			rtw_indicate_scan_done(padapter, 1);
-			clr_fwstate(pmlmepriv, _FW_UNDER_SURVEY);
-		}
-
-		if (rtw_get_ch_setting_union(padapter, &ch, &bw, &offset) != 0) {
-			DBG_871X(FUNC_ADPT_FMT " back to linked/linking union - ch:%u, bw:%u, offset:%u\n",
-				FUNC_ADPT_ARG(padapter), ch, bw, offset);
-			set_channel_bwmode(padapter, ch, offset, bw);
-		}
-
-		if (pwrpriv->wowlan_pno_enable)
-			DBG_871X_LEVEL(_drv_always_, "%s: pno: %d\n", __func__, pwrpriv->wowlan_pno_enable);
-		else
-			rtw_set_ps_mode(padapter, PS_MODE_DTIM, 0, 0, "WOWLAN");
-	} else {
-		DBG_871X_LEVEL(_drv_always_, "%s: ### ERROR ### wowlan_mode =%d\n", __func__, pwrpriv->wowlan_mode);
-	}
-	DBG_871X("<== " FUNC_ADPT_FMT " exit....\n", FUNC_ADPT_ARG(padapter));
-}
-#endif /* ifdef CONFIG_WOWLAN */
-
-#ifdef CONFIG_AP_WOWLAN
-void rtw_suspend_ap_wow(struct adapter *padapter)
-{
-	u8 ch, bw, offset;
-	struct net_device *pnetdev = padapter->pnetdev;
-	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
-	struct wowlan_ioctl_param poidparam;
-
-	DBG_871X("==> " FUNC_ADPT_FMT " entry....\n", FUNC_ADPT_ARG(padapter));
-
-	pwrpriv->wowlan_ap_mode = true;
-
-	DBG_871X("wowlan_ap_mode: %d\n", pwrpriv->wowlan_ap_mode);
-
-	if (pnetdev)
-		rtw_netif_stop_queue(pnetdev);
-	/*  1. stop thread */
-	padapter->bDriverStopped = true;	/* for stop thread */
-	rtw_stop_drv_threads(padapter);
-	padapter->bDriverStopped = false;	/* for 32k command */
-
-	/*  2. disable interrupt */
-	rtw_hal_disable_interrupt(padapter); /*  It need wait for leaving 32K. */
-
-	/*  2.1 clean interrupt */
-	if (padapter->HalFunc.clear_interrupt)
-		padapter->HalFunc.clear_interrupt(padapter);
-
-	/*  2.2 free irq */
-	/* sdio_free_irq(adapter_to_dvobj(padapter)); */
-	if (padapter->intf_free_irq)
-		padapter->intf_free_irq(adapter_to_dvobj(padapter));
-
-	poidparam.subcode = WOWLAN_AP_ENABLE;
-	padapter->HalFunc.SetHwRegHandler(padapter,
-					HW_VAR_AP_WOWLAN, (u8 *)&poidparam);
-
-	DBG_871X_LEVEL(_drv_always_, "%s: wowmode suspending\n", __func__);
-
-	if (rtw_get_ch_setting_union(padapter, &ch, &bw, &offset) != 0) {
-		DBG_871X(FUNC_ADPT_FMT " back to linked/linking union - ch:%u, bw:%u, offset:%u\n",
-			 FUNC_ADPT_ARG(padapter), ch, bw, offset);
-		set_channel_bwmode(padapter, ch, offset, bw);
-	}
-
-	rtw_set_ps_mode(padapter, PS_MODE_MIN, 0, 0, "AP-WOWLAN");
-
-	DBG_871X("<== " FUNC_ADPT_FMT " exit....\n", FUNC_ADPT_ARG(padapter));
-}
-#endif /* ifdef CONFIG_AP_WOWLAN */
-
 
 static void rtw_suspend_normal(struct adapter *padapter)
 {
@@ -1440,26 +1286,9 @@ int rtw_suspend_common(struct adapter *padapter)
 	rtw_ps_deny_cancel(padapter, PS_DENY_SUSPEND);
 
 	if (check_fwstate(pmlmepriv, WIFI_STATION_STATE)) {
-	#ifdef CONFIG_WOWLAN
-		if (check_fwstate(pmlmepriv, _FW_LINKED))
-			pwrpriv->wowlan_mode = true;
-		else if (pwrpriv->wowlan_pno_enable)
-			pwrpriv->wowlan_mode |= pwrpriv->wowlan_pno_enable;
-
-		if (pwrpriv->wowlan_mode)
-			rtw_suspend_wow(padapter);
-		else
-			rtw_suspend_normal(padapter);
-
-	#else /* CONFIG_WOWLAN */
 		rtw_suspend_normal(padapter);
-	#endif /* CONFIG_WOWLAN */
 	} else if (check_fwstate(pmlmepriv, WIFI_AP_STATE)) {
-	#ifdef CONFIG_AP_WOWLAN
-		rtw_suspend_ap_wow(padapter);
-	#else
 		rtw_suspend_normal(padapter);
-	#endif /* CONFIG_AP_WOWLAN */
 	} else {
 		rtw_suspend_normal(padapter);
 	}
@@ -1473,202 +1302,6 @@ exit:
 
 	return ret;
 }
-
-#ifdef CONFIG_WOWLAN
-int rtw_resume_process_wow(struct adapter *padapter)
-{
-	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
-	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
-	struct net_device *pnetdev = padapter->pnetdev;
-	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
-	struct dvobj_priv *psdpriv = padapter->dvobj;
-	struct debug_priv *pdbgpriv = &psdpriv->drv_dbg;
-	struct wowlan_ioctl_param poidparam;
-	struct sta_info *psta = NULL;
-	int ret = _SUCCESS;
-
-	DBG_871X("==> " FUNC_ADPT_FMT " entry....\n", FUNC_ADPT_ARG(padapter));
-
-	if (padapter) {
-		pnetdev = padapter->pnetdev;
-		pwrpriv = adapter_to_pwrctl(padapter);
-	} else {
-		pdbgpriv->dbg_resume_error_cnt++;
-		ret = -1;
-		goto exit;
-	}
-
-	if (padapter->bDriverStopped || padapter->bSurpriseRemoved) {
-		DBG_871X("%s pdapter %p bDriverStopped %d bSurpriseRemoved %d\n",
-				__func__, padapter, padapter->bDriverStopped,
-				padapter->bSurpriseRemoved);
-		goto exit;
-	}
-
-#ifdef CONFIG_PNO_SUPPORT
-	pwrpriv->pno_in_resume = true;
-#endif
-
-	if (pwrpriv->wowlan_mode) {
-		rtw_set_ps_mode(padapter, PS_MODE_ACTIVE, 0, 0, "WOWLAN");
-
-		pwrpriv->bFwCurrentInPSMode = false;
-
-		if (padapter->intf_stop)
-			padapter->intf_stop(padapter);
-
-		if (padapter->HalFunc.clear_interrupt)
-			padapter->HalFunc.clear_interrupt(padapter);
-
-		/* if (sdio_alloc_irq(adapter_to_dvobj(padapter)) != _SUCCESS) { */
-		if ((padapter->intf_alloc_irq) && (padapter->intf_alloc_irq(adapter_to_dvobj(padapter)) != _SUCCESS)) {
-			ret = -1;
-			RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("%s: sdio_alloc_irq Failed!!\n", __func__));
-			goto exit;
-		}
-
-		/* Disable WOW, set H2C command */
-		poidparam.subcode = WOWLAN_DISABLE;
-		padapter->HalFunc.SetHwRegHandler(padapter, HW_VAR_WOWLAN, (u8 *)&poidparam);
-
-		psta = rtw_get_stainfo(&padapter->stapriv, get_bssid(&padapter->mlmepriv));
-		if (psta)
-			set_sta_rate(padapter, psta);
-
-		padapter->bDriverStopped = false;
-		DBG_871X("%s: wowmode resuming, DriverStopped:%d\n", __func__, padapter->bDriverStopped);
-		rtw_start_drv_threads(padapter);
-
-		if (padapter->intf_start)
-			padapter->intf_start(padapter);
-
-		/*  start netif queue */
-		if (pnetdev) {
-			if (!rtw_netif_queue_stopped(pnetdev))
-				rtw_netif_start_queue(pnetdev);
-			else
-				rtw_netif_wake_queue(pnetdev);
-		}
-	} else {
-		DBG_871X_LEVEL(_drv_always_, "%s: ### ERROR ### wowlan_mode =%d\n", __func__, pwrpriv->wowlan_mode);
-	}
-
-	if (padapter->pid[1] != 0) {
-		DBG_871X("pid[1]:%d\n", padapter->pid[1]);
-		rtw_signal_process(padapter->pid[1], SIGUSR2);
-	}
-
-	if (rtw_chk_roam_flags(padapter, RTW_ROAM_ON_RESUME)) {
-		if (pwrpriv->wowlan_wake_reason == FWDecisionDisconnect ||
-			pwrpriv->wowlan_wake_reason == Rx_DisAssoc ||
-			pwrpriv->wowlan_wake_reason == Rx_DeAuth) {
-			DBG_871X("%s: disconnect reason: %02x\n", __func__,
-						pwrpriv->wowlan_wake_reason);
-			rtw_indicate_disconnect(padapter);
-
-			rtw_sta_media_status_rpt(padapter,
-				rtw_get_stainfo(&padapter->stapriv,
-					get_bssid(&padapter->mlmepriv)), 0);
-
-			rtw_free_assoc_resources(padapter, 1);
-			pmlmeinfo->state = WIFI_FW_NULL_STATE;
-
-		} else {
-			DBG_871X("%s: do roaming\n", __func__);
-			rtw_roaming(padapter, NULL);
-		}
-	}
-
-	if (pwrpriv->wowlan_mode) {
-		pwrpriv->bips_processing = false;
-		_set_timer(&padapter->mlmepriv.dynamic_chk_timer, 2000);
-	} else {
-		DBG_871X_LEVEL(_drv_always_, "do not reset timer\n");
-	}
-
-	pwrpriv->wowlan_mode = false;
-
-	/* clean driver side wake up reason. */
-	pwrpriv->wowlan_wake_reason = 0;
-exit:
-	DBG_871X("<== " FUNC_ADPT_FMT " exit....\n", FUNC_ADPT_ARG(padapter));
-	return ret;
-}
-#endif /* ifdef CONFIG_WOWLAN */
-
-#ifdef CONFIG_AP_WOWLAN
-int rtw_resume_process_ap_wow(struct adapter *padapter)
-{
-	struct net_device *pnetdev = padapter->pnetdev;
-	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
-	struct dvobj_priv *psdpriv = padapter->dvobj;
-	struct debug_priv *pdbgpriv = &psdpriv->drv_dbg;
-	struct wowlan_ioctl_param poidparam;
-	int ret = _SUCCESS;
-
-	DBG_871X("==> " FUNC_ADPT_FMT " entry....\n", FUNC_ADPT_ARG(padapter));
-
-	if (padapter) {
-		pnetdev = padapter->pnetdev;
-		pwrpriv = adapter_to_pwrctl(padapter);
-	} else {
-		pdbgpriv->dbg_resume_error_cnt++;
-		ret = -1;
-		goto exit;
-	}
-
-	rtw_set_ps_mode(padapter, PS_MODE_ACTIVE, 0, 0, "AP-WOWLAN");
-
-	pwrpriv->bFwCurrentInPSMode = false;
-
-	rtw_hal_disable_interrupt(padapter);
-
-	if (padapter->HalFunc.clear_interrupt)
-		padapter->HalFunc.clear_interrupt(padapter);
-
-	/* if (sdio_alloc_irq(adapter_to_dvobj(padapter)) != _SUCCESS) { */
-	if ((padapter->intf_alloc_irq) && (padapter->intf_alloc_irq(adapter_to_dvobj(padapter)) != _SUCCESS)) {
-		ret = -1;
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("%s: sdio_alloc_irq Failed!!\n", __func__));
-		goto exit;
-	}
-
-	/* Disable WOW, set H2C command */
-	poidparam.subcode = WOWLAN_AP_DISABLE;
-	padapter->HalFunc.SetHwRegHandler(padapter,
-		HW_VAR_AP_WOWLAN, (u8 *)&poidparam);
-	pwrpriv->wowlan_ap_mode = false;
-
-	padapter->bDriverStopped = false;
-	DBG_871X("%s: wowmode resuming, DriverStopped:%d\n", __func__, padapter->bDriverStopped);
-	rtw_start_drv_threads(padapter);
-
-	if (padapter->intf_start)
-		padapter->intf_start(padapter);
-
-	/*  start netif queue */
-	if (pnetdev) {
-		if (!rtw_netif_queue_stopped(pnetdev))
-			rtw_netif_start_queue(pnetdev);
-		else
-			rtw_netif_wake_queue(pnetdev);
-	}
-
-	if (padapter->pid[1] != 0) {
-		DBG_871X("pid[1]:%d\n", padapter->pid[1]);
-		rtw_signal_process(padapter->pid[1], SIGUSR2);
-	}
-
-	pwrpriv->bips_processing = false;
-	_set_timer(&padapter->mlmepriv.dynamic_chk_timer, 2000);
-
-	/* clean driver side wake up reason. */
-	pwrpriv->wowlan_wake_reason = 0;
-exit:
-	DBG_871X("<== " FUNC_ADPT_FMT " exit....\n", FUNC_ADPT_ARG(padapter));
-	return ret;
-}
-#endif /* ifdef CONFIG_APWOWLAN */
 
 static int rtw_resume_process_normal(struct adapter *padapter)
 {
@@ -1757,21 +1390,9 @@ int rtw_resume_common(struct adapter *padapter)
 	DBG_871X("==> %s (%s:%d)\n", __func__, current->comm, current->pid);
 
 	if (check_fwstate(pmlmepriv, WIFI_STATION_STATE)) {
-	#ifdef CONFIG_WOWLAN
-		if (pwrpriv->wowlan_mode)
-			rtw_resume_process_wow(padapter);
-		else
-			rtw_resume_process_normal(padapter);
-	#else
 		rtw_resume_process_normal(padapter);
-	#endif
-
 	} else if (check_fwstate(pmlmepriv, WIFI_AP_STATE)) {
-	#ifdef CONFIG_AP_WOWLAN
-		rtw_resume_process_ap_wow(padapter);
-	#else
 		rtw_resume_process_normal(padapter);
-	#endif /* CONFIG_AP_WOWLAN */
 	} else {
 		rtw_resume_process_normal(padapter);
 	}
@@ -1780,9 +1401,6 @@ int rtw_resume_common(struct adapter *padapter)
 
 	if (pwrpriv) {
 		pwrpriv->bInSuspend = false;
-	#ifdef CONFIG_PNO_SUPPORT
-		pwrpriv->pno_in_resume = false;
-	#endif
 	}
 	DBG_871X_LEVEL(_drv_always_, "%s:%d in %d ms\n", __func__, ret,
 		jiffies_to_msecs(jiffies - start_time));

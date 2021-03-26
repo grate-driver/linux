@@ -10,11 +10,6 @@
 #include <rtw_debug.h>
 #include <asm/unaligned.h>
 
-extern unsigned char RTW_WPA_OUI[];
-extern unsigned char WMM_OUI[];
-extern unsigned char WPS_OUI[];
-extern unsigned char P2P_OUI[];
-
 void init_mlme_ap_info(struct adapter *padapter)
 {
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
@@ -63,8 +58,6 @@ static void update_BCNTIM(struct adapter *padapter)
 	struct wlan_bssid_ex *pnetwork_mlmeext = &pmlmeinfo->network;
 	unsigned char *pie = pnetwork_mlmeext->IEs;
 
-	/* DBG_871X("%s\n", __func__); */
-
 	/* update TIM IE */
 	/* if (pstapriv->tim_bitmap) */
 	if (true) {
@@ -85,7 +78,7 @@ static void update_BCNTIM(struct adapter *padapter)
 
 			premainder_ie = p + tim_ielen;
 
-			tim_ie_offset = (sint)(p - pie);
+			tim_ie_offset = (signed int)(p - pie);
 
 			remainder_ielen = pnetwork_mlmeext->IELength - tim_ie_offset - tim_ielen;
 
@@ -270,10 +263,6 @@ void expire_timeout_chk(struct adapter *padapter)
 	while (phead != plist) {
 		psta = container_of(plist, struct sta_info, asoc_list);
 		plist = get_next(plist);
-#ifdef CONFIG_AUTO_AP_MODE
-		if (psta->isrc)
-			continue;
-#endif
 		if (chk_sta_is_alive(psta) || !psta->expire_to) {
 			psta->expire_to = pstapriv->expire_to;
 			psta->keep_alive_trycnt = 0;
@@ -560,8 +549,6 @@ void update_sta_info_apmode(struct adapter *padapter, struct sta_info *psta)
 	/* set intf_tag to if1 */
 	/* psta->intf_tag = 0; */
 
-	DBG_871X("%s\n", __func__);
-
 	/* psta->mac_id = psta->aid+4; */
 	/* psta->mac_id = psta->aid+1;//alloc macid when call rtw_alloc_stainfo(), */
 	/* release macid when call rtw_free_stainfo() */
@@ -717,13 +704,11 @@ static void update_hw_ht_param(struct adapter *padapter)
 	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
 	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 
-	DBG_871X("%s\n", __func__);
-
-	/* handle A-MPDU parameter field */
-	/*
-		AMPDU_para [1:0]:Max AMPDU Len => 0:8k , 1:16k, 2:32k, 3:64k
-		AMPDU_para [4:2]:Min MPDU Start Spacing
-	*/
+	/* handle A-MPDU parameter field
+	 *
+	 *	AMPDU_para [1:0]:Max AMPDU Len => 0:8k , 1:16k, 2:32k, 3:64k
+	 *	AMPDU_para [4:2]:Min MPDU Start Spacing
+	 */
 	max_AMPDU_len = pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x03;
 
 	min_MPDU_spacing = (
@@ -770,8 +755,6 @@ void start_bss_network(struct adapter *padapter, u8 *pbuf)
 	struct wlan_bssid_ex *pnetwork_mlmeext = &(pmlmeinfo->network);
 	struct HT_info_element *pht_info = NULL;
 	u8 cbw40_enable = 0;
-
-	/* DBG_871X("%s\n", __func__); */
 
 	bcn_interval = (u16)pnetwork->Configuration.BeaconPeriod;
 	cur_channel = pnetwork->Configuration.DSConfig;
@@ -924,12 +907,10 @@ void start_bss_network(struct adapter *padapter, u8 *pbuf)
 	if (pmlmeext->bstart_bss) {
 		update_beacon(padapter, WLAN_EID_TIM, NULL, true);
 
-#ifndef CONFIG_INTERRUPT_BASED_TXBCN /* other case will  tx beacon when bcn interrupt coming in. */
-		/* issue beacon frame */
-		if (send_beacon(padapter) == _FAIL)
-			DBG_871X("issue_beacon, fail!\n");
+	/* issue beacon frame */
+	if (send_beacon(padapter) == _FAIL)
+		DBG_871X("issue_beacon, fail!\n");
 
-#endif /* CONFIG_INTERRUPT_BASED_TXBCN */
 	}
 
 	/* update bc/mc sta_info */
@@ -1477,8 +1458,6 @@ static int rtw_ap_set_key(
 	struct cmd_priv *pcmdpriv = &(padapter->cmdpriv);
 	int res = _SUCCESS;
 
-	/* DBG_871X("%s\n", __func__); */
-
 	pcmd = rtw_zmalloc(sizeof(struct cmd_obj));
 	if (pcmd == NULL) {
 		res = _FAIL;
@@ -1532,8 +1511,6 @@ exit:
 
 int rtw_ap_set_group_key(struct adapter *padapter, u8 *key, u8 alg, int keyid)
 {
-	DBG_871X("%s\n", __func__);
-
 	return rtw_ap_set_key(padapter, key, alg, keyid, 1);
 }
 
@@ -1558,14 +1535,11 @@ int rtw_ap_set_wep_key(
 		alg = _NO_PRIVACY_;
 	}
 
-	DBG_871X("%s\n", __func__);
-
 	return rtw_ap_set_key(padapter, key, alg, keyid, set_tx);
 }
 
 static void update_bcn_fixed_ie(struct adapter *padapter)
 {
-	DBG_871X("%s\n", __func__);
 }
 
 static void update_bcn_erpinfo_ie(struct adapter *padapter)
@@ -1610,27 +1584,22 @@ static void update_bcn_erpinfo_ie(struct adapter *padapter)
 
 static void update_bcn_htcap_ie(struct adapter *padapter)
 {
-	DBG_871X("%s\n", __func__);
 }
 
 static void update_bcn_htinfo_ie(struct adapter *padapter)
 {
-	DBG_871X("%s\n", __func__);
 }
 
 static void update_bcn_rsn_ie(struct adapter *padapter)
 {
-	DBG_871X("%s\n", __func__);
 }
 
 static void update_bcn_wpa_ie(struct adapter *padapter)
 {
-	DBG_871X("%s\n", __func__);
 }
 
 static void update_bcn_wmm_ie(struct adapter *padapter)
 {
-	DBG_871X("%s\n", __func__);
 }
 
 static void update_bcn_wps_ie(struct adapter *padapter)
@@ -1647,8 +1616,6 @@ static void update_bcn_wps_ie(struct adapter *padapter)
 	struct wlan_bssid_ex *pnetwork = &(pmlmeinfo->network);
 	unsigned char *ie = pnetwork->IEs;
 	u32 ielen = pnetwork->IELength;
-
-	DBG_871X("%s\n", __func__);
 
 	pwps_ie = rtw_get_wps_ie(
 		ie + _FIXED_IE_LENGTH_,
@@ -1689,26 +1656,6 @@ static void update_bcn_wps_ie(struct adapter *padapter)
 	}
 
 	kfree(pbackup_remainder_ie);
-
-	/*  deal with the case without set_tx_beacon_cmd() in update_beacon() */
-#if defined(CONFIG_INTERRUPT_BASED_TXBCN)
-	if ((pmlmeinfo->state & 0x03) == WIFI_FW_AP_STATE) {
-		u8 sr = 0;
-
-		rtw_get_wps_attr_content(
-			pwps_ie_src,
-			wps_ielen,
-			WPS_ATTR_SELECTED_REGISTRAR,
-			(u8 *)(&sr),
-			NULL
-		);
-
-		if (sr) {
-			set_fwstate(pmlmepriv, WIFI_UNDER_WPS);
-			DBG_871X("%s, set WIFI_UNDER_WPS\n", __func__);
-		}
-	}
-#endif
 }
 
 static void update_bcn_p2p_ie(struct adapter *padapter)
@@ -1717,8 +1664,6 @@ static void update_bcn_p2p_ie(struct adapter *padapter)
 
 static void update_bcn_vendor_spec_ie(struct adapter *padapter, u8 *oui)
 {
-	DBG_871X("%s\n", __func__);
-
 	if (!memcmp(RTW_WPA_OUI, oui, 4))
 		update_bcn_wpa_ie(padapter);
 
@@ -1740,8 +1685,6 @@ void update_beacon(struct adapter *padapter, u8 ie_id, u8 *oui, u8 tx)
 	struct mlme_priv *pmlmepriv;
 	struct mlme_ext_priv *pmlmeext;
 	/* struct mlme_ext_info *pmlmeinfo; */
-
-	/* DBG_871X("%s\n", __func__); */
 
 	if (!padapter)
 		return;
@@ -1806,26 +1749,24 @@ void update_beacon(struct adapter *padapter, u8 ie_id, u8 *oui, u8 tx)
 
 	spin_unlock_bh(&pmlmepriv->bcn_update_lock);
 
-#ifndef CONFIG_INTERRUPT_BASED_TXBCN
 	if (tx) {
 		/* send_beacon(padapter);//send_beacon must execute on TSR level */
 		set_tx_beacon_cmd(padapter);
 	}
-#endif /* CONFIG_INTERRUPT_BASED_TXBCN */
 }
 
 /*
-op_mode
-Set to 0 (HT pure) under the following conditions
-	- all STAs in the BSS are 20/40 MHz HT in 20/40 MHz BSS or
-	- all STAs in the BSS are 20 MHz HT in 20 MHz BSS
-Set to 1 (HT non-member protection) if there may be non-HT STAs
-	in both the primary and the secondary channel
-Set to 2 if only HT STAs are associated in BSS,
-	however and at least one 20 MHz HT STA is associated
-Set to 3 (HT mixed mode) when one or more non-HT STAs are associated
-	(currently non-GF HT station is considered as non-HT STA also)
-*/
+ * op_mode
+ * Set to 0 (HT pure) under the following conditions
+ *	  - all STAs in the BSS are 20/40 MHz HT in 20/40 MHz BSS or
+ *	  - all STAs in the BSS are 20 MHz HT in 20 MHz BSS
+ * Set to 1 (HT non-member protection) if there may be non-HT STAs
+ *	  in both the primary and the secondary channel
+ * Set to 2 if only HT STAs are associated in BSS,
+ *	  however and at least one 20 MHz HT STA is associated
+ * Set to 3 (HT mixed mode) when one or more non-HT STAs are associated
+ *	  (currently non-GF HT station is considered as non-HT STA also)
+ */
 static int rtw_ht_operation_update(struct adapter *padapter)
 {
 	u16 cur_op_mode, new_op_mode;
@@ -2009,8 +1950,8 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
 	if (psta->flags & WLAN_STA_HT) {
 		u16 ht_capab = le16_to_cpu(psta->htpriv.ht_cap.cap_info);
 
-		DBG_871X("HT: STA %pM HT Capabilities "
-			   "Info: 0x%04x\n", MAC_ARG(psta->hwaddr), ht_capab);
+		DBG_871X("HT: STA %pM HT Capabilities Info: 0x%04x\n",
+			 MAC_ARG(psta->hwaddr), ht_capab);
 
 		if (psta->no_ht_set) {
 			psta->no_ht_set = 0;
@@ -2022,10 +1963,9 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
 				psta->no_ht_gf_set = 1;
 				pmlmepriv->num_sta_ht_no_gf++;
 			}
-			DBG_871X("%s STA %pM - no "
-				   "greenfield, num of non-gf stations %d\n",
-				   __func__, MAC_ARG(psta->hwaddr),
-				   pmlmepriv->num_sta_ht_no_gf);
+			DBG_871X("%s STA %pM - no greenfield, num of non-gf stations %d\n",
+				 __func__, MAC_ARG(psta->hwaddr),
+				 pmlmepriv->num_sta_ht_no_gf);
 		}
 
 		if ((ht_capab & IEEE80211_HT_CAP_SUP_WIDTH) == 0) {
@@ -2033,10 +1973,9 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
 				psta->ht_20mhz_set = 1;
 				pmlmepriv->num_sta_ht_20mhz++;
 			}
-			DBG_871X("%s STA %pM - 20 MHz HT, "
-				   "num of 20MHz HT STAs %d\n",
-				   __func__, MAC_ARG(psta->hwaddr),
-				   pmlmepriv->num_sta_ht_20mhz);
+			DBG_871X("%s STA %pM - 20 MHz HT, num of 20MHz HT STAs %d\n",
+				 __func__, MAC_ARG(psta->hwaddr),
+				 pmlmepriv->num_sta_ht_20mhz);
 		}
 
 	} else {

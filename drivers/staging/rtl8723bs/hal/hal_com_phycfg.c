@@ -12,7 +12,7 @@
 #include <linux/kernel.h>
 
 u8 PHY_GetTxPowerByRateBase(struct adapter *Adapter, u8 Band, u8 RfPath,
-			    u8 TxNum, enum RATE_SECTION RateSection)
+			    u8 TxNum, enum rate_section RateSection)
 {
 	struct hal_com_data	*pHalData = GET_HAL_DATA(Adapter);
 	u8	value = 0;
@@ -104,7 +104,7 @@ phy_SetTxPowerByRateBase(
 	struct adapter *Adapter,
 	u8 Band,
 	u8 RfPath,
-	enum RATE_SECTION	RateSection,
+	enum rate_section	RateSection,
 	u8 TxNum,
 	u8 Value
 )
@@ -198,8 +198,6 @@ struct adapter *padapter
 {
 	u8 path, base;
 
-	/* DBG_871X("===>%s\n", __func__); */
-
 	for (path = ODM_RF_PATH_A; path <= ODM_RF_PATH_B; ++path) {
 		base = PHY_GetTxPowerByRate(padapter, BAND_ON_2_4G, path, RF_1TX, MGN_11M);
 		phy_SetTxPowerByRateBase(padapter, BAND_ON_2_4G, path, CCK, RF_1TX, base);
@@ -261,8 +259,6 @@ struct adapter *padapter
 		phy_SetTxPowerByRateBase(padapter, BAND_ON_5G, path, VHT_3SSMCS0_3SSMCS9, RF_3TX, base);
 		/* DBG_871X("Power index base of 5G path %d 3Tx VHT3SS = > 0x%x\n", path, base); */
 	}
-
-	/* DBG_871X("<===%s\n", __func__); */
 }
 
 u8 PHY_GetRateSectionIndexOfTxPowerByRate(
@@ -270,7 +266,7 @@ u8 PHY_GetRateSectionIndexOfTxPowerByRate(
 )
 {
 	struct hal_com_data	*pHalData = GET_HAL_DATA(padapter);
-	PDM_ODM_T pDM_Odm = &pHalData->odmpriv;
+	struct dm_odm_t *pDM_Odm = &pHalData->odmpriv;
 	u8	index = 0;
 
 	if (pDM_Odm->PhyRegPgVersion == 0) {
@@ -795,7 +791,7 @@ void PHY_StoreTxPowerByRate(
 )
 {
 	struct hal_com_data	*pHalData = GET_HAL_DATA(padapter);
-	PDM_ODM_T		pDM_Odm = &pHalData->odmpriv;
+	struct dm_odm_t *pDM_Odm = &pHalData->odmpriv;
 
 	if (pDM_Odm->PhyRegPgVersion > 0)
 		PHY_StoreTxPowerByRateNew(padapter, Band, RfPath, TxNum, RegAddr, BitMask, Data);
@@ -1039,7 +1035,7 @@ u8 PHY_GetTxPowerIndexBase(
 	struct adapter *padapter,
 	u8 RFPath,
 	u8 Rate,
-	enum CHANNEL_WIDTH	BandWidth,
+	enum channel_width	BandWidth,
 	u8 Channel,
 	bool *bIn24G
 )
@@ -1188,7 +1184,7 @@ u8 PHY_GetTxPowerIndexBase(
 s8 PHY_GetTxPowerTrackingOffset(struct adapter *padapter, u8 RFPath, u8 Rate)
 {
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
-	PDM_ODM_T pDM_Odm = &pHalData->odmpriv;
+	struct dm_odm_t *pDM_Odm = &pHalData->odmpriv;
 	s8 offset = 0;
 
 	if (pDM_Odm->RFCalibrateInfo.TxPowerTrackControl  == false)
@@ -1556,7 +1552,7 @@ void PHY_SetTxPowerLevelByPath(struct adapter *Adapter, u8 channel, u8 path)
 void PHY_SetTxPowerIndexByRateArray(
 	struct adapter *padapter,
 	u8 RFPath,
-	enum CHANNEL_WIDTH BandWidth,
+	enum channel_width BandWidth,
 	u8 Channel,
 	u8 *Rates,
 	u8 RateArraySize
@@ -1610,7 +1606,7 @@ static s8 phy_GetChannelIndexOfTxPowerLimit(u8 Band, u8 Channel)
 	return channelIndex;
 }
 
-static s16 get_bandwidth_idx(const enum CHANNEL_WIDTH bandwidth)
+static s16 get_bandwidth_idx(const enum channel_width bandwidth)
 {
 	switch (bandwidth) {
 	case CHANNEL_WIDTH_20:
@@ -1673,7 +1669,7 @@ static s16 get_rate_sctn_idx(const u8 rate)
 }
 
 s8 phy_get_tx_pwr_lmt(struct adapter *adapter, u32 reg_pwr_tbl_sel,
-		      enum BAND_TYPE band_type, enum CHANNEL_WIDTH bandwidth,
+		      enum band_type band_type, enum channel_width bandwidth,
 		      u8 rf_path, u8 data_rate, u8 channel)
 {
 	s16 idx_band       = -1;

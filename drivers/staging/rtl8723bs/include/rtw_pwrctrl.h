@@ -46,11 +46,6 @@ enum Power_Mgnt {
 	PS_MODE_NUM,
 };
 
-#ifdef CONFIG_PNO_SUPPORT
-#define MAX_PNO_LIST_COUNT 16
-#define MAX_SCAN_LIST_COUNT 14 /* 2.4G only */
-#endif
-
 /*
 	BIT[2:0] = HW state
 	BIT[3] = Protocol PS state,   0: register active state , 1: register sleep state
@@ -146,7 +141,7 @@ enum { /*  for ips_mode */
 };
 
 /*  Design for pwrctrl_priv.ips_deny, 32 bits for 32 reasons at most */
-enum PS_DENY_REASON {
+enum ps_deny_reason {
 	PS_DENY_DRV_INITIAL = 0,
 	PS_DENY_SCAN,
 	PS_DENY_JOIN,
@@ -157,47 +152,6 @@ enum PS_DENY_REASON {
 	PS_DENY_DRV_REMOVE = 30,
 	PS_DENY_OTHERS = 31
 };
-
-#ifdef CONFIG_PNO_SUPPORT
-struct pno_nlo_info {
-	u32 fast_scan_period;				/* Fast scan period */
-	u32 ssid_num;				/* number of entry */
-	u32 slow_scan_period;			/* slow scan period */
-	u32 fast_scan_iterations;			/* Fast scan iterations */
-	u8 ssid_length[MAX_PNO_LIST_COUNT];	/* SSID Length Array */
-	u8 ssid_cipher_info[MAX_PNO_LIST_COUNT];	/* Cipher information for security */
-	u8 ssid_channel_info[MAX_PNO_LIST_COUNT];	/* channel information */
-};
-
-struct pno_ssid {
-	u32 	SSID_len;
-	u8 SSID[32];
-};
-
-struct pno_ssid_list {
-	struct pno_ssid	node[MAX_PNO_LIST_COUNT];
-};
-
-struct pno_scan_channel_info {
-	u8 channel;
-	u8 tx_power;
-	u8 timeout;
-	u8 active;				/* set 1 means active scan, or pasivite scan. */
-};
-
-struct pno_scan_info {
-	u8 enableRFE;			/* Enable RFE */
-	u8 period_scan_time;		/* exclusive with fast_scan_period and slow_scan_period */
-	u8 periodScan;			/* exclusive with fast_scan_period and slow_scan_period */
-	u8 orig_80_offset;			/* original channel 80 offset */
-	u8 orig_40_offset;			/* original channel 40 offset */
-	u8 orig_bw;			/* original bandwidth */
-	u8 orig_ch;			/* original channel */
-	u8 channel_num;			/* number of channel */
-	u64	rfe_type;			/* rfe_type && 0x00000000000000ff */
-	struct pno_scan_channel_info ssid_channel_info[MAX_SCAN_LIST_COUNT];
-};
-#endif /* CONFIG_PNO_SUPPORT */
 
 struct pwrctrl_priv {
 	struct mutex lock;
@@ -212,10 +166,10 @@ struct pwrctrl_priv {
 	u8 dtim;
 
 	u32 alives;
-	_workitem cpwm_event;
+	struct work_struct cpwm_event;
 	u8 brpwmtimeout;
-	_workitem rpwmtimeoutwi;
-	_timer pwr_rpwm_timer;
+	struct work_struct rpwmtimeoutwi;
+	struct timer_list pwr_rpwm_timer;
 	u8 bpower_saving; /* for LPS/IPS */
 
 	u8 b_hw_radio_off;
@@ -238,7 +192,7 @@ struct pwrctrl_priv {
 	u8 pre_ips_type;/*  0: default flow, 1: carddisbale flow */
 
 	/*  ps_deny: if 0, power save is free to go; otherwise deny all kinds of power save. */
-	/*  Use PS_DENY_REASON to decide reason. */
+	/*  Use enum ps_deny_reason to decide reason. */
 	/*  Don't access this variable directly without control function, */
 	/*  and this variable should be protected by lock. */
 	u32 ps_deny;
@@ -266,23 +220,7 @@ struct pwrctrl_priv {
 	u8 wowlan_wake_reason;
 	u8 wowlan_ap_mode;
 	u8 wowlan_mode;
-#ifdef CONFIG_WOWLAN
-	u8 wowlan_pattern;
-	u8 wowlan_magic;
-	u8 wowlan_unicast;
-	u8 wowlan_pattern_idx;
-	u8 wowlan_pno_enable;
-#ifdef CONFIG_PNO_SUPPORT
-	u8 pno_in_resume;
-	u8 pno_inited;
-	struct pno_nlo_info *pnlo_info;
-	struct pno_scan_info *pscan_info;
-	struct pno_ssid_list *pno_ssid_list;
-#endif
-	u32 	wowlan_pattern_context[8][5];
-	u64		wowlan_fw_iv;
-#endif /*  CONFIG_WOWLAN */
-	_timer	pwr_state_check_timer;
+	struct timer_list	pwr_state_check_timer;
 	struct adapter *adapter;
 	int		pwr_state_check_interval;
 	u8 pwr_state_check_cnts;
@@ -352,8 +290,8 @@ int _rtw_pwr_wakeup(struct adapter *padapter, u32 ips_deffer_ms, const char *cal
 int rtw_pm_set_ips(struct adapter *padapter, u8 mode);
 int rtw_pm_set_lps(struct adapter *padapter, u8 mode);
 
-void rtw_ps_deny(struct adapter *padapter, enum PS_DENY_REASON reason);
-void rtw_ps_deny_cancel(struct adapter *padapter, enum PS_DENY_REASON reason);
+void rtw_ps_deny(struct adapter *padapter, enum ps_deny_reason reason);
+void rtw_ps_deny_cancel(struct adapter *padapter, enum ps_deny_reason reason);
 u32 rtw_ps_deny_get(struct adapter *padapter);
 
 #endif  /* __RTL871X_PWRCTRL_H_ */
