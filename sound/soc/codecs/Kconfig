@@ -161,6 +161,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_RT1011
 	imply SND_SOC_RT1015
 	imply SND_SOC_RT1015P
+	imply SND_SOC_RT1019
 	imply SND_SOC_RT1305
 	imply SND_SOC_RT1308
 	imply SND_SOC_RT5514
@@ -180,8 +181,11 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_RT5682_SDW
 	imply SND_SOC_RT700_SDW
 	imply SND_SOC_RT711_SDW
+	imply SND_SOC_RT711_SDCA_SDW
 	imply SND_SOC_RT715_SDW
+	imply SND_SOC_RT715_SDCA_SDW
 	imply SND_SOC_RT1308_SDW
+	imply SND_SOC_RT1316_SDW
 	imply SND_SOC_SGTL5000
 	imply SND_SOC_SI476X
 	imply SND_SOC_SIMPLE_AMPLIFIER
@@ -1076,6 +1080,7 @@ config SND_SOC_RL6231
 	default y if SND_SOC_RT1011=y
 	default y if SND_SOC_RT1015=y
 	default y if SND_SOC_RT1015P=y
+	default y if SND_SOC_RT1019=y
 	default y if SND_SOC_RT1305=y
 	default y if SND_SOC_RT1308=y
 	default m if SND_SOC_RT5514=m
@@ -1094,6 +1099,7 @@ config SND_SOC_RL6231
 	default m if SND_SOC_RT1011=m
 	default m if SND_SOC_RT1015=m
 	default m if SND_SOC_RT1015P=m
+	default m if SND_SOC_RT1019=m
 	default m if SND_SOC_RT1305=m
 	default m if SND_SOC_RT1308=m
 
@@ -1130,6 +1136,10 @@ config SND_SOC_RT1015P
 	tristate
 	depends on GPIOLIB
 
+config SND_SOC_RT1019
+	tristate
+	depends on I2C
+
 config SND_SOC_RT1305
 	tristate
 	depends on I2C
@@ -1141,6 +1151,11 @@ config SND_SOC_RT1308
 config SND_SOC_RT1308_SDW
 	tristate "Realtek RT1308 Codec - SDW"
 	depends on I2C && SOUNDWIRE
+	select REGMAP_SOUNDWIRE
+
+config SND_SOC_RT1316_SDW
+	tristate "Realtek RT1316 Codec - SDW"
+	depends on SOUNDWIRE
 	select REGMAP_SOUNDWIRE
 
 config SND_SOC_RT5514
@@ -1241,6 +1256,12 @@ config SND_SOC_RT711_SDW
 	select SND_SOC_RT711
 	select REGMAP_SOUNDWIRE
 
+config SND_SOC_RT711_SDCA_SDW
+	tristate "Realtek RT711 SDCA Codec - SDW"
+	depends on SOUNDWIRE
+	select REGMAP_SOUNDWIRE
+	select REGMAP_SOUNDWIRE_MBQ
+
 config SND_SOC_RT715
 	tristate
 
@@ -1249,6 +1270,12 @@ config SND_SOC_RT715_SDW
 	depends on SOUNDWIRE
 	select SND_SOC_RT715
 	select REGMAP_SOUNDWIRE
+
+config SND_SOC_RT715_SDCA_SDW
+	tristate "Realtek RT715 SDCA Codec - SDW"
+	depends on SOUNDWIRE
+	select REGMAP_SOUNDWIRE
+	select REGMAP_SOUNDWIRE_MBQ
 
 #Freescale sgtl5000 codec
 config SND_SOC_SGTL5000
