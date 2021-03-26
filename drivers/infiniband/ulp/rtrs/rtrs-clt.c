@@ -325,7 +325,7 @@ static void rtrs_rdma_error_recovery(struct rtrs_clt_con *con)
 
 static void rtrs_clt_fast_reg_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_clt_con *con = cq->cq_context;
+	struct rtrs_clt_con *con = to_clt_con(wc->qp->qp_context);
 
 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
 		rtrs_err(con->c.sess, "Failed IB_WR_REG_MR: %s\n",
@@ -345,7 +345,7 @@ static void rtrs_clt_inv_rkey_done(struct ib_cq *cq, struct ib_wc *wc)
 {
 	struct rtrs_clt_io_req *req =
 		container_of(wc->wr_cqe, typeof(*req), inv_cqe);
-	struct rtrs_clt_con *con = cq->cq_context;
+	struct rtrs_clt_con *con = to_clt_con(wc->qp->qp_context);
 
 	if (unlikely(wc->status != IB_WC_SUCCESS)) {
 		rtrs_err(con->c.sess, "Failed IB_WR_LOCAL_INV: %s\n",
@@ -586,7 +586,7 @@ static int rtrs_post_recv_empty_x2(struct rtrs_con *con, struct ib_cqe *cqe)
 
 static void rtrs_clt_rdma_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_clt_con *con = cq->cq_context;
+	struct rtrs_clt_con *con = to_clt_con(wc->qp->qp_context);
 	struct rtrs_clt_sess *sess = to_clt_sess(con->c.sess);
 	u32 imm_type, imm_payload;
 	bool w_inval = false;
@@ -1853,12 +1853,14 @@ static int rtrs_clt_rdma_cm_handler(struct rdma_cm_id *cm_id,
 	case RDMA_CM_EVENT_UNREACHABLE:
 	case RDMA_CM_EVENT_ADDR_CHANGE:
 	case RDMA_CM_EVENT_TIMEWAIT_EXIT:
-		rtrs_wrn(s, "CM error event %d\n", ev->event);
+		rtrs_wrn(s, "CM error (CM event: %s, err: %d)\n",
+			 rdma_event_msg(ev->event), ev->status);
 		cm_err = -ECONNRESET;
 		break;
 	case RDMA_CM_EVENT_ADDR_ERROR:
 	case RDMA_CM_EVENT_ROUTE_ERROR:
-		rtrs_wrn(s, "CM error event %d\n", ev->event);
+		rtrs_wrn(s, "CM error (CM event: %s, err: %d)\n",
+			 rdma_event_msg(ev->event), ev->status);
 		cm_err = -EHOSTUNREACH;
 		break;
 	case RDMA_CM_EVENT_DEVICE_REMOVAL:
@@ -1868,7 +1870,8 @@ static int rtrs_clt_rdma_cm_handler(struct rdma_cm_id *cm_id,
 		rtrs_clt_close_conns(sess, false);
 		return 0;
 	default:
-		rtrs_err(s, "Unexpected RDMA CM event (%d)\n", ev->event);
+		rtrs_err(s, "Unexpected RDMA CM error (CM event: %s, err: %d)\n",
+			 rdma_event_msg(ev->event), ev->status);
 		cm_err = -ECONNRESET;
 		break;
 	}
@@ -2241,7 +2244,7 @@ destroy:
 
 static void rtrs_clt_info_req_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_clt_con *con = cq->cq_context;
+	struct rtrs_clt_con *con = to_clt_con(wc->qp->qp_context);
 	struct rtrs_clt_sess *sess = to_clt_sess(con->c.sess);
 	struct rtrs_iu *iu;
 
@@ -2323,7 +2326,7 @@ static int process_info_rsp(struct rtrs_clt_sess *sess,
 
 static void rtrs_clt_info_rsp_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_clt_con *con = cq->cq_context;
+	struct rtrs_clt_con *con = to_clt_con(wc->qp->qp_context);
 	struct rtrs_clt_sess *sess = to_clt_sess(con->c.sess);
 	struct rtrs_msg_info_rsp *msg;
 	enum rtrs_clt_state state;
