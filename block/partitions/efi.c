@@ -98,6 +98,15 @@ static int force_gpt;
 static int __init
 force_gpt_fn(char *str)
 {
+	/*
+	 * This check allows to properly parse cmdline variants like
+	 * "gpt gpt_sector=<sector>" and "gpt_sector=<sector> gpt" since
+	 * "gpt" overlaps with the "gpt_sector=", see tegra_gpt_sector_fn().
+	 * The argument is absent for a boolean cmdline option.
+	 */
+	if (strlen(str))
+		return 0;
+
 	force_gpt = 1;
 	return 1;
 }
@@ -620,6 +629,15 @@ static int find_valid_gpt(struct parsed_partitions *state, gpt_header **gpt,
 					 &agpt, &aptes);
         if (!good_agpt && force_gpt)
                 good_agpt = is_gpt_valid(state, lastlba, &agpt, &aptes);
+
+	/*
+	 * The force_gpt_sector is used by NVIDIA Tegra partition parser in
+	 * order to convey a non-standard location of the GPT entry for lookup.
+	 * By default force_gpt_sector is set to 0 and has no effect.
+	 */
+	if (!good_agpt && force_gpt && state->force_gpt_sector)
+		good_agpt = is_gpt_valid(state, state->force_gpt_sector,
+					 &agpt, &aptes);
 
         /* The obviously unsuccessful case */
         if (!good_pgpt && !good_agpt)
