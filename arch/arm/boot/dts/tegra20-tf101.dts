@@ -6,8 +6,8 @@
 #include "tegra20-cpu-opp.dtsi"
 
 / {
-	model = "NVIDIA Tegra20 Ventana evaluation board";
-	compatible = "nvidia,ventana", "nvidia,tegra20";
+	model = "ASUS EeePad Transformer TF101";
+	compatible = "asus,f101", "nvidia,ventana", "nvidia,tegra20";
 
 	aliases {
 		rtc0 = "/i2c@7000d000/tps6586x@34";
