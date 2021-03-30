@@ -97,7 +97,8 @@
 			clocks = <&tc358768_refclk>;
 			clock-names = "refclk";
 
-			reset-gpios = <&gpio TEGRA_GPIO(X, 0) GPIO_ACTIVE_LOW>; /* I2C Switch */
+			/* I2C Switch */
+			reset-gpios = <&gpio TEGRA_GPIO(X, 0) GPIO_ACTIVE_LOW>;
 
 			vddc-supply = <&mipi_1v2_vdd>;
 			vddio-supply = <&mipi_1v8_vio>;
@@ -133,7 +134,7 @@
 				compatible = "panasonic,vvx10f004b00";
 				reg = <1>;
 
-				power-supply = <&vdd_core>;
+				enable-gpios = <&gpio TEGRA_GPIO(U, 5) GPIO_ACTIVE_HIGH>;
 				backlight = <&backlight_lvds>;
 
 				port {
@@ -203,7 +204,6 @@
 		regulator-name = "mipi_1v2_vdd";
 		regulator-min-microvolt = <1200000>;
 		regulator-max-microvolt = <1200000>;
-		regulator-always-on;
 		regulator-boot-on;
 		gpio = <&gpio TEGRA_GPIO(BB, 3) GPIO_ACTIVE_HIGH>; /* 1.2V */
 		enable-active-high;
@@ -215,7 +215,6 @@
 		regulator-name = "mipi_1v8_vio";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
-		regulator-always-on;
 		regulator-boot-on;
 		gpio = <&gpio TEGRA_GPIO(C, 6) GPIO_ACTIVE_HIGH>; /* 1.8V */
 		enable-active-high;
