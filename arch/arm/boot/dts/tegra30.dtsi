@@ -1437,9 +1437,24 @@
 				     <&{/cpus/cpu@3}>;
 	};
 
+	/*
+	 * This stub regulator exists solely for easing of upgrading older
+	 * device-trees to a recent upstream DTSI since regulator is mandatory
+	 * for the core domain. You should replace it with a proper core
+	 * regulator phandle in the board's device-tree.
+	 */
+	vdd_pd_core_stub: core-domain-stub-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_core_stub";
+		regulator-min-microvolt = <1300000>;
+		regulator-max-microvolt = <1300000>;
+		regulator-always-on;
+	};
+
 	pd_core: power-domain-core {
 		compatible = "nvidia,tegra30-core-domain";
 		operating-points-v2 = <&core_opp_table>;
+		power-supply = <&vdd_pd_core_stub>;
 		#power-domain-cells = <0>;
 	};
 };
