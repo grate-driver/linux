@@ -108,17 +108,29 @@ static const struct mfd_cell asus_ec_subdev[] =
 };
 
 static const struct asus_ec_initdata asus_ec_model_info[] = {
-	{	/* Asus Transformer Pad */
+	{	/* Asus T20 Mobile Dock  */
+		.model		= "ASUS-EP101-DOCK",
+		.name		= "dock",
+		.components	= EC_PART_BATTERY|EC_PART_CHARGE_LED|
+				  EC_PART_I8042|EC_PART_EXT_KEYS,
+	},
+	{	/* Asus T30 Transformer Pad */
 		.model		= "ASUS-TF201-PAD",
 		.name		= "pad",
 		.components	= EC_PART_BATTERY|EC_PART_CHARGE_LED,
 		.flags		= EC_FLAG_SET_MODE,
 	},
-	{	/* Asus Mobile Dock */
+	{	/* Asus T30 Mobile Dock */
 		.model		= "ASUS-TF201-DOCK",
 		.name		= "dock",
 		.components	= EC_PART_BATTERY|EC_PART_CHARGE_LED|
 				  EC_PART_I8042|EC_PART_EXT_KEYS,
+	},
+	{	/* Asus T114 Transformer Pad */
+		.model		= "ASUS-TF701T-PAD",
+		.name		= "pad",
+		.components	= EC_PART_BATTERY|EC_PART_CHARGE_LED,
+		.flags		= EC_FLAG_SET_MODE,
 	},
 };
 
