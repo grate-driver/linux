@@ -685,9 +685,24 @@
 		status = "disabled";
 	};
 
+	/*
+	 * This stub regulator exists solely for easing of upgrading older
+	 * device-trees to a recent upstream DTSI since regulator is mandatory
+	 * for the core domain. You should replace it with a proper core
+	 * regulator phandle in the board's device-tree.
+	 */
+	vdd_pd_core_stub: core-domain-stub-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_core_stub";
+		regulator-min-microvolt = <1300000>;
+		regulator-max-microvolt = <1300000>;
+		regulator-always-on;
+	};
+
 	tegra_pmc: pmc@7000e400 {
 		compatible = "nvidia,tegra20-pmc";
 		reg = <0x7000e400 0x400>;
+		core-supply = <&vdd_pd_core_stub>;
 		clocks = <&tegra_car TEGRA20_CLK_PCLK>, <&clk32k_in>;
 		clock-names = "pclk", "clk32k_in";
 		#clock-cells = <1>;
