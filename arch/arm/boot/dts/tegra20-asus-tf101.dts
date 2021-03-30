@@ -38,6 +38,28 @@
 		reg = <0x00000000 0x40000000>;
 	};
 
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		ramoops@2ffe0000 {
+			compatible = "ramoops";
+			reg = <0x2ffe0000 0x10000>;	/* 64kB */
+			console-size = <0x8000>;	/* 32kB */
+			record-size = <0x400>;		/*  1kB */
+			ecc-size = <16>;
+		};
+
+		linux,cma@30000000 {
+			compatible = "shared-dma-pool";
+			alloc-ranges = <0x30000000 0x10000000>;
+			size = <0x10000000>; /* 256MiB */
+			linux,cma-default;
+			reusable;
+		};
+	};
+
 	host1x@50000000 {
 		dc@54200000 {
 			rgb {
