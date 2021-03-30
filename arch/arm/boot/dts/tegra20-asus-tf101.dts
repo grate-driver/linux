@@ -818,14 +818,29 @@
 		};
 	};
 
-	panel: panel {
-		compatible = "chunghwa,claa101wa01a";
+	display-panel {
+		compatible = "auo,b101ew05", "panel-lvds";
 
-		power-supply = <&vdd_pnl_reg>;
-		enable-gpios = <&gpio TEGRA_GPIO(B, 2) GPIO_ACTIVE_HIGH>;
-
-		backlight = <&backlight>;
 		ddc-i2c-bus = <&lvds_ddc>;
+		power-supply = <&vdd_pnl_reg>;
+		backlight = <&backlight>;
+
+		width-mm = <218>;
+		height-mm = <135>;
+
+		data-mapping = "jeida-18";
+
+		panel-timing {
+			clock-frequency = <71200000>;
+			hactive = <1280>;
+			vactive = <800>;
+			hfront-porch = <8>;
+			hback-porch = <18>;
+			hsync-len = <184>;
+			vsync-len = <3>;
+			vfront-porch = <4>;
+			vback-porch = <8>;
+		};
 
 		port {
 			panel_input: endpoint {
