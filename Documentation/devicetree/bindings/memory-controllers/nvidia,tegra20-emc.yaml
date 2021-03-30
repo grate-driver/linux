@@ -158,6 +158,46 @@ patternProperties:
         description:
           Value of RAM_CODE this timing set is used for.
 
+      jedec,lpddr-manufacturer-id:
+        $ref: /schemas/types.yaml#/definitions/uint32
+        description:
+          Unique manufacturer ID of SDRAM chip this timing set is used for.
+          See MR5 description in JEDEC LPDDR2 specification (JESD209-2).
+
+      jedec,lpddr-revision-id1:
+        $ref: /schemas/types.yaml#/definitions/uint32
+        description:
+          Revision 1 value of SDRAM chip this timing set is used for.
+          See MR6 description in chip vendor specification.
+
+      jedec,lpddr-revision-id2:
+        $ref: /schemas/types.yaml#/definitions/uint32
+        description:
+          Revision 2 value of SDRAM chip this timing set is used for.
+          See MR7 description in chip vendor specification.
+
+      jedec,lpddr-density-mbits:
+        $ref: /schemas/types.yaml#/definitions/uint32
+        description:
+          Density in megabits of SDRAM chip this timing set is used for.
+          See MR8 description in JEDEC LPDDR2 specification.
+
+      jedec,lpddr-io-width-bits:
+        $ref: /schemas/types.yaml#/definitions/uint32
+        description:
+          IO bus width in bits of SDRAM chip this timing set is used for.
+          See MR8 description in JEDEC LPDDR2 specification.
+
+      jedec,lpddr-type:
+        $ref: /schemas/types.yaml#/definitions/uint32
+        description:
+          LPDDR type which corresponds to a number of words SDRAM pre-fetches
+          per column request that this timing set is used for.
+          See MR8 description in JEDEC LPDDR2 specification.
+        enum:
+          - 4 # S4 (4 words prefetch architecture)
+          - 2 # S2 (2 words prefetch architecture)
+
       "#address-cells":
         const: 1
 
@@ -167,9 +207,6 @@ patternProperties:
     patternProperties:
       "^emc-table@[0-9]+$":
         $ref: "#/$defs/emc-table"
-
-    required:
-      - nvidia,ram-code
 
     additionalProperties: false
 
