@@ -7076,8 +7076,17 @@ static inline void io_rsrc_ref_unlock(struct io_ring_ctx *ctx)
 
 static void io_rsrc_node_set(struct io_ring_ctx *ctx,
 			     struct io_rsrc_data *rsrc_data,
-			     struct io_rsrc_node *rsrc_node)
+			     void (*rsrc_put)(struct io_ring_ctx *ctx,
+			                      struct io_rsrc_put *prsrc))
 {
+	struct io_rsrc_node *rsrc_node = ctx->rsrc_backup_node;
+
+	WARN_ON_ONCE(!rsrc_node);
+
+	ctx->rsrc_backup_node = NULL;
+	rsrc_node->rsrc_data = rsrc_data;
+	rsrc_node->rsrc_put = rsrc_put;
+
 	io_rsrc_ref_lock(ctx);
 	rsrc_data->node = rsrc_node;
 	list_add_tail(&rsrc_node->node, &ctx->rsrc_ref_list);
@@ -7105,28 +7114,11 @@ static int io_rsrc_node_prealloc(struct io_ring_ctx *ctx)
 	return ctx->rsrc_backup_node ? 0 : -ENOMEM;
 }
 
-static struct io_rsrc_node *
-io_rsrc_node_get(struct io_ring_ctx *ctx,
-		 struct io_rsrc_data *rsrc_data,
-		 void (*rsrc_put)(struct io_ring_ctx *ctx,
-		                  struct io_rsrc_put *prsrc))
-{
-	struct io_rsrc_node *node = ctx->rsrc_backup_node;
-
-	WARN_ON_ONCE(!node);
-
-	ctx->rsrc_backup_node = NULL;
-	node->rsrc_data = rsrc_data;
-	node->rsrc_put = rsrc_put;
-	return node;
-}
-
 static int io_rsrc_ref_quiesce(struct io_rsrc_data *data,
 			       struct io_ring_ctx *ctx,
 			       void (*rsrc_put)(struct io_ring_ctx *ctx,
 			                        struct io_rsrc_put *prsrc))
 {
-	struct io_rsrc_node *node;
 	int ret;
 
 	if (data->quiesce)
@@ -7146,8 +7138,7 @@ static int io_rsrc_ref_quiesce(struct io_rsrc_data *data,
 			break;
 
 		percpu_ref_resurrect(&data->refs);
-		node = io_rsrc_node_get(ctx, data, rsrc_put);
-		io_rsrc_node_set(ctx, data, node);
+		io_rsrc_node_set(ctx, data, rsrc_put);
 		reinit_completion(&data->done);
 
 		mutex_unlock(&ctx->uring_lock);
@@ -7618,7 +7609,6 @@ static int io_sqe_files_register(struct io_ring_ctx *ctx, void __user *arg,
 	unsigned nr_tables, i;
 	struct file *file;
 	int fd, ret;
-	struct io_rsrc_node *ref_node;
 	struct io_rsrc_data *file_data;
 
 	if (ctx->file_data)
@@ -7689,8 +7679,7 @@ static int io_sqe_files_register(struct io_ring_ctx *ctx, void __user *arg,
 		return ret;
 	}
 
-	ref_node = io_rsrc_node_get(ctx, ctx->file_data, io_ring_file_put);
-	io_rsrc_node_set(ctx, file_data, ref_node);
+	io_rsrc_node_set(ctx, file_data, io_ring_file_put);
 	return ret;
 out_fput:
 	for (i = 0; i < ctx->nr_user_files; i++) {
@@ -7776,7 +7765,6 @@ static int __io_sqe_files_update(struct io_ring_ctx *ctx,
 				 unsigned nr_args)
 {
 	struct io_rsrc_data *data = ctx->file_data;
-	struct io_rsrc_node *ref_node;
 	struct file *file, **file_slot;
 	__s32 __user *fds;
 	int fd, i, err;
@@ -7843,8 +7831,7 @@ static int __io_sqe_files_update(struct io_ring_ctx *ctx,
 
 	if (needs_switch) {
 		percpu_ref_kill(&data->node->refs);
-		ref_node = io_rsrc_node_get(ctx, data, io_ring_file_put);
-		io_rsrc_node_set(ctx, data, ref_node);
+		io_rsrc_node_set(ctx, data, io_ring_file_put);
 	}
 	return done ? done : err;
 }
