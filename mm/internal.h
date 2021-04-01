@@ -109,12 +109,11 @@ static inline void set_page_refcounted(struct page *page)
  */
 static inline bool is_page_poisoned(struct page *page)
 {
-	if (page != NULL) {
-		if (PageHWPoison(page))
-			return true;
-		else if (PageHuge(page) && PageHWPoison(compound_head(page)))
-			return true;
-	}
+	if (PageHWPoison(page))
+		return true;
+	else if (PageHuge(page) && PageHWPoison(compound_head(page)))
+		return true;
+
 	return false;
 }
 
