@@ -115,7 +115,7 @@ static inline bool is_page_poisoned(struct page *page)
 		else if (PageHuge(page) && PageHWPoison(compound_head(page)))
 			return true;
 	}
-	return 0;
+	return false;
 }
 
 extern unsigned long highest_memmap_pfn;
