@@ -788,7 +788,7 @@ static bool too_many_isolated(pg_data_t *pgdat)
  * Isolate all pages that can be migrated from the range specified by
  * [low_pfn, end_pfn). The range is expected to be within same pageblock.
  * Returns errno, like -EAGAIN or -EINTR in case e.g signal pending or congestion,
- * or 0.
+ * -ENOMEM in case we could not allocate a page, or 0.
  * cc->migrate_pfn will contain the next pfn to scan (which may be both less,
  * equal to or more that end_pfn).
  *
@@ -809,6 +809,7 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 	bool skip_on_failure = false;
 	unsigned long next_skip_pfn = 0;
 	bool skip_updated = false;
+	bool fatal_error = false;
 	int ret = 0;
 
 	cc->migrate_pfn = low_pfn;
@@ -905,6 +906,32 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 				goto isolate_abort;
 			}
 			valid_page = page;
+		}
+
+		if (PageHuge(page) && cc->alloc_contig) {
+			ret = isolate_or_dissolve_huge_page(page);
+
+			/*
+			 * Fail isolation in case isolate_or_dissolve_huge_page
+			 * reports an error. In case of -ENOMEM, abort right away.
+			 */
+			if (ret < 0) {
+				/*
+				 * Do not report -EBUSY down the chain.
+				 */
+				if (ret == -ENOMEM)
+					fatal_error = true;
+				else
+					ret = 0;
+				goto isolate_fail;
+			}
+
+			/*
+			 * Ok, the hugepage was dissolved. Now these pages are
+			 * Buddy and cannot be re-allocated because they are
+			 * isolated. Fall-through as the check below handles
+			 * Buddy pages.
+			 */
 		}
 
 		/*
@@ -1092,6 +1119,9 @@ isolate_fail:
 			 */
 			next_skip_pfn += 1UL << cc->order;
 		}
+
+		if (fatal_error)
+			break;
 	}
 
 	/*
@@ -1144,8 +1174,8 @@ fatal_pending:
  * @start_pfn: The first PFN to start isolating.
  * @end_pfn:   The one-past-last PFN.
  *
- * Returns errno, like -EAGAIN or -EINTR in case e.g signal pending or congestion,
- * or 0.
+ * Returns errno, like -EAGAIN or -EINTR in case e.g signal pending or
+ * congestion, -ENOMEM in case we could not allocate a page, or 0.
  */
 int
 isolate_migratepages_range(struct compact_control *cc, unsigned long start_pfn,
