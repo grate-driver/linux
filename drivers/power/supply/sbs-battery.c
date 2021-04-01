@@ -813,8 +813,16 @@ static int sbs_get_chemistry(struct i2c_client *client,
 	else
 		val->intval = POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
 
-	if (val->intval == POWER_SUPPLY_TECHNOLOGY_UNKNOWN)
+	if (val->intval == POWER_SUPPLY_TECHNOLOGY_UNKNOWN) {
+		struct sbs_info *chip = i2c_get_clientdata(client);
+
 		dev_warn_once(&client->dev, "Unknown chemistry: %s\n", chemistry);
+
+		if (chip->flags & SBS_FLAGS_TI_BQ20ZX5) {
+			dev_warn_once(&client->dev, "Falling back to Li-ion\n");
+			val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+		}
+	}
 
 	return 0;
 }
