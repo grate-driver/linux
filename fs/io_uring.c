@@ -224,16 +224,17 @@ struct io_rsrc_node {
 	struct list_head		node;
 	struct list_head		rsrc_list;
 	struct io_rsrc_data		*rsrc_data;
-	void				(*rsrc_put)(struct io_ring_ctx *ctx,
-						    struct io_rsrc_put *prsrc);
 	struct llist_node		llist;
 	bool				done;
 };
+
+typedef void (rsrc_put_fn)(struct io_ring_ctx *ctx, struct io_rsrc_put *prsrc);
 
 struct io_rsrc_data {
 	struct fixed_rsrc_table		*table;
 	struct io_ring_ctx		*ctx;
 
+	rsrc_put_fn			*do_put;
 	struct io_rsrc_node		*node;
 	struct percpu_ref		refs;
 	struct completion		done;
@@ -7075,9 +7076,7 @@ static inline void io_rsrc_ref_unlock(struct io_ring_ctx *ctx)
 }
 
 static void io_rsrc_node_set(struct io_ring_ctx *ctx,
-			     struct io_rsrc_data *rsrc_data,
-			     void (*rsrc_put)(struct io_ring_ctx *ctx,
-			                      struct io_rsrc_put *prsrc))
+			     struct io_rsrc_data *rsrc_data)
 {
 	struct io_rsrc_node *rsrc_node = ctx->rsrc_backup_node;
 
@@ -7085,7 +7084,6 @@ static void io_rsrc_node_set(struct io_ring_ctx *ctx,
 
 	ctx->rsrc_backup_node = NULL;
 	rsrc_node->rsrc_data = rsrc_data;
-	rsrc_node->rsrc_put = rsrc_put;
 
 	io_rsrc_ref_lock(ctx);
 	rsrc_data->node = rsrc_node;
@@ -7114,10 +7112,7 @@ static int io_rsrc_node_prealloc(struct io_ring_ctx *ctx)
 	return ctx->rsrc_backup_node ? 0 : -ENOMEM;
 }
 
-static int io_rsrc_ref_quiesce(struct io_rsrc_data *data,
-			       struct io_ring_ctx *ctx,
-			       void (*rsrc_put)(struct io_ring_ctx *ctx,
-			                        struct io_rsrc_put *prsrc))
+static int io_rsrc_ref_quiesce(struct io_rsrc_data *data, struct io_ring_ctx *ctx)
 {
 	int ret;
 
@@ -7138,7 +7133,7 @@ static int io_rsrc_ref_quiesce(struct io_rsrc_data *data,
 			break;
 
 		percpu_ref_resurrect(&data->refs);
-		io_rsrc_node_set(ctx, data, rsrc_put);
+		io_rsrc_node_set(ctx, data);
 		reinit_completion(&data->done);
 
 		mutex_unlock(&ctx->uring_lock);
@@ -7150,7 +7145,8 @@ static int io_rsrc_ref_quiesce(struct io_rsrc_data *data,
 	return ret;
 }
 
-static struct io_rsrc_data *io_rsrc_data_alloc(struct io_ring_ctx *ctx)
+static struct io_rsrc_data *io_rsrc_data_alloc(struct io_ring_ctx *ctx,
+					       rsrc_put_fn *do_put)
 {
 	struct io_rsrc_data *data;
 
@@ -7164,6 +7160,7 @@ static struct io_rsrc_data *io_rsrc_data_alloc(struct io_ring_ctx *ctx)
 		return NULL;
 	}
 	data->ctx = ctx;
+	data->do_put = do_put;
 	init_completion(&data->done);
 	return data;
 }
@@ -7188,7 +7185,7 @@ static int io_sqe_files_unregister(struct io_ring_ctx *ctx)
 	 */
 	if (!data || percpu_ref_is_dying(&data->refs))
 		return -ENXIO;
-	ret = io_rsrc_ref_quiesce(data, ctx, io_ring_file_put);
+	ret = io_rsrc_ref_quiesce(data, ctx);
 	if (ret)
 		return ret;
 
@@ -7523,7 +7520,7 @@ static void __io_rsrc_put_work(struct io_rsrc_node *ref_node)
 
 	list_for_each_entry_safe(prsrc, tmp, &ref_node->rsrc_list, list) {
 		list_del(&prsrc->list);
-		ref_node->rsrc_put(ctx, prsrc);
+		rsrc_data->do_put(ctx, prsrc);
 		kfree(prsrc);
 	}
 
@@ -7621,7 +7618,7 @@ static int io_sqe_files_register(struct io_ring_ctx *ctx, void __user *arg,
 	if (ret)
 		return ret;
 
-	file_data = io_rsrc_data_alloc(ctx);
+	file_data = io_rsrc_data_alloc(ctx, io_ring_file_put);
 	if (!file_data)
 		return -ENOMEM;
 	ctx->file_data = file_data;
@@ -7679,7 +7676,7 @@ static int io_sqe_files_register(struct io_ring_ctx *ctx, void __user *arg,
 		return ret;
 	}
 
-	io_rsrc_node_set(ctx, file_data, io_ring_file_put);
+	io_rsrc_node_set(ctx, file_data);
 	return ret;
 out_fput:
 	for (i = 0; i < ctx->nr_user_files; i++) {
@@ -7831,7 +7828,7 @@ static int __io_sqe_files_update(struct io_ring_ctx *ctx,
 
 	if (needs_switch) {
 		percpu_ref_kill(&data->node->refs);
-		io_rsrc_node_set(ctx, data, io_ring_file_put);
+		io_rsrc_node_set(ctx, data);
 	}
 	return done ? done : err;
 }
