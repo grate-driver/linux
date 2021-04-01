@@ -814,7 +814,7 @@ static int sbs_get_chemistry(struct i2c_client *client,
 		val->intval = POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
 
 	if (val->intval == POWER_SUPPLY_TECHNOLOGY_UNKNOWN)
-		dev_warn(&client->dev, "Unknown chemistry: %s\n", chemistry);
+		dev_warn_once(&client->dev, "Unknown chemistry: %s\n", chemistry);
 
 	return 0;
 }
