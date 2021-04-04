@@ -139,7 +139,8 @@ static int pad_battery_get_property(struct power_supply *psy,
 
 		val->intval = (s16)ret;
 
-		if (psp == POWER_SUPPLY_PROP_STATUS) {
+		switch (psp) {
+		case POWER_SUPPLY_PROP_STATUS:
 			if (ret & ASUSEC_BATTERY_FULL_CHARGED)
 				val->intval = POWER_SUPPLY_STATUS_FULL;
 			else if (ret & ASUSEC_BATTERY_FULL_DISCHARGED)
@@ -148,8 +149,21 @@ static int pad_battery_get_property(struct power_supply *psy,
 				val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
 			else
 				val->intval = POWER_SUPPLY_STATUS_CHARGING;
-		} else if (psp == POWER_SUPPLY_PROP_TEMP) {
+			break;
+
+		case POWER_SUPPLY_PROP_TEMP:
 			val->intval -= TEMP_CELSIUS_OFFSET;
+			break;
+
+		case POWER_SUPPLY_PROP_CHARGE_NOW:
+		case POWER_SUPPLY_PROP_CURRENT_NOW:
+		case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+			val->intval *= 1000;
+			break;
+
+		default:
+			break;
 		}
 
 		break;
