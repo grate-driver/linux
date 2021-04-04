@@ -95,9 +95,9 @@
 /* Device instance number, incremented each time a device is probed. */
 static int instance;
 
-static struct list_head online_list;
-static struct list_head removing_list;
-static spinlock_t dev_lock;
+static LIST_HEAD(online_list);
+static LIST_HEAD(removing_list);
+static DEFINE_SPINLOCK(dev_lock);
 
 /*
  * Global variable used to hold the major block device number
@@ -4362,11 +4362,6 @@ static int __init mtip_init(void)
 	int error;
 
 	pr_info(MTIP_DRV_NAME " Version " MTIP_DRV_VERSION "\n");
-
-	spin_lock_init(&dev_lock);
-
-	INIT_LIST_HEAD(&online_list);
-	INIT_LIST_HEAD(&removing_list);
 
 	/* Allocate a major block device number to use with this driver. */
 	error = register_blkdev(0, MTIP_DRV_NAME);
