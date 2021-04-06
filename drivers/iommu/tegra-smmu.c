@@ -1141,7 +1141,7 @@ struct tegra_smmu *tegra_smmu_probe(struct device *dev,
 
 	tegra_smmu_ahb_enable();
 
-	err = iommu_device_sysfs_add(&smmu->iommu, dev, NULL, dev_name(dev));
+	err = iommu_device_sysfs_add(&smmu->iommu, dev, NULL, "smmu");
 	if (err)
 		return ERR_PTR(err);
 
