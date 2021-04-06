@@ -596,18 +596,32 @@ void fd_install(unsigned int fd, struct file *file)
 
 EXPORT_SYMBOL(fd_install);
 
+/**
+ * pick_file - return file associatd with fd
+ * @files: file struct to retrieve file from
+ * @fd: file descriptor to retrieve file for
+ *
+ * If this functions returns an EINVAL error pointer the fd was beyond the
+ * current maximum number of file descriptors for that fdtable.
+ *
+ * Returns: The file associated with @fd, on error returns an error pointer.
+ */
 static struct file *pick_file(struct files_struct *files, unsigned fd)
 {
-	struct file *file = NULL;
+	struct file *file;
 	struct fdtable *fdt;
 
 	spin_lock(&files->file_lock);
 	fdt = files_fdtable(files);
-	if (fd >= fdt->max_fds)
+	if (fd >= fdt->max_fds) {
+		file = ERR_PTR(-EINVAL);
 		goto out_unlock;
+	}
 	file = fdt->fd[fd];
-	if (!file)
+	if (!file) {
+		file = ERR_PTR(-EBADF);
 		goto out_unlock;
+	}
 	rcu_assign_pointer(fdt->fd[fd], NULL);
 	__put_unused_fd(files, fd);
 
@@ -622,24 +636,37 @@ int close_fd(unsigned fd)
 	struct file *file;
 
 	file = pick_file(files, fd);
-	if (!file)
+	if (IS_ERR(file))
 		return -EBADF;
 
 	return filp_close(file, files);
 }
 EXPORT_SYMBOL(close_fd); /* for ksys_close() */
 
+/**
+ * last_fd - return last valid index into fd table
+ * @cur_fds: files struct
+ *
+ * Context: Either rcu read lock or files_lock must be held.
+ *
+ * Returns: Last valid index into fdtable.
+ */
+static inline unsigned last_fd(struct fdtable *fdt)
+{
+	return fdt->max_fds - 1;
+}
+
 static inline void __range_cloexec(struct files_struct *cur_fds,
 				   unsigned int fd, unsigned int max_fd)
 {
 	struct fdtable *fdt;
 
-	if (fd > max_fd)
-		return;
-
+	/* make sure we're using the correct maximum value */
 	spin_lock(&cur_fds->file_lock);
 	fdt = files_fdtable(cur_fds);
-	bitmap_set(fdt->close_on_exec, fd, max_fd - fd + 1);
+	max_fd = min(last_fd(fdt), max_fd);
+	if (fd <= max_fd)
+		bitmap_set(fdt->close_on_exec, fd, max_fd - fd + 1);
 	spin_unlock(&cur_fds->file_lock);
 }
 
@@ -650,11 +677,16 @@ static inline void __range_close(struct files_struct *cur_fds, unsigned int fd,
 		struct file *file;
 
 		file = pick_file(cur_fds, fd++);
-		if (!file)
+		if (!IS_ERR(file)) {
+			/* found a valid file to close */
+			filp_close(file, cur_fds);
+			cond_resched();
 			continue;
+		}
 
-		filp_close(file, cur_fds);
-		cond_resched();
+		/* beyond the last fd in that table */
+		if (PTR_ERR(file) == -EINVAL)
+			return;
 	}
 }
 
@@ -669,7 +701,6 @@ static inline void __range_close(struct files_struct *cur_fds, unsigned int fd,
  */
 int __close_range(unsigned fd, unsigned max_fd, unsigned int flags)
 {
-	unsigned int cur_max;
 	struct task_struct *me = current;
 	struct files_struct *cur_fds = me->files, *fds = NULL;
 
@@ -679,26 +710,26 @@ int __close_range(unsigned fd, unsigned max_fd, unsigned int flags)
 	if (fd > max_fd)
 		return -EINVAL;
 
-	rcu_read_lock();
-	cur_max = files_fdtable(cur_fds)->max_fds;
-	rcu_read_unlock();
-
-	/* cap to last valid index into fdtable */
-	cur_max--;
-
 	if (flags & CLOSE_RANGE_UNSHARE) {
 		int ret;
 		unsigned int max_unshare_fds = NR_OPEN_MAX;
 
 		/*
-		 * If the requested range is greater than the current maximum,
-		 * we're closing everything so only copy all file descriptors
-		 * beneath the lowest file descriptor.
-		 * If the caller requested all fds to be made cloexec copy all
-		 * of the file descriptors since they still want to use them.
+		 * If the caller requested all fds to be made cloexec we always
+		 * copy all of the file descriptors since they still want to
+		 * use them.
 		 */
-		if (!(flags & CLOSE_RANGE_CLOEXEC) && (max_fd >= cur_max))
-			max_unshare_fds = fd;
+		if (!(flags & CLOSE_RANGE_CLOEXEC)) {
+			/*
+			 * If the requested range is greater than the current
+			 * maximum, we're closing everything so only copy all
+			 * file descriptors beneath the lowest file descriptor.
+			 */
+			rcu_read_lock();
+			if (max_fd >= last_fd(files_fdtable(cur_fds)))
+				max_unshare_fds = fd;
+			rcu_read_unlock();
+		}
 
 		ret = unshare_fd(CLONE_FILES, max_unshare_fds, &fds);
 		if (ret)
@@ -711,8 +742,6 @@ int __close_range(unsigned fd, unsigned max_fd, unsigned int flags)
 		if (fds)
 			swap(cur_fds, fds);
 	}
-
-	max_fd = min(max_fd, cur_max);
 
 	if (flags & CLOSE_RANGE_CLOEXEC)
 		__range_cloexec(cur_fds, fd, max_fd);
