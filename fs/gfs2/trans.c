@@ -171,7 +171,6 @@ static struct gfs2_bufdata *gfs2_alloc_bufdata(struct gfs2_glock *gl,
 	INIT_LIST_HEAD(&bd->bd_list);
 	INIT_LIST_HEAD(&bd->bd_ail_st_list);
 	INIT_LIST_HEAD(&bd->bd_ail_gl_list);
-	bh->b_private = bd;
 	return bd;
 }
 
@@ -193,24 +192,24 @@ void gfs2_trans_add_data(struct gfs2_glock *gl, struct buffer_head *bh)
 {
 	struct gfs2_trans *tr = current->journal_info;
 	struct gfs2_sbd *sdp = gl->gl_name.ln_sbd;
-	struct gfs2_bufdata *bd;
+	struct gfs2_bufdata *bd = NULL;
 
 	lock_buffer(bh);
 	if (buffer_pinned(bh)) {
 		set_bit(TR_TOUCHED, &tr->tr_flags);
 		goto out;
 	}
-	gfs2_log_lock(sdp);
-	bd = bh->b_private;
-	if (bd == NULL) {
-		gfs2_log_unlock(sdp);
+	if (!bh->b_private) {
 		unlock_buffer(bh);
-		if (bh->b_private == NULL)
-			bd = gfs2_alloc_bufdata(gl, bh);
-		else
-			bd = bh->b_private;
+		bd = gfs2_alloc_bufdata(gl, bh);
 		lock_buffer(bh);
-		gfs2_log_lock(sdp);
+	}
+	gfs2_log_lock(sdp);
+	if (bh->b_private) {
+		kfree(bd);
+		bd = bh->b_private;
+	} else {
+		bh->b_private = bd;
 	}
 	gfs2_assert(sdp, bd->bd_gl == gl);
 	set_bit(TR_TOUCHED, &tr->tr_flags);
@@ -230,7 +229,7 @@ void gfs2_trans_add_meta(struct gfs2_glock *gl, struct buffer_head *bh)
 {
 
 	struct gfs2_sbd *sdp = gl->gl_name.ln_sbd;
-	struct gfs2_bufdata *bd;
+	struct gfs2_bufdata *bd = NULL;
 	struct gfs2_meta_header *mh;
 	struct gfs2_trans *tr = current->journal_info;
 	enum gfs2_freeze_state state = atomic_read(&sdp->sd_freeze_state);
@@ -240,19 +239,24 @@ void gfs2_trans_add_meta(struct gfs2_glock *gl, struct buffer_head *bh)
 		set_bit(TR_TOUCHED, &tr->tr_flags);
 		goto out;
 	}
-	gfs2_log_lock(sdp);
-	bd = bh->b_private;
-	if (bd == NULL) {
-		gfs2_log_unlock(sdp);
+	if (!bh->b_private) {
 		unlock_buffer(bh);
-		lock_page(bh->b_page);
-		if (bh->b_private == NULL)
-			bd = gfs2_alloc_bufdata(gl, bh);
-		else
-			bd = bh->b_private;
-		unlock_page(bh->b_page);
+		bd = gfs2_alloc_bufdata(gl, bh);
 		lock_buffer(bh);
-		gfs2_log_lock(sdp);
+	}
+	gfs2_log_lock(sdp);
+	if (bh->b_private) {
+		kfree(bd);
+		bd = bh->b_private;
+	} else {
+		lock_page(bh->b_page);
+		if (bh->b_private) {
+			kfree(bd);
+			bd = bh->b_private;
+		} else {
+			bh->b_private = bd;
+		}
+		unlock_page(bh->b_page);
 	}
 	gfs2_assert(sdp, bd->bd_gl == gl);
 	set_bit(TR_TOUCHED, &tr->tr_flags);
