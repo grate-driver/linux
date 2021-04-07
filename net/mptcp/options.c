@@ -26,6 +26,7 @@ static void mptcp_parse_option(const struct sk_buff *skb,
 	int expected_opsize;
 	u8 version;
 	u8 flags;
+	u8 i;
 
 	switch (subtype) {
 	case MPTCPOPT_MP_CAPABLE:
@@ -272,14 +273,17 @@ static void mptcp_parse_option(const struct sk_buff *skb,
 		break;
 
 	case MPTCPOPT_RM_ADDR:
-		if (opsize != TCPOLEN_MPTCP_RM_ADDR_BASE)
+		if (opsize < TCPOLEN_MPTCP_RM_ADDR_BASE + 1 ||
+		    opsize > TCPOLEN_MPTCP_RM_ADDR_BASE + MPTCP_RM_IDS_MAX)
 			break;
 
 		ptr++;
 
 		mp_opt->rm_addr = 1;
-		mp_opt->rm_id = *ptr++;
-		pr_debug("RM_ADDR: id=%d", mp_opt->rm_id);
+		mp_opt->rm_list.nr = opsize - TCPOLEN_MPTCP_RM_ADDR_BASE;
+		for (i = 0; i < mp_opt->rm_list.nr; i++)
+			mp_opt->rm_list.ids[i] = *ptr++;
+		pr_debug("RM_ADDR: rm_list_nr=%d", mp_opt->rm_list.nr);
 		break;
 
 	case MPTCPOPT_MP_PRIO:
@@ -299,6 +303,18 @@ static void mptcp_parse_option(const struct sk_buff *skb,
 		mp_opt->rcvr_key = get_unaligned_be64(ptr);
 		ptr += 8;
 		mp_opt->fastclose = 1;
+		break;
+
+	case MPTCPOPT_RST:
+		if (opsize != TCPOLEN_MPTCP_RST)
+			break;
+
+		if (!(TCP_SKB_CB(skb)->tcp_flags & TCPHDR_RST))
+			break;
+		mp_opt->reset = 1;
+		flags = *ptr++;
+		mp_opt->reset_transient = flags & MPTCP_RST_TRANSIENT;
+		mp_opt->reset_reason = *ptr;
 		break;
 
 	default:
@@ -323,6 +339,7 @@ void mptcp_get_options(const struct sk_buff *skb,
 	mp_opt->rm_addr = 0;
 	mp_opt->dss = 0;
 	mp_opt->mp_prio = 0;
+	mp_opt->reset = 0;
 
 	length = (th->doff * 4) - sizeof(struct tcphdr);
 	ptr = (const unsigned char *)(th + 1);
@@ -676,20 +693,25 @@ static bool mptcp_established_options_rm_addr(struct sock *sk,
 {
 	struct mptcp_subflow_context *subflow = mptcp_subflow_ctx(sk);
 	struct mptcp_sock *msk = mptcp_sk(subflow->conn);
-	u8 rm_id;
+	struct mptcp_rm_list rm_list;
+	int i, len;
 
 	if (!mptcp_pm_should_rm_signal(msk) ||
-	    !(mptcp_pm_rm_addr_signal(msk, remaining, &rm_id)))
+	    !(mptcp_pm_rm_addr_signal(msk, remaining, &rm_list)))
 		return false;
 
-	if (remaining < TCPOLEN_MPTCP_RM_ADDR_BASE)
+	len = mptcp_rm_addr_len(&rm_list);
+	if (len < 0)
+		return false;
+	if (remaining < len)
 		return false;
 
-	*size = TCPOLEN_MPTCP_RM_ADDR_BASE;
+	*size = len;
 	opts->suboptions |= OPTION_MPTCP_RM_ADDR;
-	opts->rm_id = rm_id;
+	opts->rm_list = rm_list;
 
-	pr_debug("rm_id=%d", opts->rm_id);
+	for (i = 0; i < opts->rm_list.nr; i++)
+		pr_debug("rm_list_ids[%d]=%d", i, opts->rm_list.ids[i]);
 
 	return true;
 }
@@ -717,6 +739,22 @@ static bool mptcp_established_options_mp_prio(struct sock *sk,
 	return true;
 }
 
+static noinline void mptcp_established_options_rst(struct sock *sk, struct sk_buff *skb,
+						   unsigned int *size,
+						   unsigned int remaining,
+						   struct mptcp_out_options *opts)
+{
+	const struct mptcp_subflow_context *subflow = mptcp_subflow_ctx(sk);
+
+	if (remaining < TCPOLEN_MPTCP_RST)
+		return;
+
+	*size = TCPOLEN_MPTCP_RST;
+	opts->suboptions |= OPTION_MPTCP_RST;
+	opts->reset_transient = subflow->reset_transient;
+	opts->reset_reason = subflow->reset_reason;
+}
+
 bool mptcp_established_options(struct sock *sk, struct sk_buff *skb,
 			       unsigned int *size, unsigned int remaining,
 			       struct mptcp_out_options *opts)
@@ -732,11 +770,10 @@ bool mptcp_established_options(struct sock *sk, struct sk_buff *skb,
 	if (unlikely(__mptcp_check_fallback(msk)))
 		return false;
 
-	/* prevent adding of any MPTCP related options on reset packet
-	 * until we support MP_TCPRST/MP_FASTCLOSE
-	 */
-	if (unlikely(skb && TCP_SKB_CB(skb)->tcp_flags & TCPHDR_RST))
-		return false;
+	if (unlikely(skb && TCP_SKB_CB(skb)->tcp_flags & TCPHDR_RST)) {
+		mptcp_established_options_rst(sk, skb, size, remaining, opts);
+		return true;
+	}
 
 	snd_data_fin = mptcp_data_fin_enabled(msk);
 	if (mptcp_established_options_mp(sk, skb, snd_data_fin, &opt_size, remaining, opts))
@@ -873,7 +910,7 @@ fully_established:
 	subflow->pm_notified = 1;
 	if (subflow->mp_join) {
 		clear_3rdack_retransmission(ssk);
-		mptcp_pm_subflow_established(msk, subflow);
+		mptcp_pm_subflow_established(msk);
 	} else {
 		mptcp_pm_fully_established(msk, ssk, GFP_ATOMIC);
 	}
@@ -943,7 +980,7 @@ bool mptcp_update_rcv_data_fin(struct mptcp_sock *msk, u64 data_fin_seq, bool us
 	 * should match. If they mismatch, the peer is misbehaving and
 	 * we will prefer the most recent information.
 	 */
-	if (READ_ONCE(msk->rcv_data_fin) || !READ_ONCE(msk->first))
+	if (READ_ONCE(msk->rcv_data_fin))
 		return false;
 
 	WRITE_ONCE(msk->rcv_data_fin_seq,
@@ -1031,6 +1068,7 @@ void mptcp_incoming_options(struct sock *sk, struct sk_buff *skb)
 			mptcp_pm_add_addr_received(msk, &addr);
 			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_ADDADDR);
 		} else {
+			mptcp_pm_add_addr_echoed(msk, &addr);
 			mptcp_pm_del_add_timer(msk, &addr);
 			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_ECHOADD);
 		}
@@ -1042,7 +1080,7 @@ void mptcp_incoming_options(struct sock *sk, struct sk_buff *skb)
 	}
 
 	if (mp_opt.rm_addr) {
-		mptcp_pm_rm_addr_received(msk, mp_opt.rm_id);
+		mptcp_pm_rm_addr_received(msk, &mp_opt.rm_list);
 		mp_opt.rm_addr = 0;
 	}
 
@@ -1050,6 +1088,12 @@ void mptcp_incoming_options(struct sock *sk, struct sk_buff *skb)
 		mptcp_pm_mp_prio_received(sk, mp_opt.backup);
 		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_MPPRIORX);
 		mp_opt.mp_prio = 0;
+	}
+
+	if (mp_opt.reset) {
+		subflow->reset_seen = 1;
+		subflow->reset_reason = mp_opt.reset_reason;
+		subflow->reset_transient = mp_opt.reset_transient;
 	}
 
 	if (!mp_opt.dss)
@@ -1221,9 +1265,23 @@ mp_capable_done:
 	}
 
 	if (OPTION_MPTCP_RM_ADDR & opts->suboptions) {
+		u8 i = 1;
+
 		*ptr++ = mptcp_option(MPTCPOPT_RM_ADDR,
-				      TCPOLEN_MPTCP_RM_ADDR_BASE,
-				      0, opts->rm_id);
+				      TCPOLEN_MPTCP_RM_ADDR_BASE + opts->rm_list.nr,
+				      0, opts->rm_list.ids[0]);
+
+		while (i < opts->rm_list.nr) {
+			u8 id1, id2, id3, id4;
+
+			id1 = opts->rm_list.ids[i];
+			id2 = i + 1 < opts->rm_list.nr ? opts->rm_list.ids[i + 1] : TCPOPT_NOP;
+			id3 = i + 2 < opts->rm_list.nr ? opts->rm_list.ids[i + 2] : TCPOPT_NOP;
+			id4 = i + 3 < opts->rm_list.nr ? opts->rm_list.ids[i + 3] : TCPOPT_NOP;
+			put_unaligned_be32(id1 << 24 | id2 << 16 | id3 << 8 | id4, ptr);
+			ptr += 1;
+			i += 4;
+		}
 	}
 
 	if (OPTION_MPTCP_PRIO & opts->suboptions) {
@@ -1264,6 +1322,12 @@ mp_capable_done:
 		memcpy(ptr, opts->hmac, MPTCPOPT_HMAC_LEN);
 		ptr += 5;
 	}
+
+	if (OPTION_MPTCP_RST & opts->suboptions)
+		*ptr++ = mptcp_option(MPTCPOPT_RST,
+				      TCPOLEN_MPTCP_RST,
+				      opts->reset_transient,
+				      opts->reset_reason);
 
 	if (opts->ext_copy.use_ack || opts->ext_copy.use_map) {
 		struct mptcp_ext *mpext = &opts->ext_copy;
@@ -1316,3 +1380,20 @@ mp_capable_done:
 	if (tp)
 		mptcp_set_rwin(tp);
 }
+
+__be32 mptcp_get_reset_option(const struct sk_buff *skb)
+{
+	const struct mptcp_ext *ext = mptcp_get_ext(skb);
+	u8 flags, reason;
+
+	if (ext) {
+		flags = ext->reset_transient;
+		reason = ext->reset_reason;
+
+		return mptcp_option(MPTCPOPT_RST, TCPOLEN_MPTCP_RST,
+				    flags, reason);
+	}
+
+	return htonl(0u);
+}
+EXPORT_SYMBOL_GPL(mptcp_get_reset_option);

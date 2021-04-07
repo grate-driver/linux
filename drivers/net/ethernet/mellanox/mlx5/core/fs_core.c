@@ -105,7 +105,7 @@
 #define ETHTOOL_PRIO_NUM_LEVELS 1
 #define ETHTOOL_NUM_PRIOS 11
 #define ETHTOOL_MIN_LEVEL (KERNEL_MIN_LEVEL + ETHTOOL_NUM_PRIOS)
-/* Promiscuous, Vlan, mac, ttc, inner ttc, {aRFS/accel and esp/esp_err} */
+/* Promiscuous, Vlan, mac, ttc, inner ttc, {UDP/ANY/aRFS/accel/{esp, esp_err}} */
 #define KERNEL_NIC_PRIO_NUM_LEVELS 7
 #define KERNEL_NIC_NUM_PRIOS 1
 /* One more level for tc */
@@ -590,7 +590,7 @@ static void del_sw_fte(struct fs_node *node)
 				     &fte->hash,
 				     rhash_fte);
 	WARN_ON(err);
-	ida_simple_remove(&fg->fte_allocator, fte->index - fg->start_index);
+	ida_free(&fg->fte_allocator, fte->index - fg->start_index);
 	kmem_cache_free(steering->ftes_cache, fte);
 }
 
@@ -640,7 +640,7 @@ static int insert_fte(struct mlx5_flow_group *fg, struct fs_fte *fte)
 	int index;
 	int ret;
 
-	index = ida_simple_get(&fg->fte_allocator, 0, fg->max_ftes, GFP_KERNEL);
+	index = ida_alloc_max(&fg->fte_allocator, fg->max_ftes - 1, GFP_KERNEL);
 	if (index < 0)
 		return index;
 
@@ -656,7 +656,7 @@ static int insert_fte(struct mlx5_flow_group *fg, struct fs_fte *fte)
 	return 0;
 
 err_ida_remove:
-	ida_simple_remove(&fg->fte_allocator, index);
+	ida_free(&fg->fte_allocator, index);
 	return ret;
 }
 
@@ -2395,14 +2395,12 @@ static int init_root_tree(struct mlx5_flow_steering *steering,
 			  struct init_tree_node *init_node,
 			  struct fs_node *fs_parent_node)
 {
-	int i;
-	struct mlx5_flow_namespace *fs_ns;
 	int err;
+	int i;
 
-	fs_get_obj(fs_ns, fs_parent_node);
 	for (i = 0; i < init_node->ar_size; i++) {
 		err = init_root_tree_recursive(steering, &init_node->children[i],
-					       &fs_ns->node,
+					       fs_parent_node,
 					       init_node, i);
 		if (err)
 			return err;
