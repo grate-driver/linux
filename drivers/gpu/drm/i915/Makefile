@@ -139,7 +139,6 @@ gem-y += \
 	gem/i915_gem_dmabuf.o \
 	gem/i915_gem_domain.o \
 	gem/i915_gem_execbuffer.o \
-	gem/i915_gem_fence.o \
 	gem/i915_gem_internal.o \
 	gem/i915_gem_object.o \
 	gem/i915_gem_object_blt.o \
@@ -223,7 +222,9 @@ i915-y += \
 	display/intel_sprite.o \
 	display/intel_tc.o \
 	display/intel_vga.o \
-	display/i9xx_plane.o
+	display/i9xx_plane.o \
+	display/skl_scaler.o \
+	display/skl_universal_plane.o
 i915-$(CONFIG_ACPI) += \
 	display/intel_acpi.o \
 	display/intel_opregion.o
@@ -241,6 +242,7 @@ i915-y += \
 	display/icl_dsi.o \
 	display/intel_crt.o \
 	display/intel_ddi.o \
+	display/intel_ddi_buf_trans.o \
 	display/intel_dp.o \
 	display/intel_dp_aux.o \
 	display/intel_dp_aux_backlight.o \
