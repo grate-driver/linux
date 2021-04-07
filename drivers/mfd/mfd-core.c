@@ -238,8 +238,8 @@ static int mfd_add_device(struct device *parent, int id,
 			goto fail_of_entry;
 	}
 
-	if (cell->properties) {
-		ret = platform_device_add_properties(pdev, cell->properties);
+	if (cell->swnode) {
+		ret = device_add_software_node(&pdev->dev, cell->swnode);
 		if (ret)
 			goto fail_of_entry;
 	}
@@ -304,6 +304,7 @@ fail_of_entry:
 			list_del(&of_entry->list);
 			kfree(of_entry);
 		}
+	device_remove_software_node(&pdev->dev);
 fail_alias:
 	regulator_bulk_unregister_supply_alias(&pdev->dev,
 					       cell->parent_supplies,
@@ -371,6 +372,8 @@ static int mfd_remove_devices_fn(struct device *dev, void *data)
 
 	regulator_bulk_unregister_supply_alias(dev, cell->parent_supplies,
 					       cell->num_parent_supplies);
+
+	device_remove_software_node(&pdev->dev);
 
 	platform_device_unregister(pdev);
 	return 0;
