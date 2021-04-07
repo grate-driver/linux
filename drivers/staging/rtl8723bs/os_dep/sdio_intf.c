@@ -117,55 +117,6 @@ static void sdio_free_irq(struct dvobj_priv *dvobj)
 	}
 }
 
-#ifdef CONFIG_GPIO_WAKEUP
-extern unsigned int oob_irq;
-static irqreturn_t gpio_hostwakeup_irq_thread(int irq, void *data)
-{
-	struct adapter *padapter = data;
-	DBG_871X_LEVEL(_drv_always_, "gpio_hostwakeup_irq_thread\n");
-	/* Disable interrupt before calling handler */
-	/* disable_irq_nosync(oob_irq); */
-	rtw_lock_suspend_timeout(HZ/2);
-	return IRQ_HANDLED;
-}
-
-static u8 gpio_hostwakeup_alloc_irq(struct adapter *padapter)
-{
-	int err;
-
-	if (oob_irq == 0) {
-		DBG_871X("oob_irq ZERO!\n");
-		return _FAIL;
-	}
-	/* dont set it IRQF_TRIGGER_LOW, or wowlan */
-	/* power is high after suspend */
-	/* and failing can prevent can not sleep issue if */
-	/* wifi gpio12 pin is not linked with CPU */
-	err = request_threaded_irq(oob_irq, gpio_hostwakeup_irq_thread, NULL,
-		/* IRQF_TRIGGER_LOW | IRQF_ONESHOT, */
-		IRQF_TRIGGER_FALLING,
-		"rtw_wifi_gpio_wakeup", padapter);
-	if (err < 0) {
-		DBG_871X("Oops: can't allocate gpio irq %d err:%d\n", oob_irq, err);
-		return false;
-	} else {
-		DBG_871X("allocate gpio irq %d ok\n", oob_irq);
-	}
-
-	enable_irq_wake(oob_irq);
-	return _SUCCESS;
-}
-
-static void gpio_hostwakeup_free_irq(struct adapter *padapter)
-{
-	if (oob_irq == 0)
-		return;
-
-	disable_irq_wake(oob_irq);
-	free_irq(oob_irq, padapter);
-}
-#endif
-
 static u32 sdio_init(struct dvobj_priv *dvobj)
 {
 	struct sdio_data *psdio_data;
@@ -208,9 +159,6 @@ static void sdio_deinit(struct dvobj_priv *dvobj)
 	struct sdio_func *func;
 	int err;
 
-
-	RT_TRACE(_module_hci_intfs_c_, _drv_notice_, ("+sdio_deinit\n"));
-
 	func = dvobj->intf_data.func;
 
 	if (func) {
@@ -249,10 +197,9 @@ static struct dvobj_priv *sdio_dvobj_init(struct sdio_func *func)
 	psdio = &dvobj->intf_data;
 	psdio->func = func;
 
-	if (sdio_init(dvobj) != _SUCCESS) {
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("%s: initialize SDIO Failed!\n", __func__));
+	if (sdio_init(dvobj) != _SUCCESS)
 		goto free_dvobj;
-	}
+
 	rtw_reset_continual_io_error(dvobj);
 	status = _SUCCESS;
 
@@ -354,11 +301,8 @@ static struct adapter *rtw_sdio_if1_init(struct dvobj_priv *dvobj, const struct 
 	padapter->intf_alloc_irq = &sdio_alloc_irq;
 	padapter->intf_free_irq = &sdio_free_irq;
 
-	if (rtw_init_io_priv(padapter, sdio_set_intf_ops) == _FAIL) {
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_,
-			("rtw_drv_init: Can't init io_priv\n"));
+	if (rtw_init_io_priv(padapter, sdio_set_intf_ops) == _FAIL)
 		goto free_hal_data;
-	}
 
 	rtw_hal_read_chip_version(padapter);
 
@@ -370,11 +314,8 @@ static struct adapter *rtw_sdio_if1_init(struct dvobj_priv *dvobj, const struct 
 	rtw_hal_read_chip_info(padapter);
 
 	/* 3 7. init driver common data */
-	if (rtw_init_drv_sw(padapter) == _FAIL) {
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_,
-			 ("rtw_drv_init: Initialize driver software resource Failed!\n"));
+	if (rtw_init_drv_sw(padapter) == _FAIL)
 		goto free_hal_data;
-	}
 
 	rtw_wdev_alloc(padapter, dvobj_to_dev(dvobj));
 
@@ -424,16 +365,7 @@ static void rtw_sdio_if1_deinit(struct adapter *if1)
 
 	free_mlme_ap_info(if1);
 
-#ifdef CONFIG_GPIO_WAKEUP
-	gpio_hostwakeup_free_irq(if1);
-#endif
-
 	rtw_cancel_all_timer(if1);
-
-#ifdef CONFIG_WOWLAN
-	adapter_to_pwrctl(if1)->wowlan_mode = false;
-	DBG_871X_LEVEL(_drv_always_, "%s wowlan_mode:%d\n", __func__, adapter_to_pwrctl(if1)->wowlan_mode);
-#endif /* CONFIG_WOWLAN */
 
 	rtw_dev_unload(if1);
 	DBG_871X("+r871xu_dev_remove, hw_init_completed =%d\n", if1->hw_init_completed);
@@ -463,10 +395,8 @@ static int rtw_drv_init(
 	struct dvobj_priv *dvobj;
 
 	dvobj = sdio_dvobj_init(func);
-	if (dvobj == NULL) {
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("initialize device object priv Failed!\n"));
+	if (!dvobj)
 		goto exit;
-	}
 
 	if1 = rtw_sdio_if1_init(dvobj, id);
 	if (if1 == NULL) {
@@ -481,12 +411,6 @@ static int rtw_drv_init(
 
 	if (sdio_alloc_irq(dvobj) != _SUCCESS)
 		goto free_if2;
-
-#ifdef	CONFIG_GPIO_WAKEUP
-	gpio_hostwakeup_alloc_irq(if1);
-#endif
-
-	RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("-871x_drv - drv_init, success!\n"));
 
 	rtw_ndev_notifier_register();
 	status = _SUCCESS;
@@ -508,8 +432,6 @@ static void rtw_dev_remove(struct sdio_func *func)
 {
 	struct dvobj_priv *dvobj = sdio_get_drvdata(func);
 	struct adapter *padapter = dvobj->if1;
-
-	RT_TRACE(_module_hci_intfs_c_, _drv_notice_, ("+rtw_dev_remove\n"));
 
 	dvobj->processing_dev_remove = true;
 
@@ -540,12 +462,7 @@ static void rtw_dev_remove(struct sdio_func *func)
 	rtw_sdio_if1_deinit(padapter);
 
 	sdio_dvobj_deinit(func);
-
-	RT_TRACE(_module_hci_intfs_c_, _drv_notice_, ("-rtw_dev_remove\n"));
 }
-
-extern int pm_netdev_open(struct net_device *pnetdev, u8 bnormal);
-extern int pm_netdev_close(struct net_device *pnetdev, u8 bnormal);
 
 static int rtw_sdio_suspend(struct device *dev)
 {
@@ -642,8 +559,6 @@ static void __exit rtw_drv_halt(void)
 	rtw_ndev_notifier_unregister();
 
 	DBG_871X_LEVEL(_drv_always_, "module exit success\n");
-
-	rtw_mstat_dump(RTW_DBGDUMP);
 }
 
 

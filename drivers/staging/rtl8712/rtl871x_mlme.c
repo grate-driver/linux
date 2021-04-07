@@ -124,7 +124,6 @@ static void free_network_nolock(struct mlme_priv *pmlmepriv,
 	pmlmepriv->num_of_scanned--;
 }
 
-
 /* return the wlan_network with the matching addr
  * Shall be called under atomic context...
  * to avoid possible racing condition...
@@ -357,7 +356,6 @@ static void update_scanned_network(struct _adapter *adapter,
 
 		plist = plist->next;
 	}
-
 
 	/* If we didn't find a match, then get a new network slot to initialize
 	 * with this beacon's information
@@ -621,7 +619,6 @@ void r8712_indicate_connect(struct _adapter *padapter)
 			  jiffies + msecs_to_jiffies(60000));
 }
 
-
 /*
  * r8712_ind_disconnect: the caller has to lock pmlmepriv->lock
  */
@@ -728,7 +725,8 @@ void r8712_joinbss_event_callback(struct _adapter *adapter, u8 *pbuf)
 					     r8712_find_network(&pmlmepriv->
 					     scanned_queue,
 					     cur_network->network.MacAddress);
-					pcur_wlan->fixed = false;
+					if (pcur_wlan)
+						pcur_wlan->fixed = false;
 
 					pcur_sta = r8712_get_stainfo(pstapriv,
 					     cur_network->network.MacAddress);

@@ -777,29 +777,9 @@ void EnableInterrupt8723BSdio(struct adapter *adapter)
 	himr = cpu_to_le32(haldata->sdio_himr);
 	sdio_local_write(adapter, SDIO_REG_HIMR, 4, (u8 *)&himr);
 
-	RT_TRACE(
-		_module_hci_ops_c_,
-		_drv_notice_,
-		(
-			"%s: enable SDIO HIMR = 0x%08X\n",
-			__func__,
-			haldata->sdio_himr
-		)
-	);
-
 	/*  Update current system IMR settings */
 	tmp = rtw_read32(adapter, REG_HSIMR);
 	rtw_write32(adapter, REG_HSIMR, tmp | haldata->SysIntrMask);
-
-	RT_TRACE(
-		_module_hci_ops_c_,
-		_drv_notice_,
-		(
-			"%s: enable HSIMR = 0x%08X\n",
-			__func__,
-			haldata->SysIntrMask
-		)
-	);
 
 	/*  */
 	/*  <Roger_Notes> There are some C2H CMDs have been sent before system interrupt is enabled, e.g., C2H, CPWM. */
@@ -893,10 +873,8 @@ static struct recv_buf *sd_recv_rxfifo(struct adapter *adapter, u32 size)
 	/* 3 3. read data from rxfifo */
 	readbuf = recvbuf->pskb->data;
 	ret = sdio_read_port(&adapter->iopriv.intf, WLAN_RX0FF_DEVICE_ID, readsize, readbuf);
-	if (ret == _FAIL) {
-		RT_TRACE(_module_hci_ops_os_c_, _drv_err_, ("%s: read port FAIL!\n", __func__));
+	if (ret == _FAIL)
 		return NULL;
-	}
 
 	/* 3 4. init recvbuf */
 	recvbuf->len = size;
@@ -943,11 +921,9 @@ void sd_int_dpc(struct adapter *adapter)
 	}
 
 	if (hal->sdio_hisr & SDIO_HISR_CPWM1) {
-		struct reportpwrstate_parm report;
-
 		del_timer_sync(&(pwrctl->pwr_rpwm_timer));
 
-		report.state = SdioLocalCmd52Read1Byte(adapter, SDIO_REG_HCPWM1_8723B);
+		SdioLocalCmd52Read1Byte(adapter, SDIO_REG_HCPWM1_8723B);
 
 		_set_workitem(&(pwrctl->cpwm_event));
 	}
@@ -974,7 +950,6 @@ void sd_int_dpc(struct adapter *adapter)
 
 	if (hal->sdio_hisr & SDIO_HISR_TXBCNERR)
 		DBG_8192C("%s: SDIO_HISR_TXBCNERR\n", __func__);
-#ifndef CONFIG_C2H_PACKET_EN
 	if (hal->sdio_hisr & SDIO_HISR_C2HCMD) {
 		struct c2h_evt_hdr_88xx *c2h_evt;
 
@@ -997,7 +972,6 @@ void sd_int_dpc(struct adapter *adapter)
 			_set_workitem(&adapter->evtpriv.c2h_wk);
 		}
 	}
-#endif
 
 	if (hal->sdio_hisr & SDIO_HISR_RXFOVW)
 		DBG_8192C("%s: Rx Overflow\n", __func__);
@@ -1065,10 +1039,6 @@ void sd_int_hdl(struct adapter *adapter)
 			SdioLocalCmd52Write4Byte(adapter, SDIO_REG_HISR, v32);
 
 		sd_int_dpc(adapter);
-	} else {
-		RT_TRACE(_module_hci_ops_c_, _drv_err_,
-				("%s: HISR(0x%08x) and HIMR(0x%08x) not match!\n",
-				__func__, hal->sdio_hisr, hal->sdio_himr));
 	}
 }
 
@@ -1092,13 +1062,6 @@ u8 HalQueryTxBufferStatus8723BSdio(struct adapter *adapter)
 	numof_free_page = SdioLocalCmd53Read4Byte(adapter, SDIO_REG_FREE_TXPG);
 
 	memcpy(hal->SdioTxFIFOFreePage, &numof_free_page, 4);
-	RT_TRACE(_module_hci_ops_c_, _drv_notice_,
-			("%s: Free page for HIQ(%#x), MIDQ(%#x), LOWQ(%#x), PUBQ(%#x)\n",
-			__func__,
-			hal->SdioTxFIFOFreePage[HI_QUEUE_IDX],
-			hal->SdioTxFIFOFreePage[MID_QUEUE_IDX],
-			hal->SdioTxFIFOFreePage[LOW_QUEUE_IDX],
-			hal->SdioTxFIFOFreePage[PUBLIC_QUEUE_IDX]));
 
 	return true;
 }
@@ -1114,39 +1077,4 @@ void HalQueryTxOQTBufferStatus8723BSdio(struct adapter *adapter)
 	haldata->SdioTxOQTFreeSpace = SdioLocalCmd52Read1Byte(adapter, SDIO_REG_OQT_FREE_PG);
 }
 
-#if defined(CONFIG_WOWLAN) || defined(CONFIG_AP_WOWLAN)
-u8 RecvOnePkt(struct adapter *adapter, u32 size)
-{
-	struct recv_buf *recvbuf;
-	struct dvobj_priv *sddev;
-	struct sdio_func *func;
 
-	u8 res = false;
-
-	DBG_871X("+%s: size: %d+\n", __func__, size);
-
-	if (!adapter) {
-		DBG_871X(KERN_ERR "%s: adapter is NULL!\n", __func__);
-		return false;
-	}
-
-	sddev = adapter_to_dvobj(adapter);
-	psdio_data = &sddev->intf_data;
-	func = psdio_data->func;
-
-	if (size) {
-		sdio_claim_host(func);
-		recvbuf = sd_recv_rxfifo(adapter, size);
-
-		if (recvbuf) {
-			sd_rxhandler(adapter, recvbuf);
-			res = true;
-		} else {
-			res = false;
-		}
-		sdio_release_host(func);
-	}
-	DBG_871X("-%s-\n", __func__);
-	return res;
-}
-#endif /* CONFIG_WOWLAN */

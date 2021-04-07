@@ -323,28 +323,24 @@ static int rtw_resume(struct usb_interface *pusb_intf)
  */
 
 static struct adapter *rtw_usb_if1_init(struct dvobj_priv *dvobj,
-					struct usb_interface *pusb_intf,
-					const struct usb_device_id *pdid)
+					struct usb_interface *pusb_intf)
 {
-	struct adapter *padapter = NULL;
-	struct net_device *pnetdev = NULL;
+	struct adapter *padapter;
+	struct net_device *pnetdev;
 	struct net_device *pmondev;
 	int status = _FAIL;
 
-	padapter = vzalloc(sizeof(*padapter));
-	if (!padapter)
-		goto exit;
+	pnetdev = rtw_init_netdev();
+	if (!pnetdev)
+		return NULL;
+	SET_NETDEV_DEV(pnetdev, dvobj_to_dev(dvobj));
+
+	padapter = netdev_priv(pnetdev);
 	padapter->dvobj = dvobj;
 	dvobj->if1 = padapter;
 
 	padapter->bDriverStopped = true;
 	mutex_init(&padapter->hw_init_mutex);
-
-	pnetdev = rtw_init_netdev(padapter);
-	if (!pnetdev)
-		goto free_adapter;
-	SET_NETDEV_DEV(pnetdev, dvobj_to_dev(dvobj));
-	padapter = rtw_netdev_priv(pnetdev);
 
 	if (padapter->registrypriv.monitor_enable) {
 		pmondev = rtl88eu_mon_init();
@@ -380,7 +376,6 @@ static struct adapter *rtw_usb_if1_init(struct dvobj_priv *dvobj,
 		dvobj->pusbdev->do_remote_wakeup = 1;
 		pusb_intf->needs_remote_wakeup = 1;
 		device_init_wakeup(&pusb_intf->dev, 1);
-		pr_debug("\n  padapter->pwrctrlpriv.bSupportRemoteWakeup~~~~~~\n");
 		pr_debug("\n  padapter->pwrctrlpriv.bSupportRemoteWakeup~~~[%d]~~~\n",
 			 device_may_wakeup(&pusb_intf->dev));
 	}
@@ -421,13 +416,9 @@ free_hal_data:
 		kfree(padapter->HalData);
 free_adapter:
 	if (status != _SUCCESS) {
-		if (pnetdev)
-			rtw_free_netdev(pnetdev);
-		else
-			vfree(padapter);
+		free_netdev(pnetdev);
 		padapter = NULL;
 	}
-exit:
 	return padapter;
 }
 
@@ -453,7 +444,8 @@ static void rtw_usb_if1_deinit(struct adapter *if1)
 	pr_debug("+r871xu_dev_remove, hw_init_completed=%d\n",
 		 if1->hw_init_completed);
 	rtw_free_drv_sw(if1);
-	rtw_free_netdev(pnetdev);
+	if (pnetdev)
+		free_netdev(pnetdev);
 }
 
 static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device_id *pdid)
@@ -469,7 +461,7 @@ static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device
 		goto exit;
 	}
 
-	if1 = rtw_usb_if1_init(dvobj, pusb_intf, pdid);
+	if1 = rtw_usb_if1_init(dvobj, pusb_intf);
 	if (!if1) {
 		pr_debug("rtw_init_primarystruct adapter Failed!\n");
 		goto free_dvobj;

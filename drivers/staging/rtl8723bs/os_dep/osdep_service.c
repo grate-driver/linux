@@ -47,7 +47,7 @@ inline struct sk_buff *_rtw_skb_copy(const struct sk_buff *skb)
 	return skb_copy(skb, in_interrupt() ? GFP_ATOMIC : GFP_KERNEL);
 }
 
-inline int _rtw_netif_rx(_nic_hdl ndev, struct sk_buff *skb)
+inline int _rtw_netif_rx(struct net_device *ndev, struct sk_buff *skb)
 {
 	skb->dev = ndev;
 	return netif_rx(skb);
@@ -160,10 +160,8 @@ int rtw_change_ifname(struct adapter *padapter, const char *ifname)
 	else
 		ret = register_netdevice(pnetdev);
 
-	if (ret != 0) {
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("register_netdev() failed\n"));
+	if (ret != 0)
 		goto error;
-	}
 
 	return 0;
 
