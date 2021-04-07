@@ -93,6 +93,7 @@ properties:
       - rc-medion-x10
       - rc-medion-x10-digitainer
       - rc-medion-x10-or2x
+      - rc-minix-neo
       - rc-msi-digivox-ii
       - rc-msi-digivox-iii
       - rc-msi-tvanywhere
@@ -150,6 +151,7 @@ properties:
       - rc-winfast
       - rc-winfast-usbii-deluxe
       - rc-x96max
+      - rc-xbox-360
       - rc-xbox-dvd
       - rc-zx-irdec
 
