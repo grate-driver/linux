@@ -471,6 +471,18 @@ config ADI
 	  and SSM (Silicon Secured Memory).  Intended consumers of this
 	  driver include crash and makedumpfile.
 
+config RUST_EXAMPLE
+	depends on RUST
+	tristate "Rust Example"
+	default n
+	help
+	  This option builds an example module written in Rust.
+
+	  To compile this as a module, choose M here:
+	  the module will be called rust_example.
+
+	  If unsure, say N.
+
 endmenu
 
 config RANDOM_TRUST_CPU
