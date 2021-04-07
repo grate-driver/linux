@@ -427,6 +427,19 @@
 		status = "okay";
 		clock-frequency = <400000>;
 
+		/* Aichi AMI306 digital compass */
+		magnetometer@e {
+			compatible = "asahi-kasei,ak8974";
+			reg = <0xe>;
+
+			avdd-supply = <&vdd_3v3_sys>;
+			dvdd-supply = <&vdd_1v8_sys>;
+
+			mount-matrix = "-1",  "0",  "0",
+					"0",  "1",  "0",
+					"0",  "0", "-1";
+		};
+
 		wm8903: audio-codec@1a {
 			compatible = "wlf,wm8903";
 			reg = <0x1a>;
@@ -469,9 +482,41 @@
 
 			atmel,wakeup-method = <ATMEL_MXT_WAKEUP_I2C_SCL>;
 		};
+
+		gyroscope@68 {
+			compatible = "invensense,mpu3050";
+			reg = <0x68>;
+
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(Z, 4) IRQ_TYPE_EDGE_RISING>;
+
+			vdd-supply    = <&vdd_3v3_sys>;
+			vlogic-supply = <&vdd_1v8_sys>;
+
+			mount-matrix =	 "0",  "1",  "0",
+					"-1",  "0",  "0",
+					 "0",  "0",  "1";
+
+			i2c-gate {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				accelerometer@f {
+					compatible = "kionix,kxtf9";
+					reg = <0xf>;
+
+					interrupt-parent = <&gpio>;
+					interrupts = <TEGRA_GPIO(N, 4) IRQ_TYPE_EDGE_RISING>;
+
+					mount-matrix =	 "1",  "0",  "0",
+							 "0",  "1",  "0",
+							 "0",  "0",  "1";
+				};
+			};
+		};
 	};
 
-	i2c@7000c400 {
+	i2c2: i2c@7000c400 {
 		status = "okay";
 		clock-frequency = <100000>;
 	};
@@ -481,7 +526,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		i2c-parent = <&{/i2c@7000c400}>;
+		i2c-parent = <&i2c2>;
 
 		pinctrl-names = "ddc", "pta", "idle";
 		pinctrl-0 = <&state_i2cmux_ddc>;
@@ -506,6 +551,49 @@
 				sbs,poll-retry-count = <10>;
 				power-supplies = <&mains>;
 			};
+
+			/* Dynaimage ambient light sensor */
+			light-sensor@1c {
+				compatible = "dynaimage,al3010";
+				reg = <0x1c>;
+
+				interrupt-parent = <&gpio>;
+				interrupts = <TEGRA_GPIO(Z, 2) IRQ_TYPE_LEVEL_HIGH>;
+
+				vdd-supply = <&vdd_3v3_sys>;
+			};
+		};
+	};
+
+	dock-i2c {
+		compatible = "i2c-hotplug-gpio";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupts-extended = <&gpio TEGRA_GPIO(X, 5) IRQ_TYPE_EDGE_BOTH>;
+		detect-gpios = <&gpio TEGRA_GPIO(X, 5) GPIO_ACTIVE_LOW>;
+
+		i2c-parent = <&lvds_ddc>;
+
+		embedded-controller@19 {
+			compatible = "asus,dock-ec", "asus,ec";
+			reg = <0x19>;
+
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(S, 2) IRQ_TYPE_LEVEL_LOW>;
+
+			request-gpio = <&gpio TEGRA_GPIO(S, 3) GPIO_ACTIVE_LOW>;
+			asus,dockram = <&dockram_dec>;
+
+			dock_battery: battery {
+				charge-full-design = <2260>;	/* mAh */
+			};
+		};
+
+		dockram_dec: dockram@1b {
+			compatible = "asus,dockram";
+			reg = <0x1b>;
 		};
 	};
 
@@ -783,6 +871,16 @@
 
 	gpio-keys {
 		compatible = "gpio-keys";
+
+		dock-hall-sensor {
+			label = "Lid";
+			gpios = <&gpio TEGRA_GPIO(S, 4) GPIO_ACTIVE_LOW>;
+			linux,input-type = <EV_SW>;
+			linux,code = <SW_LID>;
+			debounce-interval = <500>;
+			wakeup-event-action = <EV_ACT_ASSERTED>;
+			wakeup-source;
+		};
 
 		power {
 			label = "Power";
