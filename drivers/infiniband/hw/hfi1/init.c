@@ -627,7 +627,7 @@ static enum hrtimer_restart cca_timer_fn(struct hrtimer *t)
  * Common code for initializing the physical port structure.
  */
 void hfi1_init_pportdata(struct pci_dev *pdev, struct hfi1_pportdata *ppd,
-			 struct hfi1_devdata *dd, u8 hw_pidx, u8 port)
+			 struct hfi1_devdata *dd, u8 hw_pidx, u32 port)
 {
 	int i;
 	uint default_pkey_idx;
@@ -1852,7 +1852,8 @@ bail:
 }
 
 /**
- * allocate eager buffers, both kernel and user contexts.
+ * hfi1_setup_eagerbufs - llocate eager buffers, both kernel and user
+ * contexts.
  * @rcd: the context we are setting up.
  *
  * Allocate the eager TID buffers and program them into hip.
