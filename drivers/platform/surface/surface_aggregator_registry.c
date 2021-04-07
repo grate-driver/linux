@@ -191,7 +191,7 @@ static const struct software_node *ssam_node_group_sp6[] = {
 	NULL,
 };
 
-/* Devices for Surface Pro 7. */
+/* Devices for Surface Pro 7 and Surface Pro 7+. */
 static const struct software_node *ssam_node_group_sp7[] = {
 	&ssam_node_root,
 	&ssam_node_bat_ac,
@@ -302,7 +302,7 @@ struct ssam_base_hub {
 	struct ssam_event_notifier notif;
 };
 
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_query_opmode, u8, {
+SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_query_opmode, u8, {
 	.target_category = SSAM_SSH_TC_BAS,
 	.target_id       = 0x01,
 	.command_id      = 0x0d,
@@ -352,7 +352,7 @@ static struct attribute *ssam_base_hub_attrs[] = {
 	NULL,
 };
 
-const struct attribute_group ssam_base_hub_group = {
+static const struct attribute_group ssam_base_hub_group = {
 	.attrs = ssam_base_hub_attrs,
 };
 
@@ -520,6 +520,9 @@ static const struct acpi_device_id ssam_platform_hub_match[] = {
 
 	/* Surface Pro 7 */
 	{ "MSHW0116", (unsigned long)ssam_node_group_sp7 },
+
+	/* Surface Pro 7+ */
+	{ "MSHW0119", (unsigned long)ssam_node_group_sp7 },
 
 	/* Surface Book 2 */
 	{ "MSHW0107", (unsigned long)ssam_node_group_sb2 },
