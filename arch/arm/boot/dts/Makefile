@@ -1270,6 +1270,7 @@ dtb-$(CONFIG_ARCH_TEGRA_3x_SOC) += \
 	tegra30-beaver.dtb \
 	tegra30-cardhu-a02.dtb \
 	tegra30-cardhu-a04.dtb \
+	tegra30-cl2n.dtb \
 	tegra30-colibri-eval-v3.dtb \
 	tegra30-ouya.dtb \
 	tegra30-pegatron-chagall.dtb
