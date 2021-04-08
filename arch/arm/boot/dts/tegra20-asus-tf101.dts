@@ -508,6 +508,9 @@
 					interrupt-parent = <&gpio>;
 					interrupts = <TEGRA_GPIO(N, 4) IRQ_TYPE_EDGE_RISING>;
 
+					vdd-supply = <&vdd_3v3_sys>;
+					vddio-supply = <&vdd_1v8_sys>;
+
 					mount-matrix =	 "1",  "0",  "0",
 							 "0",  "1",  "0",
 							 "0",  "0",  "1";
@@ -616,7 +619,7 @@
 			#gpio-cells = <2>;
 			gpio-controller;
 
-			sys-supply = <&vdd_5v0_reg>;
+			sys-supply = <&vdd_5v0_sys>;
 			vin-sm0-supply = <&sys_reg>;
 			vin-sm1-supply = <&sys_reg>;
 			vin-sm2-supply = <&sys_reg>;
@@ -758,7 +761,9 @@
 		core-supply = <&vdd_core>;
 	};
 
+	/* USB via ASUS connector */
 	usb@c5000000 {
+		compatible = "nvidia,tegra20-udc";
 		status = "okay";
 		dr_mode = "peripheral";
 	};
@@ -766,14 +771,21 @@
 	usb-phy@c5000000 {
 		status = "okay";
 		dr_mode = "peripheral";
+		nvidia,xcvr-setup-use-fuses;
+		nvidia,xcvr-lsfslew = <2>;
+		nvidia,xcvr-lsrslew = <2>;
+		vbus-supply = <&vdd_5v0_sys>;
 	};
 
+	/* Dock's USB port */
 	usb@c5008000 {
 		status = "okay";
 	};
 
 	usb-phy@c5008000 {
 		status = "okay";
+		nvidia,xcvr-setup-use-fuses;
+		vbus-supply = <&vdd_5v0_sys>;
 	};
 
 	brcm_wifi_pwrseq: wifi-pwrseq {
@@ -793,7 +805,11 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		max-frequency = <50000000>;
+		assigned-clocks = <&tegra_car TEGRA20_CLK_SDMMC1>;
+		assigned-clock-parents = <&tegra_car TEGRA20_CLK_PLL_C>;
+		assigned-clock-rates = <40000000>;
+
+		max-frequency = <40000000>;
 		keep-power-in-suspend;
 		bus-width = <4>;
 		non-removable;
@@ -969,7 +985,7 @@
 		};
 	};
 
-	vdd_5v0_reg: regulator@0 {
+	vdd_5v0_sys: regulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0";
 		regulator-min-microvolt = <5000000>;
@@ -983,7 +999,7 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
-		vin-supply = <&vdd_5v0_reg>;
+		vin-supply = <&vdd_5v0_sys>;
 	};
 
 	regulator@2 {
@@ -1010,7 +1026,7 @@
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 		regulator-always-on;
-		vin-supply = <&vdd_5v0_reg>;
+		vin-supply = <&vdd_5v0_sys>;
 	};
 
 	vdd_hdmi_en: regulator@5 {
@@ -1019,7 +1035,7 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
-		vin-supply = <&vdd_5v0_reg>;
+		vin-supply = <&vdd_5v0_sys>;
 		gpio = <&gpio TEGRA_GPIO(V, 5) GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
