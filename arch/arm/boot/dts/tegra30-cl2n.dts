@@ -1008,12 +1008,11 @@
 		cd-gpios = <&gpio TEGRA_GPIO(I, 5) GPIO_ACTIVE_LOW>;
 		//vmmc-supply = <&vddio_sdmmc1>;
 		//vqmmc-supply = <&vdd_1v8>;
-		vqmmc-supplies = <&vdd_1v8>; //vcore_emmc?
+		vqmmc-supply = <&vdd_1v8>; //vcore_emmc?
 		vmmc-supply = <&vddio_sd_slot>;
 		bus-width = <4>;
-		//nvidia,default-tap = <0x0F>;
-		//max-frequency = <41000000>; //41000000
-		max-frequency = <25000000>;
+		nvidia,default-tap = <0x0F>;
+		max-frequency = <41000000>; //41000000
 	}; // sd card slot on sdmmc1
 
 	spi@7000d400 {
@@ -1090,7 +1089,7 @@
 	lcd_pwr0_pb2 {
 		nvidia,pins = "lcd_pwr0_pb2",
 				"lcd_pwr1_pc1",
-				"lcd_pwr2_pc6"
+				"lcd_pwr2_pc6",
 				"lcd_m1_pw1";
 		nvidia,function = "displaya";
 		nvidia,pull = <TEGRA_PIN_PULL_NONE>;
@@ -1462,7 +1461,7 @@
 				"vi_d9_pl7",
 				"vi_d10_pt2",
 				"vi_d11_pt3";
-		nvidia,function = "vi"
+		nvidia,function = "vi";
 		nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 		nvidia,tristate = <TEGRA_PIN_ENABLE>;
 		nvidia,enable-input = <TEGRA_PIN_DISABLE>;
