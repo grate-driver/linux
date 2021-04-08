@@ -9,6 +9,17 @@
 #include <asm/kprobes.h>
 #include <asm/runlatch.h>
 
+static inline void nap_adjust_return(struct pt_regs *regs)
+{
+#ifdef CONFIG_PPC_970_NAP
+	if (unlikely(test_thread_local_flags(_TLF_NAPPING))) {
+		/* Can avoid a test-and-clear because NMIs do not call this */
+		clear_thread_local_flags(_TLF_NAPPING);
+		regs->nip = (unsigned long)power4_idle_nap_return;
+	}
+#endif
+}
+
 struct interrupt_state {
 #ifdef CONFIG_PPC_BOOK3E_64
 	enum ctx_state ctx_state;
@@ -29,6 +40,17 @@ static inline void booke_restore_dbcr0(void)
 
 static inline void interrupt_enter_prepare(struct pt_regs *regs, struct interrupt_state *state)
 {
+#ifdef CONFIG_PPC32
+	if (!arch_irq_disabled_regs(regs))
+		trace_hardirqs_off();
+
+	if (user_mode(regs)) {
+		kuep_lock();
+		account_cpu_user_entry();
+	} else {
+		kuap_save_and_lock(regs);
+	}
+#endif
 	/*
 	 * Book3E reconciles irq soft mask in asm
 	 */
@@ -58,6 +80,8 @@ static inline void interrupt_enter_prepare(struct pt_regs *regs, struct interrup
 	if (user_mode(regs))
 		account_cpu_user_entry();
 #endif
+
+	booke_restore_dbcr0();
 }
 
 /*
@@ -80,6 +104,8 @@ static inline void interrupt_exit_prepare(struct pt_regs *regs, struct interrupt
 	exception_exit(state->ctx_state);
 #endif
 
+	if (user_mode(regs))
+		kuep_unlock();
 	/*
 	 * Book3S exits to user via interrupt_exit_user_prepare(), which does
 	 * context tracking, which is a cleaner way to handle PREEMPT=y
@@ -109,6 +135,14 @@ static inline void interrupt_async_enter_prepare(struct pt_regs *regs, struct in
 
 static inline void interrupt_async_exit_prepare(struct pt_regs *regs, struct interrupt_state *state)
 {
+	/*
+	 * Adjust at exit so the main handler sees the true NIA. This must
+	 * come before irq_exit() because irq_exit can enable interrupts, and
+	 * if another interrupt is taken before nap_adjust_return has run
+	 * here, then that interrupt would return directly to idle nap return.
+	 */
+	nap_adjust_return(regs);
+
 	irq_exit();
 	interrupt_exit_prepare(regs, state);
 }
@@ -163,6 +197,11 @@ static inline void interrupt_nmi_exit_prepare(struct pt_regs *regs, struct inter
 			!firmware_has_feature(FW_FEATURE_LPAR) ||
 			radix_enabled() || (mfmsr() & MSR_DR))
 		nmi_exit();
+
+	/*
+	 * nmi does not call nap_adjust_return because nmi should not create
+	 * new work to do (must use irq_work for that).
+	 */
 
 #ifdef CONFIG_PPC64
 	if (TRAP(regs) != 0x900 && TRAP(regs) != 0xf00 && TRAP(regs) != 0x260)
@@ -436,7 +475,7 @@ DECLARE_INTERRUPT_HANDLER_NMI(hmi_exception_realmode);
 
 DECLARE_INTERRUPT_HANDLER_ASYNC(TAUException);
 
-void unrecoverable_exception(struct pt_regs *regs);
+void __noreturn unrecoverable_exception(struct pt_regs *regs);
 
 void replay_system_reset(void);
 void replay_soft_interrupts(void);
