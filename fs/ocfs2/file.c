@@ -1124,7 +1124,7 @@ int ocfs2_setattr(struct user_namespace *mnt_userns, struct dentry *dentry,
 	handle_t *handle = NULL;
 	struct dquot *transfer_to[MAXQUOTAS] = { };
 	int qtype;
-	int had_lock;
+	int had_lock, had_alloc_lock = 0;
 	struct ocfs2_lock_holder oh;
 
 	trace_ocfs2_setattr(inode, dentry,
@@ -1245,6 +1245,9 @@ int ocfs2_setattr(struct user_namespace *mnt_userns, struct dentry *dentry,
 				goto bail_unlock;
 			}
 		}
+		down_write(&OCFS2_I(inode)->ip_alloc_sem);
+		had_alloc_lock = 1;
+
 		handle = ocfs2_start_trans(osb, OCFS2_INODE_UPDATE_CREDITS +
 					   2 * ocfs2_quota_trans_credits(sb));
 		if (IS_ERR(handle)) {
@@ -1256,6 +1259,9 @@ int ocfs2_setattr(struct user_namespace *mnt_userns, struct dentry *dentry,
 		if (status < 0)
 			goto bail_commit;
 	} else {
+		down_write(&OCFS2_I(inode)->ip_alloc_sem);
+		had_alloc_lock = 1;
+
 		handle = ocfs2_start_trans(osb, OCFS2_INODE_UPDATE_CREDITS);
 		if (IS_ERR(handle)) {
 			status = PTR_ERR(handle);
@@ -1274,6 +1280,9 @@ int ocfs2_setattr(struct user_namespace *mnt_userns, struct dentry *dentry,
 bail_commit:
 	ocfs2_commit_trans(osb, handle);
 bail_unlock:
+	if (had_alloc_lock)
+		up_write(&OCFS2_I(inode)->ip_alloc_sem);
+
 	if (status && inode_locked) {
 		ocfs2_inode_unlock_tracker(inode, 1, &oh, had_lock);
 		inode_locked = 0;
