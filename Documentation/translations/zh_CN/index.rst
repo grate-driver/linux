@@ -18,8 +18,14 @@
 
    admin-guide/index
    process/index
+   kernel-hacking/index
    filesystems/index
    arm64/index
+   sound/index
+   cpu-freq/index
+   mips/index
+   iio/index
+   riscv/index
 
 目录和表格
 ----------
