@@ -6,6 +6,8 @@
  * Author: Heikki Krogerus <heikki.krogerus@linux.intel.com>
  */
 
+#include "tps6598x.h"
+
 #include <linux/i2c.h>
 #include <linux/acpi.h>
 #include <linux/module.h>
