@@ -236,8 +236,8 @@ int kvm_reset_vcpu(struct kvm_vcpu *vcpu)
 		break;
 	}
 
-	/* Zero all registers */
-	memset(&vcpu->arch.ctxt, 0, sizeof(vcpu->arch.ctxt));
+	/* Reset core registers */
+	memset(vcpu_gp_regs(vcpu), 0, sizeof(*vcpu_gp_regs(vcpu)));
 	vcpu_gp_regs(vcpu)->pstate = pstate;
 
 	/* Reset system registers */
