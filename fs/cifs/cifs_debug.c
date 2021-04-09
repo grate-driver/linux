@@ -24,9 +24,7 @@
 #ifdef CONFIG_CIFS_SMB_DIRECT
 #include "smbdirect.h"
 #endif
-#ifdef CONFIG_CIFS_SWN_UPCALL
 #include "cifs_swn.h"
-#endif
 
 void
 cifs_dump_mem(char *label, void *data, int length)
@@ -119,10 +117,8 @@ static void cifs_debug_tcon(struct seq_file *m, struct cifs_tcon *tcon)
 		seq_printf(m, " POSIX Extensions");
 	if (tcon->ses->server->ops->dump_share_caps)
 		tcon->ses->server->ops->dump_share_caps(m, tcon);
-#ifdef CONFIG_CIFS_SWN_UPCALL
 	if (tcon->use_witness)
 		seq_puts(m, " Witness");
-#endif
 
 	if (tcon->need_reconnect)
 		seq_puts(m, "\tDISCONNECTED ");
@@ -491,10 +487,8 @@ skip_rdma:
 
 	spin_unlock(&cifs_tcp_ses_lock);
 	seq_putc(m, '\n');
-
-#ifdef CONFIG_CIFS_SWN_UPCALL
 	cifs_swn_dump(m);
-#endif
+
 	/* BB add code to dump additional info such as TCP session info now */
 	return 0;
 }
