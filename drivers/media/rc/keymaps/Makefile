@@ -69,6 +69,7 @@ obj-$(CONFIG_RC_MAP) += rc-adstech-dvb-t-pci.o \
 			rc-medion-x10.o \
 			rc-medion-x10-digitainer.o \
 			rc-medion-x10-or2x.o \
+			rc-minix-neo.o \
 			rc-msi-digivox-ii.o \
 			rc-msi-digivox-iii.o \
 			rc-msi-tvanywhere.o \
@@ -126,6 +127,7 @@ obj-$(CONFIG_RC_MAP) += rc-adstech-dvb-t-pci.o \
 			rc-winfast.o \
 			rc-winfast-usbii-deluxe.o \
 			rc-su3000.o \
+			rc-xbox-360.o \
 			rc-xbox-dvd.o \
 			rc-x96max.o \
 			rc-zx-irdec.o
