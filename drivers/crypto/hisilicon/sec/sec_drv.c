@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Driver for the Hisilicon SEC units found on Hip06 Hip07
+ * Driver for the HiSilicon SEC units found on Hip06 Hip07
  *
- * Copyright (c) 2016-2017 Hisilicon Limited.
+ * Copyright (c) 2016-2017 HiSilicon Limited.
  */
 #include <linux/acpi.h>
 #include <linux/atomic.h>
@@ -834,6 +834,7 @@ int sec_queue_stop_release(struct sec_queue *queue)
 
 /**
  * sec_queue_empty() - Is this hardware queue currently empty.
+ * @queue: The queue to test
  *
  * We need to know if we have an empty queue for some of the chaining modes
  * as if it is not empty we may need to hold the message in a software queue
@@ -1315,6 +1316,6 @@ static struct platform_driver sec_driver = {
 module_platform_driver(sec_driver);
 
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Hisilicon Security Accelerators");
+MODULE_DESCRIPTION("HiSilicon Security Accelerators");
 MODULE_AUTHOR("Zaibo Xu <xuzaibo@huawei.com");
 MODULE_AUTHOR("Jonathan Cameron <jonathan.cameron@huawei.com>");
