@@ -1,3 +1,6 @@
+.. SPDX-License-Identifier: GPL-2.0
+.. Copyright (C) 2019, Google LLC.
+
 The Kernel Concurrency Sanitizer (KCSAN)
 ========================================
 
@@ -103,7 +106,9 @@ the below options are available:
 
 * KCSAN understands the ``data_race(expr)`` annotation, which tells KCSAN that
   any data races due to accesses in ``expr`` should be ignored and resulting
-  behaviour when encountering a data race is deemed safe.
+  behaviour when encountering a data race is deemed safe.  Please see
+  ``tools/memory-model/Documentation/access-marking.txt`` in the kernel source
+  tree for more information.
 
 * Disabling data race detection for entire functions can be accomplished by
   using the function attribute ``__no_kcsan``::
