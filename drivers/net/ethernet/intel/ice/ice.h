@@ -73,7 +73,7 @@
 #define ICE_MIN_LAN_TXRX_MSIX	1
 #define ICE_MIN_LAN_OICR_MSIX	1
 #define ICE_MIN_MSIX		(ICE_MIN_LAN_TXRX_MSIX + ICE_MIN_LAN_OICR_MSIX)
-#define ICE_FDIR_MSIX		1
+#define ICE_FDIR_MSIX		2
 #define ICE_NO_VSI		0xffff
 #define ICE_VSI_MAP_CONTIG	0
 #define ICE_VSI_MAP_SCATTER	1
@@ -84,9 +84,12 @@
 #define ICE_MAX_LG_RSS_QS	256
 #define ICE_RES_VALID_BIT	0x8000
 #define ICE_RES_MISC_VEC_ID	(ICE_RES_VALID_BIT - 1)
+/* All VF control VSIs share the same IRQ, so assign a unique ID for them */
+#define ICE_RES_VF_CTRL_VEC_ID	(ICE_RES_MISC_VEC_ID - 1)
 #define ICE_INVAL_Q_INDEX	0xffff
 #define ICE_INVAL_VFID		256
 
+#define ICE_MAX_RXQS_PER_TC		256	/* Used when setting VSI context per TC Rx queues */
 #define ICE_MAX_RESET_WAIT		20
 
 #define ICE_VSIQF_HKEY_ARRAY_SIZE	((VSIQF_HKEY_MAX_INDEX + 1) *	4)
@@ -190,7 +193,7 @@ struct ice_sw {
 	u8 dflt_vsi_ena:1;	/* true if above dflt_vsi is enabled */
 };
 
-enum ice_state {
+enum ice_pf_state {
 	__ICE_TESTING,
 	__ICE_DOWN,
 	__ICE_NEEDS_RESTART,
@@ -228,15 +231,18 @@ enum ice_state {
 	__ICE_VF_RESETS_DISABLED,	/* disable resets during ice_remove */
 	__ICE_LINK_DEFAULT_OVERRIDE_PENDING,
 	__ICE_PHY_INIT_COMPLETE,
+	__ICE_FD_VF_FLUSH_CTX,		/* set at FD Rx IRQ or timeout */
 	__ICE_STATE_NBITS		/* must be last */
 };
 
-enum ice_vsi_flags {
-	ICE_VSI_FLAG_UMAC_FLTR_CHANGED,
-	ICE_VSI_FLAG_MMAC_FLTR_CHANGED,
-	ICE_VSI_FLAG_VLAN_FLTR_CHANGED,
-	ICE_VSI_FLAG_PROMISC_CHANGED,
-	ICE_VSI_FLAG_NBITS		/* must be last */
+enum ice_vsi_state {
+	ICE_VSI_DOWN,
+	ICE_VSI_NEEDS_RESTART,
+	ICE_VSI_UMAC_FLTR_CHANGED,
+	ICE_VSI_MMAC_FLTR_CHANGED,
+	ICE_VSI_VLAN_FLTR_CHANGED,
+	ICE_VSI_PROMISC_CHANGED,
+	ICE_VSI_STATE_NBITS		/* must be last */
 };
 
 /* struct that defines a VSI, associated with a dev */
@@ -252,14 +258,12 @@ struct ice_vsi {
 	irqreturn_t (*irq_handler)(int irq, void *data);
 
 	u64 tx_linearize;
-	DECLARE_BITMAP(state, __ICE_STATE_NBITS);
-	DECLARE_BITMAP(flags, ICE_VSI_FLAG_NBITS);
+	DECLARE_BITMAP(state, ICE_VSI_STATE_NBITS);
 	unsigned int current_netdev_flags;
 	u32 tx_restart;
 	u32 tx_busy;
 	u32 rx_buf_failed;
 	u32 rx_page_failed;
-	u32 rx_gro_dropped;
 	u16 num_q_vectors;
 	u16 base_vector;		/* IRQ base for OS reserved vectors */
 	enum ice_vsi_type type;
@@ -499,7 +503,7 @@ ice_irq_dynamic_ena(struct ice_hw *hw, struct ice_vsi *vsi,
 	val = GLINT_DYN_CTL_INTENA_M | GLINT_DYN_CTL_CLEARPBA_M |
 	      (itr << GLINT_DYN_CTL_ITR_INDX_S);
 	if (vsi)
-		if (test_bit(__ICE_DOWN, vsi->state))
+		if (test_bit(ICE_VSI_DOWN, vsi->state))
 			return;
 	wr32(hw, GLINT_DYN_CTL(vector), val);
 }
@@ -616,8 +620,10 @@ int ice_destroy_xdp_rings(struct ice_vsi *vsi);
 int
 ice_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
 	     u32 flags);
-int ice_set_rss(struct ice_vsi *vsi, u8 *seed, u8 *lut, u16 lut_size);
-int ice_get_rss(struct ice_vsi *vsi, u8 *seed, u8 *lut, u16 lut_size);
+int ice_set_rss_lut(struct ice_vsi *vsi, u8 *lut, u16 lut_size);
+int ice_get_rss_lut(struct ice_vsi *vsi, u8 *lut, u16 lut_size);
+int ice_set_rss_key(struct ice_vsi *vsi, u8 *seed);
+int ice_get_rss_key(struct ice_vsi *vsi, u8 *seed);
 void ice_fill_rss_lut(u8 *lut, u16 rss_table_size, u16 rss_size);
 int ice_schedule_reset(struct ice_pf *pf, enum ice_reset_req reset);
 void ice_print_link_msg(struct ice_vsi *vsi, bool isup);
