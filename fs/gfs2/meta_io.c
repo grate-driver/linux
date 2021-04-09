@@ -131,15 +131,18 @@ struct buffer_head *gfs2_getbuf(struct gfs2_glock *gl, u64 blkno, int create)
 				break;
 			yield();
 		}
+		if (!page_has_buffers(page))
+			create_empty_buffers(page, sdp->sd_sb.sb_bsize, 0);
 	} else {
 		page = find_get_page_flags(mapping, index,
 						FGP_LOCK|FGP_ACCESSED);
 		if (!page)
 			return NULL;
+		if (!page_has_buffers(page)) {
+			bh = NULL;
+			goto out_unlock;
+		}
 	}
-
-	if (!page_has_buffers(page))
-		create_empty_buffers(page, sdp->sd_sb.sb_bsize, 0);
 
 	/* Locate header for our buffer within our page */
 	for (bh = page_buffers(page); bufnum--; bh = bh->b_this_page)
@@ -149,6 +152,7 @@ struct buffer_head *gfs2_getbuf(struct gfs2_glock *gl, u64 blkno, int create)
 	if (!buffer_mapped(bh))
 		map_bh(bh, sdp->sd_vfs, blkno);
 
+out_unlock:
 	unlock_page(page);
 	put_page(page);
 
@@ -462,23 +466,22 @@ void gfs2_journal_wipe(struct gfs2_inode *ip, u64 bstart, u32 blen)
 }
 
 /**
- * gfs2_meta_indirect_buffer - Get a metadata buffer
+ * gfs2_meta_buffer - Get a metadata buffer
  * @ip: The GFS2 inode
- * @height: The level of this buf in the metadata (indir addr) tree (if any)
+ * @mtype: The block type (GFS2_METATYPE_*)
  * @num: The block number (device relative) of the buffer
  * @bhp: the buffer is returned here
  *
  * Returns: errno
  */
 
-int gfs2_meta_indirect_buffer(struct gfs2_inode *ip, int height, u64 num,
-			      struct buffer_head **bhp)
+int gfs2_meta_buffer(struct gfs2_inode *ip, u32 mtype, u64 num,
+		     struct buffer_head **bhp)
 {
 	struct gfs2_sbd *sdp = GFS2_SB(&ip->i_inode);
 	struct gfs2_glock *gl = ip->i_gl;
 	struct buffer_head *bh;
 	int ret = 0;
-	u32 mtype = height ? GFS2_METATYPE_IN : GFS2_METATYPE_DI;
 	int rahead = 0;
 
 	if (num == ip->i_no_addr)
