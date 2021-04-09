@@ -44,13 +44,45 @@
 #define DT2814_ENB 0x10
 #define DT2814_CHANMASK 0x0f
 
-struct dt2814_private {
-	int ntrig;
-	int curadchan;
-};
-
 #define DT2814_TIMEOUT 10
 #define DT2814_MAX_SPEED 100000	/* Arbitrary 10 khz limit */
+
+static int dt2814_ai_notbusy(struct comedi_device *dev,
+			     struct comedi_subdevice *s,
+			     struct comedi_insn *insn,
+			     unsigned long context)
+{
+	unsigned int status;
+
+	status = inb(dev->iobase + DT2814_CSR);
+	if (context)
+		*(unsigned int *)context = status;
+	if (status & DT2814_BUSY)
+		return -EBUSY;
+	return 0;
+}
+
+static int dt2814_ai_clear(struct comedi_device *dev)
+{
+	unsigned int status = 0;
+	int ret;
+
+	/* Wait until not busy and get status register value. */
+	ret = comedi_timeout(dev, NULL, NULL, dt2814_ai_notbusy,
+			     (unsigned long)&status);
+	if (ret)
+		return ret;
+
+	if (status & (DT2814_FINISH | DT2814_ERR)) {
+		/*
+		 * There unread data, or the error flag is set.
+		 * Read the data register twice to clear the condition.
+		 */
+		inb(dev->iobase + DT2814_DATA);
+		inb(dev->iobase + DT2814_DATA);
+	}
+	return 0;
+}
 
 static int dt2814_ai_eoc(struct comedi_device *dev,
 			 struct comedi_subdevice *s,
@@ -73,6 +105,7 @@ static int dt2814_ai_insn_read(struct comedi_device *dev,
 	int chan;
 	int ret;
 
+	dt2814_ai_clear(dev);	/* clear stale data or error */
 	for (n = 0; n < insn->n; n++) {
 		chan = CR_CHAN(insn->chanspec);
 
@@ -169,80 +202,119 @@ static int dt2814_ai_cmdtest(struct comedi_device *dev,
 
 static int dt2814_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 {
-	struct dt2814_private *devpriv = dev->private;
 	struct comedi_cmd *cmd = &s->async->cmd;
 	int chan;
 	int trigvar;
 
+	dt2814_ai_clear(dev);	/* clear stale data or error */
 	trigvar = dt2814_ns_to_timer(&cmd->scan_begin_arg, cmd->flags);
 
 	chan = CR_CHAN(cmd->chanlist[0]);
 
-	devpriv->ntrig = cmd->stop_arg;
 	outb(chan | DT2814_ENB | (trigvar << 5), dev->iobase + DT2814_CSR);
 
 	return 0;
 }
 
+static int dt2814_ai_cancel(struct comedi_device *dev,
+			    struct comedi_subdevice *s)
+{
+	unsigned int status;
+	unsigned long flags;
+
+	spin_lock_irqsave(&dev->spinlock, flags);
+	status = inb(dev->iobase + DT2814_CSR);
+	if (status & DT2814_ENB) {
+		/*
+		 * Clear the timed trigger enable bit.
+		 *
+		 * Note: turning off timed mode triggers another
+		 * sample.  This will be mopped up by the calls to
+		 * dt2814_ai_clear().
+		 */
+		outb(status & DT2814_CHANMASK, dev->iobase + DT2814_CSR);
+	}
+	spin_unlock_irqrestore(&dev->spinlock, flags);
+	return 0;
+}
+
 static irqreturn_t dt2814_interrupt(int irq, void *d)
 {
-	int lo, hi;
 	struct comedi_device *dev = d;
-	struct dt2814_private *devpriv = dev->private;
 	struct comedi_subdevice *s = dev->read_subdev;
-	int data;
+	struct comedi_async *async;
+	unsigned int lo, hi;
+	unsigned short data;
+	unsigned int status;
 
 	if (!dev->attached) {
 		dev_err(dev->class_dev, "spurious interrupt\n");
 		return IRQ_HANDLED;
 	}
 
+	async = s->async;
+
+	spin_lock(&dev->spinlock);
+
+	status = inb(dev->iobase + DT2814_CSR);
+	if (!(status & DT2814_ENB)) {
+		/* Timed acquisition not enabled.  Nothing to do. */
+		spin_unlock(&dev->spinlock);
+		return IRQ_HANDLED;
+	}
+
+	if (!(status & (DT2814_FINISH | DT2814_ERR))) {
+		/* Spurious interrupt? */
+		spin_unlock(&dev->spinlock);
+		return IRQ_HANDLED;
+	}
+
+	/* Read data or clear error. */
 	hi = inb(dev->iobase + DT2814_DATA);
 	lo = inb(dev->iobase + DT2814_DATA);
 
 	data = (hi << 4) | (lo >> 4);
 
-	if (!(--devpriv->ntrig)) {
-		int i;
-
-		outb(0, dev->iobase + DT2814_CSR);
-		/*
-		 * note: turning off timed mode triggers another
-		 * sample.
-		 */
-
-		for (i = 0; i < DT2814_TIMEOUT; i++) {
-			if (inb(dev->iobase + DT2814_CSR) & DT2814_FINISH)
-				break;
+	if (status & DT2814_ERR) {
+		async->events |= COMEDI_CB_ERROR;
+	} else {
+		comedi_buf_write_samples(s, &data, 1);
+		if (async->cmd.stop_src == TRIG_COUNT &&
+		    async->scans_done >=  async->cmd.stop_arg) {
+			async->events |= COMEDI_CB_EOA;
 		}
-		inb(dev->iobase + DT2814_DATA);
-		inb(dev->iobase + DT2814_DATA);
-
-		s->async->events |= COMEDI_CB_EOA;
 	}
+	if (async->events & COMEDI_CB_CANCEL_MASK) {
+		/*
+		 * Disable timed mode.
+		 *
+		 * Note: turning off timed mode triggers another
+		 * sample.  This will be mopped up by the calls to
+		 * dt2814_ai_clear().
+		 */
+		outb(status & DT2814_CHANMASK, dev->iobase + DT2814_CSR);
+	}
+
+	spin_unlock(&dev->spinlock);
+
 	comedi_handle_events(dev, s);
 	return IRQ_HANDLED;
 }
 
 static int dt2814_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
-	struct dt2814_private *devpriv;
 	struct comedi_subdevice *s;
 	int ret;
-	int i;
 
 	ret = comedi_request_region(dev, it->options[0], 0x2);
 	if (ret)
 		return ret;
 
 	outb(0, dev->iobase + DT2814_CSR);
-	usleep_range(100, 200);
-	if (inb(dev->iobase + DT2814_CSR) & DT2814_ERR) {
+	if (dt2814_ai_clear(dev)) {
 		dev_err(dev->class_dev, "reset error (fatal)\n");
 		return -EIO;
 	}
-	i = inb(dev->iobase + DT2814_DATA);
-	i = inb(dev->iobase + DT2814_DATA);
 
 	if (it->options[1]) {
 		ret = request_irq(it->options[1], dt2814_interrupt, 0,
@@ -254,10 +326,6 @@ static int dt2814_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	ret = comedi_alloc_subdevices(dev, 1);
 	if (ret)
 		return ret;
-
-	devpriv = comedi_alloc_devpriv(dev, sizeof(*devpriv));
-	if (!devpriv)
-		return -ENOMEM;
 
 	s = &dev->subdevices[0];
 	s->type = COMEDI_SUBD_AI;
@@ -272,16 +340,30 @@ static int dt2814_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		s->len_chanlist = 1;
 		s->do_cmd = dt2814_ai_cmd;
 		s->do_cmdtest = dt2814_ai_cmdtest;
+		s->cancel = dt2814_ai_cancel;
 	}
 
 	return 0;
+}
+
+static void dt2814_detach(struct comedi_device *dev)
+{
+	if (dev->irq) {
+		/*
+		 * An extra conversion triggered on termination of an
+		 * asynchronous command may still be in progress.  Wait for
+		 * it to finish and clear the data or error status.
+		 */
+		dt2814_ai_clear(dev);
+	}
+	comedi_legacy_detach(dev);
 }
 
 static struct comedi_driver dt2814_driver = {
 	.driver_name	= "dt2814",
 	.module		= THIS_MODULE,
 	.attach		= dt2814_attach,
-	.detach		= comedi_legacy_detach,
+	.detach		= dt2814_detach,
 };
 module_comedi_driver(dt2814_driver);
 

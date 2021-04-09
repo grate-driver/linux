@@ -24,7 +24,7 @@
 #include "../ni_routes.h"
 #include "unittest.h"
 
-#define RVi(table, src, dest)	((table)[(dest) * NI_NUM_NAMES + (src)])
+#define RVI(table, src, dest)	((table)[(dest) * NI_NUM_NAMES + (src)])
 #define O(x)	((x) + NI_NAMES_BASE)
 #define B(x)	((x) - NI_NAMES_BASE)
 #define V(x)	((x) | 0x80)
@@ -63,24 +63,24 @@ static const int no_val_dest = O(7), no_val_index = 4;
 
 /* I1 and I2 should not call O(...).  Mostly here to shut checkpatch.pl up */
 #define I1(x1)	\
-	(int[]){ \
-		x1, 0 \
-	}
+	((int[]){ \
+		(x1), 0 \
+	 })
 #define I2(x1, x2)	\
-	(int[]){ \
+	((int[]){ \
 		(x1), (x2), 0 \
-	}
+	 })
 #define I3(x1, x2, x3)	\
-	(int[]){ \
+	((int[]){ \
 		(x1), (x2), (x3), 0 \
-	}
+	 })
 
 /* O9 is build to call O(...) for each arg */
 #define O9(x1, x2, x3, x4, x5, x6, x7, x8, x9)	\
-	(int[]){ \
+	((int[]){ \
 		O(x1), O(x2), O(x3), O(x4), O(x5), O(x6), O(x7), O(x8), O(x9), \
 		0 \
-	}
+	 })
 
 static struct ni_device_routes DR = {
 	.device = "testdev",
@@ -194,7 +194,7 @@ static bool route_set_dests_in_order(const struct ni_device_routes *devroutes)
 }
 
 /* Tests that all route_set->src are in order of the signal source. */
-bool route_set_sources_in_order(const struct ni_device_routes *devroutes)
+static bool route_set_sources_in_order(const struct ni_device_routes *devroutes)
 {
 	int i;
 
@@ -211,13 +211,14 @@ bool route_set_sources_in_order(const struct ni_device_routes *devroutes)
 	return true;
 }
 
-void test_ni_assign_device_routes(void)
+static void test_ni_assign_device_routes(void)
 {
 	const struct ni_device_routes *devroutes, *olddevroutes;
 	const u8 *table, *oldtable;
 
 	init_pci_6070e();
-	ni_assign_device_routes(ni_eseries, pci_6070e, &private.routing_tables);
+	ni_assign_device_routes(ni_eseries, pci_6070e, NULL,
+				&private.routing_tables);
 	devroutes = private.routing_tables.valid_routes;
 	table = private.routing_tables.route_values;
 
@@ -242,18 +243,17 @@ void test_ni_assign_device_routes(void)
 	unittest(route_set_sources_in_order(devroutes),
 		 "all pci-6070e route_set->src's in order of signal source\n");
 
-	unittest(
-	  RVi(table, B(PXI_Star), B(NI_AI_SampleClock)) == V(17) &&
-	  RVi(table, B(NI_10MHzRefClock), B(TRIGGER_LINE(0))) == 0 &&
-	  RVi(table, B(NI_AI_ConvertClock), B(NI_PFI(0))) == 0 &&
-	  RVi(table, B(NI_AI_ConvertClock), B(NI_PFI(2))) ==
-		V(NI_PFI_OUTPUT_AI_CONVERT),
-	  "pci-6070e finds e-series route_values table\n");
+	unittest(RVI(table, B(PXI_Star), B(NI_AI_SampleClock)) == V(17) &&
+		 RVI(table, B(NI_10MHzRefClock), B(TRIGGER_LINE(0))) == 0 &&
+		 RVI(table, B(NI_AI_ConvertClock), B(NI_PFI(0))) == 0 &&
+		 RVI(table, B(NI_AI_ConvertClock), B(NI_PFI(2))) == V(NI_PFI_OUTPUT_AI_CONVERT),
+		 "pci-6070e finds e-series route_values table\n");
 
 	olddevroutes = devroutes;
 	oldtable = table;
 	init_pci_6220();
-	ni_assign_device_routes(ni_mseries, pci_6220, &private.routing_tables);
+	ni_assign_device_routes(ni_mseries, pci_6220, NULL,
+				&private.routing_tables);
 	devroutes = private.routing_tables.valid_routes;
 	table = private.routing_tables.route_values;
 
@@ -261,15 +261,14 @@ void test_ni_assign_device_routes(void)
 		 "find device pci-6220\n");
 	unittest(oldtable != table, "pci-6220 find other route_values table\n");
 
-	unittest(
-	  RVi(table, B(PXI_Star), B(NI_AI_SampleClock)) == V(20) &&
-	  RVi(table, B(NI_10MHzRefClock), B(TRIGGER_LINE(0))) == V(12) &&
-	  RVi(table, B(NI_AI_ConvertClock), B(NI_PFI(0))) == V(3) &&
-	  RVi(table, B(NI_AI_ConvertClock), B(NI_PFI(2))) == V(3),
-	  "pci-6220 finds m-series route_values table\n");
+	unittest(RVI(table, B(PXI_Star), B(NI_AI_SampleClock)) == V(20) &&
+		 RVI(table, B(NI_10MHzRefClock), B(TRIGGER_LINE(0))) == V(12) &&
+		 RVI(table, B(NI_AI_ConvertClock), B(NI_PFI(0))) == V(3) &&
+		 RVI(table, B(NI_AI_ConvertClock), B(NI_PFI(2))) == V(3),
+		 "pci-6220 finds m-series route_values table\n");
 }
 
-void test_ni_sort_device_routes(void)
+static void test_ni_sort_device_routes(void)
 {
 	/* We begin by sorting the device routes for use in later tests */
 	ni_sort_device_routes(&DR);
@@ -280,7 +279,7 @@ void test_ni_sort_device_routes(void)
 		 "all route_set->src's of fake data in order of sig. source\n");
 }
 
-void test_ni_find_route_set(void)
+static void test_ni_find_route_set(void)
 {
 	unittest(!ni_find_route_set(bad_dest, &DR),
 		 "check for nonexistent route_set\n");
@@ -296,7 +295,7 @@ void test_ni_find_route_set(void)
 		 "find last route_set\n");
 }
 
-void test_ni_route_set_has_source(void)
+static void test_ni_route_set_has_source(void)
 {
 	unittest(!ni_route_set_has_source(&DR.routes[0], O(0)),
 		 "check for bad source\n");
@@ -308,7 +307,7 @@ void test_ni_route_set_has_source(void)
 		 "find last source\n");
 }
 
-void test_ni_route_to_register(void)
+static void test_ni_route_to_register(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -358,7 +357,7 @@ void test_ni_route_to_register(void)
 		 "validate indirect route through brd3 to TRIGGER_LINE(1)\n");
 }
 
-void test_ni_lookup_route_register(void)
+static void test_ni_lookup_route_register(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -397,7 +396,7 @@ void test_ni_lookup_route_register(void)
 		 "brd0_src1: lookup indirect route register\n");
 }
 
-void test_route_is_valid(void)
+static void test_route_is_valid(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -412,7 +411,7 @@ void test_route_is_valid(void)
 		 "validate last destination\n");
 }
 
-void test_ni_is_cmd_dest(void)
+static void test_ni_is_cmd_dest(void)
 {
 	init_pci_fake();
 	unittest(ni_is_cmd_dest(NI_AI_SampleClock),
@@ -429,7 +428,7 @@ void test_ni_is_cmd_dest(void)
 		 "check that AO/SampleClockTimebase _not_ cmd destination\n");
 }
 
-void test_channel_is_pfi(void)
+static void test_channel_is_pfi(void)
 {
 	init_pci_fake();
 	unittest(channel_is_pfi(NI_PFI(0)), "check First pfi channel\n");
@@ -439,7 +438,7 @@ void test_channel_is_pfi(void)
 		 "check first non pfi channel\n");
 }
 
-void test_channel_is_rtsi(void)
+static void test_channel_is_rtsi(void)
 {
 	init_pci_fake();
 	unittest(channel_is_rtsi(TRIGGER_LINE(0)),
@@ -452,7 +451,7 @@ void test_channel_is_rtsi(void)
 		 "check first non rtsi channel\n");
 }
 
-void test_ni_count_valid_routes(void)
+static void test_ni_count_valid_routes(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -460,7 +459,7 @@ void test_ni_count_valid_routes(void)
 	unittest(ni_count_valid_routes(T) == 57, "count all valid routes\n");
 }
 
-void test_ni_get_valid_routes(void)
+static void test_ni_get_valid_routes(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 	unsigned int pair_data[2];
@@ -477,7 +476,7 @@ void test_ni_get_valid_routes(void)
 		 "destination of first valid pair from ni_get_valid_routes\n");
 }
 
-void test_ni_find_route_source(void)
+static void test_ni_find_route_source(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -494,7 +493,7 @@ void test_ni_find_route_source(void)
 		 "find invalid source (without checking device routes)\n");
 }
 
-void test_route_register_is_valid(void)
+static void test_route_register_is_valid(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -509,7 +508,7 @@ void test_route_register_is_valid(void)
 		 "find last source");
 }
 
-void test_ni_check_trigger_arg(void)
+static void test_ni_check_trigger_arg(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -542,7 +541,7 @@ void test_ni_check_trigger_arg(void)
 		 "check trigger arg for last src->dest\n");
 }
 
-void test_ni_get_reg_value(void)
+static void test_ni_get_reg_value(void)
 {
 	const struct ni_route_tables *T = &private.routing_tables;
 
@@ -578,23 +577,23 @@ void test_ni_get_reg_value(void)
 /* **** BEGIN simple module entry/exit functions **** */
 static int __init ni_routes_unittest(void)
 {
-	const unittest_fptr unit_tests[] = {
-		(unittest_fptr)test_ni_assign_device_routes,
-		(unittest_fptr)test_ni_sort_device_routes,
-		(unittest_fptr)test_ni_find_route_set,
-		(unittest_fptr)test_ni_route_set_has_source,
-		(unittest_fptr)test_ni_route_to_register,
-		(unittest_fptr)test_ni_lookup_route_register,
-		(unittest_fptr)test_route_is_valid,
-		(unittest_fptr)test_ni_is_cmd_dest,
-		(unittest_fptr)test_channel_is_pfi,
-		(unittest_fptr)test_channel_is_rtsi,
-		(unittest_fptr)test_ni_count_valid_routes,
-		(unittest_fptr)test_ni_get_valid_routes,
-		(unittest_fptr)test_ni_find_route_source,
-		(unittest_fptr)test_route_register_is_valid,
-		(unittest_fptr)test_ni_check_trigger_arg,
-		(unittest_fptr)test_ni_get_reg_value,
+	static const unittest_fptr unit_tests[] = {
+		test_ni_assign_device_routes,
+		test_ni_sort_device_routes,
+		test_ni_find_route_set,
+		test_ni_route_set_has_source,
+		test_ni_route_to_register,
+		test_ni_lookup_route_register,
+		test_route_is_valid,
+		test_ni_is_cmd_dest,
+		test_channel_is_pfi,
+		test_channel_is_rtsi,
+		test_ni_count_valid_routes,
+		test_ni_get_valid_routes,
+		test_ni_find_route_source,
+		test_route_register_is_valid,
+		test_ni_check_trigger_arg,
+		test_ni_get_reg_value,
 		NULL,
 	};
 
