@@ -11,7 +11,9 @@
 
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
+#include <linux/reboot.h>
 #include <linux/regulator/coupler.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
@@ -23,7 +25,10 @@ struct tegra_regulator_coupler {
 	struct regulator_coupler coupler;
 	struct regulator_dev *core_rdev;
 	struct regulator_dev *cpu_rdev;
-	int core_min_uV;
+	struct notifier_block reboot_notifier;
+	struct mutex lock;
+	int core_min_uV, cpu_min_uV;
+	bool sys_reboot_mode;
 };
 
 static inline struct tegra_regulator_coupler *
@@ -50,7 +55,7 @@ static int tegra30_core_limit(struct tegra_regulator_coupler *tegra,
 	 * This means that we can't fully allow CORE voltage scaling until
 	 * the state of all DVFS-critical CORE devices is synced.
 	 */
-	if (tegra_soc_core_domain_state_synced()) {
+	if (tegra_soc_core_domain_state_synced() && !tegra->sys_reboot_mode) {
 		pr_info_once("voltage state synced\n");
 		return 0;
 	}
@@ -188,6 +193,10 @@ static int tegra30_voltage_update(struct tegra_regulator_coupler *tegra,
 	if (cpu_uV < 0)
 		return cpu_uV;
 
+	/* store boot voltage level */
+	if (!tegra->cpu_min_uV)
+		tegra->cpu_min_uV = cpu_uV;
+
 	/*
 	 * CPU's regulator may not have any consumers, hence the voltage
 	 * must not be changed in that case because CPU simply won't
@@ -210,6 +219,10 @@ static int tegra30_voltage_update(struct tegra_regulator_coupler *tegra,
 	err = regulator_check_voltage(core_rdev, &core_min_uV, &core_max_uV);
 	if (err)
 		return err;
+
+	/* restore boot voltage level */
+	if (tegra->sys_reboot_mode)
+		cpu_min_uV = max(cpu_min_uV, tegra->cpu_min_uV);
 
 	if (core_min_limited_uV > core_uV) {
 		pr_err("core voltage constraint violated: %d %d %d\n",
@@ -266,9 +279,10 @@ update_core:
 	return 0;
 }
 
-static int tegra30_regulator_balance_voltage(struct regulator_coupler *coupler,
-					     struct regulator_dev *rdev,
-					     suspend_state_t state)
+static int
+tegra30_regulator_balance_voltage_locked(struct regulator_coupler *coupler,
+					 struct regulator_dev *rdev,
+					 suspend_state_t state)
 {
 	struct tegra_regulator_coupler *tegra = to_tegra_coupler(coupler);
 	struct regulator_dev *core_rdev = tegra->core_rdev;
@@ -282,11 +296,79 @@ static int tegra30_regulator_balance_voltage(struct regulator_coupler *coupler,
 	return tegra30_voltage_update(tegra, cpu_rdev, core_rdev);
 }
 
+static int tegra30_regulator_balance_voltage(struct regulator_coupler *coupler,
+					     struct regulator_dev *rdev,
+					     suspend_state_t state)
+{
+	struct tegra_regulator_coupler *tegra = to_tegra_coupler(coupler);
+	int ret;
+
+	mutex_lock(&tegra->lock);
+	ret = tegra30_regulator_balance_voltage_locked(coupler, rdev, state);
+	mutex_unlock(&tegra->lock);
+
+	return ret;
+}
+
+static int tegra30_regulator_prepare_reboot(struct tegra_regulator_coupler *tegra,
+					    bool sys_reboot_mode)
+{
+	int err;
+
+	if (!tegra->core_rdev || !tegra->cpu_rdev)
+		return 0;
+
+	/* we don't expect regulators to be decoupled during reboot */
+	WARN_ON_ONCE(tegra->sys_reboot_mode);
+	tegra->sys_reboot_mode = true;
+
+	/*
+	 * Some devices use CPU soft-reboot method and in this case we
+	 * should ensure that voltages are okay for the reboot by restoring
+	 * the minimum boot levels.
+	 */
+	err = tegra30_voltage_update(tegra, tegra->cpu_rdev, tegra->core_rdev);
+	if (err)
+		return err;
+
+	tegra->sys_reboot_mode = sys_reboot_mode;
+
+	return 0;
+}
+
+static int tegra30_regulator_reboot(struct notifier_block *notifier,
+				    unsigned long event, void *cmd)
+{
+	struct tegra_regulator_coupler *tegra;
+	int ret;
+
+	if (event != SYS_RESTART)
+		return NOTIFY_DONE;
+
+	tegra = container_of(notifier, struct tegra_regulator_coupler,
+			     reboot_notifier);
+
+	mutex_lock(&tegra->lock);
+	ret = tegra30_regulator_prepare_reboot(tegra, true);
+	mutex_unlock(&tegra->lock);
+
+	return notifier_from_errno(ret);
+}
+
 static int tegra30_regulator_attach(struct regulator_coupler *coupler,
 				    struct regulator_dev *rdev)
 {
 	struct tegra_regulator_coupler *tegra = to_tegra_coupler(coupler);
 	struct device_node *np = rdev->dev.of_node;
+
+	if (!tegra->reboot_notifier.notifier_call) {
+		int err;
+
+		mutex_init(&tegra->lock);
+		tegra->reboot_notifier.notifier_call = tegra30_regulator_reboot;
+		err = register_reboot_notifier(&tegra->reboot_notifier);
+		WARN_ON(err);
+	}
 
 	if (of_property_read_bool(np, "nvidia,tegra-core-regulator") &&
 	    !tegra->core_rdev) {
@@ -307,6 +389,16 @@ static int tegra30_regulator_detach(struct regulator_coupler *coupler,
 				    struct regulator_dev *rdev)
 {
 	struct tegra_regulator_coupler *tegra = to_tegra_coupler(coupler);
+
+	if (tegra->reboot_notifier.notifier_call) {
+		int err = unregister_reboot_notifier(&tegra->reboot_notifier);
+
+		tegra->reboot_notifier.notifier_call = NULL;
+		WARN_ON(err);
+
+		tegra30_regulator_prepare_reboot(tegra, false);
+		mutex_destroy(&tegra->lock);
+	}
 
 	if (tegra->core_rdev == rdev) {
 		tegra->core_rdev = NULL;
