@@ -1245,9 +1245,11 @@ int bdev_disk_changed(struct block_device *bdev, bool invalidate)
 	lockdep_assert_held(&bdev->bd_mutex);
 
 rescan:
-	ret = blk_drop_partitions(bdev);
-	if (ret)
-		return ret;
+	if (bdev->bd_part_count)
+		return -EBUSY;
+	sync_blockdev(bdev);
+	invalidate_bdev(bdev);
+	blk_drop_partitions(disk);
 
 	clear_bit(GD_NEED_PART_SCAN, &disk->state);
 
