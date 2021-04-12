@@ -64,8 +64,8 @@ static noinline int test_unwind(struct task_struct *task, struct pt_regs *regs,
 			break;
 		if (state.reliable && !addr) {
 			pr_err("unwind state reliable but addr is 0\n");
-			kfree(bt);
-			return -EINVAL;
+			ret = -EINVAL;
+			break;
 		}
 		sprint_symbol(sym, addr);
 		if (bt_pos < BT_BUF_SIZE) {
@@ -296,16 +296,18 @@ static int test_unwind_flags(int flags)
 
 static int test_unwind_init(void)
 {
-	int ret = 0;
+	int failed = 0;
+	int total = 0;
 
 #define TEST(flags)							\
 do {									\
 	pr_info("[ RUN      ] " #flags "\n");				\
+	total++;							\
 	if (!test_unwind_flags((flags))) {				\
 		pr_info("[       OK ] " #flags "\n");			\
 	} else {							\
 		pr_err("[  FAILED  ] " #flags "\n");			\
-		ret = -EINVAL;						\
+		failed++;						\
 	}								\
 } while (0)
 
@@ -336,7 +338,8 @@ do {									\
 #endif
 #undef TEST
 
-	return ret;
+	WARN(failed, "%d of %d unwinder tests failed", failed, total);
+	return failed ? -EINVAL : 0;
 }
 
 static void test_unwind_exit(void)
