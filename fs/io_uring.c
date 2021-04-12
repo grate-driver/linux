@@ -220,8 +220,9 @@ struct io_rsrc_put {
 	};
 };
 
-struct fixed_rsrc_table {
-	struct io_fixed_file *files;
+struct io_file_table {
+	/* two level table */
+	struct io_fixed_file **files;
 };
 
 struct io_rsrc_node {
@@ -236,11 +237,10 @@ struct io_rsrc_node {
 typedef void (rsrc_put_fn)(struct io_ring_ctx *ctx, struct io_rsrc_put *prsrc);
 
 struct io_rsrc_data {
-	struct fixed_rsrc_table		*table;
 	struct io_ring_ctx		*ctx;
 
 	rsrc_put_fn			*do_put;
-	struct percpu_ref		refs;
+	atomic_t			refs;
 	struct completion		done;
 	bool				quiesce;
 };
@@ -398,6 +398,7 @@ struct io_ring_ctx {
 	 * used. Only updated through io_uring_register(2).
 	 */
 	struct io_rsrc_data	*file_data;
+	struct io_file_table	file_table;
 	unsigned		nr_user_files;
 
 	/* if used, fixed mapped user buffers */
@@ -1080,6 +1081,18 @@ static inline void io_req_set_rsrc_node(struct io_kiocb *req)
 	}
 }
 
+static void io_refs_resurrect(struct percpu_ref *ref, struct completion *compl)
+{
+	bool got = percpu_ref_tryget(ref);
+
+	/* already at zero, wait for ->release() */
+	if (!got)
+		wait_for_completion(compl);
+	percpu_ref_resurrect(ref);
+	if (got)
+		percpu_ref_put(ref);
+}
+
 static bool io_match_task(struct io_kiocb *head,
 			  struct task_struct *task,
 			  struct files_struct *files)
@@ -1100,7 +1113,7 @@ static bool io_match_task(struct io_kiocb *head,
 
 static inline void req_set_fail_links(struct io_kiocb *req)
 {
-	if ((req->flags & (REQ_F_LINK | REQ_F_HARDLINK)) == REQ_F_LINK)
+	if (req->flags & REQ_F_LINK)
 		req->flags |= REQ_F_FAIL_LINK;
 }
 
@@ -1809,7 +1822,8 @@ static bool io_disarm_next(struct io_kiocb *req)
 
 	if (likely(req->flags & REQ_F_LINK_TIMEOUT))
 		posted = io_kill_linked_timeout(req);
-	if (unlikely(req->flags & REQ_F_FAIL_LINK)) {
+	if (unlikely((req->flags & REQ_F_FAIL_LINK) &&
+		     !(req->flags & REQ_F_HARDLINK))) {
 		posted |= (req->link != NULL);
 		io_fail_links(req);
 	}
@@ -6265,19 +6279,19 @@ static void io_wq_submit_work(struct io_wq_work *work)
 #endif
 #define FFS_MASK		~(FFS_ASYNC_READ|FFS_ASYNC_WRITE|FFS_ISREG)
 
-static inline struct io_fixed_file *io_fixed_file_slot(struct io_rsrc_data *file_data,
+static inline struct io_fixed_file *io_fixed_file_slot(struct io_file_table *table,
 						      unsigned i)
 {
-	struct fixed_rsrc_table *table;
+	struct io_fixed_file *table_l2;
 
-	table = &file_data->table[i >> IORING_FILE_TABLE_SHIFT];
-	return &table->files[i & IORING_FILE_TABLE_MASK];
+	table_l2 = table->files[i >> IORING_FILE_TABLE_SHIFT];
+	return &table_l2[i & IORING_FILE_TABLE_MASK];
 }
 
 static inline struct file *io_file_from_index(struct io_ring_ctx *ctx,
 					      int index)
 {
-	struct io_fixed_file *slot = io_fixed_file_slot(ctx->file_data, index);
+	struct io_fixed_file *slot = io_fixed_file_slot(&ctx->file_table, index);
 
 	return (struct file *) (slot->file_ptr & FFS_MASK);
 }
@@ -6307,7 +6321,7 @@ static struct file *io_file_get(struct io_submit_state *state,
 		if (unlikely((unsigned int)fd >= ctx->nr_user_files))
 			return NULL;
 		fd = array_index_nospec(fd, ctx->nr_user_files);
-		file_ptr = io_fixed_file_slot(ctx->file_data, fd)->file_ptr;
+		file_ptr = io_fixed_file_slot(&ctx->file_table, fd)->file_ptr;
 		file = (struct file *) (file_ptr & FFS_MASK);
 		file_ptr &= ~FFS_MASK;
 		/* mask in overlapping REQ_F and FFS bits */
@@ -7044,14 +7058,14 @@ static int io_cqring_wait(struct io_ring_ctx *ctx, int min_events,
 	return READ_ONCE(rings->cq.head) == READ_ONCE(rings->cq.tail) ? ret : 0;
 }
 
-static void io_free_file_tables(struct io_rsrc_data *data, unsigned nr_files)
+static void io_free_file_tables(struct io_file_table *table, unsigned nr_files)
 {
 	unsigned i, nr_tables = DIV_ROUND_UP(nr_files, IORING_MAX_FILES_TABLE);
 
 	for (i = 0; i < nr_tables; i++)
-		kfree(data->table[i].files);
-	kfree(data->table);
-	data->table = NULL;
+		kfree(table->files[i]);
+	kfree(table->files);
+	table->files = NULL;
 }
 
 static void __io_sqe_files_unregister(struct io_ring_ctx *ctx)
@@ -7075,13 +7089,6 @@ static void __io_sqe_files_unregister(struct io_ring_ctx *ctx)
 			fput(file);
 	}
 #endif
-}
-
-static void io_rsrc_data_ref_zero(struct percpu_ref *ref)
-{
-	struct io_rsrc_data *data = container_of(ref, struct io_rsrc_data, refs);
-
-	complete(&data->done);
 }
 
 static inline void io_rsrc_ref_lock(struct io_ring_ctx *ctx)
@@ -7114,7 +7121,7 @@ static void io_rsrc_node_switch(struct io_ring_ctx *ctx,
 		list_add_tail(&rsrc_node->node, &ctx->rsrc_ref_list);
 		io_rsrc_ref_unlock(ctx);
 
-		percpu_ref_get(&data_to_kill->refs);
+		atomic_inc(&data_to_kill->refs);
 		percpu_ref_kill(&rsrc_node->refs);
 		ctx->rsrc_node = NULL;
 	}
@@ -7148,14 +7155,17 @@ static int io_rsrc_ref_quiesce(struct io_rsrc_data *data, struct io_ring_ctx *ct
 			break;
 		io_rsrc_node_switch(ctx, data);
 
-		percpu_ref_kill(&data->refs);
+		/* kill initial ref, already quiesced if zero */
+		if (atomic_dec_and_test(&data->refs))
+			break;
 		flush_delayed_work(&ctx->rsrc_put_work);
-
 		ret = wait_for_completion_interruptible(&data->done);
 		if (!ret)
 			break;
 
-		percpu_ref_resurrect(&data->refs);
+		atomic_inc(&data->refs);
+		/* wait for all works potentially completing data->done */
+		flush_delayed_work(&ctx->rsrc_put_work);
 		reinit_completion(&data->done);
 
 		mutex_unlock(&ctx->uring_lock);
@@ -7176,21 +7186,11 @@ static struct io_rsrc_data *io_rsrc_data_alloc(struct io_ring_ctx *ctx,
 	if (!data)
 		return NULL;
 
-	if (percpu_ref_init(&data->refs, io_rsrc_data_ref_zero,
-			    PERCPU_REF_ALLOW_REINIT, GFP_KERNEL)) {
-		kfree(data);
-		return NULL;
-	}
+	atomic_set(&data->refs, 1);
 	data->ctx = ctx;
 	data->do_put = do_put;
 	init_completion(&data->done);
 	return data;
-}
-
-static void io_rsrc_data_free(struct io_rsrc_data *data)
-{
-	percpu_ref_exit(&data->refs);
-	kfree(data);
 }
 
 static int io_sqe_files_unregister(struct io_ring_ctx *ctx)
@@ -7205,8 +7205,8 @@ static int io_sqe_files_unregister(struct io_ring_ctx *ctx)
 		return ret;
 
 	__io_sqe_files_unregister(ctx);
-	io_free_file_tables(data, ctx->nr_user_files);
-	io_rsrc_data_free(data);
+	io_free_file_tables(&ctx->file_table, ctx->nr_user_files);
+	kfree(data);
 	ctx->file_data = NULL;
 	ctx->nr_user_files = 0;
 	return 0;
@@ -7242,9 +7242,10 @@ static void io_sq_thread_park(struct io_sq_data *sqd)
 static void io_sq_thread_stop(struct io_sq_data *sqd)
 {
 	WARN_ON_ONCE(sqd->thread == current);
+	WARN_ON_ONCE(test_bit(IO_SQ_THREAD_SHOULD_STOP, &sqd->state));
 
-	mutex_lock(&sqd->lock);
 	set_bit(IO_SQ_THREAD_SHOULD_STOP, &sqd->state);
+	mutex_lock(&sqd->lock);
 	if (sqd->thread)
 		wake_up_process(sqd->thread);
 	mutex_unlock(&sqd->lock);
@@ -7435,23 +7436,20 @@ static int io_sqe_files_scm(struct io_ring_ctx *ctx)
 }
 #endif
 
-static bool io_alloc_file_tables(struct io_rsrc_data *file_data,
-				 unsigned nr_files)
+static bool io_alloc_file_tables(struct io_file_table *table, unsigned nr_files)
 {
 	unsigned i, nr_tables = DIV_ROUND_UP(nr_files, IORING_MAX_FILES_TABLE);
 
-	file_data->table = kcalloc(nr_tables, sizeof(*file_data->table),
-				   GFP_KERNEL);
-	if (!file_data->table)
+	table->files = kcalloc(nr_tables, sizeof(*table->files), GFP_KERNEL);
+	if (!table->files)
 		return false;
 
 	for (i = 0; i < nr_tables; i++) {
-		struct fixed_rsrc_table *table = &file_data->table[i];
 		unsigned int this_files = min(nr_files, IORING_MAX_FILES_TABLE);
 
-		table->files = kcalloc(this_files, sizeof(struct file *),
+		table->files[i] = kcalloc(this_files, sizeof(*table->files[i]),
 					GFP_KERNEL);
-		if (!table->files)
+		if (!table->files[i])
 			break;
 		nr_files -= this_files;
 	}
@@ -7459,7 +7457,7 @@ static bool io_alloc_file_tables(struct io_rsrc_data *file_data,
 	if (i == nr_tables)
 		return true;
 
-	io_free_file_tables(file_data, nr_tables * IORING_MAX_FILES_TABLE);
+	io_free_file_tables(table, nr_tables * IORING_MAX_FILES_TABLE);
 	return false;
 }
 
@@ -7539,7 +7537,8 @@ static void __io_rsrc_put_work(struct io_rsrc_node *ref_node)
 	}
 
 	io_rsrc_node_destroy(ref_node);
-	percpu_ref_put(&rsrc_data->refs);
+	if (atomic_dec_and_test(&rsrc_data->refs))
+		complete(&rsrc_data->done);
 }
 
 static void io_rsrc_put_work(struct work_struct *work)
@@ -7563,10 +7562,8 @@ static void io_rsrc_put_work(struct work_struct *work)
 static void io_rsrc_node_ref_zero(struct percpu_ref *ref)
 {
 	struct io_rsrc_node *node = container_of(ref, struct io_rsrc_node, refs);
-	struct io_rsrc_data *data = node->rsrc_data;
-	struct io_ring_ctx *ctx = data->ctx;
+	struct io_ring_ctx *ctx = node->rsrc_data->ctx;
 	bool first_add = false;
-	int delay;
 
 	io_rsrc_ref_lock(ctx);
 	node->done = true;
@@ -7582,9 +7579,8 @@ static void io_rsrc_node_ref_zero(struct percpu_ref *ref)
 	}
 	io_rsrc_ref_unlock(ctx);
 
-	delay = percpu_ref_is_dying(&data->refs) ? 0 : HZ;
-	if (first_add || !delay)
-		mod_delayed_work(system_wq, &ctx->rsrc_put_work, delay);
+	if (first_add)
+		mod_delayed_work(system_wq, &ctx->rsrc_put_work, HZ);
 }
 
 static struct io_rsrc_node *io_rsrc_node_alloc(struct io_ring_ctx *ctx)
@@ -7629,9 +7625,8 @@ static int io_sqe_files_register(struct io_ring_ctx *ctx, void __user *arg,
 	if (!file_data)
 		return -ENOMEM;
 	ctx->file_data = file_data;
-
 	ret = -ENOMEM;
-	if (!io_alloc_file_tables(file_data, nr_args))
+	if (!io_alloc_file_tables(&ctx->file_table, nr_args))
 		goto out_free;
 
 	for (i = 0; i < nr_args; i++, ctx->nr_user_files++) {
@@ -7659,7 +7654,7 @@ static int io_sqe_files_register(struct io_ring_ctx *ctx, void __user *arg,
 			fput(file);
 			goto out_fput;
 		}
-		io_fixed_file_set(io_fixed_file_slot(file_data, i), file);
+		io_fixed_file_set(io_fixed_file_slot(&ctx->file_table, i), file);
 	}
 
 	ret = io_sqe_files_scm(ctx);
@@ -7676,10 +7671,10 @@ out_fput:
 		if (file)
 			fput(file);
 	}
-	io_free_file_tables(file_data, nr_args);
+	io_free_file_tables(&ctx->file_table, nr_args);
 	ctx->nr_user_files = 0;
 out_free:
-	io_rsrc_data_free(ctx->file_data);
+	kfree(ctx->file_data);
 	ctx->file_data = NULL;
 	return ret;
 }
@@ -7772,7 +7767,7 @@ static int __io_sqe_files_update(struct io_ring_ctx *ctx,
 			continue;
 
 		i = array_index_nospec(up->offset + done, ctx->nr_user_files);
-		file_slot = io_fixed_file_slot(ctx->file_data, i);
+		file_slot = io_fixed_file_slot(&ctx->file_table, i);
 
 		if (file_slot->file_ptr) {
 			file = (struct file *)(file_slot->file_ptr & FFS_MASK);
@@ -8109,25 +8104,27 @@ static unsigned long rings_size(unsigned sq_entries, unsigned cq_entries,
 	return off;
 }
 
+static void io_buffer_unmap(struct io_ring_ctx *ctx, struct io_mapped_ubuf *imu)
+{
+	unsigned int i;
+
+	for (i = 0; i < imu->nr_bvecs; i++)
+		unpin_user_page(imu->bvec[i].bv_page);
+	if (imu->acct_pages)
+		io_unaccount_mem(ctx, imu->acct_pages);
+	kvfree(imu->bvec);
+	imu->nr_bvecs = 0;
+}
+
 static int io_sqe_buffers_unregister(struct io_ring_ctx *ctx)
 {
-	int i, j;
+	unsigned int i;
 
 	if (!ctx->user_bufs)
 		return -ENXIO;
 
-	for (i = 0; i < ctx->nr_user_bufs; i++) {
-		struct io_mapped_ubuf *imu = &ctx->user_bufs[i];
-
-		for (j = 0; j < imu->nr_bvecs; j++)
-			unpin_user_page(imu->bvec[j].bv_page);
-
-		if (imu->acct_pages)
-			io_unaccount_mem(ctx, imu->acct_pages);
-		kvfree(imu->bvec);
-		imu->nr_bvecs = 0;
-	}
-
+	for (i = 0; i < ctx->nr_user_bufs; i++)
+		io_buffer_unmap(ctx, &ctx->user_bufs[i]);
 	kfree(ctx->user_bufs);
 	ctx->user_bufs = NULL;
 	ctx->nr_user_bufs = 0;
@@ -8320,17 +8317,8 @@ done:
 
 static int io_buffers_map_alloc(struct io_ring_ctx *ctx, unsigned int nr_args)
 {
-	if (ctx->user_bufs)
-		return -EBUSY;
-	if (!nr_args || nr_args > UIO_MAXIOV)
-		return -EINVAL;
-
-	ctx->user_bufs = kcalloc(nr_args, sizeof(struct io_mapped_ubuf),
-					GFP_KERNEL);
-	if (!ctx->user_bufs)
-		return -ENOMEM;
-
-	return 0;
+	ctx->user_bufs = kcalloc(nr_args, sizeof(*ctx->user_bufs), GFP_KERNEL);
+	return ctx->user_bufs ? 0 : -ENOMEM;
 }
 
 static int io_buffer_validate(struct iovec *iov)
@@ -8362,26 +8350,26 @@ static int io_sqe_buffers_register(struct io_ring_ctx *ctx, void __user *arg,
 	struct iovec iov;
 	struct page *last_hpage = NULL;
 
+	if (ctx->user_bufs)
+		return -EBUSY;
+	if (!nr_args || nr_args > UIO_MAXIOV)
+		return -EINVAL;
 	ret = io_buffers_map_alloc(ctx, nr_args);
 	if (ret)
 		return ret;
 
-	for (i = 0; i < nr_args; i++) {
+	for (i = 0; i < nr_args; i++, ctx->nr_user_bufs++) {
 		struct io_mapped_ubuf *imu = &ctx->user_bufs[i];
 
 		ret = io_copy_iov(ctx, &iov, arg, i);
 		if (ret)
 			break;
-
 		ret = io_buffer_validate(&iov);
 		if (ret)
 			break;
-
 		ret = io_sqe_buffer_register(ctx, &iov, imu, &last_hpage);
 		if (ret)
 			break;
-
-		ctx->nr_user_bufs++;
 	}
 
 	if (ret)
@@ -9812,12 +9800,11 @@ static int __io_uring_register(struct io_ring_ctx *ctx, unsigned opcode,
 			if (ret < 0)
 				break;
 		} while (1);
-
 		mutex_lock(&ctx->uring_lock);
 
 		if (ret) {
-			percpu_ref_resurrect(&ctx->refs);
-			goto out_quiesce;
+			io_refs_resurrect(&ctx->refs, &ctx->ref_comp);
+			return ret;
 		}
 	}
 
@@ -9910,7 +9897,6 @@ out:
 	if (io_register_op_must_quiesce(opcode)) {
 		/* bring the ctx back to life */
 		percpu_ref_reinit(&ctx->refs);
-out_quiesce:
 		reinit_completion(&ctx->ref_comp);
 	}
 	return ret;
