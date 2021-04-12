@@ -2183,6 +2183,19 @@ static void tegra_crtc_atomic_enable(struct drm_crtc *crtc,
 		tegra_dc_writel(dc, value, DC_COM_RG_UNDERFLOW);
 	}
 
+	/*
+	 * TC358768 DPI to DSI bridge, used on Asus TF700T, requires to have
+	 * a usable PCLK output before encoder is enabled because bridge is
+	 * clocked by PCLK and bridge is programmed before encoder is enabled.
+	 * Hence the PCLK clock shifter must be programmed here, otherwise
+	 * output clock is not usable and bridge hangs because of it.
+	 */
+	if (dc->rgb) {
+		/* XXX: parameterize? */
+		value = SC0_H_QUALIFIER_NONE | SC1_H_QUALIFIER_NONE;
+		tegra_dc_writel(dc, value, DC_DISP_SHIFT_CLOCK_OPTIONS);
+	}
+
 	tegra_dc_commit(dc);
 
 	drm_crtc_vblank_on(crtc);
