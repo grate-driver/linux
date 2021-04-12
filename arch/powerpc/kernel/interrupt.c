@@ -20,6 +20,10 @@
 #include <asm/time.h>
 #include <asm/unistd.h>
 
+#if defined(CONFIG_PPC_ADV_DEBUG_REGS) && defined(CONFIG_PPC32)
+unsigned long global_dbcr0[NR_CPUS];
+#endif
+
 typedef long (*syscall_fn)(long, long, long, long, long, long);
 
 /* Has to run notrace because it is entered not completely "reconciled" */
@@ -28,6 +32,11 @@ notrace long system_call_exception(long r3, long r4, long r5,
 				   unsigned long r0, struct pt_regs *regs)
 {
 	syscall_fn f;
+
+	kuep_lock();
+#ifdef CONFIG_PPC32
+	kuap_save_and_lock(regs);
+#endif
 
 	regs->orig_gpr3 = r3;
 
@@ -69,9 +78,7 @@ notrace long system_call_exception(long r3, long r4, long r5,
 			isync();
 	} else
 #endif
-#ifdef CONFIG_PPC64
-		kuap_check_amr();
-#endif
+		kuap_assert_locked();
 
 	booke_restore_dbcr0();
 
@@ -247,9 +254,7 @@ notrace unsigned long syscall_exit_prepare(unsigned long r3,
 
 	CT_WARN_ON(ct_state() == CONTEXT_USER);
 
-#ifdef CONFIG_PPC64
-	kuap_check_amr();
-#endif
+	kuap_assert_locked();
 
 	regs->result = r3;
 
@@ -344,12 +349,14 @@ again:
 
 	account_cpu_user_exit();
 
-#ifdef CONFIG_PPC_BOOK3S_64 /* BOOK3E and ppc32 not using this */
+#ifndef CONFIG_PPC_BOOK3E_64 /* BOOK3E not using this */
 	/*
 	 * We do this at the end so that we do context switch with KERNEL AMR
 	 */
 	kuap_user_restore(regs);
 #endif
+	kuep_unlock();
+
 	return ret;
 }
 
@@ -371,9 +378,7 @@ notrace unsigned long interrupt_exit_user_prepare(struct pt_regs *regs, unsigned
 	 * We don't need to restore AMR on the way back to userspace for KUAP.
 	 * AMR can only have been unlocked if we interrupted the kernel.
 	 */
-#ifdef CONFIG_PPC64
-	kuap_check_amr();
-#endif
+	kuap_assert_locked();
 
 	local_irq_save(flags);
 
@@ -392,7 +397,7 @@ again:
 		ti_flags = READ_ONCE(current_thread_info()->flags);
 	}
 
-	if (IS_ENABLED(CONFIG_PPC_BOOK3S) && IS_ENABLED(CONFIG_PPC_FPU)) {
+	if (IS_ENABLED(CONFIG_PPC_BOOK3S_64) && IS_ENABLED(CONFIG_PPC_FPU)) {
 		if (IS_ENABLED(CONFIG_PPC_TRANSACTIONAL_MEM) &&
 				unlikely((ti_flags & _TIF_RESTORE_TM))) {
 			restore_tm_state(regs);
@@ -430,9 +435,7 @@ again:
 	/*
 	 * We do this at the end so that we do context switch with KERNEL AMR
 	 */
-#ifdef CONFIG_PPC64
 	kuap_user_restore(regs);
-#endif
 	return ret;
 }
 
@@ -442,9 +445,7 @@ notrace unsigned long interrupt_exit_kernel_prepare(struct pt_regs *regs, unsign
 {
 	unsigned long flags;
 	unsigned long ret = 0;
-#ifdef CONFIG_PPC64
-	unsigned long amr;
-#endif
+	unsigned long kuap;
 
 	if (!IS_ENABLED(CONFIG_BOOKE) && !IS_ENABLED(CONFIG_40x) &&
 	    unlikely(!(regs->msr & MSR_RI)))
@@ -458,9 +459,7 @@ notrace unsigned long interrupt_exit_kernel_prepare(struct pt_regs *regs, unsign
 	if (TRAP(regs) != 0x700)
 		CT_WARN_ON(ct_state() == CONTEXT_USER);
 
-#ifdef CONFIG_PPC64
-	amr = kuap_get_and_check_amr();
-#endif
+	kuap = kuap_get_and_assert_locked();
 
 	if (unlikely(current_thread_info()->flags & _TIF_EMULATE_STACK_STORE)) {
 		clear_bits(_TIF_EMULATE_STACK_STORE, &current_thread_info()->flags);
@@ -502,9 +501,7 @@ again:
 	 * which would cause Read-After-Write stalls. Hence, we take the AMR
 	 * value from the check above.
 	 */
-#ifdef CONFIG_PPC64
-	kuap_kernel_restore(regs, amr);
-#endif
+	kuap_kernel_restore(regs, kuap);
 
 	return ret;
 }
