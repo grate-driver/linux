@@ -8,6 +8,7 @@
 
 #include <dt-bindings/phy/phy.h>
 #include <dt-bindings/phy/phy-ti.h>
+#include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/gpio.h>
@@ -1114,7 +1115,6 @@ static int wiz_get_lane_phy_types(struct device *dev, struct wiz *wiz)
 			dev_err(dev,
 				"%s: Reading \"reg\" from \"%s\" failed: %d\n",
 				__func__, subnode->name, ret);
-			of_node_put(subnode);
 			return ret;
 		}
 		of_property_read_u32(subnode, "cdns,num-lanes", &num_lanes);
