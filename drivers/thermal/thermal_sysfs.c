@@ -693,6 +693,7 @@ void thermal_cooling_device_stats_update(struct thermal_cooling_device *cdev,
 unlock:
 	spin_unlock(&stats->lock);
 }
+EXPORT_SYMBOL_GPL(thermal_cooling_device_stats_update);
 
 static ssize_t total_trans_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
