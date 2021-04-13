@@ -472,6 +472,22 @@
 				};
 			};
 		};
+
+		tsensor-channel0 {
+			trips {
+				dvfs-alert {
+					temperature = <70000>;
+				};
+
+				cpu-div2-throttle {
+					temperature = <75000>;
+				};
+
+				soc-critical {
+					temperature = <90000>;
+				};
+			};
+		};
 	};
 
 	vdd_12v_in: vdd_12v_in {
