@@ -296,61 +296,40 @@ mmc_send_cxd_data(struct mmc_card *card, struct mmc_host *host,
 	return 0;
 }
 
-static int mmc_spi_send_csd(struct mmc_host *host, u32 *csd)
+static int mmc_spi_send_cxd(struct mmc_host *host, u32 *cxd, u32 opcode)
 {
 	int ret, i;
-	__be32 *csd_tmp;
+	__be32 *cxd_tmp;
 
-	csd_tmp = kzalloc(16, GFP_KERNEL);
-	if (!csd_tmp)
+	cxd_tmp = kzalloc(16, GFP_KERNEL);
+	if (!cxd_tmp)
 		return -ENOMEM;
 
-	ret = mmc_send_cxd_data(NULL, host, MMC_SEND_CSD, csd_tmp, 16);
+	ret = mmc_send_cxd_data(NULL, host, opcode, cxd_tmp, 16);
 	if (ret)
 		goto err;
 
 	for (i = 0; i < 4; i++)
-		csd[i] = be32_to_cpu(csd_tmp[i]);
+		cxd[i] = be32_to_cpu(cxd_tmp[i]);
 
 err:
-	kfree(csd_tmp);
+	kfree(cxd_tmp);
 	return ret;
 }
 
 int mmc_send_csd(struct mmc_card *card, u32 *csd)
 {
 	if (mmc_host_is_spi(card->host))
-		return mmc_spi_send_csd(card->host, csd);
+		return mmc_spi_send_cxd(card->host, csd, MMC_SEND_CSD);
 
 	return mmc_send_cxd_native(card->host, card->rca << 16,	csd,
 				MMC_SEND_CSD);
 }
 
-static int mmc_spi_send_cid(struct mmc_host *host, u32 *cid)
-{
-	int ret, i;
-	__be32 *cid_tmp;
-
-	cid_tmp = kzalloc(16, GFP_KERNEL);
-	if (!cid_tmp)
-		return -ENOMEM;
-
-	ret = mmc_send_cxd_data(NULL, host, MMC_SEND_CID, cid_tmp, 16);
-	if (ret)
-		goto err;
-
-	for (i = 0; i < 4; i++)
-		cid[i] = be32_to_cpu(cid_tmp[i]);
-
-err:
-	kfree(cid_tmp);
-	return ret;
-}
-
 int mmc_send_cid(struct mmc_host *host, u32 *cid)
 {
 	if (mmc_host_is_spi(host))
-		return mmc_spi_send_cid(host, cid);
+		return mmc_spi_send_cxd(host, cid, MMC_SEND_CID);
 
 	return mmc_send_cxd_native(host, 0, cid, MMC_ALL_SEND_CID);
 }
@@ -1031,7 +1010,7 @@ int mmc_cmdq_disable(struct mmc_card *card)
 }
 EXPORT_SYMBOL_GPL(mmc_cmdq_disable);
 
-int mmc_sanitize(struct mmc_card *card)
+int mmc_sanitize(struct mmc_card *card, unsigned int timeout_ms)
 {
 	struct mmc_host *host = card->host;
 	int err;
@@ -1041,12 +1020,15 @@ int mmc_sanitize(struct mmc_card *card)
 		return -EOPNOTSUPP;
 	}
 
+	if (!timeout_ms)
+		timeout_ms = MMC_SANITIZE_TIMEOUT_MS;
+
 	pr_debug("%s: Sanitize in progress...\n", mmc_hostname(host));
 
 	mmc_retune_hold(host);
 
 	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_SANITIZE_START,
-			 1, MMC_SANITIZE_TIMEOUT_MS);
+			 1, timeout_ms);
 	if (err)
 		pr_err("%s: Sanitize failed err=%d\n", mmc_hostname(host), err);
 

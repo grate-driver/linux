@@ -90,7 +90,7 @@
 
 #define PCIE_GLI_9763E_CFG2      0x8A4
 #define   GLI_9763E_CFG2_L1DLY     GENMASK(28, 19)
-#define   GLI_9763E_CFG2_L1DLY_MAX 0x3FF
+#define   GLI_9763E_CFG2_L1DLY_MID 0x50
 
 #define PCIE_GLI_9763E_MMC_CTRL  0x960
 #define   GLI_9763E_HS400_SLOW     BIT(3)
@@ -122,6 +122,9 @@
 
 #define PCI_GLI_9755_PLLSSC        0x68
 #define   PCI_GLI_9755_PLLSSC_PPM    GENMASK(15, 0)
+
+#define PCI_GLI_9755_SerDes  0x70
+#define PCI_GLI_9755_SCP_DIS   BIT(19)
 
 #define GLI_MAX_TUNING_LOOP 40
 
@@ -547,6 +550,11 @@ static void gl9755_hw_setting(struct sdhci_pci_slot *slot)
 	value &= ~PCI_GLI_9755_DMACLK;
 	pci_write_config_dword(pdev, PCI_GLI_9755_PECONF, value);
 
+	/* enable short circuit protection */
+	pci_read_config_dword(pdev, PCI_GLI_9755_SerDes, &value);
+	value &= ~PCI_GLI_9755_SCP_DIS;
+	pci_write_config_dword(pdev, PCI_GLI_9755_SerDes, value);
+
 	gl9755_wt_off(pdev);
 }
 
@@ -802,8 +810,8 @@ static void gli_set_gl9763e(struct sdhci_pci_slot *slot)
 
 	pci_read_config_dword(pdev, PCIE_GLI_9763E_CFG2, &value);
 	value &= ~GLI_9763E_CFG2_L1DLY;
-	/* set ASPM L1 entry delay to 260us */
-	value |= FIELD_PREP(GLI_9763E_CFG2_L1DLY, GLI_9763E_CFG2_L1DLY_MAX);
+	/* set ASPM L1 entry delay to 20us */
+	value |= FIELD_PREP(GLI_9763E_CFG2_L1DLY, GLI_9763E_CFG2_L1DLY_MID);
 	pci_write_config_dword(pdev, PCIE_GLI_9763E_CFG2, value);
 
 	pci_read_config_dword(pdev, PCIE_GLI_9763E_CLKRXDLY, &value);
