@@ -270,8 +270,6 @@ struct ti_firmware_header {
 
 #define TI_TRANSFER_TIMEOUT	2
 
-#define TI_DEFAULT_CLOSING_WAIT	4000		/* in .01 secs */
-
 /* read urb states */
 #define TI_READ_URB_RUNNING	0
 #define TI_READ_URB_STOPPING	1
@@ -328,10 +326,7 @@ static void ti_recv(struct usb_serial_port *port, unsigned char *data,
 static void ti_send(struct ti_port *tport);
 static int ti_set_mcr(struct ti_port *tport, unsigned int mcr);
 static int ti_get_lsr(struct ti_port *tport, u8 *lsr);
-static int ti_get_serial_info(struct tty_struct *tty,
-	struct serial_struct *ss);
-static int ti_set_serial_info(struct tty_struct *tty,
-	struct serial_struct *ss);
+static void ti_get_serial_info(struct tty_struct *tty, struct serial_struct *ss);
 static void ti_handle_new_msr(struct ti_port *tport, u8 msr);
 
 static void ti_stop_read(struct ti_port *tport, struct tty_struct *tty);
@@ -346,8 +341,6 @@ static int ti_write_byte(struct usb_serial_port *port, struct ti_device *tdev,
 			 unsigned long addr, u8 mask, u8 byte);
 
 static int ti_download_firmware(struct ti_device *tdev);
-
-static int closing_wait = TI_DEFAULT_CLOSING_WAIT;
 
 static const struct usb_device_id ti_id_table_3410[] = {
 	{ USB_DEVICE(TI_VENDOR_ID, TI_3410_PRODUCT_ID) },
@@ -435,7 +428,6 @@ static struct usb_serial_driver ti_1port_device = {
 	.throttle		= ti_throttle,
 	.unthrottle		= ti_unthrottle,
 	.get_serial		= ti_get_serial_info,
-	.set_serial		= ti_set_serial_info,
 	.set_termios		= ti_set_termios,
 	.tiocmget		= ti_tiocmget,
 	.tiocmset		= ti_tiocmset,
@@ -469,7 +461,6 @@ static struct usb_serial_driver ti_2port_device = {
 	.throttle		= ti_throttle,
 	.unthrottle		= ti_unthrottle,
 	.get_serial		= ti_get_serial_info,
-	.set_serial		= ti_set_serial_info,
 	.set_termios		= ti_set_termios,
 	.tiocmget		= ti_tiocmget,
 	.tiocmset		= ti_tiocmset,
@@ -501,10 +492,6 @@ MODULE_FIRMWARE("moxa/moxa-1130.fw");
 MODULE_FIRMWARE("moxa/moxa-1131.fw");
 MODULE_FIRMWARE("moxa/moxa-1150.fw");
 MODULE_FIRMWARE("moxa/moxa-1151.fw");
-
-module_param(closing_wait, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(closing_wait,
-    "Maximum wait for data to drain in close, in .01 secs, default is 4000");
 
 MODULE_DEVICE_TABLE(usb, ti_id_table_combined);
 
@@ -613,7 +600,6 @@ static int ti_port_probe(struct usb_serial_port *port)
 		tport->tp_uart_base_addr = TI_UART1_BASE_ADDR;
 	else
 		tport->tp_uart_base_addr = TI_UART2_BASE_ADDR;
-	port->port.closing_wait = msecs_to_jiffies(10 * closing_wait);
 	tport->tp_port = port;
 	tport->tp_tdev = usb_get_serial_data(port->serial);
 
@@ -1393,41 +1379,12 @@ free_data:
 }
 
 
-static int ti_get_serial_info(struct tty_struct *tty,
-	struct serial_struct *ss)
+static void ti_get_serial_info(struct tty_struct *tty, struct serial_struct *ss)
 {
 	struct usb_serial_port *port = tty->driver_data;
 	struct ti_port *tport = usb_get_serial_port_data(port);
-	unsigned cwait;
 
-	cwait = port->port.closing_wait;
-	if (cwait != ASYNC_CLOSING_WAIT_NONE)
-		cwait = jiffies_to_msecs(cwait) / 10;
-
-	ss->type = PORT_16550A;
-	ss->line = port->minor;
-	ss->port = port->port_number;
-	ss->xmit_fifo_size = kfifo_size(&port->write_fifo);
 	ss->baud_base = tport->tp_tdev->td_is_3410 ? 921600 : 460800;
-	ss->closing_wait = cwait;
-	return 0;
-}
-
-
-static int ti_set_serial_info(struct tty_struct *tty,
-	struct serial_struct *ss)
-{
-	struct usb_serial_port *port = tty->driver_data;
-	struct ti_port *tport = usb_get_serial_port_data(port);
-	unsigned cwait;
-
-	cwait = ss->closing_wait;
-	if (cwait != ASYNC_CLOSING_WAIT_NONE)
-		cwait = msecs_to_jiffies(10 * ss->closing_wait);
-
-	tport->tp_port->port.closing_wait = cwait;
-
-	return 0;
 }
 
 
