@@ -199,7 +199,7 @@ static void rtrs_srv_wait_ops_ids(struct rtrs_srv_sess *sess)
 
 static void rtrs_srv_reg_mr_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_srv_con *con = cq->cq_context;
+	struct rtrs_srv_con *con = to_srv_con(wc->qp->qp_context);
 	struct rtrs_sess *s = con->c.sess;
 	struct rtrs_srv_sess *sess = to_srv_sess(s);
 
@@ -720,7 +720,7 @@ static void rtrs_srv_stop_hb(struct rtrs_srv_sess *sess)
 
 static void rtrs_srv_info_rsp_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_srv_con *con = cq->cq_context;
+	struct rtrs_srv_con *con = to_srv_con(wc->qp->qp_context);
 	struct rtrs_sess *s = con->c.sess;
 	struct rtrs_srv_sess *sess = to_srv_sess(s);
 	struct rtrs_iu *iu;
@@ -862,7 +862,7 @@ rwr_free:
 
 static void rtrs_srv_info_req_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_srv_con *con = cq->cq_context;
+	struct rtrs_srv_con *con = to_srv_con(wc->qp->qp_context);
 	struct rtrs_sess *s = con->c.sess;
 	struct rtrs_srv_sess *sess = to_srv_sess(s);
 	struct rtrs_msg_info_req *msg;
@@ -1110,7 +1110,7 @@ static void rtrs_srv_inv_rkey_done(struct ib_cq *cq, struct ib_wc *wc)
 {
 	struct rtrs_srv_mr *mr =
 		container_of(wc->wr_cqe, typeof(*mr), inv_cqe);
-	struct rtrs_srv_con *con = cq->cq_context;
+	struct rtrs_srv_con *con = to_srv_con(wc->qp->qp_context);
 	struct rtrs_sess *s = con->c.sess;
 	struct rtrs_srv_sess *sess = to_srv_sess(s);
 	struct rtrs_srv *srv = sess->srv;
@@ -1167,7 +1167,7 @@ static void rtrs_rdma_process_wr_wait_list(struct rtrs_srv_con *con)
 
 static void rtrs_srv_rdma_done(struct ib_cq *cq, struct ib_wc *wc)
 {
-	struct rtrs_srv_con *con = cq->cq_context;
+	struct rtrs_srv_con *con = to_srv_con(wc->qp->qp_context);
 	struct rtrs_sess *s = con->c.sess;
 	struct rtrs_srv_sess *sess = to_srv_sess(s);
 	struct rtrs_srv *srv = sess->srv;
@@ -1683,6 +1683,8 @@ static struct rtrs_srv_sess *__alloc_sess(struct rtrs_srv *srv,
 {
 	struct rtrs_srv_sess *sess;
 	int err = -ENOMEM;
+	char str[NAME_MAX];
+	struct rtrs_addr path;
 
 	if (srv->paths_num >= MAX_PATHS_NUM) {
 		err = -ECONNRESET;
@@ -1717,6 +1719,13 @@ static struct rtrs_srv_sess *__alloc_sess(struct rtrs_srv *srv,
 	sess->cur_cq_vector = -1;
 	sess->s.dst_addr = cm_id->route.addr.dst_addr;
 	sess->s.src_addr = cm_id->route.addr.src_addr;
+
+	/* temporary until receiving session-name from client */
+	path.src = &sess->s.src_addr;
+	path.dst = &sess->s.dst_addr;
+	rtrs_addr_to_str(&path, str, sizeof(str));
+	strlcpy(sess->s.sessname, str, sizeof(sess->s.sessname));
+
 	sess->s.con_num = con_num;
 	sess->s.recon_cnt = recon_cnt;
 	uuid_copy(&sess->s.uuid, uuid);
@@ -1908,13 +1917,10 @@ static int rtrs_srv_rdma_cm_handler(struct rdma_cm_id *cm_id,
 	case RDMA_CM_EVENT_UNREACHABLE:
 		rtrs_err(s, "CM error (CM event: %s, err: %d)\n",
 			  rdma_event_msg(ev->event), ev->status);
-		close_sess(sess);
-		break;
+		fallthrough;
 	case RDMA_CM_EVENT_DISCONNECTED:
 	case RDMA_CM_EVENT_ADDR_CHANGE:
 	case RDMA_CM_EVENT_TIMEWAIT_EXIT:
-		close_sess(sess);
-		break;
 	case RDMA_CM_EVENT_DEVICE_REMOVAL:
 		close_sess(sess);
 		break;
