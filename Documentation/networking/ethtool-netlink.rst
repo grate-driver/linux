@@ -208,6 +208,8 @@ Userspace to kernel:
   ``ETHTOOL_MSG_CABLE_TEST_ACT``        action start cable test
   ``ETHTOOL_MSG_CABLE_TEST_TDR_ACT``    action start raw TDR cable test
   ``ETHTOOL_MSG_TUNNEL_INFO_GET``       get tunnel offload info
+  ``ETHTOOL_MSG_FEC_GET``               get FEC settings
+  ``ETHTOOL_MSG_FEC_SET``               set FEC settings
   ===================================== ================================
 
 Kernel to userspace:
@@ -242,6 +244,8 @@ Kernel to userspace:
   ``ETHTOOL_MSG_CABLE_TEST_NTF``        Cable test results
   ``ETHTOOL_MSG_CABLE_TEST_TDR_NTF``    Cable test TDR results
   ``ETHTOOL_MSG_TUNNEL_INFO_GET_REPLY`` tunnel offload info
+  ``ETHTOOL_MSG_FEC_GET_REPLY``         FEC settings
+  ``ETHTOOL_MSG_FEC_NTF``               FEC settings
   ===================================== =================================
 
 ``GET`` requests are sent by userspace applications to retrieve device
@@ -1280,6 +1284,92 @@ Kernel response contents:
 For UDP tunnel table empty ``ETHTOOL_A_TUNNEL_UDP_TABLE_TYPES`` indicates that
 the table contains static entries, hard-coded by the NIC.
 
+FEC_GET
+=======
+
+Gets FEC configuration and state like ``ETHTOOL_GFECPARAM`` ioctl request.
+
+Request contents:
+
+  =====================================  ======  ==========================
+  ``ETHTOOL_A_FEC_HEADER``               nested  request header
+  =====================================  ======  ==========================
+
+Kernel response contents:
+
+  =====================================  ======  ==========================
+  ``ETHTOOL_A_FEC_HEADER``               nested  request header
+  ``ETHTOOL_A_FEC_MODES``                bitset  configured modes
+  ``ETHTOOL_A_FEC_AUTO``                 bool    FEC mode auto selection
+  ``ETHTOOL_A_FEC_ACTIVE``               u32     index of active FEC mode
+  =====================================  ======  ==========================
+
+``ETHTOOL_A_FEC_ACTIVE`` is the bit index of the FEC link mode currently
+active on the interface. This attribute may not be present if device does
+not support FEC.
+
+``ETHTOOL_A_FEC_MODES`` and ``ETHTOOL_A_FEC_AUTO`` are only meaningful when
+autonegotiation is disabled. If ``ETHTOOL_A_FEC_AUTO`` is non-zero driver will
+select the FEC mode automatically based on the parameters of the SFP module.
+This is equivalent to the ``ETHTOOL_FEC_AUTO`` bit of the ioctl interface.
+``ETHTOOL_A_FEC_MODES`` carry the current FEC configuration using link mode
+bits (rather than old ``ETHTOOL_FEC_*`` bits).
+
+FEC_SET
+=======
+
+Sets FEC parameters like ``ETHTOOL_SFECPARAM`` ioctl request.
+
+Request contents:
+
+  =====================================  ======  ==========================
+  ``ETHTOOL_A_FEC_HEADER``               nested  request header
+  ``ETHTOOL_A_FEC_MODES``                bitset  configured modes
+  ``ETHTOOL_A_FEC_AUTO``                 bool    FEC mode auto selection
+  =====================================  ======  ==========================
+
+``FEC_SET`` is only meaningful when autonegotiation is disabled. Otherwise
+FEC mode is selected as part of autonegotiation.
+
+``ETHTOOL_A_FEC_MODES`` selects which FEC mode should be used. It's recommended
+to set only one bit, if multiple bits are set driver may choose between them
+in an implementation specific way.
+
+``ETHTOOL_A_FEC_AUTO`` requests the driver to choose FEC mode based on SFP
+module parameters. This does not mean autonegotiation.
+
+MODULE_EEPROM
+=============
+
+Fetch module EEPROM data dump.
+This interface is designed to allow dumps of at most 1/2 page at once. This
+means only dumps of 128 (or less) bytes are allowed, without crossing half page
+boundary located at offset 128. For pages other than 0 only high 128 bytes are
+accessible.
+
+Request contents:
+
+  =======================================  ======  ==========================
+  ``ETHTOOL_A_MODULE_EEPROM_HEADER``       nested  request header
+  ``ETHTOOL_A_MODULE_EEPROM_OFFSET``       u32     offset within a page
+  ``ETHTOOL_A_MODULE_EEPROM_LENGTH``       u32     amount of bytes to read
+  ``ETHTOOL_A_MODULE_EEPROM_PAGE``         u8      page number
+  ``ETHTOOL_A_MODULE_EEPROM_BANK``         u8      bank number
+  ``ETHTOOL_A_MODULE_EEPROM_I2C_ADDRESS``  u8      page I2C address
+  =======================================  ======  ==========================
+
+Kernel response contents:
+
+ +---------------------------------------------+--------+---------------------+
+ | ``ETHTOOL_A_MODULE_EEPROM_HEADER``          | nested | reply header        |
+ +---------------------------------------------+--------+---------------------+
+ | ``ETHTOOL_A_MODULE_EEPROM_DATA``            | nested | array of bytes from |
+ |                                             |        | module EEPROM       |
+ +---------------------------------------------+--------+---------------------+
+
+``ETHTOOL_A_MODULE_EEPROM_DATA`` has an attribute length equal to the amount of
+bytes driver actually read.
+
 Request translation
 ===================
 
@@ -1357,8 +1447,8 @@ are netlink only.
   ``ETHTOOL_GET_DUMP_FLAG``           n/a
   ``ETHTOOL_GET_DUMP_DATA``           n/a
   ``ETHTOOL_GET_TS_INFO``             ``ETHTOOL_MSG_TSINFO_GET``
-  ``ETHTOOL_GMODULEINFO``             n/a
-  ``ETHTOOL_GMODULEEEPROM``           n/a
+  ``ETHTOOL_GMODULEINFO``             ``ETHTOOL_MSG_MODULE_EEPROM_GET``
+  ``ETHTOOL_GMODULEEEPROM``           ``ETHTOOL_MSG_MODULE_EEPROM_GET``
   ``ETHTOOL_GEEE``                    ``ETHTOOL_MSG_EEE_GET``
   ``ETHTOOL_SEEE``                    ``ETHTOOL_MSG_EEE_SET``
   ``ETHTOOL_GRSSH``                   n/a
@@ -1373,9 +1463,9 @@ are netlink only.
                                       ``ETHTOOL_MSG_LINKMODES_SET``
   ``ETHTOOL_PHY_GTUNABLE``            n/a
   ``ETHTOOL_PHY_STUNABLE``            n/a
-  ``ETHTOOL_GFECPARAM``               n/a
-  ``ETHTOOL_SFECPARAM``               n/a
-  n/a                                 ''ETHTOOL_MSG_CABLE_TEST_ACT''
-  n/a                                 ''ETHTOOL_MSG_CABLE_TEST_TDR_ACT''
+  ``ETHTOOL_GFECPARAM``               ``ETHTOOL_MSG_FEC_GET``
+  ``ETHTOOL_SFECPARAM``               ``ETHTOOL_MSG_FEC_SET``
+  n/a                                 ``ETHTOOL_MSG_CABLE_TEST_ACT``
+  n/a                                 ``ETHTOOL_MSG_CABLE_TEST_TDR_ACT``
   n/a                                 ``ETHTOOL_MSG_TUNNEL_INFO_GET``
   =================================== =====================================

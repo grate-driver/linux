@@ -438,7 +438,6 @@ struct mlx5_core_health {
 	unsigned long			flags;
 	struct work_struct		fatal_report_work;
 	struct work_struct		report_work;
-	struct delayed_work		recover_work;
 	struct devlink_health_reporter *fw_reporter;
 	struct devlink_health_reporter *fw_fatal_reporter;
 };
@@ -517,8 +516,8 @@ struct mlx5_rate_limit {
 
 struct mlx5_rl_entry {
 	u8 rl_raw[MLX5_ST_SZ_BYTES(set_pp_rate_limit_context)];
-	u16 index;
 	u64 refcount;
+	u16 index;
 	u16 uid;
 	u8 dedicated : 1;
 };
@@ -530,6 +529,7 @@ struct mlx5_rl_table {
 	u32                     max_rate;
 	u32                     min_rate;
 	struct mlx5_rl_entry   *rl_entry;
+	u64 refcount;
 };
 
 struct mlx5_core_roce {
@@ -644,10 +644,14 @@ struct mlx5_td {
 };
 
 struct mlx5e_resources {
-	u32                        pdn;
-	struct mlx5_td             td;
-	struct mlx5_core_mkey      mkey;
-	struct mlx5_sq_bfreg       bfreg;
+	struct mlx5e_hw_objs {
+		u32                        pdn;
+		struct mlx5_td             td;
+		struct mlx5_core_mkey      mkey;
+		struct mlx5_sq_bfreg       bfreg;
+	} hw_objs;
+	struct devlink_port dl_port;
+	struct net_device *uplink_netdev;
 };
 
 enum mlx5_sw_icm_type {
@@ -872,6 +876,11 @@ static inline u16 fw_rev_sub(struct mlx5_core_dev *dev)
 static inline u32 mlx5_base_mkey(const u32 key)
 {
 	return key & 0xffffff00u;
+}
+
+static inline u32 wq_get_byte_sz(u8 log_sz, u8 log_stride)
+{
+	return ((u32)1 << log_sz) << log_stride;
 }
 
 static inline void mlx5_init_fbc_offset(struct mlx5_buf_list *frags,

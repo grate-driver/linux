@@ -34,6 +34,7 @@
 #include "en/port.h"
 #include "en/params.h"
 #include "en/xsk/pool.h"
+#include "en/ptp.h"
 #include "lib/clock.h"
 
 void mlx5e_ethtool_get_drvinfo(struct mlx5e_priv *priv,
@@ -368,7 +369,7 @@ int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
 	new_channels.params.log_rq_mtu_frames = log_rq_size;
 	new_channels.params.log_sq_size = log_sq_size;
 
-	err = mlx5e_validate_params(priv, &new_channels.params);
+	err = mlx5e_validate_params(priv->mdev, &new_channels.params);
 	if (err)
 		goto unlock;
 
@@ -1769,6 +1770,49 @@ static int mlx5e_get_module_eeprom(struct net_device *netdev,
 	return 0;
 }
 
+static int mlx5e_get_module_eeprom_by_page(struct net_device *netdev,
+					   const struct ethtool_module_eeprom *page_data,
+					   struct netlink_ext_ack *extack)
+{
+	struct mlx5e_priv *priv = netdev_priv(netdev);
+	struct mlx5_module_eeprom_query_params query;
+	struct mlx5_core_dev *mdev = priv->mdev;
+	u8 *data = page_data->data;
+	int size_read;
+	int i = 0;
+
+	if (!page_data->length)
+		return -EINVAL;
+
+	memset(data, 0, page_data->length);
+
+	query.offset = page_data->offset;
+	query.i2c_address = page_data->i2c_address;
+	query.bank = page_data->bank;
+	query.page = page_data->page;
+	while (i < page_data->length) {
+		query.size = page_data->length - i;
+		size_read = mlx5_query_module_eeprom_by_page(mdev, &query, data + i);
+
+		/* Done reading, return how many bytes was read */
+		if (!size_read)
+			return i;
+
+		if (size_read == -EINVAL)
+			return -EINVAL;
+		if (size_read < 0) {
+			netdev_err(priv->netdev, "%s: mlx5_query_module_eeprom_by_page failed:0x%x\n",
+				   __func__, size_read);
+			return i;
+		}
+
+		i += size_read;
+		query.offset += size_read;
+	}
+
+	return i;
+}
+
 int mlx5e_ethtool_flash_device(struct mlx5e_priv *priv,
 			       struct ethtool_flash *flash)
 {
@@ -1865,13 +1909,19 @@ int mlx5e_modify_rx_cqe_compression_locked(struct mlx5e_priv *priv, bool new_val
 
 	new_channels.params = priv->channels.params;
 	MLX5E_SET_PFLAG(&new_channels.params, MLX5E_PFLAG_RX_CQE_COMPRESS, new_val);
+	if (priv->tstamp.rx_filter != HWTSTAMP_FILTER_NONE)
+		new_channels.params.ptp_rx = new_val;
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		priv->channels.params = new_channels.params;
 		return 0;
 	}
 
-	err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	if (new_channels.params.ptp_rx == priv->channels.params.ptp_rx)
+		err = mlx5e_safe_switch_channels(priv, &new_channels, NULL, NULL);
+	else
+		err = mlx5e_safe_switch_channels(priv, &new_channels, mlx5e_ptp_rx_manage_fs_ctx,
+						 &new_channels.params.ptp_rx);
 	if (err)
 		return err;
 
@@ -1891,11 +1941,6 @@ static int set_pflag_rx_cqe_compress(struct net_device *netdev,
 
 	if (!MLX5_CAP_GEN(mdev, cqe_compression))
 		return -EOPNOTSUPP;
-
-	if (enable && priv->tstamp.rx_filter != HWTSTAMP_FILTER_NONE) {
-		netdev_err(netdev, "Can't enable cqe compression while timestamping is enabled.\n");
-		return -EINVAL;
-	}
 
 	err = mlx5e_modify_rx_cqe_compression_locked(priv, enable);
 	if (err)
@@ -2032,7 +2077,7 @@ static int set_pflag_tx_port_ts(struct net_device *netdev, bool enable)
 					 mlx5e_num_channels_changed_ctx, NULL);
 out:
 	if (!err)
-		priv->port_ptp_opened = true;
+		priv->tx_ptp_opened = true;
 
 	return err;
 }
@@ -2157,6 +2202,7 @@ const struct ethtool_ops mlx5e_ethtool_ops = {
 	.set_wol	   = mlx5e_set_wol,
 	.get_module_info   = mlx5e_get_module_info,
 	.get_module_eeprom = mlx5e_get_module_eeprom,
+	.get_module_eeprom_by_page = mlx5e_get_module_eeprom_by_page,
 	.flash_device      = mlx5e_flash_device,
 	.get_priv_flags    = mlx5e_get_priv_flags,
 	.set_priv_flags    = mlx5e_set_priv_flags,

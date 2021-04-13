@@ -309,7 +309,7 @@ static bool ice_clean_tx_irq(struct ice_ring *tx_ring, int napi_budget)
 		smp_mb();
 		if (__netif_subqueue_stopped(tx_ring->netdev,
 					     tx_ring->q_index) &&
-		    !test_bit(__ICE_DOWN, vsi->state)) {
+		    !test_bit(ICE_VSI_DOWN, vsi->state)) {
 			netif_wake_subqueue(tx_ring->netdev,
 					    tx_ring->q_index);
 			++tx_ring->tx_stats.restart_q;
@@ -554,8 +554,8 @@ ice_run_xdp(struct ice_ring *rx_ring, struct xdp_buff *xdp,
  * @frames: XDP frames to be transmitted
  * @flags: transmit flags
  *
- * Returns number of frames successfully sent. Frames that fail are
- * free'ed via XDP return API.
+ * Returns number of frames successfully sent. Failed frames
+ * will be free'ed by XDP core.
  * For error cases, a negative errno code is returned and no-frames
  * are transmitted (caller must handle freeing frames).
  */
@@ -567,9 +567,9 @@ ice_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
 	unsigned int queue_index = smp_processor_id();
 	struct ice_vsi *vsi = np->vsi;
 	struct ice_ring *xdp_ring;
-	int drops = 0, i;
+	int nxmit = 0, i;
 
-	if (test_bit(__ICE_DOWN, vsi->state))
+	if (test_bit(ICE_VSI_DOWN, vsi->state))
 		return -ENETDOWN;
 
 	if (!ice_is_xdp_ena_vsi(vsi) || queue_index >= vsi->num_xdp_txq)
@@ -584,16 +584,15 @@ ice_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
 		int err;
 
 		err = ice_xmit_xdp_ring(xdpf->data, xdpf->len, xdp_ring);
-		if (err != ICE_XDP_TX) {
-			xdp_return_frame_rx_napi(xdpf);
-			drops++;
-		}
+		if (err != ICE_XDP_TX)
+			break;
+		nxmit++;
 	}
 
 	if (unlikely(flags & XDP_XMIT_FLUSH))
 		ice_xdp_ring_update_tail(xdp_ring);
 
-	return n - drops;
+	return nxmit;
 }
 
 /**
@@ -1098,6 +1097,11 @@ int ice_clean_rx_irq(struct ice_ring *rx_ring, int budget)
 		dma_rmb();
 
 		if (rx_desc->wb.rxdid == FDIR_DESC_RXDID || !rx_ring->netdev) {
+			struct ice_vsi *ctrl_vsi = rx_ring->vsi;
+
+			if (rx_desc->wb.rxdid == FDIR_DESC_RXDID &&
+			    ctrl_vsi->vf_id != ICE_INVAL_VFID)
+				ice_vc_fdir_irq_handler(ctrl_vsi, rx_desc);
 			ice_put_rx_buf(rx_ring, NULL, 0);
 			cleaned_count++;
 			continue;
@@ -1516,7 +1520,7 @@ static void ice_update_ena_itr(struct ice_q_vector *q_vector)
 			q_vector->itr_countdown--;
 	}
 
-	if (!test_bit(__ICE_DOWN, vsi->state))
+	if (!test_bit(ICE_VSI_DOWN, vsi->state))
 		wr32(&vsi->back->hw, GLINT_DYN_CTL(q_vector->reg_idx), itr_val);
 }
 
