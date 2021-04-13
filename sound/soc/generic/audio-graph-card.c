@@ -212,8 +212,7 @@ static void graph_parse_mclk_fs(struct device_node *top,
 static int graph_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 				  struct device_node *cpu_ep,
 				  struct device_node *codec_ep,
-				  struct link_info *li,
-				  int dup_codec)
+				  struct link_info *li)
 {
 	struct device *dev = simple_priv_to_dev(priv);
 	struct snd_soc_card *card = simple_priv_to_card(priv);
@@ -229,18 +228,6 @@ static int graph_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 	struct snd_soc_dai_link_component *codecs = dai_link->codecs;
 	int ret;
 
-	/*
-	 * Codec endpoint can be NULL for pluggable audio HW.
-	 * Platform DT can populate the Codec endpoint depending on the
-	 * plugged HW.
-	 */
-	if (!li->cpu && !codec_ep)
-		return 0;
-
-	/* Do it all CPU endpoint, and 1st Codec endpoint */
-	if (!li->cpu && dup_codec)
-		return 0;
-
 	port	= of_get_parent(ep);
 	ports	= of_get_parent(port);
 	node	= of_graph_get_port_parent(ep);
@@ -253,9 +240,6 @@ static int graph_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 		int is_single_links = 0;
 
 		/* Codec is dummy */
-		codecs->of_node		= NULL;
-		codecs->dai_name	= "snd-soc-dummy-dai";
-		codecs->name		= "snd-soc-dummy";
 
 		/* FE settings */
 		dai_link->dynamic		= 1;
@@ -294,13 +278,11 @@ static int graph_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 
 		/* card->num_links includes Codec */
 		asoc_simple_canonicalize_cpu(dai_link, is_single_links);
+		asoc_simple_canonicalize_platform(dai_link);
 	} else {
 		struct snd_soc_codec_conf *cconf;
 
 		/* CPU is dummy */
-		cpus->of_node		= NULL;
-		cpus->dai_name		= "snd-soc-dummy-dai";
-		cpus->name		= "snd-soc-dummy";
 
 		/* BE settings */
 		dai_link->no_pcm		= 1;
@@ -341,8 +323,6 @@ static int graph_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 	graph_parse_convert(dev, ep, &dai_props->adata);
 	graph_parse_mclk_fs(top, ep, dai_props);
 
-	asoc_simple_canonicalize_platform(dai_link);
-
 	ret = asoc_simple_parse_tdm(ep, dai);
 	if (ret)
 		goto out_put_node;
@@ -380,11 +360,7 @@ static int graph_dai_link_of(struct asoc_simple_priv *priv,
 	struct device_node *top = dev->of_node;
 	struct asoc_simple_dai *cpu_dai;
 	struct asoc_simple_dai *codec_dai;
-	int ret, single_cpu;
-
-	/* Do it only CPU turn */
-	if (!li->cpu)
-		return 0;
+	int ret, single_cpu = 0;
 
 	dev_dbg(dev, "link_of (%pOF)\n", cpu_ep);
 
@@ -466,7 +442,7 @@ static inline bool parse_as_dpcm_link(struct asoc_simple_priv *priv,
 	return false;
 }
 
-static int graph_for_each_link(struct asoc_simple_priv *priv,
+static int __graph_for_each_link(struct asoc_simple_priv *priv,
 			struct link_info *li,
 			int (*func_noml)(struct asoc_simple_priv *priv,
 					 struct device_node *cpu_ep,
@@ -475,7 +451,7 @@ static int graph_for_each_link(struct asoc_simple_priv *priv,
 			int (*func_dpcm)(struct asoc_simple_priv *priv,
 					 struct device_node *cpu_ep,
 					 struct device_node *codec_ep,
-					 struct link_info *li, int dup_codec))
+					 struct link_info *li))
 {
 	struct of_phandle_iterator it;
 	struct device *dev = simple_priv_to_dev(priv);
@@ -486,7 +462,7 @@ static int graph_for_each_link(struct asoc_simple_priv *priv,
 	struct device_node *codec_port;
 	struct device_node *codec_port_old = NULL;
 	struct asoc_simple_data adata;
-	int rc, ret;
+	int rc, ret = 0;
 
 	/* loop for all listed CPU port */
 	of_for_each_phandle(&it, rc, node, "dais", NULL, 0) {
@@ -509,12 +485,21 @@ static int graph_for_each_link(struct asoc_simple_priv *priv,
 			graph_parse_convert(dev, cpu_ep,   &adata);
 
 			/* check if link requires DPCM parsing */
-			if (parse_as_dpcm_link(priv, codec_port, &adata))
-				ret = func_dpcm(priv, cpu_ep, codec_ep, li,
-						(codec_port_old == codec_port));
+			if (parse_as_dpcm_link(priv, codec_port, &adata)) {
+				/*
+				 * Codec endpoint can be NULL for pluggable audio HW.
+				 * Platform DT can populate the Codec endpoint depending on the
+				 * plugged HW.
+				 */
+				/* Do it all CPU endpoint, and 1st Codec endpoint */
+				if (li->cpu ||
+				    ((codec_port_old != codec_port) && codec_ep))
+					ret = func_dpcm(priv, cpu_ep, codec_ep, li);
 			/* else normal sound */
-			else
-				ret = func_noml(priv, cpu_ep, codec_ep, li);
+			} else {
+				if (li->cpu)
+					ret = func_noml(priv, cpu_ep, codec_ep, li);
+			}
 
 			of_node_put(codec_ep);
 			of_node_put(codec_port);
@@ -527,6 +512,39 @@ static int graph_for_each_link(struct asoc_simple_priv *priv,
 	}
 
 	return 0;
+}
+
+static int graph_for_each_link(struct asoc_simple_priv *priv,
+			       struct link_info *li,
+			       int (*func_noml)(struct asoc_simple_priv *priv,
+						struct device_node *cpu_ep,
+						struct device_node *codec_ep,
+						struct link_info *li),
+			       int (*func_dpcm)(struct asoc_simple_priv *priv,
+						struct device_node *cpu_ep,
+						struct device_node *codec_ep,
+						struct link_info *li))
+{
+	int ret;
+	/*
+	 * Detect all CPU first, and Detect all Codec 2nd.
+	 *
+	 * In Normal sound case, all DAIs are detected
+	 * as "CPU-Codec".
+	 *
+	 * In DPCM sound case,
+	 * all CPUs   are detected as "CPU-dummy", and
+	 * all Codecs are detected as "dummy-Codec".
+	 * To avoid random sub-device numbering,
+	 * detect "dummy-Codec" in last;
+	 */
+	for (li->cpu = 1; li->cpu >= 0; li->cpu--) {
+		ret = __graph_for_each_link(priv, li, func_noml, func_dpcm);
+		if (ret < 0)
+			break;
+	}
+
+	return ret;
 }
 
 static void graph_get_dais_count(struct asoc_simple_priv *priv,
@@ -566,25 +584,11 @@ int audio_graph_parse_of(struct asoc_simple_priv *priv, struct device *dev)
 		return ret;
 
 	memset(&li, 0, sizeof(li));
-	for (li.cpu = 1; li.cpu >= 0; li.cpu--) {
-		/*
-		 * Detect all CPU first, and Detect all Codec 2nd.
-		 *
-		 * In Normal sound case, all DAIs are detected
-		 * as "CPU-Codec".
-		 *
-		 * In DPCM sound case,
-		 * all CPUs   are detected as "CPU-dummy", and
-		 * all Codecs are detected as "dummy-Codec".
-		 * To avoid random sub-device numbering,
-		 * detect "dummy-Codec" in last;
-		 */
-		ret = graph_for_each_link(priv, &li,
-					  graph_dai_link_of,
-					  graph_dai_link_of_dpcm);
-		if (ret < 0)
-			goto err;
-	}
+	ret = graph_for_each_link(priv, &li,
+				  graph_dai_link_of,
+				  graph_dai_link_of_dpcm);
+	if (ret < 0)
+		goto err;
 
 	ret = asoc_simple_parse_card_name(card, NULL);
 	if (ret < 0)
@@ -617,6 +621,15 @@ static int graph_count_noml(struct asoc_simple_priv *priv,
 {
 	struct device *dev = simple_priv_to_dev(priv);
 
+	if (li->link >= SNDRV_MINOR_DEVICES) {
+		dev_err(dev, "too many links\n");
+		return -EINVAL;
+	}
+
+	li->num[li->link].cpus		= 1;
+	li->num[li->link].codecs	= 1;
+	li->num[li->link].platforms	= 1;
+
 	li->link += 1; /* 1xCPU-Codec */
 	li->dais += 2; /* 1xCPU + 1xCodec */
 
@@ -628,15 +641,24 @@ static int graph_count_noml(struct asoc_simple_priv *priv,
 static int graph_count_dpcm(struct asoc_simple_priv *priv,
 			    struct device_node *cpu_ep,
 			    struct device_node *codec_ep,
-			    struct link_info *li,
-			    int dup_codec)
+			    struct link_info *li)
 {
 	struct device *dev = simple_priv_to_dev(priv);
 
-	li->link++; /* 1xCPU-dummy */
-	li->dais++; /* 1xCPU */
+	if (li->link >= SNDRV_MINOR_DEVICES) {
+		dev_err(dev, "too many links\n");
+		return -EINVAL;
+	}
 
-	if (!dup_codec && codec_ep) {
+	if (li->cpu) {
+		li->num[li->link].cpus		= 1;
+		li->num[li->link].platforms	= 1;
+
+		li->link++; /* 1xCPU-dummy */
+		li->dais++; /* 1xCPU */
+	} else {
+		li->num[li->link].codecs	= 1;
+
 		li->link++; /* 1xdummy-Codec */
 		li->conf++; /* 1xdummy-Codec */
 		li->dais++; /* 1xCodec */

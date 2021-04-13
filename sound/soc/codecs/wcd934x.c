@@ -1565,8 +1565,6 @@ static int wcd934x_set_interpolator_rate(struct snd_soc_dai *dai,
 		return ret;
 	ret = wcd934x_set_mix_interpolator_rate(dai, (u8)rate_val,
 						sample_rate);
-	if (ret)
-		return ret;
 
 	return ret;
 }
@@ -1948,7 +1946,7 @@ static int wcd934x_get_channel_map(struct snd_soc_dai *dai,
 	return 0;
 }
 
-static struct snd_soc_dai_ops wcd934x_dai_ops = {
+static const struct snd_soc_dai_ops wcd934x_dai_ops = {
 	.hw_params = wcd934x_hw_params,
 	.hw_free = wcd934x_hw_free,
 	.trigger = wcd934x_trigger,

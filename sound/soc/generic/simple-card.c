@@ -129,15 +129,6 @@ static int simple_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 	char *prefix = "";
 	int ret;
 
-	/*
-	 *	 |CPU   |Codec   : turn
-	 * CPU	 |Pass  |return
-	 * Codec |return|Pass
-	 * np
-	 */
-	if (li->cpu == (np == codec))
-		return 0;
-
 	dev_dbg(dev, "link_of DPCM (%pOF)\n", np);
 
 	li->link++;
@@ -150,9 +141,6 @@ static int simple_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 		int is_single_links = 0;
 
 		/* Codec is dummy */
-		codecs->of_node		= NULL;
-		codecs->dai_name	= "snd-soc-dummy-dai";
-		codecs->name		= "snd-soc-dummy";
 
 		/* FE settings */
 		dai_link->dynamic		= 1;
@@ -176,13 +164,11 @@ static int simple_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 			goto out_put_node;
 
 		asoc_simple_canonicalize_cpu(dai_link, is_single_links);
+		asoc_simple_canonicalize_platform(dai_link);
 	} else {
 		struct snd_soc_codec_conf *cconf;
 
 		/* CPU is dummy */
-		cpus->of_node		= NULL;
-		cpus->dai_name		= "snd-soc-dummy-dai";
-		cpus->name		= "snd-soc-dummy";
 
 		/* BE settings */
 		dai_link->no_pcm		= 1;
@@ -220,8 +206,6 @@ static int simple_dai_link_of_dpcm(struct asoc_simple_priv *priv,
 	simple_parse_convert(dev, np, &dai_props->adata);
 	simple_parse_mclk_fs(top, np, codec, dai_props, prefix);
 
-	asoc_simple_canonicalize_platform(dai_link);
-
 	ret = asoc_simple_parse_tdm(np, dai);
 	if (ret)
 		goto out_put_node;
@@ -258,16 +242,7 @@ static int simple_dai_link_of(struct asoc_simple_priv *priv,
 	struct device_node *plat = NULL;
 	char prop[128];
 	char *prefix = "";
-	int ret, single_cpu;
-
-	/*
-	 *	 |CPU   |Codec   : turn
-	 * CPU	 |Pass  |return
-	 * Codec |return|return
-	 * np
-	 */
-	if (!li->cpu || np == codec)
-		return 0;
+	int ret, single_cpu = 0;
 
 	cpu  = np;
 	node = of_get_parent(np);
@@ -342,7 +317,7 @@ dai_link_of_err:
 	return ret;
 }
 
-static int simple_for_each_link(struct asoc_simple_priv *priv,
+static int __simple_for_each_link(struct asoc_simple_priv *priv,
 			struct link_info *li,
 			int (*func_noml)(struct asoc_simple_priv *priv,
 					 struct device_node *np,
@@ -402,11 +377,26 @@ static int simple_for_each_link(struct asoc_simple_priv *priv,
 			 */
 			if (dpcm_selectable &&
 			    (num > 2 ||
-			     adata.convert_rate || adata.convert_channels))
-				ret = func_dpcm(priv, np, codec, li, is_top);
+			     adata.convert_rate || adata.convert_channels)) {
+				/*
+				 * np
+				 *	 |1(CPU)|0(Codec)  li->cpu
+				 * CPU	 |Pass  |return
+				 * Codec |return|Pass
+				 */
+				if (li->cpu != (np == codec))
+					ret = func_dpcm(priv, np, codec, li, is_top);
 			/* else normal sound */
-			else
-				ret = func_noml(priv, np, codec, li, is_top);
+			} else {
+				/*
+				 * np
+				 *	 |1(CPU)|0(Codec)  li->cpu
+				 * CPU	 |Pass  |return
+				 * Codec |return|return
+				 */
+				if (li->cpu && (np != codec))
+					ret = func_noml(priv, np, codec, li, is_top);
+			}
 
 			if (ret < 0) {
 				of_node_put(codec);
@@ -421,6 +411,39 @@ static int simple_for_each_link(struct asoc_simple_priv *priv,
 
  error:
 	of_node_put(node);
+	return ret;
+}
+
+static int simple_for_each_link(struct asoc_simple_priv *priv,
+				struct link_info *li,
+				int (*func_noml)(struct asoc_simple_priv *priv,
+						 struct device_node *np,
+						 struct device_node *codec,
+						 struct link_info *li, bool is_top),
+				int (*func_dpcm)(struct asoc_simple_priv *priv,
+						 struct device_node *np,
+						 struct device_node *codec,
+						 struct link_info *li, bool is_top))
+{
+	int ret;
+	/*
+	 * Detect all CPU first, and Detect all Codec 2nd.
+	 *
+	 * In Normal sound case, all DAIs are detected
+	 * as "CPU-Codec".
+	 *
+	 * In DPCM sound case,
+	 * all CPUs   are detected as "CPU-dummy", and
+	 * all Codecs are detected as "dummy-Codec".
+	 * To avoid random sub-device numbering,
+	 * detect "dummy-Codec" in last;
+	 */
+	for (li->cpu = 1; li->cpu >= 0; li->cpu--) {
+		ret = __simple_for_each_link(priv, li, func_noml, func_dpcm);
+		if (ret < 0)
+			break;
+	}
+
 	return ret;
 }
 
@@ -449,25 +472,11 @@ static int simple_parse_of(struct asoc_simple_priv *priv)
 
 	/* Single/Muti DAI link(s) & New style of DT node */
 	memset(&li, 0, sizeof(li));
-	for (li.cpu = 1; li.cpu >= 0; li.cpu--) {
-		/*
-		 * Detect all CPU first, and Detect all Codec 2nd.
-		 *
-		 * In Normal sound case, all DAIs are detected
-		 * as "CPU-Codec".
-		 *
-		 * In DPCM sound case,
-		 * all CPUs   are detected as "CPU-dummy", and
-		 * all Codecs are detected as "dummy-Codec".
-		 * To avoid random sub-device numbering,
-		 * detect "dummy-Codec" in last;
-		 */
-		ret = simple_for_each_link(priv, &li,
-					   simple_dai_link_of,
-					   simple_dai_link_of_dpcm);
-		if (ret < 0)
-			return ret;
-	}
+	ret = simple_for_each_link(priv, &li,
+				   simple_dai_link_of,
+				   simple_dai_link_of_dpcm);
+	if (ret < 0)
+		return ret;
 
 	ret = asoc_simple_parse_card_name(card, PREFIX);
 	if (ret < 0)
@@ -483,9 +492,19 @@ static int simple_count_noml(struct asoc_simple_priv *priv,
 			     struct device_node *codec,
 			     struct link_info *li, bool is_top)
 {
-	li->dais++; /* CPU or Codec */
-	if (np != codec)
-		li->link++; /* CPU-Codec */
+	if (li->link >= SNDRV_MINOR_DEVICES) {
+		struct device *dev = simple_priv_to_dev(priv);
+
+		dev_err(dev, "too many links\n");
+		return -EINVAL;
+	}
+
+	li->num[li->link].cpus		= 1;
+	li->num[li->link].codecs	= 1;
+	li->num[li->link].platforms	= 1;
+
+	li->link += 1;
+	li->dais += 2;
 
 	return 0;
 }
@@ -495,10 +514,26 @@ static int simple_count_dpcm(struct asoc_simple_priv *priv,
 			     struct device_node *codec,
 			     struct link_info *li, bool is_top)
 {
-	li->dais++; /* CPU or Codec */
-	li->link++; /* CPU-dummy or dummy-Codec */
-	if (np == codec)
+	if (li->link >= SNDRV_MINOR_DEVICES) {
+		struct device *dev = simple_priv_to_dev(priv);
+
+		dev_err(dev, "too many links\n");
+		return -EINVAL;
+	}
+
+	if (li->cpu) {
+		li->num[li->link].cpus		= 1;
+		li->num[li->link].platforms	= 1;
+
+		li->link++; /* CPU-dummy */
+		li->dais++;
+	} else {
+		li->num[li->link].codecs	= 1;
+
+		li->link++; /* dummy-Codec */
+		li->dais++;
 		li->conf++;
+	}
 
 	return 0;
 }
@@ -556,6 +591,10 @@ static void simple_get_dais_count(struct asoc_simple_priv *priv,
 	 *	=> 1 ccnf  = 1xdummy-Codec
 	 */
 	if (!top) {
+		li->num[0].cpus		= 1;
+		li->num[0].codecs	= 1;
+		li->num[0].platforms	= 1;
+
 		li->link = 1;
 		li->dais = 2;
 		li->conf = 0;
