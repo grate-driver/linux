@@ -512,6 +512,20 @@ EXPORT_SYMBOL(__acpi_handle_debug);
 #endif
 
 /**
+ * acpi_evaluation_failure_warn - Log evaluation failure warning.
+ * @handle: Parent object handle.
+ * @name: Name of the object whose evaluation has failed.
+ * @status: Status value returned by the failing object evaluation.
+ */
+void acpi_evaluation_failure_warn(acpi_handle handle, const char *name,
+				  acpi_status status)
+{
+	acpi_handle_warn(handle, "%s evaluation failed: %s\n", name,
+			 acpi_format_exception(status));
+}
+EXPORT_SYMBOL_GPL(acpi_evaluation_failure_warn);
+
+/**
  * acpi_has_method: Check whether @handle has a method named @name
  * @handle: ACPI device handle
  * @name: name of object or method
@@ -871,6 +885,17 @@ acpi_dev_get_first_match_dev(const char *hid, const char *uid, s64 hrv)
 	return acpi_dev_get_next_match_dev(NULL, hid, uid, hrv);
 }
 EXPORT_SYMBOL(acpi_dev_get_first_match_dev);
+
+/**
+ * acpi_reduced_hardware - Return if this is an ACPI-reduced-hw machine
+ *
+ * Return true when running on an ACPI-reduced-hw machine, false otherwise.
+ */
+bool acpi_reduced_hardware(void)
+{
+	return acpi_gbl_reduced_hardware;
+}
+EXPORT_SYMBOL_GPL(acpi_reduced_hardware);
 
 /*
  * acpi_backlight= handling, this is done here rather then in video_detect.c
