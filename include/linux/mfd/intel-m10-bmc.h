@@ -9,9 +9,12 @@
 
 #include <linux/regmap.h>
 
-#define M10BMC_LEGACY_SYS_BASE		0x300400
+#define M10BMC_LEGACY_BUILD_VER		0x300468
 #define M10BMC_SYS_BASE			0x300800
-#define M10BMC_MEM_END			0x200000fc
+#define M10BMC_SYS_END			0x300fff
+#define M10BMC_FLASH_BASE		0x10000000
+#define M10BMC_FLASH_END		0x1fffffff
+#define M10BMC_MEM_END			M10BMC_FLASH_END
 
 /* Register offset of system registers */
 #define NIOS2_FW_VERSION		0x0
