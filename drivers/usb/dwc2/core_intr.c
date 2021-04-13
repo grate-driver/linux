@@ -307,6 +307,7 @@ static void dwc2_handle_conn_id_status_change_intr(struct dwc2_hsotg *hsotg)
 static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)
 {
 	int ret;
+	u32 hprt0;
 
 	/* Clear interrupt */
 	dwc2_writel(hsotg, GINTSTS_SESSREQINT, GINTSTS);
@@ -315,9 +316,10 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)
 		hsotg->lx_state);
 
 	if (dwc2_is_device_mode(hsotg)) {
-		if (hsotg->lx_state == DWC2_L2) {
-			ret = dwc2_exit_partial_power_down(hsotg, true);
-			if (ret && (ret != -ENOTSUPP))
+		if (hsotg->lx_state == DWC2_L2 && hsotg->in_ppd) {
+			ret = dwc2_exit_partial_power_down(hsotg, 0,
+							   true);
+			if (ret)
 				dev_err(hsotg->dev,
 					"exit power_down failed\n");
 		}
@@ -327,6 +329,13 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)
 		 * established
 		 */
 		dwc2_hsotg_disconnect(hsotg);
+	} else {
+		/* Turn on the port power bit. */
+		hprt0 = dwc2_read_hprt0(hsotg);
+		hprt0 |= HPRT0_PWR;
+		dwc2_writel(hsotg, hprt0, HPRT0);
+		/* Connect hcd after port power is set. */
+		dwc2_hcd_connect(hsotg);
 	}
 }
 
@@ -406,33 +415,30 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 	if (dwc2_is_device_mode(hsotg)) {
 		dev_dbg(hsotg->dev, "DSTS=0x%0x\n",
 			dwc2_readl(hsotg, DSTS));
-		if (hsotg->lx_state == DWC2_L2) {
+		if (hsotg->lx_state == DWC2_L2 && hsotg->in_ppd) {
 			u32 dctl = dwc2_readl(hsotg, DCTL);
-
 			/* Clear Remote Wakeup Signaling */
 			dctl &= ~DCTL_RMTWKUPSIG;
 			dwc2_writel(hsotg, dctl, DCTL);
-			ret = dwc2_exit_partial_power_down(hsotg, true);
-			if (ret && (ret != -ENOTSUPP))
-				dev_err(hsotg->dev, "exit power_down failed\n");
-
-			/* Change to L0 state */
-			hsotg->lx_state = DWC2_L0;
+			ret = dwc2_exit_partial_power_down(hsotg, 1,
+							   true);
+			if (ret)
+				dev_err(hsotg->dev,
+					"exit partial_power_down failed\n");
 			call_gadget(hsotg, resume);
 		} else {
 			/* Change to L0 state */
 			hsotg->lx_state = DWC2_L0;
 		}
 	} else {
-		if (hsotg->params.power_down)
-			return;
-
-		if (hsotg->lx_state != DWC2_L1) {
-			u32 pcgcctl = dwc2_readl(hsotg, PCGCTL);
-
-			/* Restart the Phy Clock */
-			pcgcctl &= ~PCGCTL_STOPPCLK;
-			dwc2_writel(hsotg, pcgcctl, PCGCTL);
+		if (hsotg->lx_state == DWC2_L2) {
+			if (hsotg->in_ppd) {
+				ret = dwc2_exit_partial_power_down(hsotg, 1,
+								   true);
+				if (ret)
+					dev_err(hsotg->dev,
+						"exit partial_power_down failed\n");
+			}
 
 			/*
 			 * If we've got this quirk then the PHY is stuck upon
