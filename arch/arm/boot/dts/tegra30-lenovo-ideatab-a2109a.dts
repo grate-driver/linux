@@ -4,6 +4,7 @@
 #include <dt-bindings/input/gpio-keys.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/mfd/max77620.h>
+#include <dt-bindings/power/summit,smb347-charger.h>
 
 #include "tegra30.dtsi"
 #include "tegra30-cpu-opp.dtsi"
@@ -25,6 +26,15 @@
 		serial1 = &uartb; /* GPS */
 		serial2 = &uartc; /* Bluetooth */
 	};
+
+    battery: battery-cell {
+		compatible = "simple-battery";
+		constant-charge-current-max-microamp = <2000000>;
+		operating-range-celsius = <0 50>;
+		alert-celsius = <3 42>;
+
+		voltage-min-design-microvolt = <3580000>; /* downstream charger configuration states: low battery threshold:3.58*/
+    };
 
 	/*
 	 * The decompressor and also some bootloaders rely on a
@@ -1085,6 +1095,7 @@
 		fuelgauge: bq27541@55 {
 			compatible = "ti,bq27541";
 			reg = <0x55>;
+			monitored-battery = <&battery>;
 		};
 
 		pmic: pmic@3c {
@@ -1291,6 +1302,18 @@
 				};
 			};
 		};
+
+		power_supply: charger@1b {
+			compatible = "summit,smb345"; // actually is closely related smb349, but this makes charging work
+			reg = <0x1b>;
+
+			summit,usb-current-limit-microamp = <500000>;
+			summit,enable-charge-control = <SMB3XX_CHG_ENABLE_SW>;
+			summit,enable-usb-charging;
+			summit,enable-otg-charging;
+
+			monitored-battery = <&battery>;
+		};
 	};
 
 	pmc@7000e400 {
@@ -1351,7 +1374,6 @@
 		vmmc-supply = <&vddio_sdmmc>;
 		vqmmc-supply = <&vdd_1v8>;
 
-		/* Azurewave AW-NH665 BCM4330 */
 		wifi@1 {
 			reg = <1>;
 			compatible = "brcm,bcm4329-fmac";
@@ -1367,7 +1389,7 @@
 		bus-width = <8>;
 		vmmc-supply = <&vddio_sdmmc>;
 		vqmmc-supply = <&vdd_1v8>;
-		max-frequency = <20000000>;
+		max-frequency = <41000000>;
 		non-removable;
 	};
 
@@ -1478,7 +1500,7 @@
 		volume-up {
 			label = "Volume Up";
 			gpios = <&gpio TEGRA_GPIO(Q, 1) GPIO_ACTIVE_LOW>;
-			linux,code = <KEY_VOLUMEUP>;
+			linux,code = <KEY_POWER>;
 			debounce-interval = <10>;
 			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
