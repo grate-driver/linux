@@ -4,6 +4,7 @@
 #include <dt-bindings/input/gpio-keys.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/mfd/max77620.h>
+#include <dt-bindings/power/summit,smb347-charger.h>
 
 #include "tegra30.dtsi"
 #include "tegra30-cpu-opp.dtsi"
@@ -25,6 +26,15 @@
 		serial1 = &uartb; /* GPS */
 		serial2 = &uartc; /* Bluetooth */
 	};
+
+    battery: battery-cell {
+		compatible = "simple-battery";
+		constant-charge-current-max-microamp = <2000000>;
+		operating-range-celsius = <0 50>;
+		alert-celsius = <3 42>;
+
+		voltage-min-design-microvolt = <3580000>; /* downstream charger configuration states: low battery threshold:3.58*/
+    };
 
 	/*
 	 * The decompressor and also some bootloaders rely on a
@@ -1085,6 +1095,7 @@
 		fuelgauge: bq27541@55 {
 			compatible = "ti,bq27541";
 			reg = <0x55>;
+			monitored-battery = <&battery>;
 		};
 
 		pmic: pmic@3c {
@@ -1291,6 +1302,18 @@
 				};
 			};
 		};
+
+		power_supply: charger@1b {
+			compatible = "summit,smb345"; // actually is closely related smb349, but this makes charging work
+			reg = <0x1b>;
+
+			summit,usb-current-limit-microamp = <500000>;
+			summit,enable-charge-control = <SMB3XX_CHG_ENABLE_SW>;
+			summit,enable-usb-charging;
+			summit,enable-otg-charging;
+
+			monitored-battery = <&battery>;
+		};
 	};
 
 	pmc@7000e400 {
@@ -1351,7 +1374,6 @@
 		vmmc-supply = <&vddio_sdmmc>;
 		vqmmc-supply = <&vdd_1v8>;
 
-		/* Azurewave AW-NH665 BCM4330 */
 		wifi@1 {
 			reg = <1>;
 			compatible = "brcm,bcm4329-fmac";
@@ -1367,7 +1389,7 @@
 		bus-width = <8>;
 		vmmc-supply = <&vddio_sdmmc>;
 		vqmmc-supply = <&vdd_1v8>;
-		max-frequency = <20000000>;
+		max-frequency = <41000000>;
 		non-removable;
 	};
 
@@ -1393,9 +1415,41 @@
 		enable-gpios = <&gpio TEGRA_GPIO(H, 3) GPIO_ACTIVE_HIGH>;
 		pwms = <&pwm 0 100000>;
 
-		brightness-levels = <1 255>;
-		num-interpolated-steps = <254>;
-		default-brightness-level = <9>;
+		brightness-levels = <
+			0 6 6 6 6 6 6 7
+			7 8 9 10 11 12 13 14
+			15 16 17 18 19 20 20 21
+			22 23 24 25 26 27 28 29
+			30 31 32 32 34 34 36 36
+			38 39 40 40 41 42 42 43
+			44 44 45 46 46 47 48 48
+			49 50 50 51 52 53 54 54
+			55 56 57 58 58 59 60 61
+			62 63 64 65 66 67 68 69
+			70 71 72 72 73 74 75 76
+			76 77 78 79 80 81 82 83
+			85 86 87 89 90 91 92 92
+			93 94 95 96 96 97 98 99
+			100 100 101 102 103 104 104 105
+			106 107 108 108 109 110 112 114
+			116 118 120 121 122 123 124 125
+			126 127 128 129 130 131 132 133
+			134 135 136 137 138 139 140 141
+			142 143 144 145 146 147 148 149
+			150 151 151 152 153 153 154 155
+			155 156 157 157 158 159 159 160
+			162 164 166 168 170 172 174 176
+			178 180 181 181 182 183 183 184
+			185 185 186 187 187 188 189 189
+			190 191 192 193 194 195 196 197
+			198 199 200 201 201 202 203 203
+			204 205 205 206 207 207 208 209
+			209 210 211 211 212 212 213 213
+			214 215 215 216 216 217 217 218
+			219 219 220 222 226 230 232 234
+			236 238 240 244 248 251 253 255
+		>;
+		default-brightness-level = <10>;
 	};
 
 	/* PMIC has a built-in 32KHz oscillator which is used by PMC */
@@ -1446,7 +1500,7 @@
 		volume-up {
 			label = "Volume Up";
 			gpios = <&gpio TEGRA_GPIO(Q, 1) GPIO_ACTIVE_LOW>;
-			linux,code = <KEY_VOLUMEUP>;
+			linux,code = <KEY_POWER>;
 			debounce-interval = <10>;
 			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
