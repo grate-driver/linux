@@ -518,6 +518,9 @@ static int tegra30_ahub_probe(struct platform_device *pdev)
 	void __iomem *regs_apbif, *regs_ahub;
 	int ret = 0;
 
+	if (ahub)
+		return -ENODEV;
+
 	match = of_match_device(tegra30_ahub_of_match, &pdev->dev);
 	if (!match)
 		return -EINVAL;
@@ -541,21 +544,19 @@ static int tegra30_ahub_probe(struct platform_device *pdev)
 
 	ret = devm_clk_bulk_get(&pdev->dev, ahub->nclocks, ahub->clocks);
 	if (ret)
-		goto err_unset_ahub;
+		return ret;
 
 	ret = devm_reset_control_bulk_get_exclusive(&pdev->dev, ahub->nresets,
 						    ahub->resets);
 	if (ret) {
 		dev_err(&pdev->dev, "Can't get resets: %d\n", ret);
-		goto err_unset_ahub;
+		return ret;
 	}
 
 	res0 = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	regs_apbif = devm_ioremap_resource(&pdev->dev, res0);
-	if (IS_ERR(regs_apbif)) {
-		ret = PTR_ERR(regs_apbif);
-		goto err_unset_ahub;
-	}
+	if (IS_ERR(regs_apbif))
+		return PTR_ERR(regs_apbif);
 
 	ahub->apbif_addr = res0->start;
 
@@ -564,22 +565,20 @@ static int tegra30_ahub_probe(struct platform_device *pdev)
 	if (IS_ERR(ahub->regmap_apbif)) {
 		dev_err(&pdev->dev, "apbif regmap init failed\n");
 		ret = PTR_ERR(ahub->regmap_apbif);
-		goto err_unset_ahub;
+		return ret;
 	}
 	regcache_cache_only(ahub->regmap_apbif, true);
 
 	regs_ahub = devm_platform_ioremap_resource(pdev, 1);
-	if (IS_ERR(regs_ahub)) {
-		ret = PTR_ERR(regs_ahub);
-		goto err_unset_ahub;
-	}
+	if (IS_ERR(regs_ahub))
+		return PTR_ERR(regs_ahub);
 
 	ahub->regmap_ahub = devm_regmap_init_mmio(&pdev->dev, regs_ahub,
 					&tegra30_ahub_ahub_regmap_config);
 	if (IS_ERR(ahub->regmap_ahub)) {
 		dev_err(&pdev->dev, "ahub regmap init failed\n");
 		ret = PTR_ERR(ahub->regmap_ahub);
-		goto err_unset_ahub;
+		return ret;
 	}
 	regcache_cache_only(ahub->regmap_ahub, true);
 
@@ -596,19 +595,18 @@ static int tegra30_ahub_probe(struct platform_device *pdev)
 
 err_pm_disable:
 	pm_runtime_disable(&pdev->dev);
-err_unset_ahub:
-	ahub = NULL;
 
 	return ret;
 }
 
 static int tegra30_ahub_remove(struct platform_device *pdev)
 {
+	if (!ahub)
+		return -ENODEV;
+
 	pm_runtime_disable(&pdev->dev);
 	if (!pm_runtime_status_suspended(&pdev->dev))
 		tegra30_ahub_runtime_suspend(&pdev->dev);
-
-	ahub = NULL;
 
 	return 0;
 }
