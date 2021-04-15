@@ -27,14 +27,14 @@
 		serial2 = &uartc; /* Bluetooth */
 	};
 
-    battery: battery-cell {
+	battery: battery-cell {
 		compatible = "simple-battery";
 		constant-charge-current-max-microamp = <2000000>;
 		operating-range-celsius = <0 50>;
 		alert-celsius = <3 42>;
 
 		voltage-min-design-microvolt = <3580000>; /* downstream charger configuration states: low battery threshold:3.58*/
-    };
+	};
 
 	/*
 	 * The decompressor and also some bootloaders rely on a
@@ -1095,7 +1095,6 @@
 		fuelgauge: bq27541@55 {
 			compatible = "ti,bq27541";
 			reg = <0x55>;
-			monitored-battery = <&battery>;
 		};
 
 		pmic: pmic@3c {
@@ -1307,7 +1306,6 @@
 			compatible = "summit,smb345"; // actually is closely related smb349, but this makes charging work
 			reg = <0x1b>;
 
-			summit,usb-current-limit-microamp = <500000>;
 			summit,enable-charge-control = <SMB3XX_CHG_ENABLE_SW>;
 			summit,enable-usb-charging;
 			summit,enable-otg-charging;
@@ -1374,9 +1372,10 @@
 		vmmc-supply = <&vddio_sdmmc>;
 		vqmmc-supply = <&vdd_1v8>;
 
+		/* CyberTAN NC223 802.11a/b/g/n BT 4.0 + HS Combo Module */
 		wifi@1 {
 			reg = <1>;
-			compatible = "brcm,bcm4329-fmac";
+			compatible = "brcm,bcm4329-fmac", "brcm,bcm4330-fmac";
 
 			interrupt-parent = <&gpio>;
 			interrupts = <TEGRA_GPIO(W, 3) IRQ_TYPE_LEVEL_HIGH>;
