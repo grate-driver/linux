@@ -1324,6 +1324,7 @@
 		nvidia,core-pwr-off-time = <0>;
 		nvidia,core-power-req-active-high;
 		nvidia,sys-clock-req-active-high;
+		core-supply = <&vdd_core>;
 
 		i2c-thermtrip {
 			nvidia,i2c-controller-id = <4>;
