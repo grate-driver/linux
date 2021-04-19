@@ -4808,7 +4808,7 @@ static const struct panel_desc_dsi panasonic_vvx10f004b00 = {
 		.connector_type = DRM_MODE_CONNECTOR_DSI,
 	},
 	.flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
-		 MIPI_DSI_CLOCK_NON_CONTINUOUS,
+		 0/*MIPI_DSI_CLOCK_NON_CONTINUOUS*/,
 	.format = MIPI_DSI_FMT_RGB888,
 	.lanes = 4,
 };
