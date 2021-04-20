@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <dt-bindings/clock/tegra124-car.h>
+#include <dt-bindings/display/tegra-dc.h>
 #include <dt-bindings/gpio/tegra-gpio.h>
 #include <dt-bindings/memory/tegra124-mc.h>
 #include <dt-bindings/pinctrl/pinctrl-tegra.h>
@@ -128,6 +129,8 @@
 					     "cursor",
 					     "wind",
 					     "wint";
+
+			#clock-cells = <1>;
 		};
 
 		dc@54240000 {
@@ -151,6 +154,8 @@
 					     "winb",
 					     "winc",
 					     "cursor";
+
+			#clock-cells = <1>;
 		};
 
 		hdmi: hdmi@54280000 {

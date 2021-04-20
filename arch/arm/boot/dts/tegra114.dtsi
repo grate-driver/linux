@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <dt-bindings/clock/tegra114-car.h>
+#include <dt-bindings/display/tegra-dc.h>
 #include <dt-bindings/gpio/tegra-gpio.h>
 #include <dt-bindings/memory/tegra114-mc.h>
 #include <dt-bindings/pinctrl/pinctrl-tegra.h>
@@ -69,6 +70,8 @@
 
 			nvidia,head = <0>;
 
+			#clock-cells = <1>;
+
 			rgb {
 				status = "disabled";
 			};
@@ -87,6 +90,8 @@
 			iommus = <&mc TEGRA_SWGROUP_DCB>;
 
 			nvidia,head = <1>;
+
+			#clock-cells = <1>;
 
 			rgb {
 				status = "disabled";

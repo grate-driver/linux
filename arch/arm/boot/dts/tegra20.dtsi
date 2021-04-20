@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <dt-bindings/clock/tegra20-car.h>
+#include <dt-bindings/display/tegra-dc.h>
 #include <dt-bindings/gpio/tegra-gpio.h>
 #include <dt-bindings/memory/tegra20-mc.h>
 #include <dt-bindings/pinctrl/pinctrl-tegra.h>
@@ -142,6 +143,8 @@
 
 			iommus = <&mc>;
 
+			#clock-cells = <1>;
+
 			rgb {
 				status = "disabled";
 			};
@@ -173,6 +176,8 @@
 					     "cursor";
 
 			iommus = <&mc>;
+
+			#clock-cells = <1>;
 
 			rgb {
 				status = "disabled";
