@@ -119,6 +119,8 @@ struct tegra_dc {
 	const struct tegra_dc_soc_info *soc;
 
 	bool has_opp_table;
+
+	unsigned long pclk_rate;
 };
 
 static inline struct tegra_dc *

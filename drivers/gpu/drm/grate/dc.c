@@ -5,6 +5,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/iommu.h>
@@ -15,6 +16,8 @@
 #include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
+
+#include <dt-bindings/display/tegra-dc.h>
 
 #include <soc/tegra/common.h>
 #include <soc/tegra/pmc.h>
@@ -1950,6 +1953,9 @@ static void tegra_dc_set_clock_rate(struct tegra_dc *dc,
 				dc->clk, state->pclk, err);
 	}
 
+	/* calculate actual pixel clock rate which depends on internal divider */
+	dc->pclk_rate = DIV_ROUND_UP(clk_get_rate(dc->clk) * 2, state->div + 2);
+
 	DRM_DEBUG_KMS("rate: %lu, div: %u\n", clk_get_rate(dc->clk),
 		      state->div);
 	DRM_DEBUG_KMS("pclk: %lu\n", state->pclk);
@@ -2150,6 +2156,8 @@ static void tegra_crtc_atomic_disable(struct drm_crtc *crtc,
 		dev_err(dc->dev, "failed to suspend: %d\n", err);
 
 	dev_pm_genpd_set_performance_state(dc->dev, 0);
+
+	dc->pclk_rate = 0;
 }
 
 static void tegra_crtc_atomic_enable(struct drm_crtc *crtc,
@@ -3131,6 +3139,79 @@ static int tegra_dc_couple(struct tegra_dc *dc)
 	return 0;
 }
 
+struct tegra_dc_pclk {
+	struct clk_hw hw;
+	struct tegra_dc *dc;
+};
+
+static unsigned long tegra_dc_pclk_recalc_rate(struct clk_hw *hw,
+					       unsigned long parent_rate)
+{
+	struct tegra_dc_pclk *pclk = container_of(hw, struct tegra_dc_pclk, hw);
+
+	return pclk->dc->pclk_rate;
+}
+
+static const struct clk_ops tegra_dc_pclk_ops = {
+	.recalc_rate = tegra_dc_pclk_recalc_rate,
+};
+
+static struct clk_hw *tegra_dc_register_pclk(struct tegra_dc *dc)
+{
+	const char *parent = dc->pipe == 1 ? "disp2"      : "disp1";
+	const char *name   = dc->pipe == 1 ? "disp2_pclk" : "disp1_pclk";
+	struct clk_init_data init = {};
+	struct tegra_dc_pclk *pclk;
+	int err;
+
+	pclk = devm_kzalloc(dc->dev, sizeof(*pclk), GFP_KERNEL);
+	if (!pclk)
+		return ERR_PTR(-ENOMEM);
+
+	init.name = name;
+	init.ops = &tegra_dc_pclk_ops;
+	init.flags = CLK_GET_RATE_NOCACHE;
+	init.parent_names = &parent;
+	init.num_parents = 1;
+
+	pclk->hw.init = &init;
+	pclk->dc = dc;
+
+	err = clk_hw_register(dc->dev, &pclk->hw);
+	if (err)
+		return ERR_PTR(err);
+
+	return &pclk->hw;
+}
+
+static int tegra_dc_register_clk_provider(struct tegra_dc *dc)
+{
+	struct clk_hw_onecell_data *hw_data;
+	struct clk_hw *pclk;
+	int err;
+
+	hw_data = devm_kzalloc(dc->dev, sizeof(*hw_data) +
+			       1 * sizeof(struct clk_hw *), GFP_KERNEL);
+	if (!hw_data)
+		return -ENOMEM;
+
+	pclk = tegra_dc_register_pclk(dc);
+	if (IS_ERR(pclk))
+		return dev_err_probe(dc->dev, PTR_ERR(pclk),
+				     "failed to register PCLK clock\n");
+
+	hw_data->hws[TEGRA_DC_PCLK] = pclk;
+	hw_data->num = 1;
+
+	err = devm_of_clk_add_hw_provider(dc->dev, of_clk_hw_onecell_get,
+					  hw_data);
+	if (err)
+		return dev_err_probe(dc->dev, err,
+				     "failed to register clock provider\n");
+
+	return 0;
+}
+
 static int tegra_dc_init_opp_table(struct tegra_dc *dc)
 {
 	struct tegra_core_opp_params opp_params = {};
@@ -3217,6 +3298,10 @@ static int tegra_dc_probe(struct platform_device *pdev)
 	dc->irq = platform_get_irq(pdev, 0);
 	if (dc->irq < 0)
 		return -ENXIO;
+
+	err = tegra_dc_register_clk_provider(dc);
+	if (err < 0)
+		return err;
 
 	err = tegra_dc_rgb_probe(dc);
 	if (err < 0 && err != -ENODEV)
