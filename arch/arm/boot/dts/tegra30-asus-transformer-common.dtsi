@@ -77,6 +77,19 @@
 			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
 			nvidia,ddc-i2c-bus = <&hdmi_ddc>;
 		};
+
+		lcd: dc@54200000 {
+			rgb {
+				status = "okay";
+
+				port@0 {
+					dpi_output: endpoint {
+						remote-endpoint = <&bridge_input>;
+						bus-width = <24>;
+					};
+				};
+			};
+		};
 	};
 
 	gpio@6000d000 {
@@ -94,9 +107,9 @@
 			output-low;
 		};
 
-		usb_charge_limit-hog {
+		usb-charge-limit-hog {
 			gpio-hog;
-			gpios = <TEGRA_GPIO(R, 1) GPIO_ACTIVE_LOW>;	// LIMIT_SET0, out, lo; @tegra_udc.LIMIT_PWR [0 = 0.5A, 1 = 1A]
+			gpios = <TEGRA_GPIO(R, 1) GPIO_ACTIVE_LOW>;
 			output-high;
 		};
 	};
@@ -1239,8 +1252,8 @@
 
 				vdd_1v8: vio {
 					regulator-name = "vdd_1v8_gen";
-					regulator-min-microvolt = <1500000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
 					regulator-always-on;
 					regulator-boot-on;
 				};
@@ -1332,6 +1345,8 @@
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
 		regulator-boot-on;
+		gpio = <&pmic 8 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
 	};
 
 	vdd_3v3_sys: regulator@1 {
@@ -1341,6 +1356,8 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
 		regulator-boot-on;
+		gpio = <&pmic 6 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
 	};
 
 	vdd_pnl: regulator@2 {
@@ -1525,7 +1542,7 @@
 
 		enable-gpios = <&gpio TEGRA_GPIO(H, 2) GPIO_ACTIVE_HIGH>;
 		power-supply = <&vdd_5v0_sys>;
-		pwms = <&pwm 0 5000000>;
+		pwms = <&pwm 0 4000000>;
 
 		brightness-levels = <1 255>;
 		num-interpolated-steps = <254>;
@@ -1653,16 +1670,9 @@
 	};
 
 	thermal-zones {
-		skin-thermal {
-			polling-delay-passive = <1000>; /* milliseconds */
-			polling-delay = <0>; /* milliseconds */
-
-			thermal-sensors = <&nct72 0>;
-		};
-
 		cpu-thermal {
-			polling-delay-passive = <500>; /* milliseconds */
-			polling-delay = <1000>; /* milliseconds */
+			polling-delay-passive = <1000>; /* milliseconds */
+			polling-delay = <5000>; /* milliseconds */
 
 			thermal-sensors = <&nct72 1>;
 

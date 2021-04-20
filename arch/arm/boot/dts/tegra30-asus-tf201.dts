@@ -10,21 +10,6 @@
 	model = "Asus Transformer Prime TF201";
 	compatible = "asus,tf201", "nvidia,tegra30";
 
-	host1x@50000000 {
-		lcd: dc@54200000 {
-			rgb {
-				status = "okay";
-
-				port@0 {
-					lcd_output: endpoint {
-						remote-endpoint = <&lvds_encoder_input>;
-						bus-width = <24>;
-					};
-				};
-			};
-		};
-	};
-
 	pinmux@70000868 {
 		state_default: pinmux {
 			lcd_pwr2_pc6 {
@@ -181,7 +166,7 @@
 
 		port {
 			panel_input: endpoint {
-				remote-endpoint = <&lvds_encoder_output>;
+				remote-endpoint = <&bridge_output>;
 			};
 		};
 	};
@@ -200,15 +185,15 @@
 			port@0 {
 				reg = <0>;
 
-				lvds_encoder_input: endpoint {
-					remote-endpoint = <&lcd_output>;
+				bridge_input: endpoint {
+					remote-endpoint = <&dpi_output>;
 				};
 			};
 
 			port@1 {
 				reg = <1>;
 
-				lvds_encoder_output: endpoint {
+				bridge_output: endpoint {
 					remote-endpoint = <&panel_input>;
 				};
 			};
