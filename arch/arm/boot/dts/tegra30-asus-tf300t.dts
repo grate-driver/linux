@@ -10,18 +10,11 @@
 	model = "Asus Transformer Pad TF300T";
 	compatible = "asus,tf300t", "nvidia,tegra30";
 
-	host1x@50000000 {
-		lcd: dc@54200000 {
-			rgb {
-				status = "okay";
-
-				port@0 {
-					lcd_output: endpoint {
-						remote-endpoint = <&lvds_encoder_input>;
-						bus-width = <24>;
-					};
-				};
-			};
+	gpio@6000d000 {
+		tf300t-init-hog {
+			gpio-hog;
+			gpios = <TEGRA_GPIO(BB, 5) GPIO_ACTIVE_HIGH>;
+			output-low;
 		};
 	};
 
@@ -168,7 +161,7 @@
 
 		port {
 			panel_input: endpoint {
-				remote-endpoint = <&lvds_encoder_output>;
+				remote-endpoint = <&bridge_output>;
 			};
 		};
 	};
@@ -187,15 +180,15 @@
 			port@0 {
 				reg = <0>;
 
-				lvds_encoder_input: endpoint {
-					remote-endpoint = <&lcd_output>;
+				bridge_input: endpoint {
+					remote-endpoint = <&dpi_output>;
 				};
 			};
 
 			port@1 {
 				reg = <1>;
 
-				lvds_encoder_output: endpoint {
+				bridge_output: endpoint {
 					remote-endpoint = <&panel_input>;
 				};
 			};
@@ -216,7 +209,7 @@
 			"Int Spk", "LON",
 			"IN1L", "Mic Jack",
 			"IN2L", "Mic Jack",
-			"DMIC", "Int Mic";
+			"DMICDAT", "Int Mic";
 
 		nvidia,audio-codec = <&wm8903>;
 		nvidia,spkr-en-gpios = <&wm8903 2 GPIO_ACTIVE_HIGH>;
