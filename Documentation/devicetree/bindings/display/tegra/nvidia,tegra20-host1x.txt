@@ -239,6 +239,9 @@ of the following host1x client modules:
 
 - dc: display controller
 
+  Optional properties:
+  - #clock-cells: Must be one.
+
   Required properties:
   - compatible: "nvidia,tegra<chip>-dc"
   - reg: Physical base address and length of the controller's registers.
