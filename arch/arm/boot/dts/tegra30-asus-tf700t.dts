@@ -12,19 +12,8 @@
 
 	host1x@50000000 {
 		lcd: dc@54200000 {
- 			clocks = <&tegra_car TEGRA30_CLK_DISP1>,
- 				 <&tegra_car TEGRA30_CLK_PLL_D_OUT0>;
-
-			rgb {
-				status = "okay";
-
-				port@0 {
-					dpi_output: endpoint {
-						remote-endpoint = <&bridge_input>;
-						bus-width = <24>;
-					};
-				};
-			};
+			clocks = <&tegra_car TEGRA30_CLK_DISP1>,
+				 <&tegra_car TEGRA30_CLK_PLL_D_OUT0>;
 		};
 	};
 
