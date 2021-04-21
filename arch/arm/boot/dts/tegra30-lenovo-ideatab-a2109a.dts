@@ -1632,6 +1632,10 @@
 		vin-supply = <&vddio_sdmmc>;
 	};
 
+	hda@70030000 {
+		status = "okay";
+	};
+
 	memory-controller@7000f000 {
 		emc-timings-0 {
 			nvidia,ram-code = <0>; // FT2_DVT_elpida_dvfs_table_0609.txt
