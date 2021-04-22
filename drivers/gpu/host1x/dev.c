@@ -651,7 +651,46 @@ static struct platform_driver tegra_host1x_driver = {
 	.remove = host1x_remove,
 };
 
+/*
+ * We never had drivers for MPE, VI, EPP and ISP hardware units on Tegra20
+ * and Tegra30, but they are specified in the device-trees, and thus,
+ * device entity is getting created for them by host1x bus a, but driver
+ * is never getting bound.  After adding support for generic power domains
+ * on Tegra20/30, we now have a situation where the state of PMC driver is
+ * never synced because consumer device never becomes ready due to the
+ * missing drivers.  The PMC state needs to be synced in order to allow
+ * scaling of the SoC core voltage.  In order to solve this problem,
+ * we will create and bind a dummy driver to the offending devices until
+ * we will have a real driver for them.
+ */
+static const struct of_device_id host1x_stub_of_matches[] = {
+	{ .compatible = "nvidia,tegra20-mpe", },
+	{ .compatible = "nvidia,tegra30-mpe", },
+	{ .compatible = "nvidia,tegra20-epp", },
+	{ .compatible = "nvidia,tegra30-epp", },
+	{ .compatible = "nvidia,tegra20-vi", },
+	{ .compatible = "nvidia,tegra30-vi", },
+	{ .compatible = "nvidia,tegra20-isp", },
+	{ .compatible = "nvidia,tegra30-isp", },
+	{ /* sentinel */ }
+};
+
+static int host1x_stub_probe(struct platform_device *pdev)
+{
+	pm_runtime_enable(&pdev->dev);
+	return 0;
+}
+
+static struct platform_driver tegra_host1x_stub_driver = {
+	.driver = {
+		.name = "tegra-host1x-stub",
+		.of_match_table = host1x_stub_of_matches,
+	},
+	.probe = host1x_stub_probe,
+};
+
 static struct platform_driver * const drivers[] = {
+	&tegra_host1x_stub_driver,
 	&tegra_host1x_driver,
 	&tegra_mipi_driver,
 };
