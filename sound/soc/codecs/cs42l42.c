@@ -19,11 +19,11 @@
 #include <linux/gpio.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
+#include <linux/acpi.h>
 #include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/regulator/consumer.h>
 #include <linux/gpio/consumer.h>
-#include <linux/of.h>
-#include <linux/of_gpio.h>
 #include <linux/of_device.h>
 #include <linux/pm_runtime.h>
 #include <sound/core.h>
@@ -36,6 +36,7 @@
 #include <dt-bindings/sound/cs42l42.h>
 
 #include "cs42l42.h"
+#include "cirrus_legacy.h"
 
 static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_FRZ_CTL,			0x00 },
@@ -521,26 +522,33 @@ static const struct snd_soc_dapm_route cs42l42_audio_map[] = {
 	{ "SDOUT2", NULL, "ASP TX EN" },
 };
 
+static int cs42l42_set_jack(struct snd_soc_component *component, struct snd_soc_jack *jk, void *d)
+{
+	struct cs42l42_private *cs42l42 = snd_soc_component_get_drvdata(component);
+
+	cs42l42->jack = jk;
+
+	regmap_update_bits(cs42l42->regmap, CS42L42_TSRS_PLUG_INT_MASK,
+			   CS42L42_RS_PLUG_MASK | CS42L42_RS_UNPLUG_MASK |
+			   CS42L42_TS_PLUG_MASK | CS42L42_TS_UNPLUG_MASK,
+			   (1 << CS42L42_RS_PLUG_SHIFT) | (1 << CS42L42_RS_UNPLUG_SHIFT) |
+			   (0 << CS42L42_TS_PLUG_SHIFT) | (0 << CS42L42_TS_UNPLUG_SHIFT));
+
+	return 0;
+}
+
 static int cs42l42_component_probe(struct snd_soc_component *component)
 {
-	struct cs42l42_private *cs42l42 =
-		(struct cs42l42_private *)snd_soc_component_get_drvdata(component);
-	struct snd_soc_card *crd = component->card;
-	int ret = 0;
+	struct cs42l42_private *cs42l42 = snd_soc_component_get_drvdata(component);
 
 	cs42l42->component = component;
 
-	ret = snd_soc_card_jack_new(crd, "CS42L42 Headset", SND_JACK_HEADSET | SND_JACK_BTN_0 |
-				    SND_JACK_BTN_1 | SND_JACK_BTN_2 | SND_JACK_BTN_3,
-				    &cs42l42->jack, NULL, 0);
-	if (ret < 0)
-		dev_err(component->dev, "Cannot create CS42L42 Headset: %d\n", ret);
-
-	return ret;
+	return 0;
 }
 
 static const struct snd_soc_component_driver soc_component_dev_cs42l42 = {
 	.probe			= cs42l42_component_probe,
+	.set_jack		= cs42l42_set_jack,
 	.dapm_widgets		= cs42l42_dapm_widgets,
 	.num_dapm_widgets	= ARRAY_SIZE(cs42l42_dapm_widgets),
 	.dapm_routes		= cs42l42_audio_map,
@@ -1028,7 +1036,7 @@ static void cs42l42_process_hs_type_detect(struct cs42l42_private *cs42l42)
 			CS42L42_AUTO_HSBIAS_HIZ_MASK |
 			CS42L42_TIP_SENSE_EN_MASK |
 			CS42L42_HSBIAS_SENSE_TRIP_MASK,
-			(1 << CS42L42_HSBIAS_SENSE_EN_SHIFT) |
+			(cs42l42->hs_bias_sense_en << CS42L42_HSBIAS_SENSE_EN_SHIFT) |
 			(1 << CS42L42_AUTO_HSBIAS_HIZ_SHIFT) |
 			(0 << CS42L42_TIP_SENSE_EN_SHIFT) |
 			(3 << CS42L42_HSBIAS_SENSE_TRIP_SHIFT));
@@ -1413,11 +1421,11 @@ static irqreturn_t cs42l42_irq_thread(int irq, void *data)
 			switch(cs42l42->hs_type){
 			case CS42L42_PLUG_CTIA:
 			case CS42L42_PLUG_OMTP:
-				snd_soc_jack_report(&cs42l42->jack, SND_JACK_HEADSET,
+				snd_soc_jack_report(cs42l42->jack, SND_JACK_HEADSET,
 						    SND_JACK_HEADSET);
 				break;
 			case CS42L42_PLUG_HEADPHONE:
-				snd_soc_jack_report(&cs42l42->jack, SND_JACK_HEADPHONE,
+				snd_soc_jack_report(cs42l42->jack, SND_JACK_HEADPHONE,
 						    SND_JACK_HEADPHONE);
 				break;
 			default:
@@ -1445,10 +1453,10 @@ static irqreturn_t cs42l42_irq_thread(int irq, void *data)
 				switch(cs42l42->hs_type){
 				case CS42L42_PLUG_CTIA:
 				case CS42L42_PLUG_OMTP:
-					snd_soc_jack_report(&cs42l42->jack, 0, SND_JACK_HEADSET);
+					snd_soc_jack_report(cs42l42->jack, 0, SND_JACK_HEADSET);
 					break;
 				case CS42L42_PLUG_HEADPHONE:
-					snd_soc_jack_report(&cs42l42->jack, 0, SND_JACK_HEADPHONE);
+					snd_soc_jack_report(cs42l42->jack, 0, SND_JACK_HEADPHONE);
 					break;
 				default:
 					break;
@@ -1475,7 +1483,7 @@ static irqreturn_t cs42l42_irq_thread(int irq, void *data)
 				report = cs42l42_handle_button_press(cs42l42);
 
 			}
-			snd_soc_jack_report(&cs42l42->jack, report, SND_JACK_BTN_0 | SND_JACK_BTN_1 |
+			snd_soc_jack_report(cs42l42->jack, report, SND_JACK_BTN_0 | SND_JACK_BTN_1 |
 								   SND_JACK_BTN_2 | SND_JACK_BTN_3);
 		}
 	}
@@ -1582,8 +1590,8 @@ static void cs42l42_set_interrupt_masks(struct cs42l42_private *cs42l42)
 			CS42L42_TS_UNPLUG_MASK,
 			(1 << CS42L42_RS_PLUG_SHIFT) |
 			(1 << CS42L42_RS_UNPLUG_SHIFT) |
-			(0 << CS42L42_TS_PLUG_SHIFT) |
-			(0 << CS42L42_TS_UNPLUG_SHIFT));
+			(1 << CS42L42_TS_PLUG_SHIFT) |
+			(1 << CS42L42_TS_UNPLUG_SHIFT));
 }
 
 static void cs42l42_setup_hs_type_detect(struct cs42l42_private *cs42l42)
@@ -1633,17 +1641,15 @@ static const unsigned int threshold_defaults[] = {
 	CS42L42_HS_DET_LEVEL_1
 };
 
-static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
+static int cs42l42_handle_device_data(struct device *dev,
 					struct cs42l42_private *cs42l42)
 {
-	struct device_node *np = i2c_client->dev.of_node;
 	unsigned int val;
-	unsigned int thresholds[CS42L42_NUM_BIASES];
+	u32 thresholds[CS42L42_NUM_BIASES];
 	int ret;
 	int i;
 
-	ret = of_property_read_u32(np, "cirrus,ts-inv", &val);
-
+	ret = device_property_read_u32(dev, "cirrus,ts-inv", &val);
 	if (!ret) {
 		switch (val) {
 		case CS42L42_TS_INV_EN:
@@ -1651,7 +1657,7 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			cs42l42->ts_inv = val;
 			break;
 		default:
-			dev_err(&i2c_client->dev,
+			dev_err(dev,
 				"Wrong cirrus,ts-inv DT value %d\n",
 				val);
 			cs42l42->ts_inv = CS42L42_TS_INV_DIS;
@@ -1664,8 +1670,7 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			CS42L42_TS_INV_MASK,
 			(cs42l42->ts_inv << CS42L42_TS_INV_SHIFT));
 
-	ret = of_property_read_u32(np, "cirrus,ts-dbnc-rise", &val);
-
+	ret = device_property_read_u32(dev, "cirrus,ts-dbnc-rise", &val);
 	if (!ret) {
 		switch (val) {
 		case CS42L42_TS_DBNCE_0:
@@ -1679,7 +1684,7 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			cs42l42->ts_dbnc_rise = val;
 			break;
 		default:
-			dev_err(&i2c_client->dev,
+			dev_err(dev,
 				"Wrong cirrus,ts-dbnc-rise DT value %d\n",
 				val);
 			cs42l42->ts_dbnc_rise = CS42L42_TS_DBNCE_1000;
@@ -1693,8 +1698,7 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			(cs42l42->ts_dbnc_rise <<
 			CS42L42_TS_RISE_DBNCE_TIME_SHIFT));
 
-	ret = of_property_read_u32(np, "cirrus,ts-dbnc-fall", &val);
-
+	ret = device_property_read_u32(dev, "cirrus,ts-dbnc-fall", &val);
 	if (!ret) {
 		switch (val) {
 		case CS42L42_TS_DBNCE_0:
@@ -1708,7 +1712,7 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			cs42l42->ts_dbnc_fall = val;
 			break;
 		default:
-			dev_err(&i2c_client->dev,
+			dev_err(dev,
 				"Wrong cirrus,ts-dbnc-fall DT value %d\n",
 				val);
 			cs42l42->ts_dbnc_fall = CS42L42_TS_DBNCE_0;
@@ -1722,13 +1726,12 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			(cs42l42->ts_dbnc_fall <<
 			CS42L42_TS_FALL_DBNCE_TIME_SHIFT));
 
-	ret = of_property_read_u32(np, "cirrus,btn-det-init-dbnce", &val);
-
+	ret = device_property_read_u32(dev, "cirrus,btn-det-init-dbnce", &val);
 	if (!ret) {
 		if (val <= CS42L42_BTN_DET_INIT_DBNCE_MAX)
 			cs42l42->btn_det_init_dbnce = val;
 		else {
-			dev_err(&i2c_client->dev,
+			dev_err(dev,
 				"Wrong cirrus,btn-det-init-dbnce DT value %d\n",
 				val);
 			cs42l42->btn_det_init_dbnce =
@@ -1739,14 +1742,13 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			CS42L42_BTN_DET_INIT_DBNCE_DEFAULT;
 	}
 
-	ret = of_property_read_u32(np, "cirrus,btn-det-event-dbnce", &val);
-
+	ret = device_property_read_u32(dev, "cirrus,btn-det-event-dbnce", &val);
 	if (!ret) {
 		if (val <= CS42L42_BTN_DET_EVENT_DBNCE_MAX)
 			cs42l42->btn_det_event_dbnce = val;
 		else {
-			dev_err(&i2c_client->dev,
-			"Wrong cirrus,btn-det-event-dbnce DT value %d\n", val);
+			dev_err(dev,
+				"Wrong cirrus,btn-det-event-dbnce DT value %d\n", val);
 			cs42l42->btn_det_event_dbnce =
 				CS42L42_BTN_DET_EVENT_DBNCE_DEFAULT;
 		}
@@ -1755,19 +1757,17 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			CS42L42_BTN_DET_EVENT_DBNCE_DEFAULT;
 	}
 
-	ret = of_property_read_u32_array(np, "cirrus,bias-lvls",
-				   (u32 *)thresholds, CS42L42_NUM_BIASES);
-
+	ret = device_property_read_u32_array(dev, "cirrus,bias-lvls",
+					     thresholds, ARRAY_SIZE(thresholds));
 	if (!ret) {
 		for (i = 0; i < CS42L42_NUM_BIASES; i++) {
 			if (thresholds[i] <= CS42L42_HS_DET_LEVEL_MAX)
 				cs42l42->bias_thresholds[i] = thresholds[i];
 			else {
-				dev_err(&i2c_client->dev,
-				"Wrong cirrus,bias-lvls[%d] DT value %d\n", i,
+				dev_err(dev,
+					"Wrong cirrus,bias-lvls[%d] DT value %d\n", i,
 					thresholds[i]);
-				cs42l42->bias_thresholds[i] =
-					threshold_defaults[i];
+				cs42l42->bias_thresholds[i] = threshold_defaults[i];
 			}
 		}
 	} else {
@@ -1775,8 +1775,7 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			cs42l42->bias_thresholds[i] = threshold_defaults[i];
 	}
 
-	ret = of_property_read_u32(np, "cirrus,hs-bias-ramp-rate", &val);
-
+	ret = device_property_read_u32(dev, "cirrus,hs-bias-ramp-rate", &val);
 	if (!ret) {
 		switch (val) {
 		case CS42L42_HSBIAS_RAMP_FAST_RISE_SLOW_FALL:
@@ -1796,7 +1795,7 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			cs42l42->hs_bias_ramp_time = CS42L42_HSBIAS_RAMP_TIME3;
 			break;
 		default:
-			dev_err(&i2c_client->dev,
+			dev_err(dev,
 				"Wrong cirrus,hs-bias-ramp-rate DT value %d\n",
 				val);
 			cs42l42->hs_bias_ramp_rate = CS42L42_HSBIAS_RAMP_SLOW;
@@ -1812,6 +1811,11 @@ static int cs42l42_handle_device_data(struct i2c_client *i2c_client,
 			(cs42l42->hs_bias_ramp_rate <<
 			CS42L42_HSBIAS_RAMP_SHIFT));
 
+	if (device_property_read_bool(dev, "cirrus,hs-bias-sense-disable"))
+		cs42l42->hs_bias_sense_en = 0;
+	else
+		cs42l42->hs_bias_sense_en = 1;
+
 	return 0;
 }
 
@@ -1819,8 +1823,7 @@ static int cs42l42_i2c_probe(struct i2c_client *i2c_client,
 				       const struct i2c_device_id *id)
 {
 	struct cs42l42_private *cs42l42;
-	int ret, i;
-	unsigned int devid = 0;
+	int ret, i, devid;
 	unsigned int reg;
 
 	cs42l42 = devm_kzalloc(&i2c_client->dev, sizeof(struct cs42l42_private),
@@ -1883,14 +1886,12 @@ static int cs42l42_i2c_probe(struct i2c_client *i2c_client,
 			"Failed to request IRQ: %d\n", ret);
 
 	/* initialize codec */
-	ret = regmap_read(cs42l42->regmap, CS42L42_DEVID_AB, &reg);
-	devid = (reg & 0xFF) << 12;
-
-	ret = regmap_read(cs42l42->regmap, CS42L42_DEVID_CD, &reg);
-	devid |= (reg & 0xFF) << 4;
-
-	ret = regmap_read(cs42l42->regmap, CS42L42_DEVID_E, &reg);
-	devid |= (reg & 0xF0) >> 4;
+	devid = cirrus_read_device_id(cs42l42->regmap, CS42L42_DEVID_AB);
+	if (devid < 0) {
+		ret = devid;
+		dev_err(&i2c_client->dev, "Failed to read device ID: %d\n", ret);
+		goto err_disable;
+	}
 
 	if (devid != CS42L42_CHIP_ID) {
 		ret = -ENODEV;
@@ -1926,11 +1927,9 @@ static int cs42l42_i2c_probe(struct i2c_client *i2c_client,
 			(1 << CS42L42_ADC_PDN_SHIFT) |
 			(0 << CS42L42_PDN_ALL_SHIFT));
 
-	if (i2c_client->dev.of_node) {
-		ret = cs42l42_handle_device_data(i2c_client, cs42l42);
-		if (ret != 0)
-			goto err_disable;
-	}
+	ret = cs42l42_handle_device_data(&i2c_client->dev, cs42l42);
+	if (ret != 0)
+		goto err_disable;
 
 	/* Setup headset detection */
 	cs42l42_setup_hs_type_detect(cs42l42);
@@ -2009,12 +2008,21 @@ static const struct dev_pm_ops cs42l42_runtime_pm = {
 			   NULL)
 };
 
+#ifdef CONFIG_OF
 static const struct of_device_id cs42l42_of_match[] = {
 	{ .compatible = "cirrus,cs42l42", },
-	{},
+	{}
 };
 MODULE_DEVICE_TABLE(of, cs42l42_of_match);
+#endif
 
+#ifdef CONFIG_ACPI
+static const struct acpi_device_id cs42l42_acpi_match[] = {
+	{"10134242", 0,},
+	{}
+};
+MODULE_DEVICE_TABLE(acpi, cs42l42_acpi_match);
+#endif
 
 static const struct i2c_device_id cs42l42_id[] = {
 	{"cs42l42", 0},
@@ -2027,7 +2035,8 @@ static struct i2c_driver cs42l42_i2c_driver = {
 	.driver = {
 		.name = "cs42l42",
 		.pm = &cs42l42_runtime_pm,
-		.of_match_table = cs42l42_of_match,
+		.of_match_table = of_match_ptr(cs42l42_of_match),
+		.acpi_match_table = ACPI_PTR(cs42l42_acpi_match),
 		},
 	.id_table = cs42l42_id,
 	.probe = cs42l42_i2c_probe,
