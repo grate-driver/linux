@@ -38,7 +38,7 @@
  */
 #include <asm/unaligned.h>
 
-#define SYS_IND(p)	get_unaligned(&p->sys_ind)
+#define SYS_IND(p)	(p->sys_ind)
 
 static inline sector_t nr_sects(struct msdos_partition *p)
 {
