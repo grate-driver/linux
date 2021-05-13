@@ -426,8 +426,7 @@ void btrfs_mark_ordered_io_finished(struct btrfs_inode *inode,
 		 */
 		if (entry->bytes_left == 0) {
 			set_bit(BTRFS_ORDERED_IO_DONE, &entry->flags);
-			/* set_bit implies a barrier */
-			cond_wake_up_nomb(&entry->wait);
+			cond_wake_up(&entry->wait);
 			refcount_inc(&entry->refs);
 			spin_unlock_irqrestore(&tree->lock, flags);
 			btrfs_init_work(&entry->work, finish_func, NULL, NULL);
