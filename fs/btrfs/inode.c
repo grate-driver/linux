@@ -170,7 +170,7 @@ static inline void btrfs_cleanup_ordered_extents(struct btrfs_inode *inode,
 		index++;
 		if (!page)
 			continue;
-		ClearPagePrivate2(page);
+		ClearPageOrdered(page);
 		put_page(page);
 	}
 
@@ -946,7 +946,8 @@ retry:
 			const u64 end = start + async_extent->ram_size - 1;
 
 			p->mapping = inode->vfs_inode.i_mapping;
-			btrfs_writepage_endio_finish_ordered(p, start, end, 0);
+			btrfs_writepage_endio_finish_ordered(inode, p, start,
+							     end, 0);
 
 			p->mapping = NULL;
 			extent_clear_unlock_delalloc(inode, start, end, NULL, 0,
@@ -1150,15 +1151,16 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 
 		btrfs_dec_block_group_reservations(fs_info, ins.objectid);
 
-		/* we're not doing compressed IO, don't unlock the first
-		 * page (which the caller expects to stay locked), don't
-		 * clear any dirty bits and don't set any writeback bits
+		/*
+		 * We're not doing compressed IO, don't unlock the first page
+		 * (which the caller expects to stay locked), don't clear any
+		 * dirty bits and don't set any writeback bits
 		 *
-		 * Do set the Private2 bit so we know this page was properly
-		 * setup for writepage
+		 * Do set the Ordered (Private2) bit so we know this page was
+		 * properly setup for writepage.
 		 */
 		page_ops = unlock ? PAGE_UNLOCK : 0;
-		page_ops |= PAGE_SET_PRIVATE2;
+		page_ops |= PAGE_SET_ORDERED;
 
 		extent_clear_unlock_delalloc(inode, start, start + ram_size - 1,
 					     locked_page,
@@ -1822,7 +1824,7 @@ out_check:
 					     locked_page, EXTENT_LOCKED |
 					     EXTENT_DELALLOC |
 					     EXTENT_CLEAR_DATA_RESV,
-					     PAGE_UNLOCK | PAGE_SET_PRIVATE2);
+					     PAGE_UNLOCK | PAGE_SET_ORDERED);
 
 		cur_offset = extent_end;
 
@@ -2193,26 +2195,22 @@ int btrfs_bio_fits_in_stripe(struct page *page, size_t size, struct bio *bio,
 	struct inode *inode = page->mapping->host;
 	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
 	u64 logical = bio->bi_iter.bi_sector << 9;
+	u32 bio_len = bio->bi_iter.bi_size;
 	struct extent_map *em;
-	u64 length = 0;
-	u64 map_length;
 	int ret = 0;
 	struct btrfs_io_geometry geom;
 
 	if (bio_flags & EXTENT_BIO_COMPRESSED)
 		return 0;
 
-	length = bio->bi_iter.bi_size;
-	map_length = length;
-	em = btrfs_get_chunk_map(fs_info, logical, map_length);
+	em = btrfs_get_chunk_map(fs_info, logical, fs_info->sectorsize);
 	if (IS_ERR(em))
 		return PTR_ERR(em);
-	ret = btrfs_get_io_geometry(fs_info, em, btrfs_op(bio), logical,
-				    map_length, &geom);
+	ret = btrfs_get_io_geometry(fs_info, em, btrfs_op(bio), logical, &geom);
 	if (ret < 0)
 		goto out;
 
-	if (geom.len < length + size)
+	if (geom.len < bio_len + size)
 		ret = 1;
 out:
 	free_extent_map(em);
@@ -2231,33 +2229,6 @@ static blk_status_t btrfs_submit_bio_start(struct inode *inode, struct bio *bio,
 					   u64 dio_file_offset)
 {
 	return btrfs_csum_one_bio(BTRFS_I(inode), bio, 0, 0);
-}
-
-bool btrfs_bio_fits_in_ordered_extent(struct page *page, struct bio *bio,
-				      unsigned int size)
-{
-	struct btrfs_inode *inode = BTRFS_I(page->mapping->host);
-	struct btrfs_fs_info *fs_info = inode->root->fs_info;
-	struct btrfs_ordered_extent *ordered;
-	u64 len = bio->bi_iter.bi_size + size;
-	bool ret = true;
-
-	ASSERT(btrfs_is_zoned(fs_info));
-	ASSERT(fs_info->max_zone_append_size > 0);
-	ASSERT(bio_op(bio) == REQ_OP_ZONE_APPEND);
-
-	/* Ordered extent not yet created, so we're good */
-	ordered = btrfs_lookup_ordered_extent(inode, page_offset(page));
-	if (!ordered)
-		return ret;
-
-	if ((bio->bi_iter.bi_sector << SECTOR_SHIFT) + len >
-	    ordered->disk_bytenr + ordered->disk_num_bytes)
-		ret = false;
-
-	btrfs_put_ordered_extent(ordered);
-
-	return ret;
 }
 
 static blk_status_t extract_ordered_extent(struct btrfs_inode *inode,
@@ -2601,7 +2572,7 @@ again:
 	lock_extent_bits(&inode->io_tree, page_start, page_end, &cached_state);
 
 	/* already ordered? We're done */
-	if (PagePrivate2(page))
+	if (PageOrdered(page))
 		goto out_reserved;
 
 	ordered = btrfs_lookup_ordered_range(inode, page_start, PAGE_SIZE);
@@ -2676,8 +2647,8 @@ int btrfs_writepage_cow_fixup(struct page *page, u64 start, u64 end)
 	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
 	struct btrfs_writepage_fixup *fixup;
 
-	/* this page is properly in the ordered list */
-	if (TestClearPagePrivate2(page))
+	/* This page has ordered extent covering it already */
+	if (PageOrdered(page))
 		return 0;
 
 	/*
@@ -3057,28 +3028,14 @@ static void finish_ordered_fn(struct btrfs_work *work)
 	btrfs_finish_ordered_io(ordered_extent);
 }
 
-void btrfs_writepage_endio_finish_ordered(struct page *page, u64 start,
+void btrfs_writepage_endio_finish_ordered(struct btrfs_inode *inode,
+					  struct page *page, u64 start,
 					  u64 end, int uptodate)
 {
-	struct btrfs_inode *inode = BTRFS_I(page->mapping->host);
-	struct btrfs_fs_info *fs_info = inode->root->fs_info;
-	struct btrfs_ordered_extent *ordered_extent = NULL;
-	struct btrfs_workqueue *wq;
+	trace_btrfs_writepage_end_io_hook(inode, start, end, uptodate);
 
-	trace_btrfs_writepage_end_io_hook(page, start, end, uptodate);
-
-	ClearPagePrivate2(page);
-	if (!btrfs_dec_test_ordered_pending(inode, &ordered_extent, start,
-					    end - start + 1, uptodate))
-		return;
-
-	if (btrfs_is_free_space_inode(inode))
-		wq = fs_info->endio_freespace_worker;
-	else
-		wq = fs_info->endio_write_workers;
-
-	btrfs_init_work(&ordered_extent->work, finish_ordered_fn, NULL, NULL);
-	btrfs_queue_work(wq, &ordered_extent->work);
+	btrfs_mark_ordered_io_finished(inode, page, start, end + 1 - start,
+				       finish_ordered_fn, uptodate);
 }
 
 /*
@@ -3140,15 +3097,19 @@ zeroit:
  * @bio_offset:	offset to the beginning of the bio (in bytes)
  * @start:	file offset of the range start
  * @end:	file offset of the range end (inclusive)
+ *
+ * Return a bitmap where bit set means a csum mismatch, and bit not set means
+ * csum match.
  */
-int btrfs_verify_data_csum(struct btrfs_io_bio *io_bio, u32 bio_offset,
-			   struct page *page, u64 start, u64 end)
+unsigned int btrfs_verify_data_csum(struct btrfs_io_bio *io_bio, u32 bio_offset,
+				    struct page *page, u64 start, u64 end)
 {
 	struct inode *inode = page->mapping->host;
 	struct extent_io_tree *io_tree = &BTRFS_I(inode)->io_tree;
 	struct btrfs_root *root = BTRFS_I(inode)->root;
 	const u32 sectorsize = root->fs_info->sectorsize;
 	u32 pg_off;
+	unsigned int result = 0;
 
 	if (PageChecked(page)) {
 		ClearPageChecked(page);
@@ -3176,10 +3137,14 @@ int btrfs_verify_data_csum(struct btrfs_io_bio *io_bio, u32 bio_offset,
 
 		ret = check_data_csum(inode, io_bio, bio_offset, page, pg_off,
 				      page_offset(page) + pg_off);
-		if (ret < 0)
-			return -EIO;
+		if (ret < 0) {
+			const int nr_bit = (pg_off - offset_in_page(start)) >>
+				     root->fs_info->sectorsize_bits;
+
+			result |= (1U << nr_bit);
+		}
 	}
-	return 0;
+	return result;
 }
 
 /*
@@ -3241,6 +3206,7 @@ void btrfs_run_delayed_iputs(struct btrfs_fs_info *fs_info)
 		inode = list_first_entry(&fs_info->delayed_iputs,
 				struct btrfs_inode, delayed_iput);
 		run_delayed_iput_locked(fs_info, inode);
+		cond_resched_lock(&fs_info->delayed_iput_lock);
 	}
 	spin_unlock(&fs_info->delayed_iput_lock);
 }
@@ -7785,7 +7751,7 @@ static int btrfs_dio_iomap_begin(struct inode *inode, loff_t start,
 	iomap->bdev = fs_info->fs_devices->latest_bdev;
 	iomap->length = len;
 
-	if (write && btrfs_use_zone_append(BTRFS_I(inode), em))
+	if (write && btrfs_use_zone_append(BTRFS_I(inode), em->block_start))
 		iomap->flags |= IOMAP_F_ZONE_APPEND;
 
 	free_extent_map(em);
@@ -7924,19 +7890,17 @@ static blk_status_t btrfs_check_read_dio_bio(struct inode *inode,
 						 btrfs_ino(BTRFS_I(inode)),
 						 pgoff);
 			} else {
-				blk_status_t status;
+				int ret;
 
 				ASSERT((start - io_bio->logical) < UINT_MAX);
-				status = btrfs_submit_read_repair(inode,
-							&io_bio->bio,
-							start - io_bio->logical,
-							bvec.bv_page, pgoff,
-							start,
-							start + sectorsize - 1,
-							io_bio->mirror_num,
-							submit_dio_repair_bio);
-				if (status)
-					err = status;
+				ret = btrfs_repair_one_sector(inode,
+						&io_bio->bio,
+						start - io_bio->logical,
+						bvec.bv_page, pgoff,
+						start, io_bio->mirror_num,
+						submit_dio_repair_bio);
+				if (ret)
+					err = errno_to_blk_status(ret);
 			}
 			start += sectorsize;
 			ASSERT(bio_offset + sectorsize > bio_offset);
@@ -7951,41 +7915,8 @@ static void __endio_write_update_ordered(struct btrfs_inode *inode,
 					 const u64 offset, const u64 bytes,
 					 const bool uptodate)
 {
-	struct btrfs_fs_info *fs_info = inode->root->fs_info;
-	struct btrfs_ordered_extent *ordered = NULL;
-	struct btrfs_workqueue *wq;
-	u64 ordered_offset = offset;
-	u64 ordered_bytes = bytes;
-	u64 last_offset;
-
-	if (btrfs_is_free_space_inode(inode))
-		wq = fs_info->endio_freespace_worker;
-	else
-		wq = fs_info->endio_write_workers;
-
-	while (ordered_offset < offset + bytes) {
-		last_offset = ordered_offset;
-		if (btrfs_dec_test_first_ordered_pending(inode, &ordered,
-							 &ordered_offset,
-							 ordered_bytes,
-							 uptodate)) {
-			btrfs_init_work(&ordered->work, finish_ordered_fn, NULL,
-					NULL);
-			btrfs_queue_work(wq, &ordered->work);
-		}
-
-		/* No ordered extent found in the range, exit */
-		if (ordered_offset == last_offset)
-			return;
-		/*
-		 * Our bio might span multiple ordered extents. In this case
-		 * we keep going until we have accounted the whole dio.
-		 */
-		if (ordered_offset < offset + bytes) {
-			ordered_bytes = offset + bytes - ordered_offset;
-			ordered = NULL;
-		}
-	}
+	btrfs_mark_ordered_io_finished(inode, NULL, offset, bytes,
+				       finish_ordered_fn, uptodate);
 }
 
 static blk_status_t btrfs_submit_bio_start_direct_io(struct inode *inode,
@@ -8159,7 +8090,7 @@ static blk_qc_t btrfs_submit_direct(struct inode *inode, struct iomap *iomap,
 			goto out_err_em;
 		}
 		ret = btrfs_get_io_geometry(fs_info, em, btrfs_op(dio_bio),
-					    logical, submit_len, &geom);
+					    logical, &geom);
 		if (ret) {
 			status = errno_to_blk_status(ret);
 			goto out_err_em;
@@ -8263,15 +8194,14 @@ int btrfs_readpage(struct file *file, struct page *page)
 	struct btrfs_inode *inode = BTRFS_I(page->mapping->host);
 	u64 start = page_offset(page);
 	u64 end = start + PAGE_SIZE - 1;
-	unsigned long bio_flags = 0;
-	struct bio *bio = NULL;
+	struct btrfs_bio_ctrl bio_ctrl = { 0 };
 	int ret;
 
 	btrfs_lock_and_flush_ordered_range(inode, start, end, NULL);
 
-	ret = btrfs_do_readpage(page, NULL, &bio, &bio_flags, 0, NULL);
-	if (bio)
-		ret = submit_one_bio(bio, 0, bio_flags);
+	ret = btrfs_do_readpage(page, NULL, &bio_ctrl, 0, NULL);
+	if (bio_ctrl.bio)
+		ret = submit_one_bio(bio_ctrl.bio, 0, bio_ctrl.bio_flags);
 	return ret;
 }
 
@@ -8340,9 +8270,9 @@ static int btrfs_migratepage(struct address_space *mapping,
 	if (page_has_private(page))
 		attach_page_private(newpage, detach_page_private(page));
 
-	if (PagePrivate2(page)) {
-		ClearPagePrivate2(page);
-		SetPagePrivate2(newpage);
+	if (PageOrdered(page)) {
+		ClearPageOrdered(page);
+		SetPageOrdered(newpage);
 	}
 
 	if (mode != MIGRATE_SYNC_NO_COPY)
@@ -8358,22 +8288,24 @@ static void btrfs_invalidatepage(struct page *page, unsigned int offset,
 {
 	struct btrfs_inode *inode = BTRFS_I(page->mapping->host);
 	struct extent_io_tree *tree = &inode->io_tree;
-	struct btrfs_ordered_extent *ordered;
 	struct extent_state *cached_state = NULL;
 	u64 page_start = page_offset(page);
 	u64 page_end = page_start + PAGE_SIZE - 1;
-	u64 start;
-	u64 end;
+	u64 cur;
 	int inode_evicting = inode->vfs_inode.i_state & I_FREEING;
-	bool found_ordered = false;
-	bool completed_ordered = false;
 
 	/*
-	 * we have the page locked, so new writeback can't start,
-	 * and the dirty bit won't be cleared while we are here.
+	 * We have page locked so no new ordered extent can be created on this
+	 * page, nor bio can be submitted for this page.
 	 *
-	 * Wait for IO on this page so that we can safely clear
-	 * the PagePrivate2 bit and do ordered accounting
+	 * But already submitted bio can still be finished on this page.
+	 * Furthermore, endio function won't skip page which has Ordered
+	 * (Private2) already cleared, so it's possible for endio and
+	 * invalidatepage to do the same ordered extent accounting twice
+	 * on one page.
+	 *
+	 * So here we wait for any submitted bios to finish, so that we won't
+	 * do double ordered extent accounting on the same page.
 	 */
 	wait_on_page_writeback(page);
 
@@ -8385,89 +8317,120 @@ static void btrfs_invalidatepage(struct page *page, unsigned int offset,
 	if (!inode_evicting)
 		lock_extent_bits(tree, page_start, page_end, &cached_state);
 
-	start = page_start;
-again:
-	ordered = btrfs_lookup_ordered_range(inode, start, page_end - start + 1);
-	if (ordered) {
-		found_ordered = true;
-		end = min(page_end,
-			  ordered->file_offset + ordered->num_bytes - 1);
+	cur = page_start;
+	while (cur < page_end) {
+		struct btrfs_ordered_extent *ordered;
+		bool delete_states;
+		u64 range_end;
+
+		ordered = btrfs_lookup_first_ordered_range(inode, cur,
+							   page_end + 1 - cur);
+		if (!ordered) {
+			range_end = page_end;
+			/*
+			 * No ordered extent covering this range, we are safe
+			 * to delete all extent states in the range.
+			 */
+			delete_states = true;
+			goto next;
+		}
+		if (ordered->file_offset > cur) {
+			/*
+			 * There is a range between [cur, oe->file_offset) not
+			 * covered by any ordered extent.
+			 * We are safe to delete all extent states, and handle
+			 * the ordered extent in the next iteration.
+			 */
+			range_end = ordered->file_offset - 1;
+			delete_states = true;
+			goto next;
+		}
+
+		range_end = min(ordered->file_offset + ordered->num_bytes - 1,
+				page_end);
+		if (!PageOrdered(page)) {
+			/*
+			 * If Ordered (Private2) is cleared, it means endio has
+			 * already been executed for the range.
+			 * We can't delete the extent states as
+			 * btrfs_finish_ordered_io() may still use some of them.
+			 */
+			delete_states = false;
+			goto next;
+		}
+		ClearPageOrdered(page);
+
 		/*
 		 * IO on this page will never be started, so we need to account
 		 * for any ordered extents now. Don't clear EXTENT_DELALLOC_NEW
 		 * here, must leave that up for the ordered extent completion.
+		 *
+		 * This will also unlock the range for incoming
+		 * btrfs_finish_ordered_io().
 		 */
 		if (!inode_evicting)
-			clear_extent_bit(tree, start, end,
+			clear_extent_bit(tree, cur, range_end,
 					 EXTENT_DELALLOC |
 					 EXTENT_LOCKED | EXTENT_DO_ACCOUNTING |
 					 EXTENT_DEFRAG, 1, 0, &cached_state);
-		/*
-		 * whoever cleared the private bit is responsible
-		 * for the finish_ordered_io
-		 */
-		if (TestClearPagePrivate2(page)) {
-			spin_lock_irq(&inode->ordered_tree.lock);
-			set_bit(BTRFS_ORDERED_TRUNCATED, &ordered->flags);
-			ordered->truncated_len = min(ordered->truncated_len,
-						     start - ordered->file_offset);
-			spin_unlock_irq(&inode->ordered_tree.lock);
 
-			if (btrfs_dec_test_ordered_pending(inode, &ordered,
-							   start,
-							   end - start + 1, 1)) {
-				btrfs_finish_ordered_io(ordered);
-				completed_ordered = true;
-			}
+		spin_lock_irq(&inode->ordered_tree.lock);
+		set_bit(BTRFS_ORDERED_TRUNCATED, &ordered->flags);
+		ordered->truncated_len = min(ordered->truncated_len,
+					     cur - ordered->file_offset);
+		spin_unlock_irq(&inode->ordered_tree.lock);
+
+		if (btrfs_dec_test_ordered_pending(inode, &ordered,
+					cur, range_end + 1 - cur, 1)) {
+			btrfs_finish_ordered_io(ordered);
+			/*
+			 * The ordered extent has finished, now we're again
+			 * safe to delete all extent states of the range.
+			 */
+			delete_states = true;
+		} else {
+			/*
+			 * btrfs_finish_ordered_io() will get executed by endio
+			 * of other pages, thus we can't delete extent states
+			 * anymore
+			 */
+			delete_states = false;
 		}
-		btrfs_put_ordered_extent(ordered);
+next:
+		if (ordered)
+			btrfs_put_ordered_extent(ordered);
+		/*
+		 * Qgroup reserved space handler
+		 * Sector(s) here will be either:
+		 *
+		 * 1) Already written to disk or bio already finished
+		 *    Then its QGROUP_RESERVED bit in io_tree is already cleared.
+		 *    Qgroup will be handled by its qgroup_record then.
+		 *    btrfs_qgroup_free_data() call will do nothing here.
+		 *
+		 * 2) Not written to disk yet
+		 *    Then btrfs_qgroup_free_data() call will clear the
+		 *    QGROUP_RESERVED bit of its io_tree, and free the qgroup
+		 *    reserved data space.
+		 *    Since the IO will never happen for this page.
+		 */
+		btrfs_qgroup_free_data(inode, NULL, cur, range_end + 1 - cur);
 		if (!inode_evicting) {
-			cached_state = NULL;
-			lock_extent_bits(tree, start, end,
-					 &cached_state);
-		}
-
-		start = end + 1;
-		if (start < page_end)
-			goto again;
-	}
-
-	/*
-	 * Qgroup reserved space handler
-	 * Page here will be either
-	 * 1) Already written to disk or ordered extent already submitted
-	 *    Then its QGROUP_RESERVED bit in io_tree is already cleaned.
-	 *    Qgroup will be handled by its qgroup_record then.
-	 *    btrfs_qgroup_free_data() call will do nothing here.
-	 *
-	 * 2) Not written to disk yet
-	 *    Then btrfs_qgroup_free_data() call will clear the QGROUP_RESERVED
-	 *    bit of its io_tree, and free the qgroup reserved data space.
-	 *    Since the IO will never happen for this page.
-	 */
-	btrfs_qgroup_free_data(inode, NULL, page_start, PAGE_SIZE);
-	if (!inode_evicting) {
-		bool delete = true;
-
-		/*
-		 * If there's an ordered extent for this range and we have not
-		 * finished it ourselves, we must leave EXTENT_DELALLOC_NEW set
-		 * in the range for the ordered extent completion. We must also
-		 * not delete the range, otherwise we would lose that bit (and
-		 * any other bits set in the range). Make sure EXTENT_UPTODATE
-		 * is cleared if we don't delete, otherwise it can lead to
-		 * corruptions if the i_size is extented later.
-		 */
-		if (found_ordered && !completed_ordered)
-			delete = false;
-		clear_extent_bit(tree, page_start, page_end, EXTENT_LOCKED |
+			clear_extent_bit(tree, cur, range_end, EXTENT_LOCKED |
 				 EXTENT_DELALLOC | EXTENT_UPTODATE |
 				 EXTENT_DO_ACCOUNTING | EXTENT_DEFRAG, 1,
-				 delete, &cached_state);
-
-		__btrfs_releasepage(page, GFP_NOFS);
+				 delete_states, &cached_state);
+		}
+		cur = range_end + 1;
 	}
-
+	/*
+	 * We have iterated through all ordered extents of the page, the page
+	 * should not have Ordered (Private2) anymore, or the above iteration
+	 * did something wrong.
+	 */
+	ASSERT(!PageOrdered(page));
+	if (!inode_evicting)
+		__btrfs_releasepage(page, GFP_NOFS);
 	ClearPageChecked(page);
 	clear_page_extent_mapped(page);
 }
