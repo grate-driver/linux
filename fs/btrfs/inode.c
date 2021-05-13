@@ -3140,15 +3140,19 @@ zeroit:
  * @bio_offset:	offset to the beginning of the bio (in bytes)
  * @start:	file offset of the range start
  * @end:	file offset of the range end (inclusive)
+ *
+ * Return a bitmap where bit set means a csum mismatch, and bit not set means
+ * csum match.
  */
-int btrfs_verify_data_csum(struct btrfs_io_bio *io_bio, u32 bio_offset,
-			   struct page *page, u64 start, u64 end)
+unsigned int btrfs_verify_data_csum(struct btrfs_io_bio *io_bio, u32 bio_offset,
+				    struct page *page, u64 start, u64 end)
 {
 	struct inode *inode = page->mapping->host;
 	struct extent_io_tree *io_tree = &BTRFS_I(inode)->io_tree;
 	struct btrfs_root *root = BTRFS_I(inode)->root;
 	const u32 sectorsize = root->fs_info->sectorsize;
 	u32 pg_off;
+	unsigned int result = 0;
 
 	if (PageChecked(page)) {
 		ClearPageChecked(page);
@@ -3176,10 +3180,14 @@ int btrfs_verify_data_csum(struct btrfs_io_bio *io_bio, u32 bio_offset,
 
 		ret = check_data_csum(inode, io_bio, bio_offset, page, pg_off,
 				      page_offset(page) + pg_off);
-		if (ret < 0)
-			return -EIO;
+		if (ret < 0) {
+			const int nr_bit = (pg_off - offset_in_page(start)) >>
+				     root->fs_info->sectorsize_bits;
+
+			result |= (1U << nr_bit);
+		}
 	}
-	return 0;
+	return result;
 }
 
 /*
@@ -3241,6 +3249,7 @@ void btrfs_run_delayed_iputs(struct btrfs_fs_info *fs_info)
 		inode = list_first_entry(&fs_info->delayed_iputs,
 				struct btrfs_inode, delayed_iput);
 		run_delayed_iput_locked(fs_info, inode);
+		cond_resched_lock(&fs_info->delayed_iput_lock);
 	}
 	spin_unlock(&fs_info->delayed_iput_lock);
 }
@@ -7924,19 +7933,17 @@ static blk_status_t btrfs_check_read_dio_bio(struct inode *inode,
 						 btrfs_ino(BTRFS_I(inode)),
 						 pgoff);
 			} else {
-				blk_status_t status;
+				int ret;
 
 				ASSERT((start - io_bio->logical) < UINT_MAX);
-				status = btrfs_submit_read_repair(inode,
-							&io_bio->bio,
-							start - io_bio->logical,
-							bvec.bv_page, pgoff,
-							start,
-							start + sectorsize - 1,
-							io_bio->mirror_num,
-							submit_dio_repair_bio);
-				if (status)
-					err = status;
+				ret = btrfs_repair_one_sector(inode,
+						&io_bio->bio,
+						start - io_bio->logical,
+						bvec.bv_page, pgoff,
+						start, io_bio->mirror_num,
+						submit_dio_repair_bio);
+				if (ret)
+					err = errno_to_blk_status(ret);
 			}
 			start += sectorsize;
 			ASSERT(bio_offset + sectorsize > bio_offset);
@@ -9678,7 +9685,7 @@ out:
 	return ret;
 }
 
-int btrfs_start_delalloc_snapshot(struct btrfs_root *root)
+int btrfs_start_delalloc_snapshot(struct btrfs_root *root, bool in_reclaim_context)
 {
 	struct writeback_control wbc = {
 		.nr_to_write = LONG_MAX,
@@ -9691,7 +9698,7 @@ int btrfs_start_delalloc_snapshot(struct btrfs_root *root)
 	if (test_bit(BTRFS_FS_STATE_ERROR, &fs_info->fs_state))
 		return -EROFS;
 
-	return start_delalloc_inodes(root, &wbc, true, false);
+	return start_delalloc_inodes(root, &wbc, true, in_reclaim_context);
 }
 
 int btrfs_start_delalloc_roots(struct btrfs_fs_info *fs_info, long nr,

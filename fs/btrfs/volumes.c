@@ -1459,7 +1459,7 @@ static bool dev_extent_hole_check_zoned(struct btrfs_device *device,
 		/* Given hole range was invalid (outside of device) */
 		if (ret == -ERANGE) {
 			*hole_start += *hole_size;
-			*hole_size = false;
+			*hole_size = 0;
 			return true;
 		}
 
@@ -6670,8 +6670,6 @@ blk_status_t btrfs_map_bio(struct btrfs_fs_info *fs_info, struct bio *bio,
  *
  * If devid and uuid are both specified, the match must be exact, otherwise
  * only devid is used.
- *
- * If @seed is true, traverse through the seed devices.
  */
 struct btrfs_device *btrfs_find_device(struct btrfs_fs_devices *fs_devices,
 				       u64 devid, u8 *uuid, u8 *fsid)
