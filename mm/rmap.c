@@ -1742,12 +1742,14 @@ static int page_not_mapped(struct page *page)
 }
 
 /**
- * try_to_unmap - try to remove all page table mappings to a page
- * @page: the page to get unmapped
+ * try_to_unmap - try to remove all page table mappings to a page and the
+ *                compound page it belongs to
+ * @page: the page or the subpages of compound page to get unmapped
  * @flags: action and flags
  *
  * Tries to remove all the page table entries which are mapping this
- * page, used in the pageout path.  Caller must hold the page lock.
+ * page and the compound page it belongs to, used in the pageout path.
+ * Caller must hold the page lock.
  *
  * If unmap is successful, return true. Otherwise, false.
  */
@@ -1777,7 +1779,7 @@ bool try_to_unmap(struct page *page, enum ttu_flags flags)
 	else
 		rmap_walk(page, &rwc);
 
-	return !page_mapcount(page) ? true : false;
+	return !total_mapcount(page) ? true : false;
 }
 
 /**
