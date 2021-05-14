@@ -147,12 +147,11 @@ vchiq_blocking_bulk_transfer(unsigned int handle, void *data,
 	unsigned int size, enum vchiq_bulk_dir dir);
 
 #define VCHIQ_INIT_RETRIES 10
-enum vchiq_status vchiq_initialise(struct vchiq_instance **instance_out)
+int vchiq_initialise(struct vchiq_instance **instance_out)
 {
-	enum vchiq_status status = VCHIQ_ERROR;
 	struct vchiq_state *state;
 	struct vchiq_instance *instance = NULL;
-	int i;
+	int i, ret;
 
 	vchiq_log_trace(vchiq_core_log_level, "%s called", __func__);
 
@@ -170,6 +169,7 @@ enum vchiq_status vchiq_initialise(struct vchiq_instance **instance_out)
 	if (i == VCHIQ_INIT_RETRIES) {
 		vchiq_log_error(vchiq_core_log_level,
 			"%s: videocore not initialized\n", __func__);
+		ret = -ENOTCONN;
 		goto failed;
 	} else if (i > 0) {
 		vchiq_log_warning(vchiq_core_log_level,
@@ -181,6 +181,7 @@ enum vchiq_status vchiq_initialise(struct vchiq_instance **instance_out)
 	if (!instance) {
 		vchiq_log_error(vchiq_core_log_level,
 			"%s: error allocating vchiq instance\n", __func__);
+		ret = -ENOMEM;
 		goto failed;
 	}
 
@@ -191,13 +192,13 @@ enum vchiq_status vchiq_initialise(struct vchiq_instance **instance_out)
 
 	*instance_out = instance;
 
-	status = VCHIQ_SUCCESS;
+	ret = 0;
 
 failed:
 	vchiq_log_trace(vchiq_core_log_level,
-		"%s(%p): returning %d", __func__, instance, status);
+		"%s(%p): returning %d", __func__, instance, ret);
 
-	return status;
+	return ret;
 }
 EXPORT_SYMBOL(vchiq_initialise);
 
@@ -602,7 +603,9 @@ service_callback(enum vchiq_reason reason, struct vchiq_header *header,
 	DEBUG_TRACE(SERVICE_CALLBACK_LINE);
 
 	service = handle_to_service(handle);
-	BUG_ON(!service);
+	if (WARN_ON(!service))
+		return VCHIQ_SUCCESS;
+
 	user_service = (struct user_service *)service->base.userdata;
 	instance = user_service->instance;
 
@@ -918,8 +921,12 @@ static int vchiq_ioc_dequeue_message(struct vchiq_instance *instance,
 			goto out;
 	}
 
-	BUG_ON((int)(user_service->msg_insert -
-		user_service->msg_remove) < 0);
+	if (WARN_ON_ONCE((int)(user_service->msg_insert -
+			 user_service->msg_remove) < 0)) {
+		spin_unlock(&msg_queue_spinlock);
+		ret = -EINVAL;
+		goto out;
+	}
 
 	header = user_service->msg_queue[user_service->msg_remove &
 		(MSG_QUEUE_SIZE - 1)];
@@ -1379,21 +1386,20 @@ vchiq_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 		service = find_service_for_instance(instance, handle);
 		if (service) {
-			status = (cmd == VCHIQ_IOC_USE_SERVICE)	?
+			ret = (cmd == VCHIQ_IOC_USE_SERVICE) ?
 				vchiq_use_service_internal(service) :
 				vchiq_release_service_internal(service);
-			if (status != VCHIQ_SUCCESS) {
+			if (ret) {
 				vchiq_log_error(vchiq_susp_log_level,
-					"%s: cmd %s returned error %d for service %c%c%c%c:%03d",
+					"%s: cmd %s returned error %ld for service %c%c%c%c:%03d",
 					__func__,
 					(cmd == VCHIQ_IOC_USE_SERVICE) ?
 						"VCHIQ_IOC_USE_SERVICE" :
 						"VCHIQ_IOC_RELEASE_SERVICE",
-					status,
+					ret,
 					VCHIQ_FOURCC_AS_4CHARS(
 						service->base.fourcc),
 					service->client_id);
-				ret = -EINVAL;
 			}
 		} else
 			ret = -EINVAL;
@@ -1512,8 +1518,8 @@ vchiq_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			break;
 		}
 
-		status = vchiq_set_service_option(
-				args.handle, args.option, args.value);
+		ret = vchiq_set_service_option(args.handle, args.option,
+					       args.value);
 	} break;
 
 	case VCHIQ_IOC_LIB_VERSION: {
@@ -1937,7 +1943,10 @@ static int vchiq_release(struct inode *inode, struct file *file)
 
 		wait_for_completion(&service->remove_event);
 
-		BUG_ON(service->srvstate != VCHIQ_SRVSTATE_FREE);
+		if (WARN_ON(service->srvstate != VCHIQ_SRVSTATE_FREE)) {
+			unlock_service(service);
+			break;
+		}
 
 		spin_lock(&msg_queue_spinlock);
 
@@ -2228,6 +2237,7 @@ vchiq_keepalive_thread_func(void *v)
 	enum vchiq_status status;
 	struct vchiq_instance *instance;
 	unsigned int ka_handle;
+	int ret;
 
 	struct vchiq_service_params_kernel params = {
 		.fourcc      = VCHIQ_MAKE_FOURCC('K', 'E', 'E', 'P'),
@@ -2236,10 +2246,10 @@ vchiq_keepalive_thread_func(void *v)
 		.version_min = KEEPALIVE_VER_MIN
 	};
 
-	status = vchiq_initialise(&instance);
-	if (status != VCHIQ_SUCCESS) {
+	ret = vchiq_initialise(&instance);
+	if (ret) {
 		vchiq_log_error(vchiq_susp_log_level,
-			"%s vchiq_initialise failed %d", __func__, status);
+			"%s vchiq_initialise failed %d", __func__, ret);
 		goto exit;
 	}
 
@@ -2303,7 +2313,7 @@ exit:
 	return 0;
 }
 
-enum vchiq_status
+void
 vchiq_arm_init_state(struct vchiq_state *state,
 		     struct vchiq_arm_state *arm_state)
 {
@@ -2319,21 +2329,20 @@ vchiq_arm_init_state(struct vchiq_state *state,
 		arm_state->first_connect = 0;
 
 	}
-	return VCHIQ_SUCCESS;
 }
 
-enum vchiq_status
+int
 vchiq_use_internal(struct vchiq_state *state, struct vchiq_service *service,
 		   enum USE_TYPE_E use_type)
 {
 	struct vchiq_arm_state *arm_state = vchiq_platform_get_arm_state(state);
-	enum vchiq_status ret = VCHIQ_SUCCESS;
+	int ret = 0;
 	char entity[16];
 	int *entity_uc;
 	int local_uc;
 
 	if (!arm_state) {
-		ret = VCHIQ_ERROR;
+		ret = -EINVAL;
 		goto out;
 	}
 
@@ -2349,7 +2358,7 @@ vchiq_use_internal(struct vchiq_state *state, struct vchiq_service *service,
 		entity_uc = &service->service_use_count;
 	} else {
 		vchiq_log_error(vchiq_susp_log_level, "%s null service ptr", __func__);
-		ret = VCHIQ_ERROR;
+		ret = -EINVAL;
 		goto out;
 	}
 
@@ -2363,7 +2372,7 @@ vchiq_use_internal(struct vchiq_state *state, struct vchiq_service *service,
 
 	write_unlock_bh(&arm_state->susp_res_lock);
 
-	if (ret == VCHIQ_SUCCESS) {
+	if (!ret) {
 		enum vchiq_status status = VCHIQ_SUCCESS;
 		long ack_cnt = atomic_xchg(&arm_state->ka_use_ack_count, 0);
 
@@ -2383,16 +2392,16 @@ out:
 	return ret;
 }
 
-enum vchiq_status
+int
 vchiq_release_internal(struct vchiq_state *state, struct vchiq_service *service)
 {
 	struct vchiq_arm_state *arm_state = vchiq_platform_get_arm_state(state);
-	enum vchiq_status ret = VCHIQ_SUCCESS;
+	int ret = 0;
 	char entity[16];
 	int *entity_uc;
 
 	if (!arm_state) {
-		ret = VCHIQ_ERROR;
+		ret = -EINVAL;
 		goto out;
 	}
 
@@ -2413,7 +2422,7 @@ vchiq_release_internal(struct vchiq_state *state, struct vchiq_service *service)
 		/* Don't use BUG_ON - don't allow user thread to crash kernel */
 		WARN_ON(!arm_state->videocore_use_count);
 		WARN_ON(!(*entity_uc));
-		ret = VCHIQ_ERROR;
+		ret = -EINVAL;
 		goto unlock;
 	}
 	--arm_state->videocore_use_count;
@@ -2452,13 +2461,13 @@ vchiq_on_remote_release(struct vchiq_state *state)
 	complete(&arm_state->ka_evt);
 }
 
-enum vchiq_status
+int
 vchiq_use_service_internal(struct vchiq_service *service)
 {
 	return vchiq_use_internal(service->state, service, USE_TYPE_SERVICE);
 }
 
-enum vchiq_status
+int
 vchiq_release_service_internal(struct vchiq_service *service)
 {
 	return vchiq_release_internal(service->state, service);

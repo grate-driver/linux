@@ -132,8 +132,9 @@ int vchiq_platform_init(struct platform_device *pdev, struct vchiq_state *state)
 	*(char **)&g_fragments_base[i * g_fragments_size] = NULL;
 	sema_init(&g_free_fragments_sema, MAX_FRAGMENTS);
 
-	if (vchiq_init_state(state, vchiq_slot_zero) != VCHIQ_SUCCESS)
-		return -EINVAL;
+	err = vchiq_init_state(state, vchiq_slot_zero);
+	if (err)
+		return err;
 
 	g_regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(g_regs))
@@ -169,25 +170,21 @@ int vchiq_platform_init(struct platform_device *pdev, struct vchiq_state *state)
 	return 0;
 }
 
-enum vchiq_status
+int
 vchiq_platform_init_state(struct vchiq_state *state)
 {
-	enum vchiq_status status = VCHIQ_SUCCESS;
 	struct vchiq_2835_state *platform_state;
 
 	state->platform_state = kzalloc(sizeof(*platform_state), GFP_KERNEL);
 	if (!state->platform_state)
-		return VCHIQ_ERROR;
+		return -ENOMEM;
 
 	platform_state = (struct vchiq_2835_state *)state->platform_state;
 
 	platform_state->inited = 1;
-	status = vchiq_arm_init_state(state, &platform_state->arm_state);
+	vchiq_arm_init_state(state, &platform_state->arm_state);
 
-	if (status != VCHIQ_SUCCESS)
-		platform_state->inited = 0;
-
-	return status;
+	return 0;
 }
 
 struct vchiq_arm_state*
@@ -215,7 +212,7 @@ remote_event_signal(struct remote_event *event)
 		writel(0, g_regs + BELL2); /* trigger vc interrupt */
 }
 
-enum vchiq_status
+int
 vchiq_prepare_bulk_data(struct vchiq_bulk *bulk, void *offset,
 			void __user *uoffset, int size, int dir)
 {
@@ -227,7 +224,7 @@ vchiq_prepare_bulk_data(struct vchiq_bulk *bulk, void *offset,
 				       : PAGELIST_WRITE);
 
 	if (!pagelistinfo)
-		return VCHIQ_ERROR;
+		return -ENOMEM;
 
 	bulk->data = pagelistinfo->dma_addr;
 
@@ -237,7 +234,7 @@ vchiq_prepare_bulk_data(struct vchiq_bulk *bulk, void *offset,
 	 */
 	bulk->remote_data = pagelistinfo;
 
-	return VCHIQ_SUCCESS;
+	return 0;
 }
 
 void
