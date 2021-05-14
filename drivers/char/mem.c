@@ -31,6 +31,7 @@
 #include <linux/uio.h>
 #include <linux/uaccess.h>
 #include <linux/security.h>
+#include <linux/secretmem.h>
 
 #ifdef CONFIG_IA64
 # include <linux/efi.h>
@@ -64,6 +65,9 @@ static inline int valid_mmap_phys_addr_range(unsigned long pfn, size_t size)
 #ifdef CONFIG_STRICT_DEVMEM
 static inline int page_is_allowed(unsigned long pfn)
 {
+	if (pfn_valid(pfn) && page_is_secretmem(pfn_to_page(pfn)))
+		return 0;
+
 	return devmem_is_allowed(pfn);
 }
 static inline int range_is_allowed(unsigned long pfn, unsigned long size)
