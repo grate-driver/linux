@@ -980,7 +980,99 @@ static const struct st_sensor_settings st_accel_sensors_settings[] = {
 		.multi_read_bit = true,
 		.bootime = 2,
 	},
+	{
+		.wai = 0x49,
+		.wai_addr = ST_SENSORS_DEFAULT_WAI_ADDRESS,
+		.sensors_supported = {
+			[0] = LSM9DS0_IMU_DEV_NAME,
+		},
+		.ch = (struct iio_chan_spec *)st_accel_16bit_channels,
+		.odr = {
+			.addr = 0x20,
+			.mask = GENMASK(7, 4),
+			.odr_avl = {
+				{ 3, 0x01, },
+				{ 6, 0x02, },
+				{ 12, 0x03, },
+				{ 25, 0x04, },
+				{ 50, 0x05, },
+				{ 100, 0x06, },
+				{ 200, 0x07, },
+				{ 400, 0x08, },
+				{ 800, 0x09, },
+				{ 1600, 0x0a, },
+			},
+		},
+		.pw = {
+			.addr = 0x20,
+			.mask = GENMASK(7, 4),
+			.value_off = ST_SENSORS_DEFAULT_POWER_OFF_VALUE,
+		},
+		.enable_axis = {
+			.addr = ST_SENSORS_DEFAULT_AXIS_ADDR,
+			.mask = ST_SENSORS_DEFAULT_AXIS_MASK,
+		},
+		.fs = {
+			.addr = 0x21,
+			.mask = GENMASK(5, 3),
+			.fs_avl = {
+				[0] = {
+					.num = ST_ACCEL_FS_AVL_2G,
+					.value = 0x00,
+					.gain = IIO_G_TO_M_S_2(61),
+				},
+				[1] = {
+					.num = ST_ACCEL_FS_AVL_4G,
+					.value = 0x01,
+					.gain = IIO_G_TO_M_S_2(122),
+				},
+				[2] = {
+					.num = ST_ACCEL_FS_AVL_6G,
+					.value = 0x02,
+					.gain = IIO_G_TO_M_S_2(183),
+				},
+				[3] = {
+					.num = ST_ACCEL_FS_AVL_8G,
+					.value = 0x03,
+					.gain = IIO_G_TO_M_S_2(244),
+				},
+				[4] = {
+					.num = ST_ACCEL_FS_AVL_16G,
+					.value = 0x04,
+					.gain = IIO_G_TO_M_S_2(732),
+				},
+			},
+		},
+		.bdu = {
+			.addr = 0x20,
+			.mask = BIT(3),
+		},
+		.drdy_irq = {
+			.int1 = {
+				.addr = 0x22,
+				.mask = BIT(2),
+			},
+			.int2 = {
+				.addr = 0x23,
+				.mask = BIT(3),
+			},
+			.stat_drdy = {
+				.addr = ST_SENSORS_DEFAULT_STAT_ADDR,
+				.mask = GENMASK(2, 0),
+			},
+		},
+		.sim = {
+			.addr = 0x21,
+			.value = BIT(0),
+		},
+		.multi_read_bit = true,
+		.bootime = 2,
+	},
+};
 
+/* Default accel DRDY is available on INT1 pin */
+static const struct st_sensors_platform_data default_accel_pdata = {
+	.drdy_int_pin = 1,
 };
 
 static int st_accel_read_raw(struct iio_dev *indio_dev,
@@ -1255,13 +1347,9 @@ int st_accel_common_probe(struct iio_dev *indio_dev)
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->info = &accel_info;
 
-	err = st_sensors_power_enable(indio_dev);
-	if (err)
-		return err;
-
 	err = st_sensors_verify_id(indio_dev);
 	if (err < 0)
-		goto st_accel_power_off;
+		return err;
 
 	adata->num_data_channels = ST_ACCEL_NUMBER_DATA_CHANNELS;
 	indio_dev->num_channels = ST_SENSORS_NUMBER_ALL_CHANNELS;
@@ -1270,10 +1358,8 @@ int st_accel_common_probe(struct iio_dev *indio_dev)
 	channels = devm_kmemdup(&indio_dev->dev,
 				adata->sensor_settings->ch,
 				channels_size, GFP_KERNEL);
-	if (!channels) {
-		err = -ENOMEM;
-		goto st_accel_power_off;
-	}
+	if (!channels)
+		return -ENOMEM;
 
 	if (apply_acpi_orientation(indio_dev, channels))
 		dev_warn(&indio_dev->dev,
@@ -1288,11 +1374,11 @@ int st_accel_common_probe(struct iio_dev *indio_dev)
 
 	err = st_sensors_init_sensor(indio_dev, pdata);
 	if (err < 0)
-		goto st_accel_power_off;
+		return err;
 
 	err = st_accel_allocate_ring(indio_dev);
 	if (err < 0)
-		goto st_accel_power_off;
+		return err;
 
 	if (adata->irq > 0) {
 		err = st_sensors_allocate_trigger(indio_dev,
@@ -1315,9 +1401,6 @@ st_accel_device_register_error:
 		st_sensors_deallocate_trigger(indio_dev);
 st_accel_probe_trigger_error:
 	st_accel_deallocate_ring(indio_dev);
-st_accel_power_off:
-	st_sensors_power_disable(indio_dev);
-
 	return err;
 }
 EXPORT_SYMBOL(st_accel_common_probe);
@@ -1325,8 +1408,6 @@ EXPORT_SYMBOL(st_accel_common_probe);
 void st_accel_common_remove(struct iio_dev *indio_dev)
 {
 	struct st_sensor_data *adata = iio_priv(indio_dev);
-
-	st_sensors_power_disable(indio_dev);
 
 	iio_device_unregister(indio_dev);
 	if (adata->irq > 0)
