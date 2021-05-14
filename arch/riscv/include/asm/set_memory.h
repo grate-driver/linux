@@ -32,8 +32,8 @@ void protect_kernel_linear_mapping_text_rodata(void);
 static inline void protect_kernel_linear_mapping_text_rodata(void) {}
 #endif
 
-int set_direct_map_invalid_noflush(struct page *page);
-int set_direct_map_default_noflush(struct page *page);
+int set_direct_map_invalid_noflush(struct page *page, int numpages);
+int set_direct_map_default_noflush(struct page *page, int numpages);
 bool kernel_page_present(struct page *page);
 
 #endif /* __ASSEMBLY__ */
