@@ -106,8 +106,10 @@ static int codegen_datasec_def(struct bpf_object *obj,
 
 	if (strcmp(sec_name, ".data") == 0) {
 		sec_ident = "data";
+		strip_mods = true;
 	} else if (strcmp(sec_name, ".bss") == 0) {
 		sec_ident = "bss";
+		strip_mods = true;
 	} else if (strcmp(sec_name, ".rodata") == 0) {
 		sec_ident = "rodata";
 		strip_mods = true;
@@ -128,6 +130,10 @@ static int codegen_datasec_def(struct bpf_object *obj,
 		);
 		int need_off = sec_var->offset, align_off, align;
 		__u32 var_type_id = var->type;
+
+		/* static variables are not exposed through BPF skeleton */
+		if (btf_var(var)->linkage == BTF_VAR_STATIC)
+			continue;
 
 		if (off > need_off) {
 			p_err("Something is wrong for %s's variable #%d: need offset %d, already at %d.\n",
@@ -636,7 +642,7 @@ static int do_object(int argc, char **argv)
 	while (argc) {
 		file = GET_ARG();
 
-		err = bpf_linker__add_file(linker, file);
+		err = bpf_linker__add_file(linker, file, NULL);
 		if (err) {
 			p_err("failed to link '%s': %s (%d)", file, strerror(err), err);
 			goto out;
