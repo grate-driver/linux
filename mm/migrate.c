@@ -226,8 +226,10 @@ static bool remove_migration_pte(struct page *page, struct vm_area_struct *vma,
 
 #ifdef CONFIG_HUGETLB_PAGE
 		if (PageHuge(new)) {
+			unsigned int shift = huge_page_shift(hstate_vma(vma));
+
 			pte = pte_mkhuge(pte);
-			pte = arch_make_huge_pte(pte, vma, new, 0);
+			pte = arch_make_huge_pte(pte, shift, vma->vm_flags);
 			set_huge_pte_at(vma->vm_mm, pvmw.address, pvmw.pte, pte);
 			if (PageAnon(new))
 				hugepage_add_anon_rmap(new, vma, pvmw.address);
@@ -625,7 +627,10 @@ void migrate_page_states(struct page *newpage, struct page *page)
 	if (PageSwapCache(page))
 		ClearPageSwapCache(page);
 	ClearPagePrivate(page);
-	set_page_private(page, 0);
+
+	/* page->private contains hugetlb specific flags */
+	if (!PageHuge(page))
+		set_page_private(page, 0);
 
 	/*
 	 * If any waiters have accumulated on the new page then
