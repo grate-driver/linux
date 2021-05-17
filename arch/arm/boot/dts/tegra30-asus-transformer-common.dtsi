@@ -22,7 +22,6 @@
 		display0 = &lcd;
 		display1 = &hdmi;
 
-		serial0 = &uartd; /* reserved: console */
 		serial1 = &uartc; /* Bluetooth */
 		serial2 = &uartb; /* GPS */
 	};
@@ -959,6 +958,15 @@
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
 
+			/* Used to configure emmc */
+			cam_mclk_pcc0 {
+				nvidia,pins = "cam_mclk_pcc0";
+				nvidia,function = "vi_alt3";
+				nvidia,pull = <TEGRA_PIN_PULL_UP>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+
 			/* GPIO power/drive control */
 			drive_dap1 {
 				nvidia,pins = "drive_dap1",
@@ -1252,25 +1260,25 @@
 
 				vdd_1v8: vio {
 					regulator-name = "vdd_1v8_gen";
-					regulator-min-microvolt = <1800000>;
-					regulator-max-microvolt = <1800000>;
+					regulator-min-microvolt = <1500000>;
+					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
 					regulator-boot-on;
 				};
 
 				/* eMMC VDD */
-				vddio_emmc: ldo1 {
+				vcore_emmc: ldo1 {
 					regulator-name = "vdd_pexa,vdd_pexb";
 					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3340000>;
+					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
 				};
 
 				/* uSD slot VDD */
 				vdd_usd: ldo2 {
 					regulator-name = "vdd_sata,avdd_plle";
-					regulator-min-microvolt = <3100000>;
-					regulator-max-microvolt = <3140000>;
+					regulator-min-microvolt = <1050000>;
+					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
 				};
 
@@ -1288,11 +1296,7 @@
 					regulator-always-on;
 				};
 
-				vdac_vdd_reg: ldo5 {
-					regulator-name = "vddio_sdmmc,avdd_vdac";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
-				};
+				/* ldo5 is not used by transformers */
 
 				ldo6 {
 					regulator-name = "avdd_dsi_csi,pwrdet_mipi";
@@ -1409,16 +1413,7 @@
 		vin-supply = <&vdd_1v8>;
 	};
 
-	vcore_emmc: regulator@7 {
-		compatible = "regulator-fixed";
-		regulator-name = "vcore_emmc";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-always-on;
-		gpio = <&gpio TEGRA_GPIO(D, 1) GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		vin-supply = <&vdd_3v3_sys>;
-	};
+	/* fixed regulator 7 is used by tf700t */
 
 	pmc@7000e400 {
 		status = "okay";
@@ -1515,7 +1510,7 @@
 		status = "okay";
 		bus-width = <8>;
 		vmmc-supply = <&vcore_emmc>;
-		vqmmc-supply = <&vddio_emmc>;
+		vqmmc-supply = <&vdd_1v8>;
 		non-removable;
 	};
 

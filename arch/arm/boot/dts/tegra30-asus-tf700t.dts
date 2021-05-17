@@ -62,13 +62,6 @@
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
-			cam_mclk_pcc0 {
-				nvidia,pins = "cam_mclk_pcc0";
-				nvidia,function = "vi_alt3";
-				nvidia,pull = <TEGRA_PIN_PULL_UP>;
-				nvidia,tristate = <TEGRA_PIN_ENABLE>;
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
-			};
 		};
 	};
 
@@ -200,7 +193,7 @@
 		};
 	};
 
-	vdd_1v2: regulator@8 {
+	vdd_1v2: regulator@7 {
 		compatible = "regulator-fixed";
 		regulator-name = "tc358768_1v2_vdd";
 		regulator-min-microvolt = <1200000>;
