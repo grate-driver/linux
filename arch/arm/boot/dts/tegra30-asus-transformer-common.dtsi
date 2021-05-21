@@ -70,7 +70,7 @@
 			status = "okay";
 
 			hdmi-supply = <&hdmi_5v0_sys>;
-			pll-supply = <&vdd_1v8>;
+			pll-supply = <&vdd_1v8_vio>;
 			vdd-supply = <&vdd_3v3_sys>;
 
 			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
@@ -1036,7 +1036,7 @@
 			clock-names = "txco";
 
 			vbat-supply  = <&vdd_3v3_com>;
-			vddio-supply = <&vdd_1v8>;
+			vddio-supply = <&vdd_1v8_vio>;
 
 			device-wakeup-gpios = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
 			host-wakeup-gpios =   <&gpio TEGRA_GPIO(U, 6) GPIO_ACTIVE_HIGH>;
@@ -1052,16 +1052,13 @@
 		status = "okay";
 		clock-frequency = <100000>;
 
-		/* Fortemedia FM34NE voice processor */
-		dsp@60 {
-			compatible = "fortemedia,fm34";
-			reg = <0x60>;
-
-			vddc-supply = <&vdd_1v8>;
-			vdda-supply = <&vdd_1v8>;					/* fm34_power_down */
-
-			reset-gpios = <&gpio TEGRA_GPIO(O, 3) GPIO_ACTIVE_LOW>;		/* fm34_reset, out, hi */
-		};
+		/*
+		 * Fortemedia FM34NE voice processor 
+		 * dsp@60
+		 * vdd_1v8_dsp - 1.8v fixed regulator PP3 gpio
+		 * vdd_dsp_reg - 1.8v fixed regulator PBB6 gpio
+		 * reset-gpios - PO3 ACTIVE_LOW (fm34_reset, out, hi)
+		 */
 	};
 
 	i2c2: i2c@7000c400 {		/*i2c2*/
@@ -1134,7 +1131,7 @@
 			reg = <0x0e>;
 
 			avdd-supply = <&vdd_3v3_sys>;
-			dvdd-supply = <&vdd_1v8>;
+			dvdd-supply = <&vdd_1v8_vio>;
 		};
 
 		/* Dynaimage ambient light sensor */
@@ -1156,7 +1153,7 @@
 			interrupts = <TEGRA_GPIO(X, 1) IRQ_TYPE_EDGE_RISING>;
 
 			vdd-supply    = <&vdd_3v3_sys>;
-			vlogic-supply = <&vdd_1v8>;
+			vlogic-supply = <&vdd_1v8_vio>;
 
 			/* External I2C interface */
 			i2c-gate {
@@ -1171,7 +1168,7 @@
 					interrupts = <TEGRA_GPIO(O, 5) IRQ_TYPE_EDGE_RISING>;
 
 					vdd-supply = <&vdd_3v3_sys>;
-					vddio-supply = <&vdd_1v8>;
+					vddio-supply = <&vdd_1v8_vio>;
 				};
 			};
 		};
@@ -1217,14 +1214,20 @@
 			#gpio-cells = <2>;
 			gpio-controller;
 
-			vcc1-supply = <&vdd_5v0_sys>;
-			vcc2-supply = <&vdd_5v0_sys>;
-			vcc3-supply = <&vdd_1v8>;
-			vcc4-supply = <&vdd_5v0_sys>;
-			vcc5-supply = <&vdd_5v0_sys>;
+			vcc1-supply = <&vdd_5v0_bat>;
+			vcc2-supply = <&vdd_5v0_bat>;
+			vcc3-supply = <&vdd_1v8_vio>;
+			vcc4-supply = <&vdd_5v0_bat>; /* ldo5 unused by tf */
+			vcc5-supply = <&vdd_5v0_bat>;
 			vcc6-supply = <&vdd2_reg>;
-			vcc7-supply = <&vdd_5v0_sys>;
-			vccio-supply = <&vdd_5v0_sys>;
+			vcc7-supply = <&vdd_5v0_bat>;
+			vccio-supply = <&vdd_5v0_bat>;
+
+			pmic-sleep-hog {
+				gpio-hog;
+				gpios = <2 GPIO_ACTIVE_HIGH>;
+				output-high;
+			};
 
 			regulators {
 				vdd1 {
@@ -1237,7 +1240,7 @@
 				};
 
 				vdd2_reg: vdd2 {
-					regulator-name = "vdd2_1v2";
+					regulator-name = "vdd_1v5_gen";
 					regulator-min-microvolt = <600000>;
 					regulator-max-microvolt = <1500000>;
 					regulator-always-on;
@@ -1258,7 +1261,7 @@
 					nvidia,tegra-cpu-regulator;
 				};
 
-				vdd_1v8: vio {
+				vdd_1v8_vio: vio {
 					regulator-name = "vdd_1v8_gen";
 					regulator-min-microvolt = <1500000>;
 					regulator-max-microvolt = <3300000>;
@@ -1277,7 +1280,7 @@
 				/* uSD slot VDD */
 				vdd_usd: ldo2 {
 					regulator-name = "vdd_sata,avdd_plle";
-					regulator-min-microvolt = <1050000>;
+					regulator-min-microvolt = <1000000>;
 					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
 				};
@@ -1343,25 +1346,62 @@
 		};
 	};
 
-	vdd_5v0_sys: regulator@0 {
+	vdd_5v0_bat: regulator@0 {
 		compatible = "regulator-fixed";
-		regulator-name = "vdd_5v0";
+		regulator-name = "vdd_ac_bat";
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
 		regulator-boot-on;
 	};
 
-	vdd_3v3_sys: regulator@1 {
+	vdd_5v0_cp: regulator@1 {
 		compatible = "regulator-fixed";
-		regulator-name = "vdd_3v3";
+		regulator-name = "vdd_5v0_sby";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		regulator-boot-on;
+		gpio = <&pmic 0 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&vdd_5v0_bat>;
+	};
+
+	vdd_5v0_sys: regulator@2 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_5v0_sys";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		regulator-boot-on;
+		gpio = <&pmic 8 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&vdd_5v0_bat>;
+	};
+
+	vdd_1v5_ddr: regulator@3 {
+		compatible = "regulator-fixed";
+		regulator-name = "mem_vddio_ddr";
+		regulator-min-microvolt = <1500000>;
+		regulator-max-microvolt = <1500000>;
+		regulator-always-on;
+		regulator-boot-on;
+		gpio = <&pmic 7 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
+	vdd_3v3_sys: regulator@4 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_3v3_sys";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
 		regulator-boot-on;
+		gpio = <&pmic 6 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
 	};
 
-	vdd_pnl: regulator@2 {
+	vdd_pnl: regulator@5 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_panel";
 		regulator-min-microvolt = <3300000>;
@@ -1372,7 +1412,9 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	vdd_3v3_com: regulator@3 {
+	/* fixed regulator 6 is used by tf700t */
+
+	vdd_3v3_com: regulator@7 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3_com";
 		regulator-min-microvolt = <3300000>;
@@ -1383,7 +1425,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	hdmi_5v0_sys: regulator@4 {
+	hdmi_5v0_sys: regulator@8 {
 		compatible = "regulator-fixed";
 		regulator-name = "hdmi_5v0_sys";
 		regulator-min-microvolt = <5000000>;
@@ -1393,7 +1435,7 @@
 		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	vdd_2v85_cam2: regulator@5 {
+	vdd_2v85_cam2: regulator@9 {
 		compatible = "regulator-fixed";
 		regulator-name = "cam3_ldo_en";
 		regulator-min-microvolt = <2850000>;
@@ -1403,17 +1445,15 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	vddio_1v8_cam: regulator@6 {
+	vddio_1v8_cam: regulator@10 {
 		compatible = "regulator-fixed";
 		regulator-name = "vddio_1v8_cam";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 		gpio = <&gpio TEGRA_GPIO(BB, 4) GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-		vin-supply = <&vdd_1v8>;
+		vin-supply = <&vdd_1v8_vio>;
 	};
-
-	/* fixed regulator 7 is used by tf700t */
 
 	pmc@7000e400 {
 		status = "okay";
@@ -1493,7 +1533,7 @@
 
 		mmc-pwrseq = <&brcm_wifi_pwrseq>;
 		vmmc-supply = <&vdd_3v3_com>;
-		vqmmc-supply = <&vdd_1v8>;
+		vqmmc-supply = <&vdd_1v8_vio>;
 
 		/* Azurewave AW-NH615 BCM4329 or AW-NH665 BCM4330 */
 		wifi@1 {
@@ -1510,7 +1550,7 @@
 		status = "okay";
 		bus-width = <8>;
 		vmmc-supply = <&vcore_emmc>;
-		vqmmc-supply = <&vdd_1v8>;
+		vqmmc-supply = <&vdd_1v8_vio>;
 		mmc-ddr-3_3v;
 		non-removable;
 	};
@@ -1528,7 +1568,7 @@
 		nvidia,hssync-start-delay = <0>;
 		nvidia,xcvr-lsfslew = <2>;
 		nvidia,xcvr-lsrslew = <2>;
-		vbus-supply = <&vdd_5v0_sys>;
+		vbus-supply = <&vdd_5v0_bat>;
 	};
 
 	/* Dock's USB port */
@@ -1538,7 +1578,7 @@
 
 	usb-phy@7d008000 {
 		status = "okay";
-		vbus-supply = <&vdd_5v0_sys>;
+		vbus-supply = <&vdd_5v0_bat>;
 	};
 
 	backlight: backlight {

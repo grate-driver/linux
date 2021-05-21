@@ -94,9 +94,9 @@
 			reset-gpios = <&gpio TEGRA_GPIO(N, 6) GPIO_ACTIVE_LOW>,
 				      <&gpio TEGRA_GPIO(X, 0) GPIO_ACTIVE_LOW>;
 
-			vddc-supply = <&vdd_1v2>;
-			vddio-supply = <&vdd_1v8>;
-			vddmipi-supply = <&vdd_1v2>;
+			vddc-supply = <&vdd_1v2_mipi>;
+			vddio-supply = <&vdd_1v8_vio>;
+			vddmipi-supply = <&vdd_1v2_mipi>;
 
 			ports {
 				#address-cells = <1>;
@@ -193,7 +193,7 @@
 		};
 	};
 
-	vdd_1v2: regulator@7 {
+	vdd_1v2_mipi: regulator@6 {
 		compatible = "regulator-fixed";
 		regulator-name = "tc358768_1v2_vdd";
 		regulator-min-microvolt = <1200000>;
