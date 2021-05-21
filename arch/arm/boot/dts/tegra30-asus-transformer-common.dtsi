@@ -1511,6 +1511,7 @@
 		bus-width = <8>;
 		vmmc-supply = <&vcore_emmc>;
 		vqmmc-supply = <&vdd_1v8>;
+		mmc-ddr-3_3v;
 		non-removable;
 	};
 
