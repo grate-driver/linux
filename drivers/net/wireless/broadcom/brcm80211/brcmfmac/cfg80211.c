@@ -2897,6 +2897,13 @@ brcmf_cfg80211_dump_station(struct wiphy *wiphy, struct net_device *ndev,
 
 	brcmf_dbg(TRACE, "Enter, idx %d\n", idx);
 
+	/*
+	 * BCM4329 firmware doesn't support GET_ASSOCLIST and may stop
+	 * operating properly after the call.
+	 */
+	if (brcmf_feat_is_quirk_enabled(ifp, BRCMF_FEAT_QUIRK_NO_GET_ASSOCLIST))
+		return -EOPNOTSUPP;
+
 	if (idx == 0) {
 		cfg->assoclist.count = cpu_to_le32(BRCMF_MAX_ASSOCLIST);
 		err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_ASSOCLIST,
