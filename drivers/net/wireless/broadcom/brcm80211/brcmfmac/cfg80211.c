@@ -2886,6 +2886,12 @@ brcmf_cfg80211_dump_station(struct wiphy *wiphy, struct net_device *ndev,
 
 	brcmf_dbg(TRACE, "Enter, idx %d\n", idx);
 
+	/*
+	 * BCM4329 firmware may die after BRCMF_C_GET_ASSOCLIST.
+	 * This callback is optional, disable it.
+	 */
+	return -EOPNOTSUPP;
+
 	if (idx == 0) {
 		cfg->assoclist.count = cpu_to_le32(BRCMF_MAX_ASSOCLIST);
 		err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_ASSOCLIST,
