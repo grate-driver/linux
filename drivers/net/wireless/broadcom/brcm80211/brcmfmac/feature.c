@@ -304,6 +304,7 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 		break;
 	case BRCM_CC_4329_CHIP_ID:
 		drvr->chip_quirks |= BIT(BRCMF_FEAT_QUIRK_NEED_MPC);
+		drvr->chip_quirks |= BIT(BRCMF_FEAT_QUIRK_NO_GET_ASSOCLIST);
 		break;
 	default:
 		/* no quirks */
