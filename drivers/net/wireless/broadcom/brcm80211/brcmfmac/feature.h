@@ -58,10 +58,12 @@
  *
  * AUTO_AUTH: workaround needed for automatic authentication type.
  * NEED_MPC: driver needs to disable MPC during scanning operation.
+ * NO_GET_ASSOCLIST: driver needs to avoid use of GET_ASSOCLIST firmware call.
  */
 #define BRCMF_QUIRK_LIST \
 	BRCMF_QUIRK_DEF(AUTO_AUTH) \
-	BRCMF_QUIRK_DEF(NEED_MPC)
+	BRCMF_QUIRK_DEF(NEED_MPC) \
+	BRCMF_QUIRK_DEF(NO_GET_ASSOCLIST)
 
 #define BRCMF_FEAT_DEF(_f) \
 	BRCMF_FEAT_ ## _f,
