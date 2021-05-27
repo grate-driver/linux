@@ -202,7 +202,7 @@
 	sound {
 		compatible = "nvidia,tegra-audio-rt5631-tf201",
 			     "nvidia,tegra-audio-rt5631";
-		nvidia,model = "TF201 RT5631";
+		nvidia,model = "ASUS Transformer RT5631";
 
 		nvidia,audio-routing =
 			"Headphone Jack", "HPOL",

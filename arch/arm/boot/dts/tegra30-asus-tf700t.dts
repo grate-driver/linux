@@ -214,7 +214,7 @@
 	sound {
 		compatible = "nvidia,tegra-audio-rt5631-tf700t",
 			     "nvidia,tegra-audio-rt5631";
-		nvidia,model = "TF700T RT5631";
+		nvidia,model = "ASUS Transformer RT5631";
 
 		nvidia,audio-routing =
 			"Headphone Jack", "HPOL",

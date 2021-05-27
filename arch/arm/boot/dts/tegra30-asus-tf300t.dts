@@ -191,7 +191,7 @@
 	sound {
 		compatible = "nvidia,tegra-audio-wm8903-tf300t",
 			     "nvidia,tegra-audio-wm8903";
-		nvidia,model = "TF300T WM8903";
+		nvidia,model = "ASUS Transformer WM8903";
 
 		nvidia,audio-routing =
 			"Headphone Jack", "HPOUTR",
