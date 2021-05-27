@@ -1592,7 +1592,7 @@
 		};
 	};
 
-	gpio-keys {
+	pad-keys {
 		compatible = "gpio-keys";
 		interrupt-parent = <&gpio>;
 
@@ -1622,13 +1622,19 @@
 			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
 		};
+	};
+
+	extcon-keys {
+		compatible = "gpio-keys";
+		interrupt-parent = <&gpio>;
 
 		dock-hall-sensor {
-			label = "Lid";
+			label = "Lid sensor";
 			gpios = <&gpio TEGRA_GPIO(S, 6) GPIO_ACTIVE_LOW>;
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LID>;
-			debounce-interval = <10>;
+			debounce-interval = <500>;
+			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
 		};
 
@@ -1638,6 +1644,7 @@
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_DOCK>;
 			debounce-interval = <10>;
+			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
 		};
 
@@ -1647,6 +1654,7 @@
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LINEOUT_INSERT>;
 			debounce-interval = <10>;
+			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
 		};
 	};
