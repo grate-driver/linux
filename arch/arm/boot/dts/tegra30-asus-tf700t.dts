@@ -129,7 +129,7 @@
 				reg = <1>;
 
 				power-supply = <&vdd_pnl>;
-				backlight = <&backlight_lvds>;
+				backlight = <&backlight>;
 
 				port {
 					panel_input: endpoint {

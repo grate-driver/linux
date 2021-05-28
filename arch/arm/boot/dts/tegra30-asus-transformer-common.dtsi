@@ -1044,7 +1044,7 @@
 		};
 	};
 
-	pwm@7000a000 {
+	pwm: pwm@7000a000 {
 		status = "okay";
 	};
 
@@ -1541,7 +1541,7 @@
 		vbus-supply = <&vdd_5v0_sys>;
 	};
 
-	backlight_lvds: backlight-lvds {
+	backlight: backlight {
 		compatible = "pwm-backlight";
 
 		enable-gpios = <&gpio TEGRA_GPIO(H, 2) GPIO_ACTIVE_HIGH>;

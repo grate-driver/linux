@@ -132,7 +132,7 @@
 		compatible = "panel-lvds";
 
 		power-supply = <&vdd_pnl>;
-		backlight = <&backlight_lvds>;
+		backlight = <&backlight>;
 
 		width-mm = <217>;
 		height-mm = <136>;
