@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2020 NVIDIA Corporation */
 
+#include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 
@@ -19,7 +20,7 @@ static void gather_bo_release(struct kref *ref)
 {
 	struct gather_bo *bo = container_of(ref, struct gather_bo, ref);
 
-	kfree(bo->gather_data);
+	dma_free_attrs(bo->drm_dev, bo->gather_data_words * 4, bo->gather_data, bo->gather_data_dma, 0);
 	kfree(bo);
 }
 
@@ -41,13 +42,12 @@ gather_bo_pin(struct device *dev, struct host1x_bo *host_bo, dma_addr_t *phys)
 	if (!sgt)
 		return ERR_PTR(-ENOMEM);
 
-	err = sg_alloc_table(sgt, 1, GFP_KERNEL);
+	err = dma_get_sgtable(bo->drm_dev, sgt, bo->gather_data,
+			      bo->gather_data_dma, bo->gather_data_words * 4);
 	if (err) {
 		kfree(sgt);
 		return ERR_PTR(err);
 	}
-
-	sg_init_one(sgt->sgl, bo->gather_data, bo->gather_data_words*4);
 
 	return sgt;
 }

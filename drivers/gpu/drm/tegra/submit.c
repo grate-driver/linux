@@ -64,6 +64,7 @@ static void *alloc_copy_user_array(void __user *from, size_t count, size_t size)
 }
 
 static int submit_copy_gather_data(struct gather_bo **pbo,
+				   struct device *drm_dev,
 				   struct tegra_drm_context *ctx,
 				   struct drm_tegra_channel_submit *args)
 {
@@ -89,7 +90,10 @@ static int submit_copy_gather_data(struct gather_bo **pbo,
 	kref_init(&bo->ref);
 	host1x_bo_init(&bo->base, &gather_bo_ops);
 
-	bo->gather_data = kmalloc(copy_len, GFP_KERNEL | __GFP_NOWARN);
+	bo->drm_dev = drm_dev;
+	bo->gather_data =
+		dma_alloc_attrs(drm_dev, copy_len, &bo->gather_data_dma,
+				GFP_KERNEL | __GFP_NOWARN, 0);
 	if (!bo->gather_data) {
 		SUBMIT_ERR(ctx, "failed to allocate memory for gather data");
 		kfree(bo);
@@ -99,7 +103,7 @@ static int submit_copy_gather_data(struct gather_bo **pbo,
 	if (copy_from_user(bo->gather_data,
 			   u64_to_user_ptr(args->gather_data_ptr), copy_len)) {
 		SUBMIT_ERR(ctx, "failed to copy gather data from userspace");
-		kfree(bo->gather_data);
+		dma_free_attrs(drm_dev, copy_len, bo->gather_data, bo->gather_data_dma, 0);
 		kfree(bo);
 		return -EFAULT;
 	}
@@ -461,7 +465,7 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	}
 
 	/* Allocate gather BO and copy gather words in. */
-	err = submit_copy_gather_data(&bo, ctx, args);
+	err = submit_copy_gather_data(&bo, drm->dev, ctx, args);
 	if (err)
 		goto unlock;
 

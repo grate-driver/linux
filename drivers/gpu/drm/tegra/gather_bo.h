@@ -12,7 +12,9 @@ struct gather_bo {
 
 	struct kref ref;
 
+	struct device *drm_dev;
 	u32 *gather_data;
+	dma_addr_t gather_data_dma;
 	size_t gather_data_words;
 };
 
