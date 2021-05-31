@@ -489,8 +489,10 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 
 	/* Map gather data for Host1x. */
 	err = host1x_job_pin(job, ctx->client->base.dev);
-	if (err)
+	if (err) {
+		SUBMIT_ERR(ctx, "failed to pin job: %d", err);
 		goto put_job;
+	}
 
 	/* Boot engine. */
 	if (pm_runtime_enabled(ctx->client->base.dev)) {
@@ -523,8 +525,10 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 
 	if (syncobj) {
 		struct dma_fence *fence = host1x_fence_create(job->syncpt, job->syncpt_end);
-		if (IS_ERR(fence))
+		if (IS_ERR(fence)) {
 			err = PTR_ERR(fence);
+			SUBMIT_ERR(ctx, "failed to create postfence: %d", err);
+		}
 
 		drm_syncobj_replace_fence(syncobj, fence);
 	}
