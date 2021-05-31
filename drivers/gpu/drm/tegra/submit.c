@@ -311,7 +311,7 @@ static int submit_create_job(struct host1x_job **pjob,
 		return PTR_ERR(cmds);
 	}
 
-	job = host1x_job_alloc(ctx->channel, args->num_cmds, 0);
+	job = host1x_job_alloc(ctx->channel, args->num_cmds, 0, true);
 	if (!job) {
 		SUBMIT_ERR(ctx, "failed to allocate memory for job");
 		err = -ENOMEM;
