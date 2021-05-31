@@ -268,43 +268,6 @@ int tegra_drm_ioctl_channel_unmap(struct drm_device *drm, void *data,
 	}
 }
 
-int tegra_drm_ioctl_gem_create(struct drm_device *drm, void *data,
-			       struct drm_file *file)
-{
-	struct drm_tegra_gem_create *args = data;
-	struct tegra_bo *bo;
-
-	if (args->flags)
-		return -EINVAL;
-
-	bo = tegra_bo_create_with_handle(file, drm, args->size, args->flags,
-					 &args->handle);
-	if (IS_ERR(bo))
-		return PTR_ERR(bo);
-
-	return 0;
-}
-
-int tegra_drm_ioctl_gem_mmap(struct drm_device *drm, void *data,
-			     struct drm_file *file)
-{
-	struct drm_tegra_gem_mmap *args = data;
-	struct drm_gem_object *gem;
-	struct tegra_bo *bo;
-
-	gem = drm_gem_object_lookup(file, args->handle);
-	if (!gem)
-		return -EINVAL;
-
-	bo = to_tegra_bo(gem);
-
-	args->offset = drm_vma_node_offset_addr(&bo->gem.vma_node);
-
-	drm_gem_object_put(gem);
-
-	return 0;
-}
-
 int tegra_drm_ioctl_syncpoint_allocate(struct drm_device *drm, void *data,
 				       struct drm_file *file)
 {
