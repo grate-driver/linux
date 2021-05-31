@@ -42,7 +42,7 @@ static int fw_check_reg(struct tegra_drm_firewall *fw, u32 offset)
 {
 	bool is_addr;
 	u32 word;
-	int err;
+	int err, i;
 
 	err = fw_next(fw, &word);
 	if (err)
@@ -57,8 +57,19 @@ static int fw_check_reg(struct tegra_drm_firewall *fw, u32 offset)
 	if (!is_addr)
 		return 0;
 
-	if (!fw_check_addr_valid(fw, word))
+	if (!fw_check_addr_valid(fw, word)) {
+		dev_warn(fw->client->base.dev,
+			 "writing unmapped address 0x%x to address register 0x%x",
+			 word, offset);
+		pr_warn("mapped addresses are: ");
+		for (i = 0; i < fw->submit->num_used_mappings; i++) {
+			struct tegra_drm_mapping *m = fw->submit->used_mappings[i].mapping;
+
+			pr_cont("0x%x..0x%x ", m->iova, m->iova_end);
+		}
+		pr_cont("\n");
 		return -EINVAL;
+	}
 
 	return 0;
 }
