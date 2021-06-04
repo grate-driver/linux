@@ -1051,14 +1051,6 @@
 	i2c@7000c000 {		/*i2c1*/
 		status = "okay";
 		clock-frequency = <100000>;
-
-		/*
-		 * Fortemedia FM34NE voice processor 
-		 * dsp@60
-		 * vdd_1v8_dsp - 1.8v fixed regulator PP3 gpio
-		 * vdd_dsp_reg - 1.8v fixed regulator PBB6 gpio
-		 * reset-gpios - PO3 ACTIVE_LOW (fm34_reset, out, hi)
-		 */
 	};
 
 	i2c2: i2c@7000c400 {		/*i2c2*/
@@ -1066,7 +1058,7 @@
 		clock-frequency = <400000>;
 
 		/* Nuvoton NPCE795LA0BX embedded controller */
-		asusec@15 {
+		embedded-controller@15 {
 			compatible = "asus,pad-ec", "asus,ec";
 			reg = <0x15>;
 
@@ -1077,11 +1069,8 @@
 			asus,dockram = <&dockram_pec>;
 
 			/* Texas Instruments bq24725 SMBus Charge Controller */
-			pad_battery: battery {
-//				power-supplies = <&dock_battery>;
-				charge-full-design = <2940>;	/* mAh */
-				non-removable;
-			};
+			monitored-battery = <&pad_battery>;
+			power-supplies = <&mains>;
 		};
 
 		dockram_pec: dockram@17 {
@@ -1101,7 +1090,7 @@
 
 		i2c-parent = <&i2c2>;
 
-		asusec@19 {
+		embedded-controller@19 {
 			compatible = "asus,dock-ec", "asus,ec";
 			reg = <0x19>;
 
@@ -1111,9 +1100,7 @@
 			request-gpio = <&gpio TEGRA_GPIO(Q, 6) GPIO_ACTIVE_LOW>;
 			asus,dockram = <&dockram_dec>;
 
-			dock_battery: battery {
-				charge-full-design = <2260>;	/* mAh */
-			};
+			monitored-battery = <&dock_battery>;
 		};
 
 		dockram_dec: dockram@1b {
@@ -1283,16 +1270,16 @@
 				/* uSD slot VDD */
 				vdd_usd: ldo2 {
 					regulator-name = "vdd_sata,avdd_plle";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-min-microvolt = <2900000>;
+					regulator-max-microvolt = <2940000>;
 					regulator-always-on;
 				};
 
 				/* uSD slot VDDIO */
 				vddio_usd: ldo3 {
 					regulator-name = "vddio_usd";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <2900000>;
 				};
 
 				ldo4 {
@@ -1635,6 +1622,12 @@
 		};
 	};
 
+	mains: ac-adapter-detect {
+		compatible = "gpio-charger";
+		charger-type = "mains";
+		gpios = <&gpio TEGRA_GPIO(H, 5) GPIO_ACTIVE_HIGH>;
+	};
+
 	pad-keys {
 		compatible = "gpio-keys";
 		interrupt-parent = <&gpio>;
@@ -1677,16 +1670,6 @@
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LID>;
 			debounce-interval = <500>;
-			wakeup-event-action = <EV_ACT_ASSERTED>;
-			wakeup-source;
-		};
-
-		ac-15v {
-			label = "Power adapter 15V";
-			gpios = <&gpio TEGRA_GPIO(H, 5) GPIO_ACTIVE_HIGH>;
-			linux,input-type = <EV_SW>;
-			linux,code = <SW_DOCK>;
-			debounce-interval = <10>;
 			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
 		};
