@@ -42,7 +42,11 @@ struct tegra_cpu_car_ops {
 #endif
 };
 
+#ifdef CONFIG_ARCH_TEGRA
 extern struct tegra_cpu_car_ops *tegra_cpu_car_ops;
+#else
+static struct tegra_cpu_car_ops *tegra_cpu_car_ops __maybe_unused;
+#endif
 
 static inline void tegra_wait_cpu_in_reset(u32 cpu)
 {
