@@ -1121,7 +1121,7 @@ out_qunlock:
 
 static inline bool gfs2_iomap_need_write_lock(unsigned flags)
 {
-	return (flags & IOMAP_WRITE) && !(flags & IOMAP_DIRECT);
+	return (flags & (IOMAP_WRITE | IOMAP_ZERO)) && !(flags & IOMAP_DIRECT);
 }
 
 static int gfs2_iomap_begin(struct inode *inode, loff_t pos, loff_t length,
