@@ -291,7 +291,7 @@ submit_create_job(struct tegra_drm_context *context, struct gather_bo *bo,
 		return ERR_CAST(cmds);
 	}
 
-	job = host1x_job_alloc(context->channel, args->num_cmds, 0);
+	job = host1x_job_alloc(context->channel, args->num_cmds, 0, true);
 	if (!job) {
 		SUBMIT_ERR(context, "failed to allocate memory for job");
 		job = ERR_PTR(-ENOMEM);
