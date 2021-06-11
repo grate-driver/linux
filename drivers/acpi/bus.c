@@ -330,32 +330,21 @@ static void acpi_bus_osc_negotiate_platform_control(void)
 	if (ACPI_FAILURE(acpi_run_osc(handle, &context)))
 		return;
 
-	capbuf_ret = context.ret.pointer;
-	if (context.ret.length <= OSC_SUPPORT_DWORD) {
-		kfree(context.ret.pointer);
-		return;
-	}
-
-	/*
-	 * Now run _OSC again with query flag clear and with the caps
-	 * supported by both the OS and the platform.
-	 */
-	capbuf[OSC_QUERY_DWORD] = 0;
-	capbuf[OSC_SUPPORT_DWORD] = capbuf_ret[OSC_SUPPORT_DWORD];
 	kfree(context.ret.pointer);
+
+	/* Now run _OSC again with query flag clear */
+	capbuf[OSC_QUERY_DWORD] = 0;
 
 	if (ACPI_FAILURE(acpi_run_osc(handle, &context)))
 		return;
 
 	capbuf_ret = context.ret.pointer;
-	if (context.ret.length > OSC_SUPPORT_DWORD) {
-		osc_sb_apei_support_acked =
-			capbuf_ret[OSC_SUPPORT_DWORD] & OSC_SB_APEI_SUPPORT;
-		osc_pc_lpi_support_confirmed =
-			capbuf_ret[OSC_SUPPORT_DWORD] & OSC_SB_PCLPI_SUPPORT;
-		osc_sb_native_usb4_support_confirmed =
-			capbuf_ret[OSC_SUPPORT_DWORD] & OSC_SB_NATIVE_USB4_SUPPORT;
-	}
+	osc_sb_apei_support_acked =
+		capbuf_ret[OSC_SUPPORT_DWORD] & OSC_SB_APEI_SUPPORT;
+	osc_pc_lpi_support_confirmed =
+		capbuf_ret[OSC_SUPPORT_DWORD] & OSC_SB_PCLPI_SUPPORT;
+	osc_sb_native_usb4_support_confirmed =
+		capbuf_ret[OSC_SUPPORT_DWORD] & OSC_SB_NATIVE_USB4_SUPPORT;
 
 	kfree(context.ret.pointer);
 }
@@ -370,7 +359,7 @@ EXPORT_SYMBOL_GPL(osc_sb_native_usb4_control);
 
 static void acpi_bus_decode_usb_osc(const char *msg, u32 bits)
 {
-	printk(KERN_INFO PREFIX "%s USB3%c DisplayPort%c PCIe%c XDomain%c\n", msg,
+	pr_info("%s USB3%c DisplayPort%c PCIe%c XDomain%c\n", msg,
 	       (bits & OSC_USB_USB3_TUNNELING) ? '+' : '-',
 	       (bits & OSC_USB_DP_TUNNELING) ? '+' : '-',
 	       (bits & OSC_USB_PCIE_TUNNELING) ? '+' : '-',
@@ -409,7 +398,7 @@ static void acpi_bus_osc_negotiate_usb_control(void)
 		return;
 
 	if (context.ret.length != sizeof(capbuf)) {
-		printk(KERN_INFO PREFIX "USB4 _OSC: returned invalid length buffer\n");
+		pr_info("USB4 _OSC: returned invalid length buffer\n");
 		goto out_free;
 	}
 
@@ -1325,13 +1314,12 @@ static int __init acpi_init(void)
 	}
 
 	acpi_kobj = kobject_create_and_add("acpi", firmware_kobj);
-	if (!acpi_kobj) {
+	if (!acpi_kobj)
 		pr_debug("%s: kset create error\n", __func__);
-		acpi_kobj = NULL;
-	}
 
 	result = acpi_bus_init();
 	if (result) {
+		kobject_put(acpi_kobj);
 		disable_acpi();
 		return result;
 	}
