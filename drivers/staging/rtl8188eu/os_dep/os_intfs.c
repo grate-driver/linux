@@ -136,7 +136,7 @@ MODULE_PARM_DESC(monitor_enable, "Enable monitor interface (default: false)");
 
 static int netdev_close(struct net_device *pnetdev);
 
-static void loadparam(struct adapter *padapter, struct net_device *pnetdev)
+static void loadparam(struct adapter *padapter)
 {
 	struct registry_priv *registry_par = &padapter->registrypriv;
 
@@ -315,7 +315,8 @@ struct net_device *rtw_init_netdev(void)
 	pnetdev->watchdog_timeo = HZ * 3; /* 3 second timeout */
 	pnetdev->wireless_handlers = (struct iw_handler_def *)&rtw_handlers_def;
 
-	loadparam(padapter, pnetdev);
+	loadparam(padapter);
+	padapter->cmdThread = NULL;
 
 	return pnetdev;
 }
@@ -326,13 +327,11 @@ static int rtw_start_drv_threads(struct adapter *padapter)
 
 	RT_TRACE(_module_os_intfs_c_, _drv_info_, ("+%s\n", __func__));
 
-	padapter->cmdThread = kthread_run(rtw_cmd_thread, padapter,
-					  "RTW_CMD_THREAD");
-	if (IS_ERR(padapter->cmdThread))
+	padapter->cmdThread = kthread_run(rtw_cmd_thread, padapter, "RTW_CMD_THREAD");
+	if (IS_ERR(padapter->cmdThread)) {
 		err = PTR_ERR(padapter->cmdThread);
-	else
-		/* wait for cmd_thread to run */
-		wait_for_completion_interruptible(&padapter->cmdpriv.terminate_cmdthread_comp);
+		padapter->cmdThread = NULL;
+	}
 
 	return err;
 }
@@ -341,10 +340,11 @@ void rtw_stop_drv_threads(struct adapter *padapter)
 {
 	RT_TRACE(_module_os_intfs_c_, _drv_info_, ("+%s\n", __func__));
 
-	/* Below is to terminate rtw_cmd_thread & event_thread... */
+	if (!padapter->cmdThread)
+		return;
+
 	complete(&padapter->cmdpriv.cmd_queue_comp);
-	if (padapter->cmdThread)
-		wait_for_completion_interruptible(&padapter->cmdpriv.terminate_cmdthread_comp);
+	kthread_stop(padapter->cmdThread);
 }
 
 static u8 rtw_init_default_value(struct adapter *padapter)
@@ -424,13 +424,7 @@ u8 rtw_init_drv_sw(struct adapter *padapter)
 
 	RT_TRACE(_module_os_intfs_c_, _drv_info_, ("+%s\n", __func__));
 
-	if ((rtw_init_cmd_priv(&padapter->cmdpriv)) == _FAIL) {
-		RT_TRACE(_module_os_intfs_c_, _drv_err_, ("\n Can't init cmd_priv\n"));
-		ret8 = _FAIL;
-		goto exit;
-	}
-
-	padapter->cmdpriv.padapter = padapter;
+	rtw_init_cmd_priv(&padapter->cmdpriv);
 
 	if (rtw_init_mlme_priv(padapter) == _FAIL) {
 		RT_TRACE(_module_os_intfs_c_, _drv_err_, ("\n Can't init mlme_priv\n"));

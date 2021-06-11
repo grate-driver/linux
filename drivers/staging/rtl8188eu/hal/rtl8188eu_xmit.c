@@ -413,7 +413,7 @@ static u32 xmitframe_need_length(struct xmit_frame *pxmitframe)
 bool rtl8188eu_xmitframe_complete(struct adapter *adapt,
 				  struct xmit_priv *pxmitpriv)
 {
-	struct xmit_frame *pxmitframe = NULL;
+	struct xmit_frame *pxmitframe, *n;
 	struct xmit_frame *pfirstframe = NULL;
 	struct xmit_buf *pxmitbuf;
 
@@ -422,7 +422,7 @@ bool rtl8188eu_xmitframe_complete(struct adapter *adapt,
 	struct sta_info *psta = NULL;
 	struct tx_servq *ptxservq = NULL;
 
-	struct list_head *xmitframe_plist = NULL, *xmitframe_phead = NULL;
+	struct list_head *xmitframe_phead = NULL;
 
 	u32 pbuf;	/*  next pkt address */
 	u32 pbuf_tail;	/*  last pkt tail */
@@ -442,8 +442,6 @@ bool rtl8188eu_xmitframe_complete(struct adapter *adapt,
 		return false;
 
 	/* 3 1. pick up first frame */
-	rtw_free_xmitframe(pxmitpriv, pxmitframe);
-
 	pxmitframe = rtw_dequeue_xframe(pxmitpriv, pxmitpriv->hwxmits, pxmitpriv->hwxmit_entry);
 	if (!pxmitframe) {
 		/*  no more xmit frame, release xmit buffer */
@@ -507,12 +505,7 @@ bool rtl8188eu_xmitframe_complete(struct adapter *adapt,
 	spin_lock_bh(&pxmitpriv->lock);
 
 	xmitframe_phead = get_list_head(&ptxservq->sta_pending);
-	xmitframe_plist = xmitframe_phead->next;
-
-	while (xmitframe_phead != xmitframe_plist) {
-		pxmitframe = container_of(xmitframe_plist, struct xmit_frame, list);
-		xmitframe_plist = xmitframe_plist->next;
-
+	list_for_each_entry_safe(pxmitframe, n, xmitframe_phead, list) {
 		pxmitframe->agg_num = 0; /*  not first frame of aggregation */
 		pxmitframe->pkt_offset = 0; /*  not first frame of aggregation, no need to reserve offset */
 

@@ -7,6 +7,7 @@
 #define _RTW_MLME_EXT_C_
 
 #include <linux/ieee80211.h>
+#include <linux/etherdevice.h>
 #include <asm/unaligned.h>
 
 #include <osdep_service.h>
@@ -314,7 +315,6 @@ static void issue_beacon(struct adapter *padapter, int timeout_ms)
 	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
 	struct mlme_ext_info *pmlmeinfo = &pmlmeext->mlmext_info;
 	struct wlan_bssid_ex *cur_network = &pmlmeinfo->network;
-	u8 bc_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 	pmgntframe = alloc_mgtxmitframe(pxmitpriv);
 	if (!pmgntframe) {
@@ -338,13 +338,13 @@ static void issue_beacon(struct adapter *padapter, int timeout_ms)
 	fctrl = &pwlanhdr->frame_control;
 	*(fctrl) = 0;
 
-	ether_addr_copy(pwlanhdr->addr1, bc_addr);
+	eth_broadcast_addr(pwlanhdr->addr1);
 	ether_addr_copy(pwlanhdr->addr2, myid(&padapter->eeprompriv));
 	ether_addr_copy(pwlanhdr->addr3, cur_network->MacAddress);
 
 	SetSeqNum(pwlanhdr, 0/*pmlmeext->mgnt_seq*/);
 	/* pmlmeext->mgnt_seq++; */
-	SetFrameSubType(pframe, WIFI_BEACON);
+	SetFrameSubType(pframe, IEEE80211_STYPE_BEACON);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -487,7 +487,7 @@ static void issue_probersp(struct adapter *padapter, unsigned char *da)
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(fctrl, WIFI_PROBERSP);
+	SetFrameSubType(fctrl, IEEE80211_STYPE_PROBE_RESP);
 
 	pattrib->hdrlen = sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = pattrib->hdrlen;
@@ -604,7 +604,6 @@ static int issue_probereq(struct adapter *padapter,
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
 	int bssrate_len = 0;
-	u8 bc_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 	RT_TRACE(_module_rtl871x_mlme_c_, _drv_notice_, ("+%s\n", __func__));
 
@@ -632,15 +631,15 @@ static int issue_probereq(struct adapter *padapter,
 		ether_addr_copy(pwlanhdr->addr3, da);
 	} else {
 		/*	broadcast probe request frame */
-		ether_addr_copy(pwlanhdr->addr1, bc_addr);
-		ether_addr_copy(pwlanhdr->addr3, bc_addr);
+		eth_broadcast_addr(pwlanhdr->addr1);
+		eth_broadcast_addr(pwlanhdr->addr3);
 	}
 
 	ether_addr_copy(pwlanhdr->addr2, mac);
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_PROBEREQ);
+	SetFrameSubType(pframe, IEEE80211_STYPE_PROBE_REQ);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -762,7 +761,7 @@ static void issue_auth(struct adapter *padapter, struct sta_info *psta,
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_AUTH);
+	SetFrameSubType(pframe, IEEE80211_STYPE_AUTH);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -912,7 +911,7 @@ static void issue_asocrsp(struct adapter *padapter, unsigned short status,
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	if ((pkt_type == WIFI_ASSOCRSP) || (pkt_type == WIFI_REASSOCRSP))
+	if ((pkt_type == IEEE80211_STYPE_ASSOC_RESP) || (pkt_type == IEEE80211_STYPE_REASSOC_RESP))
 		SetFrameSubType(pwlanhdr, pkt_type);
 	else
 		return;
@@ -1034,7 +1033,7 @@ static void issue_assocreq(struct adapter *padapter)
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_ASSOCREQ);
+	SetFrameSubType(pframe, IEEE80211_STYPE_ASSOC_REQ);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -1226,7 +1225,7 @@ static int _issue_nulldata(struct adapter *padapter, unsigned char *da,
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_DATA_NULL);
+	SetFrameSubType(pframe, IEEE80211_FTYPE_DATA | IEEE80211_STYPE_NULLFUNC);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -1355,7 +1354,7 @@ static int _issue_qos_nulldata(struct adapter *padapter, unsigned char *da,
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_QOS_DATA_NULL);
+	SetFrameSubType(pframe, IEEE80211_FTYPE_DATA | IEEE80211_STYPE_QOS_NULLFUNC);
 
 	pframe += sizeof(struct ieee80211_qos_hdr);
 	pattrib->pktlen = sizeof(struct ieee80211_qos_hdr);
@@ -1460,7 +1459,7 @@ static int _issue_deauth(struct adapter *padapter, unsigned char *da,
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_DEAUTH);
+	SetFrameSubType(pframe, IEEE80211_STYPE_DEAUTH);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -1578,7 +1577,7 @@ static void issue_action_BA(struct adapter *padapter, unsigned char *raddr,
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_ACTION);
+	SetFrameSubType(pframe, IEEE80211_STYPE_ACTION);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -1735,7 +1734,7 @@ static void issue_action_BSSCoexistPacket(struct adapter *padapter)
 
 	SetSeqNum(pwlanhdr, pmlmeext->mgnt_seq);
 	pmlmeext->mgnt_seq++;
-	SetFrameSubType(pframe, WIFI_ACTION);
+	SetFrameSubType(pframe, IEEE80211_STYPE_ACTION);
 
 	pframe += sizeof(struct ieee80211_hdr_3addr);
 	pattrib->pktlen = sizeof(struct ieee80211_hdr_3addr);
@@ -1760,16 +1759,13 @@ static void issue_action_BSSCoexistPacket(struct adapter *padapter)
 		spin_lock_bh(&pmlmepriv->scanned_queue.lock);
 
 		phead = get_list_head(queue);
-		plist = phead->next;
-
-		while (phead != plist) {
+		list_for_each(plist, phead) {
 			uint len;
 			u8 *p;
 			struct wlan_bssid_ex *pbss_network;
 
-			pnetwork = container_of(plist, struct wlan_network, list);
-
-			plist = plist->next;
+			pnetwork = list_entry(plist, struct wlan_network,
+					      list);
 
 			pbss_network = &pnetwork->network;
 
@@ -2024,15 +2020,15 @@ static u8 collect_bss_info(struct adapter *padapter,
 
 	subtype = GetFrameSubType(pframe);
 
-	if (subtype == WIFI_BEACON) {
+	if (subtype == IEEE80211_STYPE_BEACON) {
 		bssid->Reserved[0] = 1;
 		ie_offset = _BEACON_IE_OFFSET_;
 	} else {
 		/*  FIXME : more type */
-		if (subtype == WIFI_PROBEREQ) {
+		if (subtype == IEEE80211_STYPE_PROBE_REQ) {
 			ie_offset = _PROBEREQ_IE_OFFSET_;
 			bssid->Reserved[0] = 2;
-		} else if (subtype == WIFI_PROBERSP) {
+		} else if (subtype == IEEE80211_STYPE_PROBE_RESP) {
 			ie_offset = _PROBERSP_IE_OFFSET_;
 			bssid->Reserved[0] = 3;
 		} else {
@@ -2120,7 +2116,7 @@ static u8 collect_bss_info(struct adapter *padapter,
 		}
 	}
 
-	if (subtype == WIFI_PROBEREQ) {
+	if (subtype == IEEE80211_STYPE_PROBE_REQ) {
 		/*  FIXME */
 		bssid->InfrastructureMode = Ndis802_11Infrastructure;
 		ether_addr_copy(bssid->MacAddress, GetAddr2Ptr(pframe));
@@ -2907,10 +2903,10 @@ static unsigned int OnAssocReq(struct adapter *padapter,
 		return _FAIL;
 
 	frame_type = GetFrameSubType(pframe);
-	if (frame_type == WIFI_ASSOCREQ) {
+	if (frame_type == IEEE80211_STYPE_ASSOC_REQ) {
 		reassoc = 0;
 		ie_offset = _ASOCREQ_IE_OFFSET_;
-	} else { /*  WIFI_REASSOCREQ */
+	} else { /*  IEEE80211_STYPE_REASSOC_REQ */
 		reassoc = 1;
 		ie_offset = _REASOCREQ_IE_OFFSET_;
 	}
@@ -3282,10 +3278,10 @@ static unsigned int OnAssocReq(struct adapter *padapter,
 		sta_info_update(padapter, pstat);
 
 		/* issue assoc rsp before notify station join event. */
-		if (frame_type == WIFI_ASSOCREQ)
-			issue_asocrsp(padapter, status, pstat, WIFI_ASSOCRSP);
+		if (frame_type == IEEE80211_STYPE_ASSOC_REQ)
+			issue_asocrsp(padapter, status, pstat, IEEE80211_STYPE_ASSOC_RESP);
 		else
-			issue_asocrsp(padapter, status, pstat, WIFI_REASSOCRSP);
+			issue_asocrsp(padapter, status, pstat, IEEE80211_STYPE_REASSOC_RESP);
 
 		/* 2 - report to upper layer */
 		DBG_88E("indicate_sta_join_event to upper layer - hostapd\n");
@@ -3306,10 +3302,10 @@ asoc_class2_error:
 OnAssocReqFail:
 
 	pstat->aid = 0;
-	if (frame_type == WIFI_ASSOCREQ)
-		issue_asocrsp(padapter, status, pstat, WIFI_ASSOCRSP);
+	if (frame_type == IEEE80211_STYPE_ASSOC_REQ)
+		issue_asocrsp(padapter, status, pstat, IEEE80211_STYPE_ASSOC_RESP);
 	else
-		issue_asocrsp(padapter, status, pstat, WIFI_REASSOCRSP);
+		issue_asocrsp(padapter, status, pstat, IEEE80211_STYPE_REASSOC_RESP);
 
 #endif /* CONFIG_88EU_AP_MODE */
 
@@ -3381,6 +3377,7 @@ static unsigned int OnAssocRsp(struct adapter *padapter,
 			break;
 		case WLAN_EID_ERP_INFO:
 			ERP_IE_handler(padapter, pIE);
+			break;
 		default:
 			break;
 		}
@@ -3822,20 +3819,20 @@ Following are the initialization functions for WiFi MLME
 *****************************************************************************/
 
 static struct mlme_handler mlme_sta_tbl[] = {
-	{WIFI_ASSOCREQ,	  "OnAssocReq",	  &OnAssocReq},
-	{WIFI_ASSOCRSP,	  "OnAssocRsp",	  &OnAssocRsp},
-	{WIFI_REASSOCREQ, "OnReAssocReq", &OnAssocReq},
-	{WIFI_REASSOCRSP, "OnReAssocRsp", &OnAssocRsp},
-	{WIFI_PROBEREQ,	  "OnProbeReq",	  &OnProbeReq},
-	{WIFI_PROBERSP,	  "OnProbeRsp",	  &OnProbeRsp},
-	{0,		  "DoReserved",	  &DoReserved},
-	{0,		  "DoReserved",	  &DoReserved},
-	{WIFI_BEACON,	  "OnBeacon",	  &OnBeacon},
-	{WIFI_ATIM,	  "OnATIM",	  &OnAtim},
-	{WIFI_DISASSOC,	  "OnDisassoc",	  &OnDisassoc},
-	{WIFI_AUTH,	  "OnAuth",	  &OnAuthClient},
-	{WIFI_DEAUTH,	  "OnDeAuth",	  &OnDeAuth},
-	{WIFI_ACTION,	  "OnAction",	  &OnAction},
+	{IEEE80211_STYPE_ASSOC_REQ,	"OnAssocReq",	&OnAssocReq},
+	{IEEE80211_STYPE_ASSOC_RESP,	"OnAssocRsp",	&OnAssocRsp},
+	{IEEE80211_STYPE_REASSOC_REQ,	"OnReAssocReq",	&OnAssocReq},
+	{IEEE80211_STYPE_REASSOC_RESP,	"OnReAssocRsp",	&OnAssocRsp},
+	{IEEE80211_STYPE_PROBE_REQ,	"OnProbeReq",	&OnProbeReq},
+	{IEEE80211_STYPE_PROBE_RESP,	"OnProbeRsp",	&OnProbeRsp},
+	{0,				"DoReserved",	&DoReserved},
+	{0,				"DoReserved",	&DoReserved},
+	{IEEE80211_STYPE_BEACON,	"OnBeacon",	&OnBeacon},
+	{IEEE80211_STYPE_ATIM,		"OnATIM",	&OnAtim},
+	{IEEE80211_STYPE_DISASSOC,	"OnDisassoc",	&OnDisassoc},
+	{IEEE80211_STYPE_AUTH,		"OnAuth",	&OnAuthClient},
+	{IEEE80211_STYPE_DEAUTH,	"OnDeAuth",	&OnDeAuth},
+	{IEEE80211_STYPE_ACTION,	"OnAction",	&OnAction},
 };
 
 int init_hw_mlme_ext(struct adapter *padapter)
@@ -4017,8 +4014,6 @@ int init_mlme_ext_priv(struct adapter *padapter)
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	struct mlme_ext_info *pmlmeinfo = &pmlmeext->mlmext_info;
 
-	pmlmeext->padapter = padapter;
-
 	init_mlme_ext_priv_value(padapter);
 	pmlmeinfo->accept_addba_req = pregistrypriv->accept_addba_req;
 
@@ -4041,10 +4036,7 @@ int init_mlme_ext_priv(struct adapter *padapter)
 
 void free_mlme_ext_priv(struct mlme_ext_priv *pmlmeext)
 {
-	struct adapter *padapter = pmlmeext->padapter;
-
-	if (!padapter)
-		return;
+	struct adapter *padapter = container_of(pmlmeext, struct adapter, mlmeextpriv);
 
 	if (padapter->bDriverStopped) {
 		del_timer_sync(&pmlmeext->survey_timer);
@@ -4056,13 +4048,12 @@ static void _mgt_dispatcher(struct adapter *padapter,
 			    struct mlme_handler *ptable,
 			    struct recv_frame *precv_frame)
 {
-	u8 bc_addr[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 	u8 *pframe = precv_frame->pkt->data;
 
 	if (ptable->func) {
 		/* receive the frames that ra(a1) is my address or ra(a1) is bc address. */
 		if (memcmp(GetAddr1Ptr(pframe), myid(&padapter->eeprompriv), ETH_ALEN) &&
-		    memcmp(GetAddr1Ptr(pframe), bc_addr, ETH_ALEN))
+		    !is_broadcast_ether_addr(GetAddr1Ptr(pframe)))
 			return;
 		ptable->func(padapter, precv_frame);
 	}
@@ -4075,7 +4066,6 @@ void mgt_dispatcher(struct adapter *padapter, struct recv_frame *precv_frame)
 #ifdef CONFIG_88EU_AP_MODE
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 #endif
-	u8 bc_addr[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 	u8 *pframe = precv_frame->pkt->data;
 	struct sta_info *psta = rtw_get_stainfo(&padapter->stapriv, GetAddr2Ptr(pframe));
 
@@ -4093,7 +4083,7 @@ void mgt_dispatcher(struct adapter *padapter, struct recv_frame *precv_frame)
 
 	/* receive the frames that ra(a1) is my address or ra(a1) is bc address. */
 	if (memcmp(GetAddr1Ptr(pframe), myid(&padapter->eeprompriv), ETH_ALEN) &&
-	    memcmp(GetAddr1Ptr(pframe), bc_addr, ETH_ALEN))
+	    !is_broadcast_ether_addr(GetAddr1Ptr(pframe)))
 		return;
 
 	ptable = mlme_sta_tbl;
@@ -4121,17 +4111,17 @@ void mgt_dispatcher(struct adapter *padapter, struct recv_frame *precv_frame)
 
 #ifdef CONFIG_88EU_AP_MODE
 	switch (GetFrameSubType(pframe)) {
-	case WIFI_AUTH:
+	case IEEE80211_STYPE_AUTH:
 		if (check_fwstate(pmlmepriv, WIFI_AP_STATE))
 			ptable->func = &OnAuth;
 		else
 			ptable->func = &OnAuthClient;
 		fallthrough;
-	case WIFI_ASSOCREQ:
-	case WIFI_REASSOCREQ:
-	case WIFI_PROBEREQ:
-	case WIFI_BEACON:
-	case WIFI_ACTION:
+	case IEEE80211_STYPE_ASSOC_REQ:
+	case IEEE80211_STYPE_REASSOC_REQ:
+	case IEEE80211_STYPE_PROBE_REQ:
+	case IEEE80211_STYPE_BEACON:
+	case IEEE80211_STYPE_ACTION:
 		_mgt_dispatcher(padapter, ptable, precv_frame);
 		break;
 	default:
@@ -5386,8 +5376,8 @@ u8 tx_beacon_hdl(struct adapter *padapter, unsigned char *pbuf)
 #ifdef CONFIG_88EU_AP_MODE
 	else { /* tx bc/mc frames after update TIM */
 		struct sta_info *psta_bmc;
-		struct list_head *xmitframe_plist, *xmitframe_phead;
-		struct xmit_frame *pxmitframe = NULL;
+		struct list_head *xmitframe_phead;
+		struct xmit_frame *pxmitframe, *n;
 		struct sta_priv *pstapriv = &padapter->stapriv;
 
 		/* for BC/MC Frames */
@@ -5400,13 +5390,8 @@ u8 tx_beacon_hdl(struct adapter *padapter, unsigned char *pbuf)
 			spin_lock_bh(&psta_bmc->sleep_q.lock);
 
 			xmitframe_phead = get_list_head(&psta_bmc->sleep_q);
-			xmitframe_plist = xmitframe_phead->next;
-
-			while (xmitframe_phead != xmitframe_plist) {
-				pxmitframe = container_of(xmitframe_plist, struct xmit_frame, list);
-
-				xmitframe_plist = xmitframe_plist->next;
-
+			list_for_each_entry_safe(pxmitframe, n, xmitframe_phead,
+						 list) {
 				list_del_init(&pxmitframe->list);
 
 				psta_bmc->sleepq_len--;
