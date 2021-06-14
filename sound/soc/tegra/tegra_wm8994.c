@@ -125,7 +125,7 @@ static int tegra_wm8994_remove(struct snd_soc_card *card)
 
 SND_SOC_DAILINK_DEFS(wm8994_hifi,
 	DAILINK_COMP_ARRAY(COMP_EMPTY()),
-	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "wm8994-hifi")),
+	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "wm8994-aif1")),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
 static struct snd_soc_dai_link tegra_wm8994_dai = {
