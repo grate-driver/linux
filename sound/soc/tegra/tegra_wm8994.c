@@ -149,6 +149,7 @@ static struct snd_soc_card snd_soc_tegra_wm8994 = {
 
 static const struct tegra_asoc_data tegra_wm8994_data = {
 	.mclk_rate = tegra_wm8994_mclk_rate,
+	.mclk_id = WM8994_SYSCLK_MCLK1,
 	.dapm_event = tegra_wm8994_event,
 	.card = &snd_soc_tegra_wm8994,
 	.add_common_dapm_widgets = true,
