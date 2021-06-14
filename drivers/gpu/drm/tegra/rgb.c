@@ -125,6 +125,10 @@ static void tegra_rgb_encoder_enable(struct drm_encoder *encoder)
 	tegra_dc_writel(rgb->dc, value, DC_COM_PIN_OUTPUT_POLARITY(1));
 
 	/* XXX: parameterize? */
+	if (of_machine_is_compatible("samsung,i927")) {
+		/* Set DISP_COLOR_SWAP bit to swap red and blue colors */
+		tegra_dc_writel(rgb->dc, (1 << 16), DC_DISP_DISP_COLOR_CONTROL);
+	}
 	value = DISP_DATA_FORMAT_DF1P1C | DISP_ALIGNMENT_MSB |
 		DISP_ORDER_RED_BLUE;
 	tegra_dc_writel(rgb->dc, value, DC_DISP_DISP_INTERFACE_CONTROL);
