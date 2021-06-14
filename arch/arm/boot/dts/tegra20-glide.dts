@@ -1777,6 +1777,7 @@
 		gpio = <&gpio TEGRA_GPIO(X, 5) GPIO_ACTIVE_HIGH>;
 		regulator-enable-ramp-delay = <125000>;
 		regulator-boot-on;
+		regulator-always-on;
 		enable-active-high;
 	};
 
@@ -1798,12 +1799,12 @@
 		nvidia,hp-det-gpios = <&gpio TEGRA_GPIO(L, 3) GPIO_ACTIVE_HIGH>;
 
 		nvidia,audio-routing =
-			"Int Spk", "SPKOUTLP",
-			"Int Spk", "SPKOUTLN",
+			"Speakers", "SPKOUTLP",
+			"Speakers", "SPKOUTLN",
 			"Headphone Jack", "HPOUT1L",
 			"Headphone Jack", "HPOUT1R",
-			"Earpiece Spk", "HPOUT2P",
-			"Earpiece Spk", "HPOUT2N",
+			"Int Spk", "HPOUT2P",
+			"Int Spk", "HPOUT2N",
 			"IN1LP", "Mic Jack",
 			"IN1LN", "Mic Jack";
 		/* TODO: routes for modem and, probably, BT SCO */
