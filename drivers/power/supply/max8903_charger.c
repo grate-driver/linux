@@ -340,7 +340,7 @@ static int max8903_otg_enable(struct regulator_dev *rdev)
 	/* Disable charging */
 	data->otg_en = true;
 	if (data->usb_in)
-		gpiod_set_value(data->cen, 1);
+		gpiod_set_value(data->cen, 0);
 	data->usb_in = false;
 
 	if (data->psy_desc.type != POWER_SUPPLY_TYPE_BATTERY)
