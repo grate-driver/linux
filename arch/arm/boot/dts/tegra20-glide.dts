@@ -869,8 +869,8 @@
 	usb_ta_charger: max8922-charger {
 		compatible = "maxim,max8903";
 		chg-gpios = <&stmpegpio 16 GPIO_ACTIVE_LOW>;
-		cen-gpios = <&gpio TEGRA_GPIO(R, 3) GPIO_ACTIVE_HIGH>;
-		uok-gpios = <&gpio TEGRA_GPIO(T, 0) GPIO_ACTIVE_HIGH>;
+		cen-gpios = <&gpio TEGRA_GPIO(R, 3) GPIO_ACTIVE_LOW>;
+		uok-gpios = <&gpio TEGRA_GPIO(T, 0) GPIO_ACTIVE_LOW>;
 		/*
 		 * Original sources also use FSA9480 for USB charger
 		 * detection, but it's on extcon and not GPIO,
