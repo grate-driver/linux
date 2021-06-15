@@ -85,6 +85,7 @@ struct tegra_tsensor {
 	struct device *dev;
 	struct reset_control *rst;
 	struct tegra_tsensor_channel ch[2];
+	struct thermal_cooling_device *cdev;
 	struct tegra_tsensor_calibration_data calib;
 };
 
@@ -245,6 +246,56 @@ static const struct thermal_zone_of_device_ops ops = {
 	.set_trips = tegra_tsensor_set_trips,
 };
 
+static int tegra_tsensor_get_max_state(struct thermal_cooling_device *cdev,
+				       unsigned long *state)
+{
+	*state = 1;
+
+	return 0;
+}
+
+static bool tegra_tsensor_channel_div2_active(const struct tegra_tsensor *ts,
+					      unsigned int id)
+{
+	u32 val;
+
+	val = readl_relaxed(ts->ch[id].regs + TSENSOR_SENSOR0_CONFIG0);
+	if (!FIELD_GET(TSENSOR_SENSOR0_CONFIG0_HW_FREQ_DIV_EN, val))
+		return false;
+
+	val = readl_relaxed(ts->ch[id].regs + TSENSOR_SENSOR0_STATUS0);
+
+	/* CPU frequency is halved when LEVEL2 is breached */
+	return FIELD_GET(TSENSOR_SENSOR0_STATUS0_STATE, val) > 2;
+}
+
+static int tegra_tsensor_get_cur_state(struct thermal_cooling_device *cdev,
+				       unsigned long *state)
+{
+	const struct tegra_tsensor *ts = cdev->devdata;
+	unsigned int i, div2_state = 0;
+
+	for (i = 0; i < ARRAY_SIZE(ts->ch); i++)
+		div2_state |= tegra_tsensor_channel_div2_active(ts, i);
+
+	*state = div2_state;
+
+	return 0;
+}
+
+static int tegra_tsensor_set_cur_state(struct thermal_cooling_device *cdev,
+				       unsigned long state)
+{
+	/* state is controlled by hardware and can't be changed by software */
+	return -EOPNOTSUPP;
+}
+
+static const struct thermal_cooling_device_ops tegra_tsensor_cpu_cooling_ops = {
+	.get_max_state = tegra_tsensor_get_max_state,
+	.get_cur_state = tegra_tsensor_get_cur_state,
+	.set_cur_state = tegra_tsensor_set_cur_state,
+};
+
 static bool
 tegra_tsensor_handle_channel_interrupt(const struct tegra_tsensor *ts,
 				       unsigned int id)
@@ -269,11 +320,16 @@ tegra_tsensor_handle_channel_interrupt(const struct tegra_tsensor *ts,
 static irqreturn_t tegra_tsensor_isr(int irq, void *data)
 {
 	const struct tegra_tsensor *ts = data;
+	bool div2_state = false;
 	bool handled = false;
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(ts->ch); i++)
-		handled |= tegra_tsensor_handle_channel_interrupt(ts, i);
+	for (i = 0; i < ARRAY_SIZE(ts->ch); i++) {
+		div2_state |= tegra_tsensor_channel_div2_active(ts, i);
+		handled    |= tegra_tsensor_handle_channel_interrupt(ts, i);
+	}
+
+	thermal_cooling_device_stats_update(ts->cdev, div2_state);
 
 	return handled ? IRQ_HANDLED : IRQ_NONE;
 }
@@ -364,6 +420,9 @@ static int tegra_tsensor_enable_hw_channel(const struct tegra_tsensor *ts,
 	/* prevent potential racing with tegra_tsensor_set_trips() */
 	mutex_lock(&tzd->lock);
 
+	dev_info_once(ts->dev, "ch%u: CPU freq div2 throttle trip set to %dC\n",
+		      id, DIV_ROUND_CLOSEST(hot_trip, 1000));
+
 	dev_info_once(ts->dev, "ch%u: PMC emergency shutdown trip set to %dC\n",
 		      id, DIV_ROUND_CLOSEST(crit_trip, 1000));
 
@@ -383,11 +442,8 @@ static int tegra_tsensor_enable_hw_channel(const struct tegra_tsensor *ts,
 	writel_relaxed(val, tsc->regs + TSENSOR_SENSOR0_CONFIG2);
 
 	/*
-	 * Enable sensor, emergency shutdown, interrupts for level 1/2/3
-	 * breaches and counter overflow condition.
-	 *
-	 * Disable DIV2 throttle for now since we need to figure out how
-	 * to integrate it properly with the thermal framework.
+	 * Enable sensor, DIV2 throttle, emergency shutdown, interrupts
+	 * for level 1/2/3 breaches and counter overflow condition.
 	 *
 	 * Thermal levels supported by hardware:
 	 *
@@ -399,7 +455,7 @@ static int tegra_tsensor_enable_hw_channel(const struct tegra_tsensor *ts,
 	val = readl_relaxed(tsc->regs + TSENSOR_SENSOR0_CONFIG0);
 	val &= ~TSENSOR_SENSOR0_CONFIG0_SENSOR_STOP;
 	val |= FIELD_PREP(TSENSOR_SENSOR0_CONFIG0_DVFS_EN, 1);
-	val |= FIELD_PREP(TSENSOR_SENSOR0_CONFIG0_HW_FREQ_DIV_EN, 0);
+	val |= FIELD_PREP(TSENSOR_SENSOR0_CONFIG0_HW_FREQ_DIV_EN, 1);
 	val |= FIELD_PREP(TSENSOR_SENSOR0_CONFIG0_THERMAL_RST_EN, 1);
 	val |= FIELD_PREP(TSENSOR_SENSOR0_CONFIG0_INTR_OVERFLOW_EN, 1);
 	val |= FIELD_PREP(TSENSOR_SENSOR0_CONFIG0_INTR_HW_FREQ_DIV_EN, 1);
@@ -586,6 +642,13 @@ static int tegra_tsensor_probe(struct platform_device *pdev)
 		if (err)
 			return err;
 	}
+
+	ts->cdev = devm_thermal_of_cooling_device_register(&pdev->dev,
+				pdev->dev.of_node, "tegra-cpu-div2-throttle",
+				ts, &tegra_tsensor_cpu_cooling_ops);
+	if (IS_ERR(ts->cdev))
+		return dev_err_probe(&pdev->dev, PTR_ERR(ts->cdev),
+				     "failed to register cooling device\n");
 
 	err = devm_request_threaded_irq(&pdev->dev, irq, NULL,
 					tegra_tsensor_isr, IRQF_ONESHOT,
