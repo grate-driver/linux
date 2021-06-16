@@ -1636,6 +1636,32 @@
 		status = "okay";
 	};
 
+	thermal-zones {
+		tsensor-channel0 {
+			polling-delay-passive = <1000>; /* milliseconds */
+			polling-delay = <5000>; /* milliseconds */
+
+			thermal-sensors = <&tsensor 0>;
+
+			trips {
+				level1_trip: dvfs-alert {
+					/* throttle at 67C until temperature drops to 66.8C */
+					temperature = <67000>;
+				};
+
+				level2_trip: cpu-div2-throttle {
+					/* hardware CPU x2 freq throttle at 70C */
+					temperature = <70000>;
+				};
+
+				level3_trip: soc-critical {
+					/* hardware shut down at 80C */
+					temperature = <80000>;
+				};
+			};
+		};
+	};
+
 	memory-controller@7000f000 {
 		emc-timings-0 {
 			nvidia,ram-code = <0>; // FT2_DVT_elpida_dvfs_table_0609.txt
