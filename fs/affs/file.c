@@ -453,7 +453,6 @@ static sector_t _affs_bmap(struct address_space *mapping, sector_t block)
 }
 
 const struct address_space_operations affs_aops = {
-	.set_page_dirty	= __set_page_dirty_buffers,
 	.readpage = affs_readpage,
 	.writepage = affs_writepage,
 	.write_begin = affs_write_begin,
@@ -834,7 +833,6 @@ err_bh:
 }
 
 const struct address_space_operations affs_aops_ofs = {
-	.set_page_dirty	= __set_page_dirty_buffers,
 	.readpage = affs_readpage_ofs,
 	//.writepage = affs_writepage_ofs,
 	.write_begin = affs_write_begin_ofs,
