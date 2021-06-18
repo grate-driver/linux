@@ -156,7 +156,6 @@ static int hfsplus_writepages(struct address_space *mapping,
 }
 
 const struct address_space_operations hfsplus_btree_aops = {
-	.set_page_dirty	= __set_page_dirty_buffers,
 	.readpage	= hfsplus_readpage,
 	.writepage	= hfsplus_writepage,
 	.write_begin	= hfsplus_write_begin,
@@ -166,7 +165,6 @@ const struct address_space_operations hfsplus_btree_aops = {
 };
 
 const struct address_space_operations hfsplus_aops = {
-	.set_page_dirty	= __set_page_dirty_buffers,
 	.readpage	= hfsplus_readpage,
 	.writepage	= hfsplus_writepage,
 	.write_begin	= hfsplus_write_begin,
