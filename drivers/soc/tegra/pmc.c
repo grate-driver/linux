@@ -1344,6 +1344,7 @@ tegra_pmc_core_pd_opp_to_performance_state(struct generic_pm_domain *genpd,
 
 static int tegra_pmc_core_pd_add(struct tegra_pmc *pmc, struct device_node *np)
 {
+	static struct lock_class_key tegra_core_domain_lock_class;
 	struct generic_pm_domain *genpd;
 	const char *rname = "core";
 	int err;
@@ -1366,6 +1367,15 @@ static int tegra_pmc_core_pd_add(struct tegra_pmc *pmc, struct device_node *np)
 		dev_err(pmc->dev, "failed to init core genpd: %d\n", err);
 		return err;
 	}
+
+	/*
+	 * The PMC domains use clocks and clocks use core power domain.
+	 * The PMC/core domains are separate from each other, but they
+	 * use the same GENPD code paths. LOCKDEP needs to know that the
+	 * core lock is different from PMC locks and it's safe to perform
+	 * nested locking.
+	 */
+	lockdep_set_class(&genpd->mlock, &tegra_core_domain_lock_class);
 
 	err = of_genpd_add_provider_simple(np, genpd);
 	if (err) {
