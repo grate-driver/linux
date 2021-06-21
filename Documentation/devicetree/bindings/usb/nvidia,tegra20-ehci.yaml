@@ -1,0 +1,156 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/usb/nvidia,tegra20-ehci.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Device tree binding for NVIDIA Tegra USB controllers
+
+description: |
+  The device node for a USB controller that is part of a Tegra SOC is as
+  described in the document "Open Firmware Recommended Practice : Universal
+  Serial Bus". Modifications and additions are detailed in this document.
+
+maintainers:
+  - Thierry Reding <treding@nvidia.com>
+  - Jon Hunter <jonathanh@nvidia.com>
+
+allOf:
+  - $ref: "usb-hcd.yaml"
+
+properties:
+  compatible:
+    oneOf:
+      - items:
+          - enum:
+              - nvidia,tegra210-ehci
+              - nvidia,tegra124-ehci
+              - nvidia,tegra114-ehci
+          - const: nvidia,tegra30-ehci
+      - items:
+          - const: nvidia,tegra30-ehci
+      - items:
+          - const: nvidia,tegra20-ehci
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  dr_mode: true
+  phy_type: true
+
+  clocks:
+    maxItems: 1
+
+  resets:
+    maxItems: 1
+
+  reset-names:
+    items:
+      - const: usb
+
+  operating-points-v2: true
+  power-domains: true
+
+  nvidia,phy:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description:
+      phandle of the PHY that the controller is connected to
+
+  nvidia,needs-double-reset:
+    type: boolean
+    description:
+      This must be set for some instances of the USB controller found on
+      Tegra20 that need to be reset twice due to some hardware issue.
+
+unevaluatedProperties: false
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - clocks
+  - resets
+  - reset-names
+  - nvidia,phy
+
+examples:
+  - |
+    #include <dt-bindings/clock/tegra20-car.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    usb@c5000000 {
+        compatible = "nvidia,tegra20-ehci";
+        reg = <0xc5000000 0x4000>;
+        interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+        phy_type = "utmi";
+        clocks = <&tegra_car TEGRA20_CLK_USBD>;
+        resets = <&tegra_car 22>;
+        reset-names = "usb";
+        nvidia,needs-double-reset;
+        nvidia,phy = <&phy1>;
+    };
+
+  - |
+    #include <dt-bindings/clock/tegra30-car.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    usb@7d000000 {
+        compatible = "nvidia,tegra30-ehci";
+        reg = <0x7d000000 0x4000>;
+        interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+        phy_type = "utmi";
+        clocks = <&tegra_car TEGRA30_CLK_USBD>;
+        resets = <&tegra_car 22>;
+        reset-names = "usb";
+        nvidia,needs-double-reset;
+        nvidia,phy = <&phy1>;
+    };
+
+  - |
+    #include <dt-bindings/clock/tegra114-car.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    usb@7d000000 {
+        compatible = "nvidia,tegra114-ehci", "nvidia,tegra30-ehci";
+        reg = <0x7d000000 0x4000>;
+        interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+        phy_type = "utmi";
+        clocks = <&tegra_car TEGRA114_CLK_USBD>;
+        resets = <&tegra_car 22>;
+        reset-names = "usb";
+        nvidia,phy = <&phy1>;
+    };
+
+  - |
+    #include <dt-bindings/clock/tegra124-car.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    usb@7d000000 {
+        compatible = "nvidia,tegra124-ehci", "nvidia,tegra30-ehci";
+        reg = <0x7d000000 0x4000>;
+        interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+        phy_type = "utmi";
+        clocks = <&tegra_car TEGRA124_CLK_USBD>;
+        resets = <&tegra_car 22>;
+        reset-names = "usb";
+        nvidia,phy = <&phy1>;
+    };
+
+  - |
+    #include <dt-bindings/clock/tegra210-car.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    usb@7d000000 {
+        compatible = "nvidia,tegra210-ehci", "nvidia,tegra30-ehci";
+        reg = <0x7d000000 0x4000>;
+        interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+        phy_type = "utmi";
+        clocks = <&tegra_car TEGRA210_CLK_USBD>;
+        clock-names = "usb";
+        resets = <&tegra_car 22>;
+        reset-names = "usb";
+        nvidia,phy = <&phy1>;
+    };
