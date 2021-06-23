@@ -49,6 +49,9 @@ enum asus_ec_subdev_id {
 	ID_EC_PART_BATTERY,
 #define EC_PART_BATTERY BIT(ID_EC_PART_BATTERY)
 
+	ID_EC_PART_CHARGER,
+#define EC_PART_CHARGER BIT(ID_EC_PART_CHARGER)
+
 	ID_EC_PART_CHARGE_LED,
 #define EC_PART_CHARGE_LED BIT(ID_EC_PART_CHARGE_LED)
 
@@ -75,6 +78,9 @@ static const struct mfd_cell asus_ec_subdev[] = {
 	[ID_EC_PART_BATTERY] = {
 		.name = "asusec-battery",
 	},
+	[ID_EC_PART_CHARGER] = {
+		.name = "asusec-charger",
+	},
 	[ID_EC_PART_CHARGE_LED] = {
 		.name = "asusec-led",
 	},
@@ -91,7 +97,8 @@ static const struct asus_ec_initdata asus_ec_model_info[] = {
 		.model		= "ASUS-EP101-DOCK",
 		.name		= "dock",
 		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
-				  EC_PART_I8042 | EC_PART_EXT_KEYS,
+				  EC_PART_I8042 | EC_PART_EXT_KEYS |
+				  EC_PART_CHARGER,
 	},
 	{	/* Asus T30 Transformer Pad */
 		.model		= "ASUS-TF201-PAD",
@@ -103,7 +110,8 @@ static const struct asus_ec_initdata asus_ec_model_info[] = {
 		.model		= "ASUS-TF201-DOCK",
 		.name		= "dock",
 		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
-				  EC_PART_I8042 | EC_PART_EXT_KEYS,
+				  EC_PART_I8042 | EC_PART_EXT_KEYS |
+				  EC_PART_CHARGER,
 	},
 	{	/* Asus T114 Transformer Pad */
 		.model		= "ASUS-TF701T-PAD",
