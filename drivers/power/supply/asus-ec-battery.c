@@ -32,9 +32,10 @@ struct asusec_battery_data {
 	struct power_supply_battery_info	batt_info;
 	struct delayed_work			poll_work;
 	struct mutex				battery_lock;
+	unsigned int				battery_addr;
+	unsigned int				charger_addr;
 	unsigned long				batt_data_ts;
 	int					last_state;
-	int					ec_addr;
 	u8					batt_data[DOCKRAM_ENTRY_BUFSIZE];
 };
 
@@ -47,7 +48,8 @@ static int asusec_battery_refresh(struct asusec_battery_data *priv)
 	if (time_before(jiffies, priv->batt_data_ts))
 		goto out_unlock;
 
-	ret = asus_dockram_read(priv->ec->dockram, priv->ec_addr, priv->batt_data);
+	ret = asus_dockram_read(priv->ec->dockram, priv->battery_addr,
+				priv->batt_data);
 	if (ret < 0)
 		goto out_unlock;
 
@@ -194,7 +196,7 @@ static int asusec_battery_no_usb(struct asusec_battery_data *priv)
 	u8 buf[DOCKRAM_ENTRY_BUFSIZE];
 	char *plug = buf;
 
-	ret = asus_dockram_read(priv->ec->dockram, 0x0A, plug);
+	ret = asus_dockram_read(priv->ec->dockram, priv->charger_addr, plug);
 	if (ret < 0)
 		return -EINVAL;
 
@@ -238,6 +240,7 @@ static const struct power_supply_desc pad_battery_desc = {
 	.properties = pad_battery_properties,
 	.num_properties = ARRAY_SIZE(pad_battery_properties),
 	.get_property = pad_battery_get_property,
+	.external_power_changed = power_supply_changed,
 };
 
 static const struct power_supply_desc dock_battery_desc = {
@@ -246,6 +249,7 @@ static const struct power_supply_desc dock_battery_desc = {
 	.properties = pad_battery_properties,
 	.num_properties = ARRAY_SIZE(pad_battery_properties),
 	.get_property = pad_battery_get_property,
+	.external_power_changed = power_supply_changed,
 };
 
 static int asusec_battery_probe(struct platform_device *pdev)
@@ -253,6 +257,7 @@ static int asusec_battery_probe(struct platform_device *pdev)
 	const struct asusec_info *ec = asusec_cell_to_ec(pdev);
 	const struct power_supply_desc *psd;
 	struct asusec_battery_data *priv;
+	struct asusec_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct power_supply_config cfg = {};
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -264,7 +269,8 @@ static int asusec_battery_probe(struct platform_device *pdev)
 	mutex_init(&priv->battery_lock);
 
 	priv->ec = ec;
-	priv->ec_addr = 0x14;
+	priv->battery_addr = pdata->battery_addr;
+	priv->charger_addr = pdata->charger_addr;
 	priv->batt_data_ts = jiffies - 1;
 	priv->last_state = POWER_SUPPLY_STATUS_UNKNOWN;
 
