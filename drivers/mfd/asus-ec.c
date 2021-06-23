@@ -50,6 +50,9 @@ enum asus_ec_subdev_id {
 
 	ID_EC_PART_EXT_KEYS,
 #define EC_PART_EXT_KEYS BIT(ID_EC_PART_EXT_KEYS)
+
+	ID_EC_PART_CHARGER,
+#define EC_PART_CHARGER BIT(ID_EC_PART_CHARGER)
 };
 
 enum asus_ec_flag {
@@ -64,9 +67,16 @@ struct asus_ec_initdata {
 	unsigned int flags;
 };
 
+static struct asusec_platform_data asusec_pdata = {
+	.battery_addr = 0x14,
+	.charger_addr = 0x0A,
+};
+
 static const struct mfd_cell asus_ec_subdev[] = {
 	[ID_EC_PART_BATTERY] = {
 		.name = "asusec-battery",
+		.platform_data = &asusec_pdata,
+		.pdata_size = sizeof(asusec_pdata),
 	},
 	[ID_EC_PART_CHARGE_LED] = {
 		.name = "asusec-led",
@@ -77,6 +87,11 @@ static const struct mfd_cell asus_ec_subdev[] = {
 	[ID_EC_PART_EXT_KEYS] = {
 		.name = "asusec-keys",
 	},
+	[ID_EC_PART_CHARGER] = {
+		.name = "asusec-charger",
+		.platform_data = &asusec_pdata,
+		.pdata_size = sizeof(asusec_pdata),
+	},
 };
 
 static const struct asus_ec_initdata asus_ec_model_info[] = {
@@ -84,7 +99,8 @@ static const struct asus_ec_initdata asus_ec_model_info[] = {
 		.model		= "ASUS-EP101-DOCK",
 		.name		= "dock",
 		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
-				  EC_PART_I8042 | EC_PART_EXT_KEYS,
+				  EC_PART_I8042 | EC_PART_EXT_KEYS |
+				  EC_PART_CHARGER,
 	},
 	{	/* Asus T30 Transformer Pad */
 		.model		= "ASUS-TF201-PAD",
@@ -96,13 +112,15 @@ static const struct asus_ec_initdata asus_ec_model_info[] = {
 		.model		= "ASUS-TF201-DOCK",
 		.name		= "dock",
 		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
-				  EC_PART_I8042 | EC_PART_EXT_KEYS,
+				  EC_PART_I8042 | EC_PART_EXT_KEYS |
+				  EC_PART_CHARGER,
 	},
 	{	/* Asus TF500T/TF700T Mobile Dock */
 		.model		= "ASUS-DOCK-EC21N",
 		.name		= "dock",
 		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
-				  EC_PART_I8042 | EC_PART_EXT_KEYS,
+				  EC_PART_I8042 | EC_PART_EXT_KEYS |
+				  EC_PART_CHARGER,
 	},
 	{	/* Asus T30 AiO Pad */
 		.model		= "ASUS-EC21T-PAD",
@@ -113,7 +131,8 @@ static const struct asus_ec_initdata asus_ec_model_info[] = {
 	{	/* Asus T30 Windows Pad */
 		.model		= "ASUS-TF600T-PAD",
 		.name		= "pad",
-		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED,
+		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
+				  EC_PART_CHARGER,
 		.flags		= EC_FLAG_SET_MODE,
 	},
 	{	/* Asus T114 Transformer Pad */
