@@ -21,6 +21,11 @@ struct i2c_client *devm_asus_dockram_get(struct device *parent);
 
 /* EC public API */
 
+struct asusec_platform_data {
+	unsigned int battery_addr;
+	unsigned int charger_addr;
+};
+
 struct asusec_info {
 	const char			*name;
 	const char			*model;
