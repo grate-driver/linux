@@ -210,7 +210,7 @@ void gfs2_set_inode_flags(struct inode *inode)
 
 /**
  * do_gfs2_set_flags - set flags on an inode
- * @filp: file pointer
+ * @inode: The inode
  * @reqflags: The flags to set
  * @mask: Indicates which flags are valid
  * @fsflags: The FS_* inode flags passed in
@@ -450,8 +450,8 @@ static vm_fault_t gfs2_page_mkwrite(struct vm_fault *vmf)
 	file_update_time(vmf->vma->vm_file);
 
 	/* page is wholly or partially inside EOF */
-	if (offset > size - PAGE_SIZE)
-		length = offset_in_page(size);
+	if (size - offset < PAGE_SIZE)
+		length = size - offset;
 	else
 		length = PAGE_SIZE;
 
