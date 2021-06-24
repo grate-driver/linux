@@ -100,7 +100,7 @@ static long *xmon_fault_jmp[NR_CPUS];
 /* Breakpoint stuff */
 struct bpt {
 	unsigned long	address;
-	struct ppc_inst	*instr;
+	u32		*instr;
 	atomic_t	ref_count;
 	int		enabled;
 	unsigned long	pad;
@@ -514,7 +514,7 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 
 	bp = in_breakpoint_table(regs->nip, &offset);
 	if (bp != NULL) {
-		regs->nip = bp->address + offset;
+		regs_set_return_ip(regs, bp->address + offset);
 		atomic_dec(&bp->ref_count);
 	}
 
@@ -702,7 +702,7 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 	if (regs->msr & MSR_DE) {
 		bp = at_breakpoint(regs->nip);
 		if (bp != NULL) {
-			regs->nip = (unsigned long) &bp->instr[0];
+			regs_set_return_ip(regs, (unsigned long) &bp->instr[0]);
 			atomic_inc(&bp->ref_count);
 		}
 	}
@@ -712,7 +712,7 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 		if (bp != NULL) {
 			int stepped = emulate_step(regs, ppc_inst_read(bp->instr));
 			if (stepped == 0) {
-				regs->nip = (unsigned long) &bp->instr[0];
+				regs_set_return_ip(regs, (unsigned long) &bp->instr[0]);
 				atomic_inc(&bp->ref_count);
 			} else if (stepped < 0) {
 				printf("Couldn't single-step %s instruction\n",
@@ -766,7 +766,7 @@ static int xmon_bpt(struct pt_regs *regs)
 	/* Are we at the trap at bp->instr[1] for some bp? */
 	bp = in_breakpoint_table(regs->nip, &offset);
 	if (bp != NULL && (offset == 4 || offset == 8)) {
-		regs->nip = bp->address + offset;
+		regs_set_return_ip(regs, bp->address + offset);
 		atomic_dec(&bp->ref_count);
 		return 1;
 	}
@@ -836,7 +836,7 @@ static int xmon_fault_handler(struct pt_regs *regs)
 	if ((regs->msr & (MSR_IR|MSR_PR|MSR_64BIT)) == (MSR_IR|MSR_64BIT)) {
 		bp = in_breakpoint_table(regs->nip, &offset);
 		if (bp != NULL) {
-			regs->nip = bp->address + offset;
+			regs_set_return_ip(regs, bp->address + offset);
 			atomic_dec(&bp->ref_count);
 		}
 	}
@@ -946,11 +946,11 @@ static void insert_bpts(void)
 		}
 
 		patch_instruction(bp->instr, instr);
-		patch_instruction(ppc_inst_next(bp->instr, &instr),
+		patch_instruction(ppc_inst_next(bp->instr, bp->instr),
 				  ppc_inst(bpinstr));
 		if (bp->enabled & BP_CIABR)
 			continue;
-		if (patch_instruction((struct ppc_inst *)bp->address,
+		if (patch_instruction((u32 *)bp->address,
 				      ppc_inst(bpinstr)) != 0) {
 			printf("Couldn't write instruction at %lx, "
 			       "disabling breakpoint there\n", bp->address);
@@ -992,7 +992,7 @@ static void remove_bpts(void)
 		if (mread_instr(bp->address, &instr)
 		    && ppc_inst_equal(instr, ppc_inst(bpinstr))
 		    && patch_instruction(
-			(struct ppc_inst *)bp->address, ppc_inst_read(bp->instr)) != 0)
+			(u32 *)bp->address, ppc_inst_read(bp->instr)) != 0)
 			printf("Couldn't remove breakpoint at %lx\n",
 			       bp->address);
 	}
@@ -1188,7 +1188,7 @@ cmds(struct pt_regs *excp)
 #ifdef CONFIG_BOOKE
 static int do_step(struct pt_regs *regs)
 {
-	regs->msr |= MSR_DE;
+	regs_set_return_msr(regs, regs->msr | MSR_DE);
 	mtspr(SPRN_DBCR0, mfspr(SPRN_DBCR0) | DBCR0_IC | DBCR0_IDM);
 	return 1;
 }
@@ -1221,7 +1221,7 @@ static int do_step(struct pt_regs *regs)
 			}
 		}
 	}
-	regs->msr |= MSR_SE;
+	regs_set_return_msr(regs, regs->msr | MSR_SE);
 	return 1;
 }
 #endif
@@ -2214,7 +2214,7 @@ mread_instr(unsigned long adrs, struct ppc_inst *instr)
 	if (setjmp(bus_error_jmp) == 0) {
 		catch_memory_errors = 1;
 		sync();
-		*instr = ppc_inst_read((struct ppc_inst *)adrs);
+		*instr = ppc_inst_read((u32 *)adrs);
 		sync();
 		/* wait a little while to see if we get a machine check */
 		__delay(200);
@@ -2975,7 +2975,7 @@ static void
 dump_log_buf(void)
 {
 	struct kmsg_dump_iter iter;
-	unsigned char buf[128];
+	static unsigned char buf[1024];
 	size_t len;
 
 	if (setjmp(bus_error_jmp) != 0) {
