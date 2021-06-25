@@ -14,8 +14,8 @@ extern struct kunit_suite * const * const __kunit_suites_end[];
 
 #if IS_BUILTIN(CONFIG_KUNIT)
 
-static char *filter_glob_param;
-module_param_named(filter_glob, filter_glob_param, charp, 0);
+static char *filter_glob;
+module_param(filter_glob, charp, 0);
 MODULE_PARM_DESC(filter_glob,
 		"Filter which KUnit test suites run at boot-time, e.g. list*");
 
@@ -23,8 +23,7 @@ static char *kunit_shutdown;
 core_param(kunit_shutdown, kunit_shutdown, charp, 0644);
 
 static struct kunit_suite * const *
-+kunit_filter_subsuite(struct kunit_suite * const * const subsuite,
-			const char *filter_glob)
+kunit_filter_subsuite(struct kunit_suite * const * const subsuite)
 {
 	int i, n = 0;
 	struct kunit_suite **filtered;
@@ -57,14 +56,19 @@ struct suite_set {
 	struct kunit_suite * const * const *end;
 };
 
-static struct suite_set kunit_filter_suites(const struct suite_set *suite_set,
-					    const char *filter_glob)
+static struct suite_set kunit_filter_suites(void)
 {
 	int i;
 	struct kunit_suite * const **copy, * const *filtered_subsuite;
 	struct suite_set filtered;
 
-	const size_t max = suite_set->end - suite_set->start;
+	const size_t max = __kunit_suites_end - __kunit_suites_start;
+
+	if (!filter_glob) {
+		filtered.start = __kunit_suites_start;
+		filtered.end = __kunit_suites_end;
+		return filtered;
+	}
 
 	copy = kmalloc_array(max, sizeof(*filtered.start), GFP_KERNEL);
 	filtered.start = copy;
@@ -74,7 +78,7 @@ static struct suite_set kunit_filter_suites(const struct suite_set *suite_set,
 	}
 
 	for (i = 0; i < max; ++i) {
-		filtered_subsuite = kunit_filter_subsuite(suite_set->start[i], filter_glob);
+		filtered_subsuite = kunit_filter_subsuite(__kunit_suites_start[i]);
 		if (filtered_subsuite)
 			*copy++ = filtered_subsuite;
 	}
@@ -112,20 +116,15 @@ static void kunit_print_tap_header(struct suite_set *suite_set)
 int kunit_run_all_tests(void)
 {
 	struct kunit_suite * const * const *suites;
-	struct suite_set suite_set = {
-		.start = __kunit_suites_start,
-		.end = __kunit_suites_end,
-	};
 
-	if (filter_glob_param)
-		suite_set = kunit_filter_suites(&suite_set, filter_glob_param);
+	struct suite_set suite_set = kunit_filter_suites();
 
 	kunit_print_tap_header(&suite_set);
 
 	for (suites = suite_set.start; suites < suite_set.end; suites++)
 		__kunit_test_suites_init(*suites);
 
-	if (filter_glob_param) { /* a copy was made of each array */
+	if (filter_glob) { /* a copy was made of each array */
 		for (suites = suite_set.start; suites < suite_set.end; suites++)
 			kfree(*suites);
 		kfree(suite_set.start);
@@ -135,9 +134,5 @@ int kunit_run_all_tests(void)
 
 	return 0;
 }
-
-#if IS_BUILTIN(CONFIG_KUNIT_TEST)
-#include "executor_test.c"
-#endif
 
 #endif /* IS_BUILTIN(CONFIG_KUNIT) */
