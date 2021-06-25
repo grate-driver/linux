@@ -6567,7 +6567,7 @@ static void __init memmap_init(void)
 	 * node.
 	 * The call to init_unavailable_range() is outside the ifdef to
 	 * silence the compiler warining about zone_id set but not used;
-	 * for FLATMEM it is is nop anyway
+	 * for FLATMEM it is a nop anyway
 	 */
 	end_pfn = round_up(end_pfn, PAGES_PER_SECTION);
 	if (hole_pfn < end_pfn)
