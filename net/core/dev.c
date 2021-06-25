@@ -3852,10 +3852,33 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	qdisc_calculate_pkt_len(skb, q);
 
 	if (q->flags & TCQ_F_NOLOCK) {
-		rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
-		if (likely(!netif_xmit_frozen_or_stopped(txq)))
-			qdisc_run(q);
+		if (q->flags & TCQ_F_CAN_BYPASS && nolock_qdisc_is_empty(q) &&
+		    qdisc_run_begin(q)) {
+			/* Retest nolock_qdisc_is_empty() within the protection
+			 * of q->seqlock to protect from racing with requeuing.
+			 */
+			if (unlikely(!nolock_qdisc_is_empty(q))) {
+				rc = q->enqueue(skb, q, &to_free) &
+					NET_XMIT_MASK;
+				__qdisc_run(q);
+				qdisc_run_end(q);
 
+				goto no_lock_out;
+			}
+
+			qdisc_bstats_cpu_update(q, skb);
+			if (sch_direct_xmit(skb, q, dev, txq, NULL, true) &&
+			    !nolock_qdisc_is_empty(q))
+				__qdisc_run(q);
+
+			qdisc_run_end(q);
+			return NET_XMIT_SUCCESS;
+		}
+
+		rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
+		qdisc_run(q);
+
+no_lock_out:
 		if (unlikely(to_free))
 			kfree_skb_list(to_free);
 		return rc;
@@ -6520,11 +6543,18 @@ EXPORT_SYMBOL(napi_schedule_prep);
  * __napi_schedule_irqoff - schedule for receive
  * @n: entry to schedule
  *
- * Variant of __napi_schedule() assuming hard irqs are masked
+ * Variant of __napi_schedule() assuming hard irqs are masked.
+ *
+ * On PREEMPT_RT enabled kernels this maps to __napi_schedule()
+ * because the interrupt disabled assumption might not be true
+ * due to force-threaded interrupts and spinlock substitution.
  */
 void __napi_schedule_irqoff(struct napi_struct *n)
 {
-	____napi_schedule(this_cpu_ptr(&softnet_data), n);
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		____napi_schedule(this_cpu_ptr(&softnet_data), n);
+	else
+		__napi_schedule(n);
 }
 EXPORT_SYMBOL(__napi_schedule_irqoff);
 
