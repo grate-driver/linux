@@ -289,8 +289,8 @@ static int nx842_validate_result(struct device *dev,
  * @inlen: Length of input buffer
  * @out: Pointer to output buffer
  * @outlen: Length of output buffer
- * @wrkmem: ptr to buffer for working memory, size determined by
- *          nx842_pseries_driver.workmem_size
+ * @wmem: ptr to buffer for working memory, size determined by
+ *        nx842_pseries_driver.workmem_size
  *
  * Returns:
  *   0		Success, output of length @outlen stored in the buffer at @out
@@ -418,8 +418,8 @@ unlock:
  * @inlen: Length of input buffer
  * @out: Pointer to output buffer
  * @outlen: Length of output buffer
- * @wrkmem: ptr to buffer for working memory, size determined by
- *          nx842_pseries_driver.workmem_size
+ * @wmem: ptr to buffer for working memory, size determined by
+ *        nx842_pseries_driver.workmem_size
  *
  * Returns:
  *   0		Success, output of length @outlen stored in the buffer at @out
@@ -538,7 +538,7 @@ unlock:
 /**
  * nx842_OF_set_defaults -- Set default (disabled) values for devdata
  *
- * @devdata - struct nx842_devdata to update
+ * @devdata: struct nx842_devdata to update
  *
  * Returns:
  *  0 on success
@@ -563,13 +563,15 @@ static int nx842_OF_set_defaults(struct nx842_devdata *devdata)
  * The status field indicates if the device is enabled when the status
  * is 'okay'.  Otherwise the device driver will be disabled.
  *
- * @prop - struct property point containing the maxsyncop for the update
+ * @devdata: struct nx842_devdata to use for dev_info
+ * @prop: struct property point containing the maxsyncop for the update
  *
  * Returns:
  *  0 - Device is available
  *  -ENODEV - Device is not available
  */
-static int nx842_OF_upd_status(struct property *prop)
+static int nx842_OF_upd_status(struct nx842_devdata *devdata,
+			       struct property *prop)
 {
 	const char *status = (const char *)prop->value;
 
@@ -596,8 +598,8 @@ static int nx842_OF_upd_status(struct property *prop)
  *  In this example, the maximum byte length of a scatter list is
  *  0x0ff0 (4,080).
  *
- * @devdata - struct nx842_devdata to update
- * @prop - struct property point containing the maxsyncop for the update
+ * @devdata: struct nx842_devdata to update
+ * @prop: struct property point containing the maxsyncop for the update
  *
  * Returns:
  *  0 on success
@@ -644,8 +646,8 @@ static int nx842_OF_upd_maxsglen(struct nx842_devdata *devdata,
  *  0x1000 (4,096) data byte length and 0x1f3 (510) total scatter list
  *  elements.
  *
- * @devdata - struct nx842_devdata to update
- * @prop - struct property point containing the maxsyncop for the update
+ * @devdata: struct nx842_devdata to update
+ * @prop: struct property point containing the maxsyncop for the update
  *
  * Returns:
  *  0 on success
@@ -714,7 +716,6 @@ out:
 }
 
 /**
- *
  * nx842_OF_upd -- Handle OF properties updates for the device.
  *
  * Set all properties from the OF tree.  Optionally, a new property
@@ -783,7 +784,7 @@ static int nx842_OF_upd(struct property *new_prop)
 		goto out;
 
 	/* Perform property updates */
-	ret = nx842_OF_upd_status(status);
+	ret = nx842_OF_upd_status(new_devdata, status);
 	if (ret)
 		goto error_out;
 
@@ -837,8 +838,7 @@ error_out:
  *
  * @np: notifier block
  * @action: notifier action
- * @update: struct pSeries_reconfig_prop_update pointer if action is
- *	PSERIES_UPDATE_PROPERTY
+ * @data: struct of_reconfig_data pointer
  *
  * Returns:
  *	NOTIFY_OK on success
@@ -1195,6 +1195,7 @@ static const struct vio_device_id nx842_vio_driver_ids[] = {
 	{"ibm,compression-v1", "ibm,compression"},
 	{"", ""},
 };
+MODULE_DEVICE_TABLE(vio, nx842_vio_driver_ids);
 
 static struct vio_driver nx842_vio_driver = {
 	.name = KBUILD_MODNAME,
