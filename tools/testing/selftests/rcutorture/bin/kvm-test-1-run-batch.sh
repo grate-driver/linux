@@ -55,6 +55,7 @@ do
 	echo ---- System running test: `uname -a` > $i/kvm-test-1-run-qemu.sh.out
 	echo > $i/kvm-test-1-run-qemu.sh.out
 	kvm-test-1-run-qemu.sh $i >> $i/kvm-test-1-run-qemu.sh.out 2>&1 &
+	parse-console.sh $resdir/console.log $i
 done
 for i in $runfiles
 do
