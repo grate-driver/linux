@@ -63,6 +63,10 @@
 #define   A_VBUS_VLD_WAKEUP_EN			BIT(30)
 
 #define USB_PHY_VBUS_WAKEUP_ID			0x408
+#define   ID_INT_EN				BIT(0)
+#define   ID_CHG_DET				BIT(1)
+#define   VBUS_WAKEUP_INT_EN			BIT(8)
+#define   VBUS_WAKEUP_CHG_DET			BIT(9)
 #define   VBUS_WAKEUP_STS			BIT(10)
 #define   VBUS_WAKEUP_WAKEUP_EN			BIT(30)
 
@@ -157,6 +161,10 @@
 #define   USB_USBMODE_MASK			(3 << 0)
 #define   USB_USBMODE_HOST			(3 << 0)
 #define   USB_USBMODE_DEVICE			(2 << 0)
+
+#define PMC_USB_AO				0xf0
+#define   VBUS_WAKEUP_PD_P0			BIT(2)
+#define   ID_PD_P0				BIT(3)
 
 static DEFINE_SPINLOCK(utmip_pad_lock);
 static unsigned int utmip_pad_count;
@@ -533,13 +541,14 @@ static int utmi_phy_power_on(struct tegra_usb_phy *phy)
 	val &= ~USB_WAKE_ON_RESUME_EN;
 	writel_relaxed(val, base + USB_SUSP_CTRL);
 
-	if (phy->mode == USB_DR_MODE_PERIPHERAL) {
+	if (phy->mode != USB_DR_MODE_HOST) {
 		val = readl_relaxed(base + USB_SUSP_CTRL);
 		val &= ~(USB_WAKE_ON_CNNT_EN_DEV | USB_WAKE_ON_DISCON_EN_DEV);
 		writel_relaxed(val, base + USB_SUSP_CTRL);
 
 		val = readl_relaxed(base + USB_PHY_VBUS_WAKEUP_ID);
 		val &= ~VBUS_WAKEUP_WAKEUP_EN;
+		val &= ~(ID_CHG_DET | VBUS_WAKEUP_CHG_DET);
 		writel_relaxed(val, base + USB_PHY_VBUS_WAKEUP_ID);
 
 		val = readl_relaxed(base + USB_PHY_VBUS_SENSORS);
@@ -687,9 +696,10 @@ static int utmi_phy_power_off(struct tegra_usb_phy *phy)
 		 * Ask VBUS sensor to generate wake event once cable is
 		 * connected.
 		 */
-		if (phy->mode == USB_DR_MODE_PERIPHERAL) {
+		if (phy->mode != USB_DR_MODE_HOST) {
 			val = readl_relaxed(base + USB_PHY_VBUS_WAKEUP_ID);
 			val |= VBUS_WAKEUP_WAKEUP_EN;
+			val &= ~(ID_CHG_DET | VBUS_WAKEUP_CHG_DET);
 			writel_relaxed(val, base + USB_PHY_VBUS_WAKEUP_ID);
 
 			val = readl_relaxed(base + USB_PHY_VBUS_SENSORS);
@@ -904,26 +914,151 @@ static void tegra_usb_phy_shutdown(struct usb_phy *u_phy)
 	phy->freq = NULL;
 }
 
+static irqreturn_t tegra_usb_phy_isr(int irq, void *data)
+{
+	u32 val, int_mask = ID_CHG_DET | VBUS_WAKEUP_CHG_DET;
+	struct tegra_usb_phy *phy = data;
+	void __iomem *base = phy->regs;
+
+	/*
+	 * The PHY interrupt also wakes the USB controller driver since
+	 * interrupt is shared. We don't do anything in the PHY driver,
+	 * so just clear the interrupt.
+	 */
+	val = readl_relaxed(base + USB_PHY_VBUS_WAKEUP_ID);
+	writel_relaxed(val, base + USB_PHY_VBUS_WAKEUP_ID);
+
+	return val & int_mask ? IRQ_HANDLED : IRQ_NONE;
+}
+
 static int tegra_usb_phy_set_wakeup(struct usb_phy *u_phy, bool enable)
 {
 	struct tegra_usb_phy *phy = to_tegra_usb_phy(u_phy);
+	void __iomem *base = phy->regs;
+	int ret = 0;
+	u32 val;
+
+	if (phy->wakeup_enabled && phy->mode != USB_DR_MODE_HOST &&
+	    phy->irq > 0) {
+		disable_irq(phy->irq);
+
+		val = readl_relaxed(base + USB_PHY_VBUS_WAKEUP_ID);
+		val &= ~(ID_INT_EN | VBUS_WAKEUP_INT_EN);
+		writel_relaxed(val, base + USB_PHY_VBUS_WAKEUP_ID);
+
+		enable_irq(phy->irq);
+
+		free_irq(phy->irq, phy);
+
+		phy->wakeup_enabled = false;
+	}
+
+	if (enable && phy->mode != USB_DR_MODE_HOST && phy->irq > 0) {
+		ret = request_irq(phy->irq, tegra_usb_phy_isr, IRQF_SHARED,
+				  dev_name(phy->u_phy.dev), phy);
+		if (!ret) {
+			disable_irq(phy->irq);
+
+			/*
+			 * USB clock will be resumed once wake event will be
+			 * generated.  The ID-change event requires to have
+			 * interrupts enabled, otherwise it won't be generated.
+			 */
+			val = readl_relaxed(base + USB_PHY_VBUS_WAKEUP_ID);
+			val |= ID_INT_EN | VBUS_WAKEUP_INT_EN;
+			writel_relaxed(val, base + USB_PHY_VBUS_WAKEUP_ID);
+
+			enable_irq(phy->irq);
+		} else {
+			dev_err(phy->u_phy.dev,
+				"Failed to request interrupt: %d", ret);
+			enable = false;
+		}
+
+	}
 
 	phy->wakeup_enabled = enable;
 
-	return 0;
+	return ret;
 }
 
 static int tegra_usb_phy_set_suspend(struct usb_phy *u_phy, int suspend)
 {
 	struct tegra_usb_phy *phy = to_tegra_usb_phy(u_phy);
+	int ret;
 
 	if (WARN_ON(!phy->freq))
 		return -EINVAL;
 
+	/*
+	 * PHY is sharing IRQ with the CI driver, hence here we either
+	 * disable interrupt for both PHY and CI or for CI only.  The
+	 * interrupt needs to be disabled while hardware is reprogrammed
+	 * because interrupt touches the programmed registers, and thus,
+	 * there could be a race condition.
+	 */
+	if (phy->irq > 0)
+		disable_irq(phy->irq);
+
 	if (suspend)
-		return tegra_usb_phy_power_off(phy);
+		ret = tegra_usb_phy_power_off(phy);
 	else
-		return tegra_usb_phy_power_on(phy);
+		ret = tegra_usb_phy_power_on(phy);
+
+	if (phy->irq > 0)
+		enable_irq(phy->irq);
+
+	return ret;
+}
+
+static int tegra_usb_phy_configure_pmc(struct tegra_usb_phy *phy)
+{
+	int err, val = 0;
+
+	/* older device-trees don't have PMC regmap */
+	if (!phy->pmc_regmap)
+		return 0;
+
+	/* should be initialized if regmap presents */
+	if (WARN_ON(phy->instance < 0))
+		return 0;
+
+	/*
+	 * Tegra20 has a different layout of PMC USB register bits and AO is
+	 * enabled by default after system reset on Tegra20, so assume nothing
+	 * to do on Tegra20.
+	 */
+	if (!phy->soc_config->requires_pmc_ao_power_up)
+		return 0;
+
+	/* enable VBUS wake-up detector */
+	if (phy->mode != USB_DR_MODE_HOST)
+		val |= VBUS_WAKEUP_PD_P0 << phy->instance * 4;
+
+	/* enable ID-pin ACC detector for OTG mode switching */
+	if (phy->mode == USB_DR_MODE_OTG)
+		val |= ID_PD_P0 << phy->instance * 4;
+
+	/* disable detectors to reset them */
+	err = regmap_set_bits(phy->pmc_regmap, PMC_USB_AO, val);
+	if (err) {
+		dev_err(phy->u_phy.dev, "Failed to disable PMC AO: %d\n", err);
+		return err;
+	}
+
+	usleep_range(10, 100);
+
+	/* enable detectors */
+	err = regmap_clear_bits(phy->pmc_regmap, PMC_USB_AO, val);
+	if (err) {
+		dev_err(phy->u_phy.dev, "Failed to enable PMC AO: %d\n", err);
+		return err;
+	}
+
+	/* detectors starts to work after 10ms */
+	usleep_range(10000, 15000);
+
+	return 0;
 }
 
 static int tegra_usb_phy_init(struct usb_phy *u_phy)
@@ -966,6 +1101,10 @@ static int tegra_usb_phy_init(struct usb_phy *u_phy)
 		if (err)
 			goto disable_vbus;
 	}
+
+	err = tegra_usb_phy_configure_pmc(phy);
+	if (err)
+		goto close_phy;
 
 	err = tegra_usb_phy_power_on(phy);
 	if (err)
@@ -1135,11 +1274,50 @@ static int utmi_phy_probe(struct tegra_usb_phy *tegra_phy,
 	return 0;
 }
 
+static void tegra_usb_phy_put_pmc_device(void *dev)
+{
+	put_device(dev);
+}
+
+static struct regmap *tegra_usb_phy_get_pmc_regmap(struct device *dev)
+{
+	struct platform_device *pmc_pdev;
+	struct device_node *np;
+	struct regmap *regmap;
+	int err;
+
+	np = of_parse_phandle(dev->of_node, "nvidia,pmc", 0);
+	if (!np) {
+		dev_warn_once(dev, "nvidia,pmc is missing, please update your device-tree\n");
+		return NULL;
+	}
+
+	pmc_pdev = of_find_device_by_node(np);
+	of_node_put(np);
+	if (!pmc_pdev)
+		return ERR_PTR(-ENODEV);
+
+	err = devm_add_action_or_reset(dev, tegra_usb_phy_put_pmc_device,
+				       &pmc_pdev->dev);
+	if (err)
+		return ERR_PTR(err);
+
+	if (!platform_get_drvdata(pmc_pdev))
+		return ERR_PTR(-EPROBE_DEFER);
+
+	regmap = dev_get_regmap(&pmc_pdev->dev, "usb_sleepwalk");
+	if (!regmap)
+		return ERR_PTR(-EINVAL);
+
+	return regmap;
+}
+
 static const struct tegra_phy_soc_config tegra20_soc_config = {
 	.utmi_pll_config_in_car_module = false,
 	.has_hostpc = false,
 	.requires_usbmode_setup = false,
 	.requires_extra_tuning_parameters = false,
+	.requires_pmc_ao_power_up = false,
 };
 
 static const struct tegra_phy_soc_config tegra30_soc_config = {
@@ -1147,6 +1325,7 @@ static const struct tegra_phy_soc_config tegra30_soc_config = {
 	.has_hostpc = true,
 	.requires_usbmode_setup = true,
 	.requires_extra_tuning_parameters = true,
+	.requires_pmc_ao_power_up = true,
 };
 
 static const struct of_device_id tegra_usb_phy_id_table[] = {
@@ -1172,6 +1351,7 @@ static int tegra_usb_phy_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	tegra_phy->soc_config = of_device_get_match_data(&pdev->dev);
+	tegra_phy->irq = platform_get_irq_optional(pdev, 0);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -1214,6 +1394,19 @@ static int tegra_usb_phy_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to get pll_u clock: %d\n", err);
 		return err;
 	}
+
+	tegra_phy->pmc_regmap = tegra_usb_phy_get_pmc_regmap(&pdev->dev);
+	err = PTR_ERR_OR_ZERO(tegra_phy->pmc_regmap);
+	if (err) {
+		dev_err_probe(&pdev->dev, err, "Failed to get PMC regmap\n");
+		return err;
+	}
+
+	/* older device-trees don't specify instance ID */
+	err = of_property_read_u32(np, "nvidia,phy-instance",
+				   &tegra_phy->instance);
+	if (err)
+		tegra_phy->instance = -1;
 
 	phy_type = of_usb_get_phy_mode(np);
 	switch (phy_type) {
