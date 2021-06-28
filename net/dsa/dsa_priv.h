@@ -84,7 +84,7 @@ struct dsa_notifier_vlan_info {
 
 /* DSA_NOTIFIER_MTU */
 struct dsa_notifier_mtu_info {
-	bool propagate_upstream;
+	bool targeted_match;
 	int sw_index;
 	int port;
 	int mtu;
@@ -154,6 +154,11 @@ const struct dsa_device_ops *dsa_find_tagger_by_name(const char *buf);
 bool dsa_schedule_work(struct work_struct *work);
 const char *dsa_tag_protocol_to_str(const struct dsa_device_ops *ops);
 
+static inline int dsa_tag_protocol_overhead(const struct dsa_device_ops *ops)
+{
+	return ops->needed_headroom + ops->needed_tailroom;
+}
+
 /* master.c */
 int dsa_master_setup(struct net_device *dev, struct dsa_port *cpu_dp);
 void dsa_master_teardown(struct net_device *dev);
@@ -195,7 +200,7 @@ int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
 bool dsa_port_skip_vlan_configuration(struct dsa_port *dp);
 int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock);
 int dsa_port_mtu_change(struct dsa_port *dp, int new_mtu,
-			bool propagate_upstream);
+			bool targeted_match);
 int dsa_port_fdb_add(struct dsa_port *dp, const unsigned char *addr,
 		     u16 vid);
 int dsa_port_fdb_del(struct dsa_port *dp, const unsigned char *addr,

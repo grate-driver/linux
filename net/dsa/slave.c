@@ -1528,6 +1528,7 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	struct dsa_slave_priv *p = netdev_priv(dev);
 	struct dsa_switch *ds = p->dp->ds;
+	struct dsa_port *dp_iter;
 	struct dsa_port *cpu_dp;
 	int port = p->dp->index;
 	int largest_mtu = 0;
@@ -1535,31 +1536,31 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 	int old_master_mtu;
 	int mtu_limit;
 	int cpu_mtu;
-	int err, i;
+	int err;
 
 	if (!ds->ops->port_change_mtu)
 		return -EOPNOTSUPP;
 
-	for (i = 0; i < ds->num_ports; i++) {
+	list_for_each_entry(dp_iter, &ds->dst->ports, list) {
 		int slave_mtu;
 
-		if (!dsa_is_user_port(ds, i))
+		if (!dsa_port_is_user(dp_iter))
 			continue;
 
 		/* During probe, this function will be called for each slave
 		 * device, while not all of them have been allocated. That's
 		 * ok, it doesn't change what the maximum is, so ignore it.
 		 */
-		if (!dsa_to_port(ds, i)->slave)
+		if (!dp_iter->slave)
 			continue;
 
 		/* Pretend that we already applied the setting, which we
 		 * actually haven't (still haven't done all integrity checks)
 		 */
-		if (i == port)
+		if (dp_iter == dp)
 			slave_mtu = new_mtu;
 		else
-			slave_mtu = dsa_to_port(ds, i)->slave->mtu;
+			slave_mtu = dp_iter->slave->mtu;
 
 		if (largest_mtu < slave_mtu)
 			largest_mtu = slave_mtu;
@@ -1569,7 +1570,7 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 
 	mtu_limit = min_t(int, master->max_mtu, dev->max_mtu);
 	old_master_mtu = master->mtu;
-	new_master_mtu = largest_mtu + cpu_dp->tag_ops->overhead;
+	new_master_mtu = largest_mtu + dsa_tag_protocol_overhead(cpu_dp->tag_ops);
 	if (new_master_mtu > mtu_limit)
 		return -ERANGE;
 
@@ -1585,14 +1586,15 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 			goto out_master_failed;
 
 		/* We only need to propagate the MTU of the CPU port to
-		 * upstream switches.
+		 * upstream switches, so create a non-targeted notifier which
+		 * updates all switches.
 		 */
-		err = dsa_port_mtu_change(cpu_dp, cpu_mtu, true);
+		err = dsa_port_mtu_change(cpu_dp, cpu_mtu, false);
 		if (err)
 			goto out_cpu_failed;
 	}
 
-	err = dsa_port_mtu_change(dp, new_mtu, false);
+	err = dsa_port_mtu_change(dp, new_mtu, true);
 	if (err)
 		goto out_port_failed;
 
@@ -1605,8 +1607,8 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 out_port_failed:
 	if (new_master_mtu != old_master_mtu)
 		dsa_port_mtu_change(cpu_dp, old_master_mtu -
-				    cpu_dp->tag_ops->overhead,
-				    true);
+				    dsa_tag_protocol_overhead(cpu_dp->tag_ops),
+				    false);
 out_cpu_failed:
 	if (new_master_mtu != old_master_mtu)
 		dev_set_mtu(master, old_master_mtu);
@@ -1749,7 +1751,8 @@ static void dsa_slave_phylink_fixed_state(struct phylink_config *config,
 }
 
 /* slave device setup *******************************************************/
-static int dsa_slave_phy_connect(struct net_device *slave_dev, int addr)
+static int dsa_slave_phy_connect(struct net_device *slave_dev, int addr,
+				 u32 flags)
 {
 	struct dsa_port *dp = dsa_slave_to_port(slave_dev);
 	struct dsa_switch *ds = dp->ds;
@@ -1759,6 +1762,8 @@ static int dsa_slave_phy_connect(struct net_device *slave_dev, int addr)
 		netdev_err(slave_dev, "no phy at %d\n", addr);
 		return -ENODEV;
 	}
+
+	slave_dev->phydev->dev_flags |= flags;
 
 	return phylink_connect_phy(dp->pl, slave_dev->phydev);
 }
@@ -1804,7 +1809,7 @@ static int dsa_slave_phy_setup(struct net_device *slave_dev)
 		/* We could not connect to a designated PHY or SFP, so try to
 		 * use the switch internal MDIO bus instead
 		 */
-		ret = dsa_slave_phy_connect(slave_dev, dp->index);
+		ret = dsa_slave_phy_connect(slave_dev, dp->index, phy_flags);
 		if (ret) {
 			netdev_err(slave_dev,
 				   "failed to connect to port %d: %d\n",
@@ -1824,10 +1829,8 @@ void dsa_slave_setup_tagger(struct net_device *slave)
 	const struct dsa_port *cpu_dp = dp->cpu_dp;
 	struct net_device *master = cpu_dp->master;
 
-	if (cpu_dp->tag_ops->tail_tag)
-		slave->needed_tailroom = cpu_dp->tag_ops->overhead;
-	else
-		slave->needed_headroom = cpu_dp->tag_ops->overhead;
+	slave->needed_headroom = cpu_dp->tag_ops->needed_headroom;
+	slave->needed_tailroom = cpu_dp->tag_ops->needed_tailroom;
 	/* Try to save one extra realloc later in the TX path (in the master)
 	 * by also inheriting the master's needed headroom and tailroom.
 	 * The 8021q driver also does this.
