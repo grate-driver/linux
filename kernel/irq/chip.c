@@ -173,6 +173,11 @@ static void irq_state_clr_masked(struct irq_desc *desc)
 	irqd_clear(&desc->irq_data, IRQD_IRQ_MASKED);
 }
 
+static void irq_state_clr_flow_masked(struct irq_desc *desc)
+{
+	irqd_clear(&desc->irq_data, IRQD_IRQ_FLOW_MASKED);
+}
+
 static void irq_state_clr_started(struct irq_desc *desc)
 {
 	irqd_clear(&desc->irq_data, IRQD_IRQ_STARTED);

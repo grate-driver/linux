@@ -221,6 +221,8 @@ struct irq_data {
  *				  irq_chip::irq_set_affinity() when deactivated.
  * IRQD_IRQ_ENABLED_ON_SUSPEND	- Interrupt is enabled on suspend by irq pm if
  *				  irqchip have flag IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND set.
+ * IRQD_IRQ_FLOW_MASKED         - Interrupt is masked by ACK. Only EOI can
+ *                                clear this.
  */
 enum {
 	IRQD_TRIGGER_MASK		= 0xf,
@@ -247,6 +249,7 @@ enum {
 	IRQD_HANDLE_ENFORCE_IRQCTX	= (1 << 28),
 	IRQD_AFFINITY_ON_ACTIVATE	= (1 << 29),
 	IRQD_IRQ_ENABLED_ON_SUSPEND	= (1 << 30),
+	IRQD_IRQ_FLOW_MASKED            = (1 << 31),
 };
 
 #define __irqd_to_state(d) ACCESS_PRIVATE((d)->common, state_use_accessors)
@@ -349,6 +352,11 @@ static inline bool irqd_irq_disabled(struct irq_data *d)
 static inline bool irqd_irq_masked(struct irq_data *d)
 {
 	return __irqd_to_state(d) & IRQD_IRQ_MASKED;
+}
+
+static inline bool irqd_irq_flow_masked(struct irq_data *d)
+{
+	return __irqd_to_state(d) & IRQD_IRQ_FLOW_MASKED;
 }
 
 static inline bool irqd_irq_inprogress(struct irq_data *d)
@@ -569,6 +577,7 @@ struct irq_chip {
  * IRQCHIP_SUPPORTS_NMI:              Chip can deliver NMIs, only for root irqchips
  * IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND:  Invokes __enable_irq()/__disable_irq() for wake irqs
  *                                    in the suspend path if they are in disabled state
+ * IRQCHIP_AUTOMASKS_FLOW:            chip->ack() masks and chip->eoi() unmasks
  */
 enum {
 	IRQCHIP_SET_TYPE_MASKED			= (1 <<  0),
@@ -581,6 +590,7 @@ enum {
 	IRQCHIP_SUPPORTS_LEVEL_MSI		= (1 <<  7),
 	IRQCHIP_SUPPORTS_NMI			= (1 <<  8),
 	IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND	= (1 <<  9),
+	IRQCHIP_AUTOMASKS_FLOW                  = (1 <<  10),
 };
 
 #include <linux/irqdesc.h>

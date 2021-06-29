@@ -245,6 +245,11 @@ static inline void irq_state_set_masked(struct irq_desc *desc)
 	irqd_set(&desc->irq_data, IRQD_IRQ_MASKED);
 }
 
+static inline void irq_state_set_flow_masked(struct irq_desc *desc)
+{
+	irqd_set(&desc->irq_data, IRQD_IRQ_FLOW_MASKED);
+}
+
 #undef __irqd_to_state
 
 static inline void __kstat_incr_irqs_this_cpu(struct irq_desc *desc)
