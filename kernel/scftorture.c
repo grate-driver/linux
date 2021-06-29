@@ -421,10 +421,12 @@ static void scftorture_invoke_one(struct scf_statistics *scfp, struct torture_ra
 	}
 	if (scfcp && scfsp->scfs_wait) {
 		if (WARN_ON_ONCE((num_online_cpus() > 1 || scfsp->scfs_prim == SCF_PRIM_SINGLE ||
-				  scfsp->scfs_prim == SCF_PRIM_SINGLE_RPC) && !scfcp->scfc_out))
+				  scfsp->scfs_prim == SCF_PRIM_SINGLE_RPC) && !scfcp->scfc_out)) {
+			pr_warn("%s: Memory-ordering failure, scfs_prim: %d.\n", __func__, scfsp->scfs_prim);
 			atomic_inc(&n_mb_out_errs); // Leak rather than trash!
-		else
+		} else {
 			kfree(scfcp);
+		}
 		barrier(); // Prevent race-reduction compiler optimizations.
 	}
 	if (use_cpus_read_lock)
