@@ -32,7 +32,9 @@ properties:
     maxItems: 1
 
   asus,dockram:
-    maxItems: 1
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: |
+      I2C device used to read/write embedded controller.
 
   monitored-battery:
     $ref: /schemas/types.yaml#/definitions/phandle
@@ -61,6 +63,9 @@ additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/gpio/gpio.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
+
     pad_battery: pad-battery {
       compatible = "simple-battery";
       charge-full-design-microamp-hours = <3380000>;
