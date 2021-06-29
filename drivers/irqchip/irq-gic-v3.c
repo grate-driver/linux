@@ -484,10 +484,10 @@ static int gic_irq_nmi_setup(struct irq_data *d)
 		/* Setting up PPI as NMI, only switch handler for first NMI */
 		if (!refcount_inc_not_zero(&ppi_nmi_refs[idx])) {
 			refcount_set(&ppi_nmi_refs[idx], 1);
-			desc->handle_irq = handle_percpu_devid_fasteoi_nmi;
+			desc->handle_irq = handle_percpu_devid_nmi;
 		}
 	} else {
-		desc->handle_irq = handle_fasteoi_nmi;
+		desc->handle_irq = handle_nmi;
 	}
 
 	gic_irq_set_prio(d, GICD_INT_NMI_PRI);
