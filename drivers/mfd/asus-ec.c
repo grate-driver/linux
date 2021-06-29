@@ -113,6 +113,13 @@ static const struct asus_ec_initdata asus_ec_model_info[] = {
 				  EC_PART_I8042 | EC_PART_EXT_KEYS |
 				  EC_PART_CHARGER,
 	},
+	{	/* Asus TF500T/TF700T Mobile Dock */
+		.model		= "ASUS-DOCK-EC21N",
+		.name		= "dock",
+		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
+				  EC_PART_I8042 | EC_PART_EXT_KEYS |
+				  EC_PART_CHARGER,
+	},
 	{	/* Asus T114 Transformer Pad */
 		.model		= "ASUS-TF701T-PAD",
 		.name		= "pad",
