@@ -49,6 +49,9 @@ examples:
      * Asus Transformers use I2C hotplug for attachable dock keyboard
      */
 
+    #include <dt-bindings/gpio/gpio.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
+
     dock-i2c {
         compatible = "i2c-hotplug-gpio";
 
