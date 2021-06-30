@@ -24,6 +24,7 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_opp.h>
+#include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/sort.h>
 #include <linux/types.h>
@@ -1519,6 +1520,32 @@ static int tegra_emc_init_clk(struct tegra_emc *emc)
 	return 0;
 }
 
+static void devm_tegra_emc_disable_runtime_pm(void *dev)
+{
+	pm_runtime_put(dev);
+	pm_runtime_disable(dev);
+}
+
+static int tegra_emc_init_pm(struct tegra_emc *emc)
+{
+	int err;
+
+	pm_runtime_enable(emc->dev);
+	err = pm_runtime_resume_and_get(emc->dev);
+	if (err) {
+		pm_runtime_disable(emc->dev);
+		return err;
+	}
+
+	err = devm_add_action_or_reset(emc->dev,
+				       devm_tegra_emc_disable_runtime_pm,
+				       emc->dev);
+	if (err)
+		return err;
+
+	return 0;
+}
+
 static int tegra_emc_probe(struct platform_device *pdev)
 {
 	struct tegra_core_opp_params opp_params = {};
@@ -1568,6 +1595,10 @@ static int tegra_emc_probe(struct platform_device *pdev)
 	}
 
 	err = tegra_emc_init_clk(emc);
+	if (err)
+		return err;
+
+	err = tegra_emc_init_pm(emc);
 	if (err)
 		return err;
 
