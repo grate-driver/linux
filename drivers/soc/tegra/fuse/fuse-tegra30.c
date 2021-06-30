@@ -208,6 +208,7 @@ const struct tegra_fuse_soc tegra124_fuse_soc = {
 	.lookups = tegra124_fuse_lookups,
 	.num_lookups = ARRAY_SIZE(tegra124_fuse_lookups),
 	.soc_attr_group = &tegra_soc_attr_group,
+	.clk_suspend_on = true,
 };
 #endif
 
