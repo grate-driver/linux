@@ -212,9 +212,9 @@ static int tegra_mc_hotreset_assert(struct reset_controller_dev *rcdev,
 		/* wait for completion of the outstanding DMA requests */
 		while (!rst_ops->dma_idling(mc, rst)) {
 			if (!retries--) {
-				dev_err(mc->dev, "failed to flush %s DMA\n",
+				dev_dbg(mc->dev, "failed to flush %s DMA\n",
 					rst->name);
-				return -EBUSY;
+				break;
 			}
 
 			usleep_range(10, 100);
