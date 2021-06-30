@@ -506,6 +506,151 @@ static void tegra_pmc_scratch_writel(struct tegra_pmc *pmc, u32 value,
 		writel(value, pmc->scratch + offset);
 }
 
+static const char * const tegra_emc_compats[] = {
+	"nvidia,tegra20-emc",
+	"nvidia,tegra30-emc",
+	NULL,
+};
+
+/*
+ * This GENPD callback is used by both powergate and core domains.
+ *
+ * We retrieve clock rate of the attached device and initialize domain's
+ * performance state in accordance to the clock rate.
+ */
+static int tegra_pmc_pd_attach_dev(struct generic_pm_domain *genpd,
+				   struct device *dev)
+{
+	struct generic_pm_domain_data *gpd_data = dev_gpd_data(dev);
+	struct opp_table *opp_table, *pd_opp_table;
+	struct generic_pm_domain *core_genpd;
+	struct dev_pm_opp *opp, *pd_opp;
+	unsigned long rate, state;
+	struct gpd_link *link;
+	struct clk *clk;
+	u32 hw_version;
+	int ret;
+
+	/*
+	 * Tegra114+ SocS don't support OPP yet.  But if they will get OPP
+	 * support, then we want to skip OPP for older kernels to preserve
+	 * compatibility of newer DTBs with older kernels.
+	 */
+	if (!pmc->soc->supports_core_domain)
+		return 0;
+
+	/*
+	 * The EMC devices are a special case because we have a protection
+	 * from non-EMC drivers getting clock handle before EMC driver is
+	 * fully initialized.  The goal of the protection is to prevent
+	 * devfreq driver from getting failures if it will try to change
+	 * EMC clock rate until clock is fully initialized.  The EMC drivers
+	 * will initialize the performance state by themselves.
+	 */
+	if (of_device_compatible_match(dev->of_node, tegra_emc_compats))
+		return 0;
+
+	clk = clk_get(dev, NULL);
+	if (IS_ERR(clk)) {
+		dev_err(&genpd->dev, "failed to get clk of %s: %pe\n",
+			dev_name(dev), clk);
+		return PTR_ERR(clk);
+	}
+
+	rate = clk_get_rate(clk);
+	if (!rate) {
+		dev_err(&genpd->dev, "failed to get clk rate of %s\n",
+			dev_name(dev));
+		ret = -EINVAL;
+		goto put_clk;
+	}
+
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		hw_version = BIT(tegra_sku_info.soc_process_id);
+	else
+		hw_version = BIT(tegra_sku_info.soc_speedo_id);
+
+	opp_table = dev_pm_opp_set_supported_hw(dev, &hw_version, 1);
+	if (IS_ERR(opp_table)) {
+		dev_err(&genpd->dev, "failed to set OPP supported HW for %s: %d\n",
+			dev_name(dev), ret);
+		ret = PTR_ERR(opp_table);
+		goto put_clk;
+	}
+
+	ret = dev_pm_opp_of_add_table(dev);
+	if (ret) {
+		/* older DTBs that don't have OPPs will get -ENODEV here */
+		if (ret != -ENODEV)
+			dev_err(&genpd->dev, "failed to get OPP table of %s: %d\n",
+				dev_name(dev), ret);
+		else
+			ret = 0;
+
+		goto put_supported_hw;
+	}
+
+	/* find suitable OPP for the rate */
+	opp = dev_pm_opp_find_freq_ceil(dev, &rate);
+
+	if (opp == ERR_PTR(-ERANGE))
+		opp = dev_pm_opp_find_freq_floor(dev, &rate);
+
+	if (IS_ERR(opp)) {
+		dev_err(&genpd->dev, "failed to find OPP for %luHz of %s: %pe\n",
+			rate, dev_name(dev), opp);
+		ret = PTR_ERR(opp);
+		goto remove_dev_table;
+	}
+
+	if (!list_empty(&genpd->child_links)) {
+		link = list_first_entry(&genpd->child_links, struct gpd_link,
+					child_node);
+		core_genpd = link->parent;
+	} else {
+		core_genpd = genpd;
+	}
+
+	pd_opp_table = dev_pm_opp_get_opp_table(&core_genpd->dev);
+	if (IS_ERR(pd_opp_table)) {
+		dev_err(&genpd->dev, "failed to get OPP table of %s: %pe\n",
+			dev_name(&core_genpd->dev), pd_opp_table);
+		ret = PTR_ERR(pd_opp_table);
+		goto put_dev_opp;
+	}
+
+	pd_opp = dev_pm_opp_xlate_required_opp(opp_table, pd_opp_table, opp);
+	if (IS_ERR(pd_opp)) {
+		dev_err(&genpd->dev,
+			"failed to xlate required OPP for %luHz of %s: %pe\n",
+			rate, dev_name(dev), pd_opp);
+		ret = PTR_ERR(pd_opp);
+		goto put_pd_opp_table;
+	}
+
+	/*
+	 * The initialized state will be applied by GENPD core on the first
+	 * RPM-resume of the device.  This means that drivers don't need to
+	 * explicitly initialize performance state.
+	 */
+	state = pm_genpd_opp_to_performance_state(&core_genpd->dev, pd_opp);
+	gpd_data->rpm_pstate = state;
+	dev_pm_opp_put(pd_opp);
+
+put_pd_opp_table:
+	dev_pm_opp_put_opp_table(pd_opp_table);
+put_dev_opp:
+	dev_pm_opp_put(opp);
+remove_dev_table:
+	dev_pm_opp_of_remove_table(dev);
+put_supported_hw:
+	dev_pm_opp_put_supported_hw(opp_table);
+put_clk:
+	clk_put(clk);
+
+	return ret;
+}
+
 /*
  * TODO Figure out a way to call this with the struct tegra_pmc * passed in.
  * This currently doesn't work because readx_poll_timeout() can only operate
@@ -1238,6 +1383,7 @@ static int tegra_powergate_add(struct tegra_pmc *pmc, struct device_node *np)
 
 	pg->id = id;
 	pg->genpd.name = np->name;
+	pg->genpd.attach_dev = tegra_pmc_pd_attach_dev;
 	pg->genpd.power_off = tegra_genpd_power_off;
 	pg->genpd.power_on = tegra_genpd_power_on;
 	pg->pmc = pmc;
@@ -1354,6 +1500,7 @@ static int tegra_pmc_core_pd_add(struct tegra_pmc *pmc, struct device_node *np)
 		return -ENOMEM;
 
 	genpd->name = np->name;
+	genpd->attach_dev = tegra_pmc_pd_attach_dev;
 	genpd->set_performance_state = tegra_pmc_core_pd_set_performance_state;
 	genpd->opp_to_performance_state = tegra_pmc_core_pd_opp_to_performance_state;
 
