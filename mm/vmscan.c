@@ -1049,14 +1049,15 @@ static pageout_t pageout(struct page *page, struct address_space *mapping)
 static int __remove_mapping(struct address_space *mapping, struct page *page,
 			    bool reclaimed, struct mem_cgroup *target_memcg)
 {
-	unsigned long flags;
 	int refcount;
 	void *shadow = NULL;
 
 	BUG_ON(!PageLocked(page));
 	BUG_ON(mapping != page_mapping(page));
 
-	xa_lock_irqsave(&mapping->i_pages, flags);
+	if (!PageSwapCache(page))
+		spin_lock(&mapping->host->i_lock);
+	xa_lock_irq(&mapping->i_pages);
 	/*
 	 * The non racy check for a busy page.
 	 *
@@ -1097,7 +1098,7 @@ static int __remove_mapping(struct address_space *mapping, struct page *page,
 		if (reclaimed && !mapping_exiting(mapping))
 			shadow = workingset_eviction(page, target_memcg);
 		__delete_from_swap_cache(page, swap, shadow);
-		xa_unlock_irqrestore(&mapping->i_pages, flags);
+		xa_unlock_irq(&mapping->i_pages);
 		put_swap_page(page, swap);
 	} else {
 		void (*freepage)(struct page *);
@@ -1123,7 +1124,10 @@ static int __remove_mapping(struct address_space *mapping, struct page *page,
 		    !mapping_exiting(mapping) && !dax_mapping(mapping))
 			shadow = workingset_eviction(page, target_memcg);
 		__delete_from_page_cache(page, shadow);
-		xa_unlock_irqrestore(&mapping->i_pages, flags);
+		xa_unlock_irq(&mapping->i_pages);
+		if (mapping_shrinkable(mapping))
+			inode_add_lru(mapping->host);
+		spin_unlock(&mapping->host->i_lock);
 
 		if (freepage != NULL)
 			freepage(page);
@@ -1132,7 +1136,9 @@ static int __remove_mapping(struct address_space *mapping, struct page *page,
 	return 1;
 
 cannot_free:
-	xa_unlock_irqrestore(&mapping->i_pages, flags);
+	xa_unlock_irq(&mapping->i_pages);
+	if (!PageSwapCache(page))
+		spin_unlock(&mapping->host->i_lock);
 	return 0;
 }
 
@@ -1499,7 +1505,8 @@ static unsigned int shrink_page_list(struct list_head *page_list,
 			if (unlikely(PageTransHuge(page)))
 				flags |= TTU_SPLIT_HUGE_PMD;
 
-			if (!try_to_unmap(page, flags)) {
+			try_to_unmap(page, flags);
+			if (page_mapped(page)) {
 				stat->nr_unmap_fail += nr_pages;
 				if (!was_swapbacked && PageSwapBacked(page))
 					stat->nr_lazyfree_fail += nr_pages;
@@ -1701,6 +1708,7 @@ unsigned int reclaim_clean_pages_from_list(struct zone *zone,
 	unsigned int nr_reclaimed;
 	struct page *page, *next;
 	LIST_HEAD(clean_pages);
+	unsigned int noreclaim_flag;
 
 	list_for_each_entry_safe(page, next, page_list, lru) {
 		if (!PageHuge(page) && page_is_file_lru(page) &&
@@ -1711,8 +1719,17 @@ unsigned int reclaim_clean_pages_from_list(struct zone *zone,
 		}
 	}
 
+	/*
+	 * We should be safe here since we are only dealing with file pages and
+	 * we are not kswapd and therefore cannot write dirty file pages. But
+	 * call memalloc_noreclaim_save() anyway, just in case these conditions
+	 * change in the future.
+	 */
+	noreclaim_flag = memalloc_noreclaim_save();
 	nr_reclaimed = shrink_page_list(&clean_pages, zone->zone_pgdat, &sc,
 					&stat, true);
+	memalloc_noreclaim_restore(noreclaim_flag);
+
 	list_splice(&clean_pages, page_list);
 	mod_node_page_state(zone->zone_pgdat, NR_ISOLATED_FILE,
 			    -(long)nr_reclaimed);
@@ -1810,7 +1827,7 @@ static __always_inline void update_lru_sizes(struct lruvec *lruvec,
 
 }
 
-/**
+/*
  * Isolating page from the lruvec to fill in @dst list by nr_to_scan times.
  *
  * lruvec->lru_lock is heavily contended.  Some of the functions that
@@ -2306,6 +2323,7 @@ unsigned long reclaim_pages(struct list_head *page_list)
 	LIST_HEAD(node_page_list);
 	struct reclaim_stat dummy_stat;
 	struct page *page;
+	unsigned int noreclaim_flag;
 	struct scan_control sc = {
 		.gfp_mask = GFP_KERNEL,
 		.priority = DEF_PRIORITY,
@@ -2313,6 +2331,8 @@ unsigned long reclaim_pages(struct list_head *page_list)
 		.may_unmap = 1,
 		.may_swap = 1,
 	};
+
+	noreclaim_flag = memalloc_noreclaim_save();
 
 	while (!list_empty(page_list)) {
 		page = lru_to_page(page_list);
@@ -2349,6 +2369,8 @@ unsigned long reclaim_pages(struct list_head *page_list)
 			putback_lru_page(page);
 		}
 	}
+
+	memalloc_noreclaim_restore(noreclaim_flag);
 
 	return nr_reclaimed;
 }

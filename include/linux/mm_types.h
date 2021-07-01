@@ -159,10 +159,12 @@ struct page {
 				struct mm_struct *pt_mm; /* x86 pgds only */
 				atomic_t pt_frag_refcount; /* powerpc */
 			};
+#if USE_SPLIT_PTE_PTLOCKS
 #if ALLOC_SPLIT_PTLOCKS
 			spinlock_t *ptl;
 #else
 			spinlock_t ptl;
+#endif
 #endif
 		};
 		struct {	/* ZONE_DEVICE pages */
@@ -404,7 +406,7 @@ struct mm_struct {
 		unsigned long mmap_base;	/* base of mmap area */
 		unsigned long mmap_legacy_base;	/* base of mmap area in bottom-up allocations */
 #ifdef CONFIG_HAVE_ARCH_COMPAT_MMAP_BASES
-		/* Base adresses for compatible mmap() */
+		/* Base addresses for compatible mmap() */
 		unsigned long mmap_compat_base;
 		unsigned long mmap_compat_legacy_base;
 #endif
