@@ -73,14 +73,18 @@ u##bits btrfs_get_token_##bits(struct btrfs_map_token *token,		\
 	}								\
 	token->kaddr = page_address(token->eb->pages[idx]);		\
 	token->offset = idx << PAGE_SHIFT;				\
-	if (oip + size <= PAGE_SIZE)					\
+	if (INLINE_EXTENT_BUFFER_PAGES == 1) {				\
 		return get_unaligned_le##bits(token->kaddr + oip);	\
+	} else {							\
+		if (oip + size <= PAGE_SIZE)				\
+			return get_unaligned_le##bits(token->kaddr + oip); \
 									\
-	memcpy(lebytes, token->kaddr + oip, part);			\
-	token->kaddr = page_address(token->eb->pages[idx + 1]);		\
-	token->offset = (idx + 1) << PAGE_SHIFT;			\
-	memcpy(lebytes + part, token->kaddr, size - part);		\
-	return get_unaligned_le##bits(lebytes);				\
+		memcpy(lebytes, token->kaddr + oip, part);		\
+		token->kaddr = page_address(token->eb->pages[idx + 1]);	\
+		token->offset = (idx + 1) << PAGE_SHIFT;		\
+		memcpy(lebytes + part, token->kaddr, size - part);	\
+		return get_unaligned_le##bits(lebytes);			\
+	}								\
 }									\
 u##bits btrfs_get_##bits(const struct extent_buffer *eb,		\
 			 const void *ptr, unsigned long off)		\
@@ -94,13 +98,17 @@ u##bits btrfs_get_##bits(const struct extent_buffer *eb,		\
 	u8 lebytes[sizeof(u##bits)];					\
 									\
 	ASSERT(check_setget_bounds(eb, ptr, off, size));		\
-	if (oip + size <= PAGE_SIZE)					\
+	if (INLINE_EXTENT_BUFFER_PAGES == 1) {				\
 		return get_unaligned_le##bits(kaddr + oip);		\
+	} else {							\
+		if (oip + size <= PAGE_SIZE)				\
+			return get_unaligned_le##bits(kaddr + oip);	\
 									\
-	memcpy(lebytes, kaddr + oip, part);				\
-	kaddr = page_address(eb->pages[idx + 1]);			\
-	memcpy(lebytes + part, kaddr, size - part);			\
-	return get_unaligned_le##bits(lebytes);				\
+		memcpy(lebytes, kaddr + oip, part);			\
+		kaddr = page_address(eb->pages[idx + 1]);		\
+		memcpy(lebytes + part, kaddr, size - part);		\
+		return get_unaligned_le##bits(lebytes);			\
+	}								\
 }									\
 void btrfs_set_token_##bits(struct btrfs_map_token *token,		\
 			    const void *ptr, unsigned long off,		\
@@ -124,15 +132,19 @@ void btrfs_set_token_##bits(struct btrfs_map_token *token,		\
 	}								\
 	token->kaddr = page_address(token->eb->pages[idx]);		\
 	token->offset = idx << PAGE_SHIFT;				\
-	if (oip + size <= PAGE_SIZE) {					\
+	if (INLINE_EXTENT_BUFFER_PAGES == 1) {				\
 		put_unaligned_le##bits(val, token->kaddr + oip);	\
-		return;							\
+	} else {							\
+		if (oip + size <= PAGE_SIZE) {				\
+			put_unaligned_le##bits(val, token->kaddr + oip); \
+			return;						\
+		}							\
+		put_unaligned_le##bits(val, lebytes);			\
+		memcpy(token->kaddr + oip, lebytes, part);		\
+		token->kaddr = page_address(token->eb->pages[idx + 1]);	\
+		token->offset = (idx + 1) << PAGE_SHIFT;		\
+		memcpy(token->kaddr, lebytes + part, size - part);	\
 	}								\
-	put_unaligned_le##bits(val, lebytes);				\
-	memcpy(token->kaddr + oip, lebytes, part);			\
-	token->kaddr = page_address(token->eb->pages[idx + 1]);		\
-	token->offset = (idx + 1) << PAGE_SHIFT;			\
-	memcpy(token->kaddr, lebytes + part, size - part);		\
 }									\
 void btrfs_set_##bits(const struct extent_buffer *eb, void *ptr,	\
 		      unsigned long off, u##bits val)			\
@@ -146,15 +158,19 @@ void btrfs_set_##bits(const struct extent_buffer *eb, void *ptr,	\
 	u8 lebytes[sizeof(u##bits)];					\
 									\
 	ASSERT(check_setget_bounds(eb, ptr, off, size));		\
-	if (oip + size <= PAGE_SIZE) {					\
+	if (INLINE_EXTENT_BUFFER_PAGES == 1) {				\
 		put_unaligned_le##bits(val, kaddr + oip);		\
-		return;							\
-	}								\
+	} else {							\
+		if (oip + size <= PAGE_SIZE) {				\
+			put_unaligned_le##bits(val, kaddr + oip);	\
+			return;						\
+		}							\
 									\
-	put_unaligned_le##bits(val, lebytes);				\
-	memcpy(kaddr + oip, lebytes, part);				\
-	kaddr = page_address(eb->pages[idx + 1]);			\
-	memcpy(kaddr, lebytes + part, size - part);			\
+		put_unaligned_le##bits(val, lebytes);			\
+		memcpy(kaddr + oip, lebytes, part);			\
+		kaddr = page_address(eb->pages[idx + 1]);		\
+		memcpy(kaddr, lebytes + part, size - part);		\
+	}								\
 }
 
 DEFINE_BTRFS_SETGET_BITS(8)
