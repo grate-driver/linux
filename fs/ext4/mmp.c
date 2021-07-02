@@ -157,6 +157,16 @@ static int kmmpd(void *data)
 	       sizeof(mmp->mmp_nodename));
 
 	while (!kthread_should_stop()) {
+		if (!(le32_to_cpu(es->s_feature_incompat) &
+		    EXT4_FEATURE_INCOMPAT_MMP)) {
+			ext4_warning(sb, "kmmpd being stopped since MMP feature"
+				     " has been disabled.");
+			goto wait_to_exit;
+		}
+		if (sb_rdonly(sb)) {
+			schedule_timeout_interruptible(HZ);
+			continue;
+		}
 		if (++seq > EXT4_MMP_SEQ_MAX)
 			seq = 1;
 
@@ -176,16 +186,6 @@ static int kmmpd(void *data)
 			}
 			failed_writes++;
 		}
-
-		if (!(le32_to_cpu(es->s_feature_incompat) &
-		    EXT4_FEATURE_INCOMPAT_MMP)) {
-			ext4_warning(sb, "kmmpd being stopped since MMP feature"
-				     " has been disabled.");
-			goto exit_thread;
-		}
-
-		if (sb_rdonly(sb))
-			break;
 
 		diff = jiffies - last_update_time;
 		if (diff < mmp_update_interval * HZ)
@@ -207,7 +207,7 @@ static int kmmpd(void *data)
 				ext4_error_err(sb, -retval,
 					       "error reading MMP data: %d",
 					       retval);
-				goto exit_thread;
+				goto wait_to_exit;
 			}
 
 			mmp_check = (struct mmp_struct *)(bh_check->b_data);
@@ -221,7 +221,7 @@ static int kmmpd(void *data)
 				ext4_error_err(sb, EBUSY, "abort");
 				put_bh(bh_check);
 				retval = -EBUSY;
-				goto exit_thread;
+				goto wait_to_exit;
 			}
 			put_bh(bh_check);
 		}
@@ -246,6 +246,11 @@ static int kmmpd(void *data)
 
 exit_thread:
 	return retval;
+wait_to_exit:
+	while (!kthread_should_stop())
+		schedule();
+	return retval;
+
 }
 
 void ext4_stop_mmpd(struct ext4_sb_info *sbi)
@@ -391,5 +396,3 @@ failed:
 	brelse(bh);
 	return 1;
 }
-
-
