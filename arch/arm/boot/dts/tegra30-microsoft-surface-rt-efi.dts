@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include "tegra30-microsoft-surface-rt.dts"
+
+/* 
+ * Temporary Microsoft Surface RT device-tree for EFI booting.
+ * Replacing PMIC with fixed regulators.
+ */
+
+/ {
+	compatible = "microsoft,surface-rt-efi", "microsoft,surface-rt", "nvidia,tegra30";
+
+	ldo5_reg: tps65911-ldo5 {
+		compatible = "regulator-fixed";
+		regulator-name = "vddio_sdmmc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+};
+
+&pmic {
+	/delete-node/ regulators;
+};
