@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include "tegra30-microsoft-surface-rt.dts"
+
+/* 
+ * Temporary Microsoft Surface RT device-tree for EFI booting.
+ * Replacing PMIC with fixed regulators.
+ */
+
+/ {
+	compatible = "microsoft,surface-rt-efi", "microsoft,surface-rt", "nvidia,tegra30";
+
+	/* L2 cache does not work yet */
+	/delete-node/ cache-controller@50043000;
+
+	/* CPU Idle does not work yet, disabling LP2 */
+	pmc@7000e400 {
+		/delete-property/ nvidia,suspend-mode;
+	};
+
+	ldo5_reg: tps65911-ldo5 {
+		compatible = "regulator-fixed";
+		regulator-name = "vddio_sdmmc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+	
+	cover-i2c {
+		compatible = "i2c-hotplug-gpio";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupts-extended = <&gpio TEGRA_GPIO(S,0) IRQ_TYPE_EDGE_BOTH>;
+		detect-gpios = <&gpio TEGRA_GPIO(S,0) GPIO_ACTIVE_HIGH>;
+
+		i2c-parent = <&i2c1>;
+
+		cover@0 {
+			compatible = "hid-over-i2c";
+			reg = <0x00>;
+			hid-descr-addr = <0x0041>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(O, 5) IRQ_TYPE_LEVEL_LOW>;
+		};
+	};
+};
+
+&pmic {
+	/delete-node/ regulators;
+};
