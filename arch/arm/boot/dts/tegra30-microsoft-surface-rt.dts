@@ -110,6 +110,11 @@
 		status = "okay";
 	};
 
+	i2c1: i2c@7000c000 {
+		status = "okay";
+		clock-frequency = <400000>;
+	};
+
 	i2c@7000c400 {
 		status = "okay";
 		clock-frequency = <400000>;
