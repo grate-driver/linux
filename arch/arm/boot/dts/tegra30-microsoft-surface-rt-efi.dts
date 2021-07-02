@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
+#include "tegra30-microsoft-surface-rt.dts"
+
+/*
+ * Temporary Microsoft Surface RT device-tree for EFI booting.
+ * Replacing PMIC with fixed regulators.
+ */
+
+/* Core regulator cannot work with UEFI, delete it */
+/delete-node/ &vdd_core;
+
+/* L2 cache does not work yet */
+/delete-node/ &cache_controller;
+
+/ {
+	compatible = "microsoft,surface-rt-efi", "microsoft,surface-rt", "nvidia,tegra30";
+
+	ldo5_reg: tps65911-ldo5 {
+		compatible = "regulator-fixed";
+		regulator-name = "vddio_sdmmc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+};
+
+/* DVFS cannot work with UEFI, delete it */
+&cpu0 {
+	/delete-property/ cpu-supply;
+	/delete-property/ operating-points-v2;
+};
+
+&cpu1 {
+	/delete-property/ cpu-supply;
+	/delete-property/ operating-points-v2;
+};
+
+&cpu2 {
+	/delete-property/ cpu-supply;
+	/delete-property/ operating-points-v2;
+};
+
+&cpu3 {
+	/delete-property/ cpu-supply;
+	/delete-property/ operating-points-v2;
+};
+
+&pmic {
+	/delete-node/ regulators;
+};
+
+&tegra_pmc {
+	/* CPU Idle does not work yet, disabling LP2 */
+	/delete-property/ nvidia,suspend-mode;
+
+	/* Core regulator cannot work with UEFI, use fallback stub */
+	core-supply = <&vdd_pd_core_stub>;
+};
