@@ -1,0 +1,396 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/dts-v1/;
+
+#include <dt-bindings/input/input.h>
+#include "tegra30.dtsi"
+
+/ {
+	model = "Microsoft Surface RT";
+	compatible = "microsoft,surface-rt", "nvidia,tegra30";
+
+	aliases {
+		mmc0 = &sdmmc4; /* eMMC */
+		mmc1 = &sdmmc1; /* uSD slot */
+		mmc2 = &sdmmc3; /* WiFi */
+		rtc0 = &pmic;
+		rtc1 = "/rtc@7000e000";
+		serial0 = &uarta; /* console */
+		serial1 = &uartc; /* Bluetooth */
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	/* 2GB DDR3 Memory */
+	memory@80000000 {
+		reg = <0x80000000 0x40000000>; // 1 GiB is wrong size but 2GB doesnt work atm
+	};
+
+	host1x@50000000 {
+		hdmi@54280000 {
+			status = "okay";
+			nvidia,ddc-i2c-bus = <&hdmi_ddc>;
+			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
+		};
+
+		dc@54200000 {
+			rgb {
+				status = "okay";
+
+				port@0 {
+					lcd_output: endpoint {
+						remote-endpoint = <&lvds_encoder_input>;
+						bus-width = <24>;
+					};
+				};
+			};
+		};
+	};
+
+	pinmux@70000868 {
+		pinctrl-names = "default";
+		pinctrl-0 = <&state_default>;
+
+		state_default: pinmux {
+			/* HDMI HOTPLUG_DETECT */
+			hdmi-int-pn7 {
+				nvidia,pins = "hdmi_int_pn7";
+				nvidia,function = "hdmi";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+
+			volKeys {
+				nvidia,pins = "kb_row14_ps6", //down
+					      "kb_row15_ps7"; //up
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+
+			/* Backlight PWM */
+			gmi-ad8-ph0 {
+				nvidia,pins = "gmi_ad8_ph0";
+				nvidia,function = "pwm0";
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+			};
+
+			wifi-interrupt {
+				nvidia,pins = "pu5";
+				nvidia,pull = <TEGRA_PIN_PULL_DOWN>;
+				nvidia,tristate = <TEGRA_PIN_DISABLE>;
+				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+			};
+		};
+	};
+
+	serial@70006000 {
+		status = "okay";
+	};
+
+	serial@70006200 {
+		status = "okay";
+		compatible = "nvidia,tegra30-hsuart";
+
+		nvidia,adjust-baud-rates = <0 9600 100>,
+					   <9600 115200 200>;
+
+		/* Marvell 88W8797 Bluetooth */
+		bluetooth {
+			compatible = "mrvl,88w8897";
+		};
+	};
+
+	pwm@7000a000 {
+		status = "okay";
+	};
+
+	i2c@7000c400 {
+		status = "okay";
+		clock-frequency = <400000>;
+
+		/* Atmel Maxtouch HID over I2C */
+		touchscreen@5b {
+			compatible = "hid-over-i2c";
+			reg = <0x5b>;
+			hid-descr-addr = <0x0000>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(K, 2) IRQ_TYPE_LEVEL_LOW>;
+		};
+	};
+
+	hdmi_ddc: i2c@7000c700 {
+		status = "okay";
+		clock-frequency = <100000>;
+	};
+
+	i2c@7000d000 {
+		status = "okay";
+		clock-frequency = <400000>;
+
+		pmic: tps65911@2d {
+			compatible = "ti,tps65911";
+			reg = <0x2d>;
+
+			interrupts = <GIC_SPI 86 IRQ_TYPE_LEVEL_HIGH>;
+			#interrupt-cells = <2>;
+			interrupt-controller;
+
+			ti,system-power-controller;
+
+			#gpio-cells = <2>;
+			gpio-controller;
+
+			regulators {
+				ldo5_reg: ldo5 {
+					regulator-name = "vddio_sdmmc";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <3300000>;
+					regulator-always-on;
+				};
+			};
+		};
+		
+		nct1008: temperature-sensor@4c {
+			compatible = "onnn,nct1008";
+			reg = <0x4c>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(DD, 5) IRQ_TYPE_EDGE_FALLING>;
+			#thermal-sensor-cells = <1>;
+		};
+	};
+
+	spi@7000da00 {
+		status = "okay";
+		spi-max-frequency = <25000000>;
+
+		/* Boot flash - OTP read only */
+		spi-flash@1 {
+			compatible = "winbond,w25q32", "jedec,spi-nor";
+			reg = <1>;
+			spi-max-frequency = <20000000>;
+		};
+	};
+
+	pmc@7000e400 {
+		status = "okay";
+		nvidia,invert-interrupt;
+		nvidia,suspend-mode = <1>;
+		nvidia,cpu-pwr-good-time = <2000>;
+		nvidia,cpu-pwr-off-time = <200>;
+		nvidia,core-pwr-good-time = <3845 3845>;
+		nvidia,core-pwr-off-time = <0>;
+		nvidia,core-power-req-active-high;
+		nvidia,sys-clock-req-active-high;
+	};
+
+	hda@70030000 {
+		status = "okay";
+	};
+
+	/* SD CARD - SDMMC-1 */
+	mmc@78000000 {
+		status = "okay";
+		vqmmc-supply = <&ldo5_reg>;
+		bus-width = <4>;
+		power-gpios = <&gpio TEGRA_GPIO(D, 7) GPIO_ACTIVE_HIGH>;
+		cd-gpios = <&gpio TEGRA_GPIO(I, 5) GPIO_ACTIVE_LOW>;
+		wp-gpios = <&gpio TEGRA_GPIO(T, 3) GPIO_ACTIVE_HIGH>;
+	};
+
+	mmc@78000400 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		status = "okay";
+
+		bus-width = <4>;
+		cap-power-off-card;
+		keep-power-in-suspend;
+		max-frequency = <50000000>;
+
+		assigned-clocks = <&tegra_car TEGRA30_CLK_SDMMC3>;
+		assigned-clock-parents = <&tegra_car TEGRA30_CLK_PLL_C>;
+		assigned-clock-rates = <50000000>;
+
+		mmc-pwrseq = <&brcm_wifi_pwrseq>;
+		vqmmc-supply = <&vqmmc_wifi>;
+
+		/* Marvell 88W8797 WiFi */
+		wifi@1 {
+			compatible = "marvell,sd8897";
+			reg = <1>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(U, 5) IRQ_TYPE_LEVEL_HIGH>;
+		};
+	};
+
+	/* internal 32/64GB eMMC - SDMMC-4 */
+	mmc@78000600 {
+		status = "okay";
+		bus-width = <8>;
+		non-removable;
+	};
+
+	usb@7d000000 {
+		status = "okay";
+	};
+
+	usb-phy@7d000000 {
+		vbus-supply = <&usb_vbus_reg>;
+		status = "okay";
+	};
+	
+	usb_vbus_reg: regulator@103 {
+		compatible = "regulator-fixed";
+		regulator-name = "usb_vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		gpio = <&gpio TEGRA_GPIO(EE, 0) GPIO_ACTIVE_HIGH>;
+		gpio-open-drain;
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		enable-gpios = <&gpio TEGRA_GPIO(DD, 0) GPIO_ACTIVE_HIGH>;
+		pwms = <&pwm 0 50000>;
+		brightness-levels = <1 255>;
+		num-interpolated-steps = <254>;
+		default-brightness-level = <128>;
+	};
+
+	/* clock from PMIC */
+	clk32k_in: clock@0 {
+		compatible = "fixed-clock";
+		clock-frequency = <32768>;
+		#clock-cells = <0>;
+	};
+
+	panel: display-panel {
+		compatible = "samsung,ltn140at29-301";
+
+		power-supply = <&vdd_pnl>;
+		backlight = <&backlight>;
+
+		port {
+			panel_input: endpoint {
+				remote-endpoint = <&lvds_encoder_output>;
+			};
+		};
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		label = "GPIO Buttons";
+
+		power {
+			label = "Power Button";
+			gpios = <&gpio TEGRA_GPIO(V, 0) GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_POWER>;
+			debounce-interval = <10>;
+			wakeup-source;
+		};
+
+		windows-button {
+			label = "Windows Button";
+			gpios = <&gpio TEGRA_GPIO(S, 5) GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_LEFTMETA>;
+			debounce-interval = <10>;
+			wakeup-source;
+		};
+
+		volume-down {
+			label = "Volume Down";
+			gpios = <&gpio TEGRA_GPIO(S, 6) GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEDOWN>;
+			debounce-interval = <10>;
+		};
+
+		volume-up {
+			label = "Volume Up";
+			gpios = <&gpio TEGRA_GPIO(S, 7) GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEUP>;
+			debounce-interval = <10>;
+		};
+	};
+	
+	gpio-hall-sensor {
+		compatible = "gpio-keys";
+
+		label = "GPIO Hall Effect Sensor";
+
+		hall-sensor {
+			label = "Hall Effect Sensor";
+			gpios = <&gpio TEGRA_GPIO(L, 1) GPIO_ACTIVE_HIGH>;
+			linux,input-type = <EV_SW>;
+			linux,code = <SW_LID>;
+			linux,can-disable;
+			wakeup-source;
+		};
+	};
+
+	/* IDT V103 */
+	lvds-encoder {
+		compatible = "lvds-encoder";
+
+		powerdown-gpios = <&gpio TEGRA_GPIO(B, 2) GPIO_ACTIVE_LOW>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				lvds_encoder_input: endpoint {
+					remote-endpoint = <&lcd_output>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				lvds_encoder_output: endpoint {
+					remote-endpoint = <&panel_input>;
+				};
+			};
+		};
+	};
+
+	brcm_wifi_pwrseq: wifi-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+
+		clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
+		clock-names = "ext_clock";
+
+		post-power-on-delay-ms = <300>;
+		power-off-delay-us = <300>;
+	};
+
+	vqmmc_wifi: vddio-wifi {
+		compatible = "regulator-fixed";
+		regulator-name = "vqmmc_wifi";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	vdd_pnl: vdd-panel {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_panel";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+		gpio = <&gpio TEGRA_GPIO(DD, 2) GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+};
