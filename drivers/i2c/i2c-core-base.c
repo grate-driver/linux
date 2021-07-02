@@ -821,6 +821,12 @@ static unsigned short i2c_encode_flags_to_addr(struct i2c_client *client)
  * are purposely not enforced, except for the general call address. */
 static int i2c_check_addr_validity(unsigned int addr, unsigned short flags)
 {
+	// Fix for Surface RT tCover support.
+	// tCover uses address 0x00 which is reserved for general call
+	if (addr == 0x00 && of_machine_is_compatible("microsoft,surface-rt")) {
+		return 0;
+	}
+
 	if (flags & I2C_CLIENT_TEN) {
 		/* 10-bit address, all values are valid */
 		if (addr > 0x3ff)
@@ -849,6 +855,12 @@ int i2c_check_7bit_addr_validity_strict(unsigned short addr)
 	 *  0x78-0x7b  10-bit slave addressing
 	 *  0x7c-0x7f  Reserved for future purposes
 	 */
+	// Fix for Surface RT tCover support.
+	// tCover uses address 0x00 which is reserved for general call
+	if (addr == 0x00 && of_machine_is_compatible("microsoft,surface-rt")) {
+		return 0;
+	}
+
 	if (addr < 0x08 || addr > 0x77)
 		return -EINVAL;
 	return 0;
