@@ -36,6 +36,8 @@
 		dc@54200000 {
 			rgb {
 				status = "okay";
+				
+				nvidia,panel = <&panel>;
 
 				port@0 {
 					lcd_output: endpoint {
