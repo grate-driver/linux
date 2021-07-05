@@ -241,7 +241,7 @@
 
 		power {
 			label = "Power Button";
-			gpios = <&gpio TEGRA_GPIO(V, 0) GPIO_ACTIVE_LOW>;
+			gpios = <&gpio TEGRA_GPIO(V, 0) GPIO_ACTIVE_HIGH>;
 			linux,code = <KEY_POWER>;
 			debounce-interval = <10>;
 			wakeup-source;
@@ -249,7 +249,7 @@
 
 		windows-button {
 			label = "Windows Button";
-			gpios = <&gpio TEGRA_GPIO(S, 5) GPIO_ACTIVE_LOW>;
+			gpios = <&gpio TEGRA_GPIO(S, 5) GPIO_ACTIVE_HIGH>;
 			linux,code = <KEY_LEFTMETA>;
 			debounce-interval = <10>;
 		};
