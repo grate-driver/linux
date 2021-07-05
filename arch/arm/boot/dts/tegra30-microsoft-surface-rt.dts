@@ -239,6 +239,8 @@
 	gpio-keys {
 		compatible = "gpio-keys";
 
+		label = "GPIO Buttons";
+
 		power {
 			label = "Power Button";
 			gpios = <&gpio TEGRA_GPIO(V, 0) GPIO_ACTIVE_HIGH>;
