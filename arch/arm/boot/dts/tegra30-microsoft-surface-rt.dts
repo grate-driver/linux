@@ -190,6 +190,8 @@
 		vqmmc-supply = <&ldo5_reg>;
 		bus-width = <4>;
 		power-gpios = <&gpio TEGRA_GPIO(D, 7) GPIO_ACTIVE_HIGH>;
+		cd-gpios = <&gpio TEGRA_GPIO(I, 5) GPIO_ACTIVE_LOW>;
+		wp-gpios = <&gpio TEGRA_GPIO(T, 3) GPIO_ACTIVE_HIGH>;
 	};
 
 	/* internal 32/64GB eMMC - SDMMC-4 */
