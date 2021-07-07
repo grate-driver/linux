@@ -158,6 +158,14 @@
 				};
 			};
 		};
+		
+		nct1008: temperature-sensor@4c {
+			compatible = "onnn,nct1008";
+			reg = <0x4c>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(DD, 5) IRQ_TYPE_EDGE_FALLING>;
+			#thermal-sensor-cells = <1>;
+		};
 	};
 
 	spi@7000da00 {
