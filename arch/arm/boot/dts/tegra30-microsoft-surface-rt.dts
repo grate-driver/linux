@@ -206,7 +206,18 @@
 	};
 
 	usb-phy@7d000000 {
+		vbus-supply = <&usb_vbus_reg>;
 		status = "okay";
+	};
+	
+	usb_vbus_reg: regulator@103 {
+		compatible = "regulator-fixed";
+		regulator-name = "usb_vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		gpio = <&gpio TEGRA_GPIO(EE, 0) GPIO_ACTIVE_HIGH>;
+		gpio-open-drain;
 	};
 
 	backlight: backlight {
