@@ -118,12 +118,19 @@
 
 			micdet-cfg = <0>;
 			micdet-delay = <100>;
-			gpio-cfg = <0xffffffff 0xffffffff 0 0xffffffff 0xffffffff>;
 
-			AVDD-supply  = <&vdd_3v3_sys>;
-			CPVDD-supply = <&vdd_3v3_sys>;
-			DBVDD-supply = <&vdd_3v3_sys>;
-			DCVDD-supply = <&vdd_3v3_sys>;
+			gpio-cfg = <
+				0xffffffff
+				0xffffffff
+				0x00000000 
+				0xffffffff /* Interrupt, output */
+				0xffffffff /* BCLK, input, active high */
+			>;
+
+			AVDD-supply  = <&vdd_1v8_vio>;
+			CPVDD-supply = <&vdd_1v8_vio>;
+			DBVDD-supply = <&vdd_1v8_vio>;
+			DCVDD-supply = <&vdd_1v8_vio>;
 		};
 	};
 
@@ -220,6 +227,7 @@
 
 		nvidia,audio-codec = <&wm8903>;
 		nvidia,spkr-en-gpios = <&wm8903 2 GPIO_ACTIVE_HIGH>;
+		nvidia,headset;
 	};
 
 	memory-controller@7000f000 {
