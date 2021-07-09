@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: Quality assurance
+on: [pull_request]
+jobs:
+  checkpatch:
+    name: checkpatch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 150
+      - name: Run checkpatch review
+        uses: webispy/checkpatch-action@master
+        env:
+          CHECKPATCH_COMMAND: checkpatch.pl --no-tree --strict
+
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 150
+      - name: Install yamllint
+        run: |
+          sudo apt-get -qq update > /dev/null
+          sudo apt-get -qq install python3-pip > /dev/null
+          pip install yamllint
+
+      - id: files
+        uses: jitterbit/get-changed-files@v1
+      - name: Run yamllint review
+        run: |
+          YAMLS="${{ steps.files.outputs.added_modified }}"
+          touch out.txt
+          for item in ${YAMLS}; do
+            if [[ "${item}" != **/*yaml ]]; then
+              continue
+            fi
+            yamllint -d "{rules: {line-length: {level: warning, max: 100}}}" \
+                     -f github ${item}
+            yamllint -d "{rules: {line-length: {level: warning, max: 100}}}" \
+                     -f standard ${item} >> out.txt
+          done
+          cat out.txt
+
+  dt-doc-validate:
+    name: dt-doc-validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 150
+      - name: Install dt-schema
+        run: |
+          sudo apt-get -qq update > /dev/null
+          sudo apt-get -qq install python3-pip > /dev/null
+          pip install git+https://github.com/devicetree-org/dt-schema.git@master
+
+      - id: files
+        uses: jitterbit/get-changed-files@v1
+      - name: Run dt-doc-validate review
+        run: |
+          YAMLS="${{ steps.files.outputs.added_modified }}"
+          for item in ${YAMLS}; do
+            if [[ "${item}" != **/*yaml ]]; then
+              continue
+            fi
+            # remove warning about URL
+            dt-doc-validate "${item}" #2>&1 | grep -v \
+              #"\$id: relative path/filename doesn't match actual path or filename\|expected:.*yaml#"
+          done
