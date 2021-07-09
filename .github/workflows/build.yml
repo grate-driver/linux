@@ -1,0 +1,125 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: Build
+
+env:
+  KERNEL_NAME: grate
+  KBUILD_DEFCONFIG: tegra_defconfig
+  CROSS_COMPILE: arm-linux-gnueabihf- # build for armv7
+  ARCH_SPEC_PKGS: crossbuild-essential-armhf
+  ARCH: arm # build for armv7
+  SCCACHE_CACHE_SIZE: 2G
+  SCCACHE_DIR: /home/runner/.cache/sccache
+  BUILD_PATH: /home/runner/.cache/tuxmake/builds/1
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ['tegra_defconfig', 'grate_defconfig']
+        option: ['default'] # , 'thumb2'] # FIXME after action-automatic-releases gets fixed https://github.com/marvinpinto/actions/issues/19
+        cc: [gcc, clang]
+        include:
+          - config: 'tegra_defconfig'
+            additional_params: ''
+          - config: 'grate_defconfig'
+            additional_params: '-K pmos.config'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install sccache
+        env:
+          LINK: https://github.com/mozilla/sccache/releases/download
+          SCCACHE_VERSION: 0.2.15
+        run: |
+          export SCCACHE_FILE=sccache-v$SCCACHE_VERSION-x86_64-unknown-linux-musl
+          mkdir -p $HOME/.local/bin
+          curl -L "$LINK/v$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
+          mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
+          chmod +x $HOME/.local/bin/sccache
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Enable cache
+        uses: actions/cache@v2
+        continue-on-error: false
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: ${{ env.KERNEL_NAME }}-${{ matrix.config }}-${{ matrix.option }}-${{ matrix.cc }}
+      - name: Start sccache server
+        run: sccache --start-server
+      - name: Install dependencies
+        run: |
+          sudo apt-get -qq update > /dev/null
+          sudo apt-get -qq install -y --no-install-recommends -o=Dpkg::Use-Pty=0 ${{ env.ARCH_SPEC_PKGS }} git build-essential binutils-multiarch device-tree-compiler fakeroot libncurses5-dev libssl-dev bison flex libelf-dev dwarves python3-pip socat > /dev/null
+          pip3 install -U --user tuxmake
+      - name: Build
+        run: |
+          if [ "${{ matrix.option }}" = "thumb2" ]; then
+            export TUXMAKE_KCONFIG_OPTS="-K CONFIG_THUMB2_KERNEL=y"
+          fi
+          tuxmake --directory ./ -w sccache --target-arch=arm -k ${{ matrix.config }} ${{ matrix.additional_params }} ${TUXMAKE_KCONFIG_OPTS} | sed "s|^/home/runner/work/linux/linux/|::error::|"
+          export ERRS=`grep "errors" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
+          export WARNS=`grep "warnings" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
+          RET=0
+          if [ "$ERRS" -gt 0 ]; then
+            echo "::error::Compilation failed due to $ERRS errors, please fix them."
+            RET=1
+          fi
+          if [ "$WARNS" -gt 0 ]; then
+            echo "::error::$WARNS warnings found, please fix them."
+            RET=1
+          fi
+          if [ $RET -eq 1 ]; then
+            exit 1
+          fi
+          mv /home/runner/.cache/tuxmake/builds/1/vmlinux.xz ./debug-vmlinux.xz
+          tar -cf linux-grate-${{ matrix.config }}-${{ matrix.cc }}.tar -C /home/runner/.cache/tuxmake/builds/1 .
+      - name: Stop sccache server
+        run: sccache --stop-server || true
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        if: ${{!startsWith(github.ref, 'refs/pull')}}
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "${{ env.KERNEL_NAME }}-${{ matrix.config }}-${{ matrix.option }}-${{ matrix.cc }}"
+          prerelease: true
+          title: "Binary of ${{ matrix.config }} + ${{ matrix.option }} build with ${{ matrix.cc }}"
+          files: |
+            *.tar
+            *.xz
+  dtbs:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get -qq update > /dev/null
+          sudo apt-get -qq install -y --no-install-recommends -o=Dpkg::Use-Pty=0 ${{ env.ARCH_SPEC_PKGS }} libyaml-dev git build-essential binutils-multiarch device-tree-compiler fakeroot libncurses5-dev libssl-dev bison flex libelf-dev dwarves python3-pip socat > /dev/null
+          pip3 install -U --user git+https://github.com/devicetree-org/dt-schema.git@master
+      - name: Build
+        run: |
+          make $KBUILD_DEFCONFIG
+          status=0
+          make -j3 dtbs || status=1
+          make -j3 dtbs_check || status=1
+          exit $status
+
+  dt_bindings_check:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get -qq update > /dev/null
+          sudo apt-get -qq install -y --no-install-recommends -o=Dpkg::Use-Pty=0 ${{ env.ARCH_SPEC_PKGS }} libyaml-dev git build-essential binutils-multiarch device-tree-compiler fakeroot libncurses5-dev libssl-dev bison flex libelf-dev dwarves python3-pip socat > /dev/null
+          pip3 install -U --user git+https://github.com/devicetree-org/dt-schema.git@master
+      - name: Build
+        run: |
+          make -j3 dt_binding_check
