@@ -1221,7 +1221,7 @@
 
 			regulators {
 				vdd1 {
-					regulator-name = "vddio_ddr_1v2";
+					regulator-name = "vdd_1v2_gen";
 					regulator-min-microvolt = <600000>;
 					regulator-max-microvolt = <1500000>;
 					regulator-always-on;
@@ -1230,7 +1230,7 @@
 				};
 
 				vdd2_reg: vdd2 {
-					regulator-name = "vdd_1v5_gen";
+					regulator-name = "vddio_ddr";
 					regulator-min-microvolt = <600000>;
 					regulator-max-microvolt = <1500000>;
 					regulator-always-on;
@@ -1261,7 +1261,7 @@
 
 				/* eMMC VDD */
 				vcore_emmc: ldo1 {
-					regulator-name = "vdd_pexa,vdd_pexb";
+					regulator-name = "vdd_emmc";
 					regulator-min-microvolt = <1000000>;
 					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
@@ -1269,9 +1269,9 @@
 
 				/* uSD slot VDD */
 				vdd_usd: ldo2 {
-					regulator-name = "vdd_sata,avdd_plle";
-					regulator-min-microvolt = <2900000>;
-					regulator-max-microvolt = <2940000>;
+					regulator-name = "vdd_usd";
+					regulator-min-microvolt = <3100000>;
+					regulator-max-microvolt = <3100000>;
 					regulator-always-on;
 				};
 
@@ -1279,7 +1279,7 @@
 				vddio_usd: ldo3 {
 					regulator-name = "vddio_usd";
 					regulator-min-microvolt = <1800000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-max-microvolt = <3100000>;
 				};
 
 				ldo4 {
@@ -1371,13 +1371,14 @@
 
 	vdd_1v5_ddr: regulator@3 {
 		compatible = "regulator-fixed";
-		regulator-name = "mem_vddio_ddr";
+		regulator-name = "vdd_ddr";
 		regulator-min-microvolt = <1500000>;
 		regulator-max-microvolt = <1500000>;
 		regulator-always-on;
 		regulator-boot-on;
 		gpio = <&pmic 7 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+		vin-supply = <&vdd_5v0_bat>;
 	};
 
 	vdd_3v3_sys: regulator@4 {
@@ -1389,6 +1390,7 @@
 		regulator-boot-on;
 		gpio = <&pmic 6 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+		vin-supply = <&vdd_5v0_bat>;
 	};
 
 	vdd_pnl: regulator@5 {
@@ -1396,7 +1398,7 @@
 		regulator-name = "vdd_panel";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		regulator-enable-ramp-delay = <300000>;
+		regulator-enable-ramp-delay = <20000>;
 		gpio = <&gpio TEGRA_GPIO(W, 1) GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		vin-supply = <&vdd_3v3_sys>;
@@ -1575,7 +1577,7 @@
 		compatible = "pwm-backlight";
 
 		enable-gpios = <&gpio TEGRA_GPIO(H, 2) GPIO_ACTIVE_HIGH>;
-		power-supply = <&vdd_5v0_sys>;
+		power-supply = <&vdd_5v0_bat>;
 		pwms = <&pwm 0 4000000>;
 
 		brightness-levels = <1 255>;
