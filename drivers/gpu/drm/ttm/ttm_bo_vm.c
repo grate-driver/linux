@@ -552,7 +552,7 @@ static const struct vm_operations_struct ttm_bo_vm_ops = {
 int ttm_bo_mmap_obj(struct vm_area_struct *vma, struct ttm_buffer_object *bo)
 {
 	/* Enforce no COW since would have really strange behavior with it. */
-	if (is_cow_mapping(vma->vm_flags))
+	if (is_cow_mapping(vma->vm_flags) && (vma->vm_flags & VM_WRITE))
 		return -EINVAL;
 
 	ttm_bo_get(bo);
