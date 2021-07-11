@@ -89,7 +89,7 @@
 			status = "okay";
 
 			hdmi-supply = <&hdmi_5v0_sys>;
-			pll-supply = <&vdd_1v8>;
+			pll-supply = <&vdd_1v8_vio>;
 			vdd-supply = <&vdd_3v3_sys>;
 
 			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(N, 7) GPIO_ACTIVE_HIGH>;
@@ -1073,16 +1073,16 @@
 					   <9600 115200 200>,
 					   <1000000 4000000 136>;
 
-		/* Azurewave AW-NH615 BCM4329B1 */
+		/* Azurewave AW-NH665 BCM4330B1 */
 		bluetooth {
-			compatible = "brcm,bcm4329-bt";
+			compatible = "brcm,bcm4330-bt";
 			max-speed = <4000000>;
 
 			clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
 			clock-names = "txco";
 
 			vbat-supply  = <&vdd_3v3_sys>;
-			vddio-supply = <&vdd_1v8>;
+			vddio-supply = <&vdd_1v8_vio>;
 
 			device-wakeup-gpios = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
 			host-wakeup-gpios =   <&gpio TEGRA_GPIO(U, 6) GPIO_ACTIVE_HIGH>;
@@ -1119,12 +1119,13 @@
 
 			micdet-cfg = <0>;
 			micdet-delay = <100>;
+
 			gpio-cfg = <0xffffffff 0xffffffff 0 0xffffffff 0xffffffff>;
 
-			AVDD-supply  = <&vdd_3v3_sys>;
-			CPVDD-supply = <&vdd_3v3_sys>;
-			DBVDD-supply = <&vdd_3v3_sys>;
-			DCVDD-supply = <&vdd_3v3_sys>;
+			AVDD-supply  = <&vdd_1v8_vio>;
+			CPVDD-supply = <&vdd_1v8_vio>;
+			DBVDD-supply = <&vdd_1v8_vio>;
+			DCVDD-supply = <&vdd_1v8_vio>;
 		};
 
 	};
@@ -1143,7 +1144,7 @@
 			reset-gpios = <&gpio TEGRA_GPIO(H, 6) GPIO_ACTIVE_LOW>;
 
 			vdda-supply = <&vdd_3v3_sys>;
-			vdd-supply  = <&vdd_3v3_sys>;	/* Might need a vdd_5v0_ts fixed regulator */
+			vdd-supply  = <&vdd_3v3_sys>;
 		};
 	};
 
@@ -1168,7 +1169,7 @@
 			reg = <0x0c>;
 
 			vdd-supply = <&vdd_3v3_sen>;
-			vid-supply = <&vdd_1v8>;
+			vid-supply = <&vdd_1v8_vio>;
 
 			mount-matrix =	"0",  "1",  "0",
 					"1",  "0",  "0",
@@ -1183,7 +1184,7 @@
 			interrupts = <TEGRA_GPIO(X, 1) IRQ_TYPE_EDGE_RISING>;
 
 			vdd-supply = <&vdd_3v3_sen>;
-			vlogic-supply = <&vdd_1v8>;
+			vlogic-supply = <&vdd_1v8_vio>;
 
 			mount-matrix =    "0",  "1",  "0",
 					  "1",  "0",  "0",
@@ -1202,7 +1203,7 @@
 					interrupts = <TEGRA_GPIO(L, 1) IRQ_TYPE_EDGE_RISING>;
 
 			        	vdd-supply = <&vdd_3v3_sys>;
-			        	vddio-supply = <&vdd_1v8>;
+			        	vddio-supply = <&vdd_1v8_vio>;
 
 					mount-matrix =   "1",  "0",  "0",
 							 "0", "-1",  "0",
@@ -1230,7 +1231,10 @@
 			compatible = "onnn,nct1008";
 			reg = <0x4c>;
 
-			vcc-supply = <&vdd_3v3_sen>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(U, 5) IRQ_TYPE_EDGE_FALLING>;
+
+			vcc-supply = <&vdd_3v3_sys>;
 			#thermal-sensor-cells = <1>;
 		};
 
@@ -1254,16 +1258,25 @@
 
 			vcc1-supply = <&vdd_5v0_sys>;
 			vcc2-supply = <&vdd_5v0_sys>;
-			vcc3-supply = <&vdd_1v8>;
-			vcc4-supply = <&vdd_5v0_sys>;
+			vcc3-supply = <&vdd_1v8_vio>;
+			vcc4-supply = <&vdd_5v0_sys>; /* may need vio */
 			vcc5-supply = <&vdd_5v0_sys>;
-			vcc6-supply = <&vdd2_reg>;
+			vcc6-supply = <&vddio_1v2_ddr>;
 			vcc7-supply = <&vdd_5v0_sys>;
 			vccio-supply = <&vdd_5v0_sys>;
 
+			pmic-sleep-hog {
+				gpio-hog;
+				gpios = <0 GPIO_ACTIVE_HIGH>,
+					<2 GPIO_ACTIVE_HIGH>,
+					<6 GPIO_ACTIVE_HIGH>,
+					<8 GPIO_ACTIVE_HIGH>;
+				output-high;
+			};
+
 			regulators {
 				vdd1 {
-					regulator-name = "vddio_ddr_1v2";
+					regulator-name = "vddio_1v2_gen";
 					regulator-min-microvolt = <600000>;
 					regulator-max-microvolt = <1500000>;
 					regulator-always-on;
@@ -1271,10 +1284,10 @@
 					ti,regulator-ext-sleep-control = <8>;
 				};
 
-				vdd2_reg: vdd2 {
-					regulator-name = "vdd2_1v2";
-					regulator-min-microvolt = <600000>;
-					regulator-max-microvolt = <1500000>;
+				vddio_1v2_ddr: vdd2 {
+					regulator-name = "vddio_1v2_ddr";
+					regulator-min-microvolt = <1200000>;
+					regulator-max-microvolt = <1200000>;
 					regulator-always-on;
 					regulator-boot-on;
 				};
@@ -1293,7 +1306,7 @@
 					nvidia,tegra-cpu-regulator;
 				};
 
-				vdd_1v8: vio {
+				vdd_1v8_vio: vio {
 					regulator-name = "vdd_1v8_gen";
 					regulator-min-microvolt = <1500000>;
 					regulator-max-microvolt = <3300000>;
@@ -1303,7 +1316,7 @@
 
 				/* eMMC VDD */
 				vcore_emmc: ldo1 {
-					regulator-name = "vdd_pexa,vdd_pexb";
+					regulator-name = "vdd_emmc_core";
 					regulator-min-microvolt = <1000000>;
 					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
@@ -1311,29 +1324,29 @@
 
 				/* uSD slot VDD */
 				vdd_usd: ldo2 {
-					regulator-name = "vdd_sata,avdd_plle";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-name = "vdd_usd";
+					regulator-min-microvolt = <3100000>;
+					regulator-max-microvolt = <3100000>;
 				};
 
 				/* uSD slot VDDIO */
 				vddio_usd: ldo3 {
 					regulator-name = "vddio_usd";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <3100000>;
 				};
 
 				ldo4 {
 					regulator-name = "vdd_rtc";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-min-microvolt = <1200000>;
+					regulator-max-microvolt = <1200000>;
 					regulator-always-on;
 				};
 
-				vdac_vdd_reg: ldo5 {
-					regulator-name = "vddio_sdmmc,avdd_vdac";
+				ldo5 {
+					regulator-name = "vdd_1v3_cameraisp";
 					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-max-microvolt = <1000000>;
 				};
 
 				ldo6 {
@@ -1354,7 +1367,7 @@
 				ldo8 {
 					regulator-name = "vdd_ddr_hs";
 					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-max-microvolt = <1000000>;
 					regulator-always-on;
 					ti,regulator-ext-sleep-control = <8>;
 				};
@@ -1383,17 +1396,16 @@
 
 	vdd_5v0_sys: regulator@0 {
 		compatible = "regulator-fixed";
-		regulator-name = "vdd_5v0";
+		regulator-name = "vdd_5v0_sys";
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
 		regulator-boot-on;
-		gpio = <&gpio TEGRA_GPIO(H, 3) GPIO_ACTIVE_HIGH>;
 	};
 
 	vdd_3v3_sys: regulator@1 {
 		compatible = "regulator-fixed";
-		regulator-name = "vdd_3v3";
+		regulator-name = "vdd_3v3_sys";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
@@ -1431,24 +1443,24 @@
 		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	vdd_2v85_cam2: regulator@5 {
+	vdd_vbus_usb1: regulator@5 {
 		compatible = "regulator-fixed";
-		regulator-name = "cam3_ldo_en";
-		regulator-min-microvolt = <2850000>;
-		regulator-max-microvolt = <2850000>;
-		gpio = <&gpio TEGRA_GPIO(S, 0) GPIO_ACTIVE_HIGH>;
+		regulator-name = "vdd_vbus_micro_usb";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpio = <&gpio TEGRA_GPIO(DD, 3) GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-		vin-supply = <&vdd_3v3_sys>;
+		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	vddio_1v8_cam: regulator@6 {
+	vdd_vbus_usb3: regulator@6 {
 		compatible = "regulator-fixed";
-		regulator-name = "vddio_1v8_cam";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
-		gpio = <&gpio TEGRA_GPIO(BB, 4) GPIO_ACTIVE_HIGH>;
+		regulator-name = "vdd_vbus_typea_usb";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpio = <&gpio TEGRA_GPIO(CC, 6) GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-		vin-supply = <&vdd_1v8>;
+		vin-supply = <&vdd_5v0_sys>;
 	};
 
 	pmc@7000e400 {
@@ -1501,19 +1513,6 @@
 		vqmmc-supply = <&vddio_usd>;	/* ldo3 */
 	};
 
-	battery: battery {
-		compatible = "simple-battery";
-		charge-full-design-microamp-hours = <3050000>;
-		energy-full-design-microwatt-hours = <23000000>;
-		operating-range-celsius = <0 45>;
-	};
-
-	mains: ac-adapter-detect {
-		compatible = "gpio-charger";
-		charger-type = "mains";
-		gpios = <&gpio TEGRA_GPIO(V, 1) GPIO_ACTIVE_HIGH>;
-	};
-
 	brcm_wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 
@@ -1542,9 +1541,9 @@
 
 		mmc-pwrseq = <&brcm_wifi_pwrseq>;
 		vmmc-supply = <&vdd_3v3_sys>;
-		vqmmc-supply = <&vdd_1v8>;
+		vqmmc-supply = <&vdd_1v8_vio>;
 
-		/* Azurewave AW-NH615 BCM4329 or AW-NH665 BCM4330 */
+		/* Azurewave AW-NH665 BCM4330 */
 		wifi@1 {
 			compatible = "brcm,bcm4329-fmac";
 			reg = <1>;
@@ -1559,7 +1558,7 @@
 		status = "okay";
 		bus-width = <8>;
 		vmmc-supply = <&vcore_emmc>;
-		vqmmc-supply = <&vdd_1v8>;
+		vqmmc-supply = <&vdd_1v8_vio>;
 		non-removable;
 	};
 
@@ -1572,17 +1571,10 @@
 	usb-phy@7d000000 {
 		status = "okay";
 		dr_mode = "peripheral";
-		vbus-supply = <&vdd_5v0_sys>;		/* might need vdd_vbus_micro_usb fixed */
-	};
-
-
-	usb@7d004000 {
-		status = "okay";		
-	};
-
-	usb-phy@7d004000 {
-		status = "okay";
-		vbus-supply = <&vdd_5v0_sys>;		/* might need vdd_vbus_typea_usb fixed */
+		nvidia,hssync-start-delay = <0>;
+		nvidia,xcvr-lsfslew = <2>;
+		nvidia,xcvr-lsrslew = <2>;
+		vbus-supply = <&vdd_vbus_usb1>;
 	};
 
 	usb@7d008000 {
@@ -1591,7 +1583,7 @@
 
 	usb-phy@7d008000 {
 		status = "okay";
-		vbus-supply = <&vdd_5v0_sys>;		/* might need vdd_vbus_typea_usb fixed */
+		vbus-supply = <&vdd_vbus_usb3>;
 	};
 
 	backlight_lvds: backlight-lvds {
@@ -1706,6 +1698,19 @@
 		};
 	};
 
+	battery: battery {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <3050000>;
+		energy-full-design-microwatt-hours = <23000000>;
+		operating-range-celsius = <0 45>;
+	};
+
+	mains: ac-adapter-detect {
+		compatible = "gpio-charger";
+		charger-type = "mains";
+		gpios = <&gpio TEGRA_GPIO(V, 1) GPIO_ACTIVE_HIGH>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 		interrupt-parent = <&gpio>;
@@ -1738,10 +1743,14 @@
 		};
 	};
 
+	power-domain-core {
+		power-supply = <&vdd_core>;
+	};
+
 	sound {
-		compatible = "nvidia,tegra-audio-wm8903-tf300t",
+		compatible = "nvidia,tegra-audio-wm8903-chagall",
 			     "nvidia,tegra-audio-wm8903";
-		nvidia,model = "WM8903";
+		nvidia,model = "ASUS Transformer WM8903";
 
 		nvidia,audio-routing =
 			"Headphone Jack", "HPOUTR",
@@ -1750,8 +1759,7 @@
 			"Int Spk", "RON",
 			"Int Spk", "LOP",
 			"Int Spk", "LON",
-			"Mic Bias", "Mic Jack",
-			"IN1R", "Mic Bias",
+			"IN1R", "Mic Jack",
 			"DMICDAT", "Int Mic";
 
 		nvidia,i2s-controller = <&tegra_i2s1>;
@@ -1759,6 +1767,7 @@
 
 		nvidia,spkr-en-gpios = <&wm8903 2 GPIO_ACTIVE_HIGH>;
 		nvidia,hp-det-gpios = <&gpio TEGRA_GPIO(W, 2) GPIO_ACTIVE_LOW>;
+		nvidia,headset;
 
 		clocks = <&tegra_car TEGRA30_CLK_PLL_A>,
 			 <&tegra_car TEGRA30_CLK_PLL_A_OUT0>,
@@ -1773,28 +1782,35 @@
 	};
 
 	thermal-zones {
+		/*
+		 * NCT72 has two sensors:
+		 *
+		 *	0: internal that monitors ambient/skin temperature
+		 *	1: external that is connected to the CPU's diode
+		 *
+		 * Ideally we should use userspace thermal governor,
+		 * but it's a much more complex solution.  The "skin"
+		 * zone exists as a simpler solution which prevents
+		 * Chagall from getting too hot from a user's tactile
+		 * perspective. The CPU zone is intended to protect
+		 * silicon from damage.
+		 */
+
 		skin-thermal {
-			polling-delay-passive = <1000>; /* milliseconds */
-			polling-delay = <0>; /* milliseconds */
-
-			thermal-sensors = <&nct72 0>;
-		};
-
-		cpu-thermal {
 			polling-delay-passive = <1000>; /* milliseconds */
 			polling-delay = <5000>; /* milliseconds */
 
-			thermal-sensors = <&nct72 1>;
+			thermal-sensors = <&nct72 0>;
 
 			trips {
-				trip0: cpu-alert0 {
+				trip0: skin-alert {
 					/* throttle at 57C until temperature drops to 56.8C */
 					temperature = <57000>;
 					hysteresis = <200>;
 					type = "passive";
 				};
 
-				trip1: cpu-crit {
+				trip1: skin-crit {
 					/* shut down at 65C */
 					temperature = <65000>;
 					hysteresis = <2000>;
@@ -1809,7 +1825,43 @@
 							 <&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&cpu2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&cpu3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&actmon THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+							 <&actmon THERMAL_NO_LIMIT
+								  THERMAL_NO_LIMIT>;
+				};
+			};
+		};
+
+		cpu-thermal {
+			polling-delay-passive = <1000>; /* milliseconds */
+			polling-delay = <5000>; /* milliseconds */
+
+			thermal-sensors = <&nct72 1>;
+
+			trips {
+				trip2: cpu-alert {
+					/* throttle at 85C until temperature drops to 84.8C */
+					temperature = <85000>;
+					hysteresis = <200>;
+					type = "passive";
+				};
+
+				trip3: cpu-crit {
+					/* shut down at 90C */
+					temperature = <90000>;
+					hysteresis = <2000>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map1 {
+					trip = <&trip2>;
+					cooling-device = <&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&cpu2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&cpu3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&actmon THERMAL_NO_LIMIT
+								  THERMAL_NO_LIMIT>;
 				};
 			};
 		};
