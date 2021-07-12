@@ -10,9 +10,7 @@ env:
 
 on:
   push:
-    branches: [ master ]
   pull_request:
-    branches: [ master ]
   workflow_dispatch:
 
 jobs:
@@ -34,6 +32,7 @@ jobs:
           mv /home/runner/.cache/tuxmake/builds/1/linux-grate-next.tar ./
 
       - uses: "marvinpinto/action-automatic-releases@latest"
+        if: ${{!startsWith(github.ref, 'refs/pull')}}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "${{ env.KERNEL_NAME }}"
