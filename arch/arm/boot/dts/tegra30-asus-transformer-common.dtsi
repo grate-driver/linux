@@ -1207,9 +1207,9 @@
 			vcc1-supply = <&vdd_5v0_bat>;
 			vcc2-supply = <&vdd_5v0_bat>;
 			vcc3-supply = <&vdd_1v8_vio>;
-			vcc4-supply = <&vdd_5v0_bat>; /* ldo5 unused by tf */
+			vcc4-supply = <&vdd_5v0_bat>;
 			vcc5-supply = <&vdd_5v0_bat>;
-			vcc6-supply = <&vdd2_reg>;
+			vcc6-supply = <&vddio_ddr>;
 			vcc7-supply = <&vdd_5v0_bat>;
 			vccio-supply = <&vdd_5v0_bat>;
 
@@ -1229,10 +1229,10 @@
 					ti,regulator-ext-sleep-control = <8>;
 				};
 
-				vdd2_reg: vdd2 {
+				vddio_ddr: vdd2 {
 					regulator-name = "vddio_ddr";
-					regulator-min-microvolt = <600000>;
-					regulator-max-microvolt = <1500000>;
+					regulator-min-microvolt = <1200000>;
+					regulator-max-microvolt = <1200000>;
 					regulator-always-on;
 					regulator-boot-on;
 				};
@@ -1261,7 +1261,7 @@
 
 				/* eMMC VDD */
 				vcore_emmc: ldo1 {
-					regulator-name = "vdd_emmc";
+					regulator-name = "vdd_emmc_core";
 					regulator-min-microvolt = <1000000>;
 					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
@@ -1284,8 +1284,8 @@
 
 				ldo4 {
 					regulator-name = "vdd_rtc";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-min-microvolt = <1200000>;
+					regulator-max-microvolt = <1200000>;
 					regulator-always-on;
 				};
 
@@ -1309,7 +1309,7 @@
 				ldo8 {
 					regulator-name = "vdd_ddr_hs";
 					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <3300000>;
+					regulator-max-microvolt = <1000000>;
 					regulator-always-on;
 					ti,regulator-ext-sleep-control = <8>;
 				};
