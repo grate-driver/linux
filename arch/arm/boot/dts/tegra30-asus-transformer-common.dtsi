@@ -1220,14 +1220,7 @@
 			};
 
 			regulators {
-				vdd1 {
-					regulator-name = "vdd_1v2_gen";
-					regulator-min-microvolt = <600000>;
-					regulator-max-microvolt = <1500000>;
-					regulator-always-on;
-					regulator-boot-on;
-					ti,regulator-ext-sleep-control = <8>;
-				};
+				/* vdd1 is not used by transformers */
 
 				vddio_ddr: vdd2 {
 					regulator-name = "vddio_ddr";
