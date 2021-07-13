@@ -126,6 +126,12 @@ config CHARGER_ASUSEC
 	  Say Y here to enable support AC plug detection on Asus Transformer
 	  Dock.
 
+config BATTERY_CHAGALL
+	tristate "Pegatron Chagall battery driver"
+	depends on I2C
+	help
+	  Say Y to include support for Pegatron Chagall battery fuel gauge.
+
 config BATTERY_CPCAP
 	tristate "Motorola CPCAP PMIC battery driver"
 	depends on MFD_CPCAP && IIO
