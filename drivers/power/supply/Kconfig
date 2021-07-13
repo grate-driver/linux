@@ -126,6 +126,12 @@ config CHARGER_ASUSEC
 	  Say Y here to enable support AC plug detection on Asus Transformer
 	  Dock.
 
+config BATTERY_CG7153AM
+	tristate "CG7153AM Compliant gas gauge"
+	depends on I2C
+	help
+	  Say Y to include support for cg7153am battery driver.
+
 config BATTERY_CPCAP
 	tristate "Motorola CPCAP PMIC battery driver"
 	depends on MFD_CPCAP && IIO
