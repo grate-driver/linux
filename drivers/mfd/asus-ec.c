@@ -45,13 +45,10 @@ struct asus_ec_data {
 
 enum asus_ec_subdev_id {
 	ID_EC_PART_BATTERY,
-#define EC_PART_PAD_BATTERY BIT(ID_EC_PART_BATTERY)
+#define EC_PART_BATTERY BIT(ID_EC_PART_BATTERY)
 
-	ID_EC_PART_DOCK_BATTERY,
-#define EC_PART_DOCK_BATTERY BIT(ID_EC_PART_DOCK_BATTERY)
-
-	ID_EC_PART_DOCK_BATTERY_TF701T,
-#define EC_PART_DOCK_BATTERY_TF701T BIT(ID_EC_PART_DOCK_BATTERY_TF701T)
+	ID_EC_PART_CHARGER,
+#define EC_PART_CHARGER BIT(ID_EC_PART_CHARGER)
 
 	ID_EC_PART_CHARGE_LED,
 #define EC_PART_CHARGE_LED BIT(ID_EC_PART_CHARGE_LED)
@@ -61,9 +58,6 @@ enum asus_ec_subdev_id {
 
 	ID_EC_PART_EXT_KEYS,
 #define EC_PART_EXT_KEYS BIT(ID_EC_PART_EXT_KEYS)
-
-	ID_EC_PART_CHARGER,
-#define EC_PART_CHARGER BIT(ID_EC_PART_CHARGER)
 };
 
 enum asus_ec_flag {
@@ -78,36 +72,12 @@ struct asus_ec_initdata {
 	unsigned int flags;
 };
 
-static struct asusec_pdata pad_battery_pdata = {
-	.is_pad = true,
-	.ec_addr = 0x14,
-};
-
-static struct asusec_pdata dock_battery_pdata = {
-	.is_pad = false,
-	.ec_addr = 0x14,
-};
-
-static struct asusec_pdata dock_battery_tf701t_pdata = {
-	.is_pad = false,
-	.ec_addr = 0x24,
-};
-
 static const struct mfd_cell asus_ec_subdev[] = {
 	[ID_EC_PART_BATTERY] = {
 		.name = "asusec-battery",
-		.platform_data = &pad_battery_pdata,
-		.pdata_size = sizeof(pad_battery_pdata),
 	},
-	[ID_EC_PART_DOCK_BATTERY] = {
-		.name = "asusec-battery",
-		.platform_data = &dock_battery_pdata,
-		.pdata_size = sizeof(dock_battery_pdata),
-	},
-	[ID_EC_PART_DOCK_BATTERY_TF701T] = {
-		.name = "asusec-battery",
-		.platform_data = &dock_battery_tf701t_pdata,
-		.pdata_size = sizeof(dock_battery_tf701t_pdata),
+	[ID_EC_PART_CHARGER] = {
+		.name = "asusec-charger",
 	},
 	[ID_EC_PART_CHARGE_LED] = {
 		.name = "asusec-led",
@@ -118,45 +88,40 @@ static const struct mfd_cell asus_ec_subdev[] = {
 	[ID_EC_PART_EXT_KEYS] = {
 		.name = "asusec-keys",
 	},
-	[ID_EC_PART_CHARGER] = {
-		.name = "asusec-charger",
-	},
 };
 
 static const struct asus_ec_initdata asus_ec_model_info[] = {
 	{	/* Asus T20 Mobile Dock  */
 		.model		= "ASUS-EP101-DOCK",
 		.name		= "dock",
-		.components	= EC_PART_DOCK_BATTERY | EC_PART_CHARGE_LED |
+		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
 				  EC_PART_I8042 | EC_PART_EXT_KEYS |
 				  EC_PART_CHARGER,
 	},
 	{	/* Asus T30 Transformer Pad */
 		.model		= "ASUS-TF201-PAD",
 		.name		= "pad",
-		.components	= EC_PART_PAD_BATTERY | EC_PART_CHARGE_LED,
+		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED,
 		.flags		= EC_FLAG_SET_MODE,
 	},
 	{	/* Asus T30 Mobile Dock */
 		.model		= "ASUS-TF201-DOCK",
 		.name		= "dock",
-		.components	= EC_PART_DOCK_BATTERY | EC_PART_CHARGE_LED |
+		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
 				  EC_PART_I8042 | EC_PART_EXT_KEYS |
 				  EC_PART_CHARGER,
 	},
 	{	/* Asus TF500T/TF700T Mobile Dock */
 		.model		= "ASUS-DOCK-EC21N",
 		.name		= "dock",
-		.components	= EC_PART_DOCK_BATTERY | EC_PART_CHARGE_LED |
+		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED |
 				  EC_PART_I8042 | EC_PART_EXT_KEYS |
 				  EC_PART_CHARGER,
 	},
-	{	/* Asus T114 Transformer combined Pad/Dock */
+	{	/* Asus T114 Transformer Pad */
 		.model		= "ASUS-TF701T-PAD",
 		.name		= "pad",
-		.components	= EC_PART_PAD_BATTERY |
-				  /* EC_PART_DOCK_BATTERY_TF701T | */
-				  EC_PART_CHARGE_LED,
+		.components	= EC_PART_BATTERY | EC_PART_CHARGE_LED,
 		.flags		= EC_FLAG_SET_MODE,
 	},
 };
@@ -515,6 +480,7 @@ static int asus_ec_remove(struct i2c_client *client)
 	struct asus_ec_data *priv = i2c_get_clientdata(client);
 
 	mfd_remove_devices(&priv->self->dev);
+
 	sysfs_remove_link(&client->dev.kobj, "dockram");
 	sysfs_remove_group(&client->dev.kobj, &asus_ec_attr_group);
 

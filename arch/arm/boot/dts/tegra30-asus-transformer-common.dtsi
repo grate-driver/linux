@@ -1059,7 +1059,7 @@
 
 		/* Nuvoton NPCE795LA0BX embedded controller */
 		embedded-controller@15 {
-			compatible = "asus,ec";
+			compatible = "asus,pad-ec", "asus,ec";
 			reg = <0x15>;
 
 			interrupt-parent = <&gpio>;
@@ -1091,7 +1091,7 @@
 		i2c-parent = <&i2c2>;
 
 		embedded-controller@19 {
-			compatible = "asus,ec";
+			compatible = "asus,dock-ec", "asus,ec";
 			reg = <0x19>;
 
 			interrupt-parent = <&gpio>;

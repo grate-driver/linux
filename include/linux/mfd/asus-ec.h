@@ -4,7 +4,6 @@
 
 #include <linux/notifier.h>
 #include <linux/platform_device.h>
-#include <linux/types.h>
 
 struct i2c_client;
 struct workqueue_struct;
@@ -21,11 +20,6 @@ struct i2c_client *devm_asus_dockram_get(struct device *parent);
 #define DOCKRAM_ENTRY_BUFSIZE (DOCKRAM_ENTRY_SIZE + 1)
 
 /* EC public API */
-
-struct asusec_pdata {
-	bool is_pad;
-	unsigned int ec_addr;
-};
 
 struct asusec_info {
 	const char			*name;
