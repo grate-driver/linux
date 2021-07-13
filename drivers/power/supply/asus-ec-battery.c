@@ -222,7 +222,6 @@ static const struct power_supply_desc dock_battery_desc = {
 
 static int asusec_battery_probe(struct platform_device *pdev)
 {
-	const struct asusec_pdata *pdata = dev_get_platdata(&pdev->dev);
 	const struct asusec_info *ec = asusec_cell_to_ec(pdev);
 	const struct power_supply_desc *psd;
 	struct asusec_battery_data *priv;
@@ -237,14 +236,14 @@ static int asusec_battery_probe(struct platform_device *pdev)
 	mutex_init(&priv->battery_lock);
 
 	priv->ec = ec;
-	priv->ec_addr = pdata->ec_addr;
+	priv->ec_addr = 0x14;
 	priv->batt_data_ts = jiffies - 1;
 	priv->last_state = POWER_SUPPLY_STATUS_UNKNOWN;
 
 	cfg.of_node = pdev->dev.parent->of_node;
 	cfg.drv_data = priv;
 
-	if (pdata->is_pad)
+	if (!of_property_match_string(cfg.of_node, "compatible", "asus,pad-ec"))
 		psd = &pad_battery_desc;
 	else
 		psd = &dock_battery_desc;

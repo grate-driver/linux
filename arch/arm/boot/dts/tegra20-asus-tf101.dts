@@ -580,7 +580,7 @@
 		i2c-parent = <&lvds_ddc>;
 
 		embedded-controller@19 {
-			compatible = "asus,ec";
+			compatible = "asus,dock-ec", "asus,ec";
 			reg = <0x19>;
 
 			interrupt-parent = <&gpio>;

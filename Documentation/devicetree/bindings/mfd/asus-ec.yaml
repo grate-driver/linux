@@ -17,8 +17,11 @@ maintainers:
 
 properties:
   compatible:
-    const: asus,ec
-
+    items:
+      - enum:
+          - asus,pad-ec  # Pad part of Asus Transformer
+          - asus,dock-ec # Dock part of Asus Transformer
+      - const: asus,ec
   reg:
     maxItems: 1
 
@@ -87,7 +90,7 @@ examples:
       #size-cells = <0>;
 
       embedded-controller@15 {
-        compatible = "asus,ec";
+        compatible = "asus,pad-ec", "asus,ec";
         reg = <0x15>;
 
         interrupt-parent = <&gpio>;
