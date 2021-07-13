@@ -78,6 +78,8 @@ static int reconn_set_ipaddr_from_hostname(struct TCP_Server_Info *server)
 	int rc;
 	int len;
 	char *unc, *ipaddr = NULL;
+	time64_t expiry, now;
+	unsigned long ttl = SMB_DNS_RESOLVE_INTERVAL_DEFAULT;
 
 	if (!server->hostname)
 		return -EINVAL;
@@ -91,13 +93,13 @@ static int reconn_set_ipaddr_from_hostname(struct TCP_Server_Info *server)
 	}
 	scnprintf(unc, len, "\\\\%s", server->hostname);
 
-	rc = dns_resolve_server_name_to_ip(unc, &ipaddr);
+	rc = dns_resolve_server_name_to_ip(unc, &ipaddr, &expiry);
 	kfree(unc);
 
 	if (rc < 0) {
 		cifs_dbg(FYI, "%s: failed to resolve server part of %s to IP: %d\n",
 			 __func__, server->hostname, rc);
-		return rc;
+		goto requeue_resolve;
 	}
 
 	spin_lock(&cifs_tcp_ses_lock);
@@ -106,7 +108,45 @@ static int reconn_set_ipaddr_from_hostname(struct TCP_Server_Info *server)
 	spin_unlock(&cifs_tcp_ses_lock);
 	kfree(ipaddr);
 
-	return !rc ? -1 : 0;
+	/* rc == 1 means success here */
+	if (rc) {
+		now = ktime_get_real_seconds();
+		if (expiry && expiry > now)
+			/*
+			 * To make sure we don't use the cached entry, retry 1s
+			 * after expiry.
+			 */
+			ttl = (expiry - now + 1);
+	}
+	rc = !rc ? -1 : 0;
+
+requeue_resolve:
+	cifs_dbg(FYI, "%s: next dns resolution scheduled for %lu seconds in the future\n",
+		 __func__, ttl);
+	mod_delayed_work(cifsiod_wq, &server->resolve, (ttl * HZ));
+
+	return rc;
+}
+
+
+static void cifs_resolve_server(struct work_struct *work)
+{
+	int rc;
+	struct TCP_Server_Info *server = container_of(work,
+					struct TCP_Server_Info, resolve.work);
+
+	mutex_lock(&server->srv_mutex);
+
+	/*
+	 * Resolve the hostname again to make sure that IP address is up-to-date.
+	 */
+	rc = reconn_set_ipaddr_from_hostname(server);
+	if (rc) {
+		cifs_dbg(FYI, "%s: failed to resolve hostname: %d\n",
+				__func__, rc);
+	}
+
+	mutex_unlock(&server->srv_mutex);
 }
 
 #ifdef CONFIG_CIFS_DFS_UPCALL
@@ -680,6 +720,7 @@ static void clean_demultiplex_info(struct TCP_Server_Info *server)
 	spin_unlock(&cifs_tcp_ses_lock);
 
 	cancel_delayed_work_sync(&server->echo);
+	cancel_delayed_work_sync(&server->resolve);
 
 	spin_lock(&GlobalMid_Lock);
 	server->tcpStatus = CifsExiting;
@@ -1260,6 +1301,7 @@ cifs_put_tcp_session(struct TCP_Server_Info *server, int from_reconnect)
 	spin_unlock(&cifs_tcp_ses_lock);
 
 	cancel_delayed_work_sync(&server->echo);
+	cancel_delayed_work_sync(&server->resolve);
 
 	if (from_reconnect)
 		/*
@@ -1342,6 +1384,7 @@ cifs_get_tcp_session(struct smb3_fs_context *ctx)
 	INIT_LIST_HEAD(&tcp_ses->tcp_ses_list);
 	INIT_LIST_HEAD(&tcp_ses->smb_ses_list);
 	INIT_DELAYED_WORK(&tcp_ses->echo, cifs_echo_request);
+	INIT_DELAYED_WORK(&tcp_ses->resolve, cifs_resolve_server);
 	INIT_DELAYED_WORK(&tcp_ses->reconnect, smb2_reconnect_server);
 	mutex_init(&tcp_ses->reconnect_mutex);
 	memcpy(&tcp_ses->srcaddr, &ctx->srcaddr,
@@ -1426,6 +1469,12 @@ smbd_connected:
 
 	/* queue echo request delayed work */
 	queue_delayed_work(cifsiod_wq, &tcp_ses->echo, tcp_ses->echo_interval);
+
+	/* queue dns resolution delayed work */
+	cifs_dbg(FYI, "%s: next dns resolution scheduled for %d seconds in the future\n",
+		 __func__, SMB_DNS_RESOLVE_INTERVAL_DEFAULT);
+
+	queue_delayed_work(cifsiod_wq, &tcp_ses->resolve, (SMB_DNS_RESOLVE_INTERVAL_DEFAULT * HZ));
 
 	return tcp_ses;
 
@@ -2786,10 +2835,67 @@ static inline void mount_put_conns(struct cifs_sb_info *cifs_sb,
 	free_xid(xid);
 }
 
-/* Get connections for tcp, ses and tcon */
+static struct cifs_tcon *mount_get_tcon(struct smb3_fs_context *ctx, struct cifs_sb_info *cifs_sb,
+					const unsigned int xid, struct TCP_Server_Info *server,
+					struct cifs_ses *ses)
+{
+	struct cifs_tcon *tcon;
+
+	/* search for existing tcon to this server share */
+	tcon = cifs_get_tcon(ses, ctx);
+	if (IS_ERR(tcon))
+		return tcon;
+
+	/* if new SMB3.11 POSIX extensions are supported do not remap / and \ */
+	if (tcon->posix_extensions)
+		cifs_sb->mnt_cifs_flags |= CIFS_MOUNT_POSIX_PATHS;
+
+	/* tell server which Unix caps we support */
+	if (cap_unix(tcon->ses)) {
+		/*
+		 * reset of caps checks mount to see if unix extensions disabled
+		 * for just this mount.
+		 */
+		reset_cifs_unix_caps(xid, tcon, cifs_sb, ctx);
+		if ((tcon->ses->server->tcpStatus == CifsNeedReconnect) &&
+		    (le64_to_cpu(tcon->fsUnixInfo.Capability) &
+		     CIFS_UNIX_TRANSPORT_ENCRYPTION_MANDATORY_CAP))
+			return ERR_PTR(-EACCES);
+	} else
+		tcon->unix_ext = 0; /* server does not support them */
+
+	/* do not care if a following call succeed - informational */
+	if (!tcon->pipe && server->ops->qfs_tcon) {
+		server->ops->qfs_tcon(xid, tcon, cifs_sb);
+		if (cifs_sb->mnt_cifs_flags & CIFS_MOUNT_RO_CACHE) {
+			if (tcon->fsDevInfo.DeviceCharacteristics &
+			    cpu_to_le32(FILE_READ_ONLY_DEVICE))
+				cifs_dbg(VFS, "mounted to read only share\n");
+			else if ((cifs_sb->mnt_cifs_flags &
+				  CIFS_MOUNT_RW_CACHE) == 0)
+				cifs_dbg(VFS, "read only mount of RW share\n");
+			/* no need to log a RW mount of a typical RW share */
+		}
+	}
+
+	/*
+	 * Clamp the rsize/wsize mount arguments if they are too big for the server
+	 * and set the rsize/wsize to the negotiated values if not passed in by
+	 * the user on mount
+	 */
+	if ((cifs_sb->ctx->wsize == 0) ||
+	    (cifs_sb->ctx->wsize > server->ops->negotiate_wsize(tcon, ctx)))
+		cifs_sb->ctx->wsize = server->ops->negotiate_wsize(tcon, ctx);
+	if ((cifs_sb->ctx->rsize == 0) ||
+	    (cifs_sb->ctx->rsize > server->ops->negotiate_rsize(tcon, ctx)))
+		cifs_sb->ctx->rsize = server->ops->negotiate_rsize(tcon, ctx);
+
+	return tcon;
+}
+
+/* Get connections for tcp, ses and optionally a tcon */
 static int mount_get_conns(struct smb3_fs_context *ctx, struct cifs_sb_info *cifs_sb,
-			   unsigned int *xid,
-			   struct TCP_Server_Info **nserver,
+			   unsigned int *xid, struct TCP_Server_Info **nserver,
 			   struct cifs_ses **nses, struct cifs_tcon **ntcon)
 {
 	int rc = 0;
@@ -2797,9 +2903,13 @@ static int mount_get_conns(struct smb3_fs_context *ctx, struct cifs_sb_info *cif
 	struct cifs_ses *ses;
 	struct cifs_tcon *tcon;
 
+	if (WARN_ON_ONCE(!nserver || !nses))
+		return -EINVAL;
+
 	*nserver = NULL;
 	*nses = NULL;
-	*ntcon = NULL;
+	if (ntcon)
+		*ntcon = NULL;
 
 	*xid = get_xid();
 
@@ -2827,60 +2937,14 @@ static int mount_get_conns(struct smb3_fs_context *ctx, struct cifs_sb_info *cif
 		return -EOPNOTSUPP;
 	}
 
-	/* search for existing tcon to this server share */
-	tcon = cifs_get_tcon(ses, ctx);
-	if (IS_ERR(tcon)) {
-		rc = PTR_ERR(tcon);
-		return rc;
+	if (ntcon) {
+		tcon = mount_get_tcon(ctx, cifs_sb, *xid, server, ses);
+		if (IS_ERR(tcon))
+			rc = PTR_ERR(tcon);
+		else
+			*ntcon = tcon;
 	}
-
-	*ntcon = tcon;
-
-	/* if new SMB3.11 POSIX extensions are supported do not remap / and \ */
-	if (tcon->posix_extensions)
-		cifs_sb->mnt_cifs_flags |= CIFS_MOUNT_POSIX_PATHS;
-
-	/* tell server which Unix caps we support */
-	if (cap_unix(tcon->ses)) {
-		/*
-		 * reset of caps checks mount to see if unix extensions disabled
-		 * for just this mount.
-		 */
-		reset_cifs_unix_caps(*xid, tcon, cifs_sb, ctx);
-		if ((tcon->ses->server->tcpStatus == CifsNeedReconnect) &&
-		    (le64_to_cpu(tcon->fsUnixInfo.Capability) &
-		     CIFS_UNIX_TRANSPORT_ENCRYPTION_MANDATORY_CAP))
-			return -EACCES;
-	} else
-		tcon->unix_ext = 0; /* server does not support them */
-
-	/* do not care if a following call succeed - informational */
-	if (!tcon->pipe && server->ops->qfs_tcon) {
-		server->ops->qfs_tcon(*xid, tcon, cifs_sb);
-		if (cifs_sb->mnt_cifs_flags & CIFS_MOUNT_RO_CACHE) {
-			if (tcon->fsDevInfo.DeviceCharacteristics &
-			    cpu_to_le32(FILE_READ_ONLY_DEVICE))
-				cifs_dbg(VFS, "mounted to read only share\n");
-			else if ((cifs_sb->mnt_cifs_flags &
-				  CIFS_MOUNT_RW_CACHE) == 0)
-				cifs_dbg(VFS, "read only mount of RW share\n");
-			/* no need to log a RW mount of a typical RW share */
-		}
-	}
-
-	/*
-	 * Clamp the rsize/wsize mount arguments if they are too big for the server
-	 * and set the rsize/wsize to the negotiated values if not passed in by
-	 * the user on mount
-	 */
-	if ((cifs_sb->ctx->wsize == 0) ||
-	    (cifs_sb->ctx->wsize > server->ops->negotiate_wsize(tcon, ctx)))
-		cifs_sb->ctx->wsize = server->ops->negotiate_wsize(tcon, ctx);
-	if ((cifs_sb->ctx->rsize == 0) ||
-	    (cifs_sb->ctx->rsize > server->ops->negotiate_rsize(tcon, ctx)))
-		cifs_sb->ctx->rsize = server->ops->negotiate_rsize(tcon, ctx);
-
-	return 0;
+	return rc;
 }
 
 static int mount_setup_tlink(struct cifs_sb_info *cifs_sb, struct cifs_ses *ses,
@@ -2910,6 +2974,23 @@ static int mount_setup_tlink(struct cifs_sb_info *cifs_sb, struct cifs_ses *ses,
 }
 
 #ifdef CONFIG_CIFS_DFS_UPCALL
+static int mount_get_dfs_conns(struct smb3_fs_context *ctx, struct cifs_sb_info *cifs_sb,
+			       unsigned int *xid, struct TCP_Server_Info **nserver,
+			       struct cifs_ses **nses, struct cifs_tcon **ntcon)
+{
+	int rc;
+
+	ctx->nosharesock = true;
+	rc = mount_get_conns(ctx, cifs_sb, xid, nserver, nses, ntcon);
+	if (*nserver) {
+		cifs_dbg(FYI, "%s: marking tcp session as a dfs connection\n", __func__);
+		spin_lock(&cifs_tcp_ses_lock);
+		(*nserver)->is_dfs_conn = true;
+		spin_unlock(&cifs_tcp_ses_lock);
+	}
+	return rc;
+}
+
 /*
  * cifs_build_path_to_root returns full path to root when we do not have an
  * existing connection (tcon)
@@ -3105,7 +3186,7 @@ static int do_dfs_failover(const char *path, const char *full_path, struct cifs_
 			 tmp_ctx.prepath);
 
 		mount_put_conns(cifs_sb, *xid, *server, *ses, *tcon);
-		rc = mount_get_conns(&tmp_ctx, cifs_sb, xid, server, ses, tcon);
+		rc = mount_get_dfs_conns(&tmp_ctx, cifs_sb, xid, server, ses, tcon);
 		if (!rc || (*server && *ses)) {
 			/*
 			 * We were able to connect to new target server. Update current context with
@@ -3383,7 +3464,7 @@ int cifs_mount(struct cifs_sb_info *cifs_sb, struct smb3_fs_context *ctx)
 	char *oldmnt = NULL;
 	bool ref_server = false;
 
-	rc = mount_get_conns(ctx, cifs_sb, &xid, &server, &ses, &tcon);
+	rc = mount_get_conns(ctx, cifs_sb, &xid, &server, &ses, NULL);
 	/*
 	 * If called with 'nodfs' mount option, then skip DFS resolving.  Otherwise unconditionally
 	 * try to get an DFS referral (even cached) to determine whether it is an DFS mount.
@@ -3394,9 +3475,41 @@ int cifs_mount(struct cifs_sb_info *cifs_sb, struct smb3_fs_context *ctx)
 	if ((cifs_sb->mnt_cifs_flags & CIFS_MOUNT_NO_DFS) ||
 	    dfs_cache_find(xid, ses, cifs_sb->local_nls, cifs_remap(cifs_sb), ctx->UNC + 1, NULL,
 			   NULL)) {
+		bool is_dfs_conn;
+
 		if (rc)
 			goto error;
-		/* Check if it is fully accessible and then mount it */
+
+		spin_lock(&cifs_tcp_ses_lock);
+		is_dfs_conn = server->is_dfs_conn;
+		spin_unlock(&cifs_tcp_ses_lock);
+		/*
+		 * If tcp server existed and is a dfs connection, then create a new session for the
+		 * regular share.  We don't want to have them shared because DFS failover relies on
+		 * a single instance of tcp in order to find superblock + full referral path of a
+		 * specific connection.
+		 *
+		 * Otherwise connect to share and check if prefix paths are all accessible.
+		 */
+		if (is_dfs_conn) {
+			bool tmp = ctx->nosharesock;
+
+			cifs_put_smb_ses(ses);
+			ctx->nosharesock = true;
+			rc = mount_get_conns(ctx, cifs_sb, &xid, &server, &ses, &tcon);
+			ctx->nosharesock = tmp;
+
+			if (rc)
+				goto error;
+		} else {
+			tcon = mount_get_tcon(ctx, cifs_sb, xid, server, ses);
+			if (IS_ERR(tcon)) {
+				rc = PTR_ERR(tcon);
+				tcon = NULL;
+				goto error;
+			}
+		}
+
 		rc = is_path_remote(cifs_sb, ctx, xid, server, tcon);
 		if (!rc)
 			goto out;
@@ -3404,7 +3517,12 @@ int cifs_mount(struct cifs_sb_info *cifs_sb, struct smb3_fs_context *ctx)
 			goto error;
 	}
 
-	ctx->nosharesock = true;
+	mount_put_conns(cifs_sb, xid, server, ses, tcon);
+	/*
+	 * Ignore error check here because we may failover to other targets from cached a
+	 * referral.
+	 */
+	(void)mount_get_dfs_conns(ctx, cifs_sb, &xid, &server, &ses, &tcon);
 
 	/* Get path of DFS root */
 	ref_path = build_unc_path_to_root(ctx, cifs_sb, false);
@@ -3433,7 +3551,7 @@ int cifs_mount(struct cifs_sb_info *cifs_sb, struct smb3_fs_context *ctx)
 		/* Connect to new DFS target only if we were redirected */
 		if (oldmnt != cifs_sb->ctx->mount_options) {
 			mount_put_conns(cifs_sb, xid, server, ses, tcon);
-			rc = mount_get_conns(ctx, cifs_sb, &xid, &server, &ses, &tcon);
+			rc = mount_get_dfs_conns(ctx, cifs_sb, &xid, &server, &ses, &tcon);
 		}
 		if (rc && !server && !ses) {
 			/* Failed to connect. Try to connect to other targets in the referral. */
@@ -4095,7 +4213,8 @@ int cifs_tree_connect(const unsigned int xid, struct cifs_tcon *tcon, const stru
 	if (!tree)
 		return -ENOMEM;
 
-	if (!tcon->dfs_path) {
+	/* If it is not dfs or there was no cached dfs referral, then reconnect to same share */
+	if (!tcon->dfs_path || dfs_cache_noreq_find(tcon->dfs_path + 1, &ref, &tl)) {
 		if (tcon->ipc) {
 			scnprintf(tree, MAX_TREE_SIZE, "\\\\%s\\IPC$", server->hostname);
 			rc = ops->tree_connect(xid, tcon->ses, tree, tcon, nlsc);
@@ -4105,9 +4224,6 @@ int cifs_tree_connect(const unsigned int xid, struct cifs_tcon *tcon, const stru
 		goto out;
 	}
 
-	rc = dfs_cache_noreq_find(tcon->dfs_path + 1, &ref, &tl);
-	if (rc)
-		goto out;
 	isroot = ref.server_type == DFS_TYPE_ROOT;
 	free_dfs_info_param(&ref);
 
