@@ -1098,7 +1098,13 @@
 		status = "okay";
 		clock-frequency = <400000>;
 
-		/* cg7153am battery driver is here */
+		fuel-gauge@10 {
+			compatible = "cg7153am,battery";
+			reg = <0x10>;
+
+			monitored-battery = <&battery>;
+			power-supplies = <&mains>;
+		};
 
 		/* Wolfson Microelectronics WM8903 audio codec */
 		wm8903: audio-codec@1a {
@@ -1493,6 +1499,19 @@
 
 		vmmc-supply = <&vdd_usd>;	/* ldo2 */
 		vqmmc-supply = <&vddio_usd>;	/* ldo3 */
+	};
+
+	battery: battery {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <3050000>;
+		energy-full-design-microwatt-hours = <23000000>;
+		operating-range-celsius = <0 45>;
+	};
+
+	mains: ac-adapter-detect {
+		compatible = "gpio-charger";
+		charger-type = "mains";
+		gpios = <&gpio TEGRA_GPIO(V, 1) GPIO_ACTIVE_HIGH>;
 	};
 
 	brcm_wifi_pwrseq: wifi-pwrseq {
