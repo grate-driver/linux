@@ -80,13 +80,13 @@ Todolist:
    :maxdepth: 1
 
    cachetlb
+   cpu_hotplug
+   genericirq
 
 Todolist:
 
 
-   cpu_hotplug
    memory-hotplug
-   genericirq
    protection-keys
 
 
