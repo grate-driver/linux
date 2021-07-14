@@ -10,6 +10,9 @@
 / {
 	compatible = "microsoft,surface-rt-efi", "microsoft,surface-rt", "nvidia,tegra30";
 
+	/* L2 cache does not work yet */
+	/delete-node/ cache-controller@50043000;
+
 	ldo5_reg: tps65911-ldo5 {
 		compatible = "regulator-fixed";
 		regulator-name = "vddio_sdmmc";
