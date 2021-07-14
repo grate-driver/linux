@@ -259,6 +259,7 @@
 			gpios = <&gpio TEGRA_GPIO(S, 5) GPIO_ACTIVE_HIGH>;
 			linux,code = <KEY_LEFTMETA>;
 			debounce-interval = <10>;
+			wakeup-source;
 		};
 
 		volume-down {
