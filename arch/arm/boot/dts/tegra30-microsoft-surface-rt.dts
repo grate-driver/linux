@@ -172,6 +172,10 @@
 		nvidia,sys-clock-req-active-high;
 	};
 
+	hda@70030000 {
+		status = "okay";
+	};
+
 	/* SD CARD - SDMMC-1 */
 	mmc@78000000 {
 		status = "okay";
