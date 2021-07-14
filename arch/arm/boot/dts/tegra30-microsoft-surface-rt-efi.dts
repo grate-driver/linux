@@ -13,6 +13,11 @@
 	/* L2 cache does not work yet */
 	/delete-node/ cache-controller@50043000;
 
+	/* CPU Idle does not work yet, disabling LP2 */
+	pmc@7000e400 {
+		/delete-property/ nvidia,suspend-mode;
+	};
+
 	ldo5_reg: tps65911-ldo5 {
 		compatible = "regulator-fixed";
 		regulator-name = "vddio_sdmmc";
