@@ -398,6 +398,7 @@ generate_smb3signingkey(struct cifs_ses *ses,
 #ifdef CONFIG_CIFS_DEBUG_DUMP_KEYS
 	struct TCP_Server_Info *server = ses->server;
 #endif
+	unsigned int chan_index;
 
 	/*
 	 * All channels use the same encryption/decryption keys but
@@ -414,6 +415,8 @@ generate_smb3signingkey(struct cifs_ses *ses,
 				  ptriplet->signing.context,
 				  cifs_ses_binding_channel(ses)->signkey,
 				  SMB3_SIGN_KEY_SIZE);
+		cifs_dbg(FYI, "%s: Generated key for chan %u\n",
+			 __func__, chan_index);
 		if (rc)
 			return rc;
 	} else {
