@@ -62,6 +62,7 @@ static enum power_supply_property pad_battery_properties[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CURRENT_MAX,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CHARGE_NOW,
 	POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG,
@@ -77,6 +78,7 @@ static enum power_supply_property pad_battery_properties[] = {
 static const unsigned int pad_battery_prop_offs[] = {
 	[POWER_SUPPLY_PROP_STATUS] = 1,
 	[POWER_SUPPLY_PROP_VOLTAGE_MAX] = 3,
+	[POWER_SUPPLY_PROP_CURRENT_MAX] = 5,
 	[POWER_SUPPLY_PROP_TEMP] = 7,
 	[POWER_SUPPLY_PROP_VOLTAGE_NOW] = 9,
 	[POWER_SUPPLY_PROP_CURRENT_NOW] = 11,
@@ -162,6 +164,7 @@ static int pad_battery_get_property(struct power_supply *psy,
 
 		case POWER_SUPPLY_PROP_CHARGE_NOW:
 		case POWER_SUPPLY_PROP_CURRENT_NOW:
+		case POWER_SUPPLY_PROP_CURRENT_MAX:
 		case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 			val->intval *= 1000;
