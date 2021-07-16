@@ -1628,6 +1628,7 @@ static unsigned int shrink_page_list(struct list_head *page_list,
 			if (!page_ref_freeze(page, 1))
 				goto keep_locked;
 			if (PageDirty(page)) {
+				SetPageSwapBacked(page);
 				page_ref_unfreeze(page, 1);
 				goto keep_locked;
 			}
