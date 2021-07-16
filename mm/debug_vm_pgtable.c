@@ -520,27 +520,26 @@ static void __init pud_populate_tests(struct vm_pgtable_debug *debug) { }
 #endif /* PAGETABLE_PUD_FOLDED */
 
 #ifndef __PAGETABLE_P4D_FOLDED
-static void __init p4d_clear_tests(struct mm_struct *mm, p4d_t *p4dp)
+static void __init p4d_clear_tests(struct vm_pgtable_debug *debug)
 {
-	p4d_t p4d = READ_ONCE(*p4dp);
+	p4d_t p4d = READ_ONCE(*(debug->p4dp));
 
-	if (mm_pud_folded(mm))
+	if (mm_pud_folded(debug->mm))
 		return;
 
 	pr_debug("Validating P4D clear\n");
 	p4d = __p4d(p4d_val(p4d) | RANDOM_ORVALUE);
-	WRITE_ONCE(*p4dp, p4d);
-	p4d_clear(p4dp);
-	p4d = READ_ONCE(*p4dp);
+	WRITE_ONCE(*(debug->p4dp), p4d);
+	p4d_clear(debug->p4dp);
+	p4d = READ_ONCE(*(debug->p4dp));
 	WARN_ON(!p4d_none(p4d));
 }
 
-static void __init p4d_populate_tests(struct mm_struct *mm, p4d_t *p4dp,
-				      pud_t *pudp)
+static void __init p4d_populate_tests(struct vm_pgtable_debug *debug)
 {
 	p4d_t p4d;
 
-	if (mm_pud_folded(mm))
+	if (mm_pud_folded(debug->mm))
 		return;
 
 	pr_debug("Validating P4D populate\n");
@@ -548,34 +547,33 @@ static void __init p4d_populate_tests(struct mm_struct *mm, p4d_t *p4dp,
 	 * This entry points to next level page table page.
 	 * Hence this must not qualify as p4d_bad().
 	 */
-	pud_clear(pudp);
-	p4d_clear(p4dp);
-	p4d_populate(mm, p4dp, pudp);
-	p4d = READ_ONCE(*p4dp);
+	pud_clear(debug->pudp);
+	p4d_clear(debug->p4dp);
+	p4d_populate(debug->mm, debug->p4dp, debug->start_pudp);
+	p4d = READ_ONCE(*(debug->p4dp));
 	WARN_ON(p4d_bad(p4d));
 }
 
-static void __init pgd_clear_tests(struct mm_struct *mm, pgd_t *pgdp)
+static void __init pgd_clear_tests(struct vm_pgtable_debug *debug)
 {
-	pgd_t pgd = READ_ONCE(*pgdp);
+	pgd_t pgd = READ_ONCE(*(debug->pgdp));
 
-	if (mm_p4d_folded(mm))
+	if (mm_p4d_folded(debug->mm))
 		return;
 
 	pr_debug("Validating PGD clear\n");
 	pgd = __pgd(pgd_val(pgd) | RANDOM_ORVALUE);
-	WRITE_ONCE(*pgdp, pgd);
-	pgd_clear(pgdp);
-	pgd = READ_ONCE(*pgdp);
+	WRITE_ONCE(*(debug->pgdp), pgd);
+	pgd_clear(debug->pgdp);
+	pgd = READ_ONCE(*(debug->pgdp));
 	WARN_ON(!pgd_none(pgd));
 }
 
-static void __init pgd_populate_tests(struct mm_struct *mm, pgd_t *pgdp,
-				      p4d_t *p4dp)
+static void __init pgd_populate_tests(struct vm_pgtable_debug *debug)
 {
 	pgd_t pgd;
 
-	if (mm_p4d_folded(mm))
+	if (mm_p4d_folded(debug->mm))
 		return;
 
 	pr_debug("Validating PGD populate\n");
@@ -583,23 +581,17 @@ static void __init pgd_populate_tests(struct mm_struct *mm, pgd_t *pgdp,
 	 * This entry points to next level page table page.
 	 * Hence this must not qualify as pgd_bad().
 	 */
-	p4d_clear(p4dp);
-	pgd_clear(pgdp);
-	pgd_populate(mm, pgdp, p4dp);
-	pgd = READ_ONCE(*pgdp);
+	p4d_clear(debug->p4dp);
+	pgd_clear(debug->pgdp);
+	pgd_populate(debug->mm, debug->pgdp, debug->start_p4dp);
+	pgd = READ_ONCE(*(debug->pgdp));
 	WARN_ON(pgd_bad(pgd));
 }
 #else  /* !__PAGETABLE_P4D_FOLDED */
-static void __init p4d_clear_tests(struct mm_struct *mm, p4d_t *p4dp) { }
-static void __init pgd_clear_tests(struct mm_struct *mm, pgd_t *pgdp) { }
-static void __init p4d_populate_tests(struct mm_struct *mm, p4d_t *p4dp,
-				      pud_t *pudp)
-{
-}
-static void __init pgd_populate_tests(struct mm_struct *mm, pgd_t *pgdp,
-				      p4d_t *p4dp)
-{
-}
+static void __init p4d_clear_tests(struct vm_pgtable_debug *debug) { }
+static void __init pgd_clear_tests(struct vm_pgtable_debug *debug) { }
+static void __init p4d_populate_tests(struct vm_pgtable_debug *debug) { }
+static void __init pgd_populate_tests(struct vm_pgtable_debug *debug) { }
 #endif /* PAGETABLE_P4D_FOLDED */
 
 static void __init pte_clear_tests(struct vm_pgtable_debug *debug)
@@ -1300,12 +1292,12 @@ static int __init debug_vm_pgtable(void)
 	pud_populate_tests(&debug);
 	spin_unlock(ptl);
 
-	spin_lock(&mm->page_table_lock);
-	p4d_clear_tests(mm, p4dp);
-	pgd_clear_tests(mm, pgdp);
-	p4d_populate_tests(mm, p4dp, saved_pudp);
-	pgd_populate_tests(mm, pgdp, saved_p4dp);
-	spin_unlock(&mm->page_table_lock);
+	spin_lock(&(debug.mm->page_table_lock));
+	p4d_clear_tests(&debug);
+	pgd_clear_tests(&debug);
+	p4d_populate_tests(&debug);
+	pgd_populate_tests(&debug);
+	spin_unlock(&(debug.mm->page_table_lock));
 
 	p4d_free(mm, saved_p4dp);
 	pud_free(mm, saved_pudp);
