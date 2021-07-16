@@ -33,14 +33,6 @@
 #include <asm/tlbflush.h>
 
 /*
- * Please refer Documentation/vm/arch_pgtable_helpers.rst for the semantics
- * expectations that are being validated here. All future changes in here
- * or the documentation need to be in sync.
- */
-
-#define VMFLAGS	(VM_READ|VM_WRITE|VM_EXEC)
-
-/*
  * On s390 platform, the lower 4 bits are used to identify given page table
  * entry type. But these bits might affect the ability to clear entries with
  * pxx_clear() because of how dynamic page table folding works on s390. So
@@ -1025,7 +1017,12 @@ static int __init alloc_mem(struct vm_pgtable_debug *debug)
 	phys_addr_t phys;
 	int ret = 0;
 
-	/* Initialize the debugging data */
+	/*
+	 * Initialize the debugging data. For @page_prot, please refer
+	 * Documentation/vm/arch_pgtable_helpers.rst for the semantics
+	 * expectations that are being validated here. All future changes
+	 * in here or the documentation need to be in sync.
+	 */
 	debug->mm             = NULL;
 	debug->vma            = NULL;
 	debug->pgdp           = NULL;
@@ -1137,17 +1134,6 @@ error:
 static int __init debug_vm_pgtable(void)
 {
 	struct vm_pgtable_debug debug;
-	struct vm_area_struct *vma;
-	struct mm_struct *mm;
-	pgd_t *pgdp;
-	p4d_t *p4dp, *saved_p4dp;
-	pud_t *pudp, *saved_pudp;
-	pmd_t *pmdp, *saved_pmdp, pmd;
-	pgtable_t saved_ptep;
-	pgprot_t prot, protnone;
-	phys_addr_t paddr;
-	unsigned long vaddr, pte_aligned, pmd_aligned;
-	unsigned long pud_aligned, p4d_aligned, pgd_aligned;
 	spinlock_t *ptl = NULL;
 	int idx, ret;
 
@@ -1155,68 +1141,6 @@ static int __init debug_vm_pgtable(void)
 	ret = alloc_mem(&debug);
 	if (ret)
 		return ret;
-
-	prot = vm_get_page_prot(VMFLAGS);
-	vaddr = get_random_vaddr();
-	mm = mm_alloc();
-	if (!mm) {
-		pr_err("mm_struct allocation failed\n");
-		return 1;
-	}
-
-	/*
-	 * __P000 (or even __S000) will help create page table entries with
-	 * PROT_NONE permission as required for pxx_protnone_tests().
-	 */
-	protnone = __P000;
-
-	vma = vm_area_alloc(mm);
-	if (!vma) {
-		pr_err("vma allocation failed\n");
-		return 1;
-	}
-
-	/*
-	 * PFN for mapping at PTE level is determined from a standard kernel
-	 * text symbol. But pfns for higher page table levels are derived by
-	 * masking lower bits of this real pfn. These derived pfns might not
-	 * exist on the platform but that does not really matter as pfn_pxx()
-	 * helpers will still create appropriate entries for the test. This
-	 * helps avoid large memory block allocations to be used for mapping
-	 * at higher page table levels.
-	 */
-	paddr = __pa_symbol(&start_kernel);
-
-	pte_aligned = (paddr & PAGE_MASK) >> PAGE_SHIFT;
-	pmd_aligned = (paddr & PMD_MASK) >> PAGE_SHIFT;
-	pud_aligned = (paddr & PUD_MASK) >> PAGE_SHIFT;
-	p4d_aligned = (paddr & P4D_MASK) >> PAGE_SHIFT;
-	pgd_aligned = (paddr & PGDIR_MASK) >> PAGE_SHIFT;
-	WARN_ON(!pfn_valid(pte_aligned));
-
-	pgdp = pgd_offset(mm, vaddr);
-	p4dp = p4d_alloc(mm, pgdp, vaddr);
-	pudp = pud_alloc(mm, p4dp, vaddr);
-	pmdp = pmd_alloc(mm, pudp, vaddr);
-	/*
-	 * Allocate pgtable_t
-	 */
-	if (pte_alloc(mm, pmdp)) {
-		pr_err("pgtable allocation failed\n");
-		return 1;
-	}
-
-	/*
-	 * Save all the page table page addresses as the page table
-	 * entries will be used for testing with random or garbage
-	 * values. These saved addresses will be used for freeing
-	 * page table pages.
-	 */
-	pmd = READ_ONCE(*pmdp);
-	saved_p4dp = p4d_offset(pgdp, 0UL);
-	saved_pudp = pud_offset(p4dp, 0UL);
-	saved_pmdp = pmd_offset(pudp, 0UL);
-	saved_ptep = pmd_pgtable(pmd);
 
 	/*
 	 * Iterate over the protection_map[] to make sure that all
@@ -1298,17 +1222,6 @@ static int __init debug_vm_pgtable(void)
 	p4d_populate_tests(&debug);
 	pgd_populate_tests(&debug);
 	spin_unlock(&(debug.mm->page_table_lock));
-
-	p4d_free(mm, saved_p4dp);
-	pud_free(mm, saved_pudp);
-	pmd_free(mm, saved_pmdp);
-	pte_free(mm, saved_ptep);
-
-	vm_area_free(vma);
-	mm_dec_nr_puds(mm);
-	mm_dec_nr_pmds(mm);
-	mm_dec_nr_ptes(mm);
-	mmdrop(mm);
 
 	free_mem(&debug);
 	return 0;
