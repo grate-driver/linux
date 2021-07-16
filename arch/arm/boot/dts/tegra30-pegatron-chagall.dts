@@ -1102,6 +1102,8 @@
 			compatible = "cg7153am,battery";
 			reg = <0x10>;
 
+			cg7153am,leds-indication;
+
 			monitored-battery = <&battery>;
 			power-supplies = <&mains>;
 		};
