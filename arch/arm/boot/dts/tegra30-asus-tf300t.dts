@@ -120,11 +120,11 @@
 			micdet-delay = <100>;
 
 			gpio-cfg = <
-				0xffffffff
-				0xffffffff
-				0x00000000 
-				0xffffffff /* Interrupt, output */
-				0xffffffff /* BCLK, input, active high */
+				0xffffffff /* don't touch */
+				0xffffffff /* don't touch */
+				0x00000000 /* Speaker-enable GPIO, output, low */
+				0xffffffff /* don't touch */
+				0xffffffff /* don't touch */
 			>;
 
 			AVDD-supply  = <&vdd_1v8_vio>;
