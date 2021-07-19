@@ -19,6 +19,8 @@ jobs:
   build:
     strategy:
       fail-fast: false
+      matrix:
+        cc: [gcc, clang]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -38,7 +40,7 @@ jobs:
         continue-on-error: false
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: ${{ env.KERNEL_NAME }}
+          key: ${{ env.KERNEL_NAME }}-${{ matrix.cc }}
       - name: Start sccache server
         run: sccache --start-server
       - name: Install dependencies
@@ -49,21 +51,16 @@ jobs:
       - name: Build
         run: |
           tuxmake --directory ./ -w sccache --target-arch=arm -k $KBUILD_DEFCONFIG $TUXMAKE_EXTRA_OPTS
-          cd /home/runner/.cache/tuxmake/builds/1/
-          tar -cf linux-grate-next.tar *
-          cd -
-          mv /home/runner/.cache/tuxmake/builds/1/linux-grate-next.tar ./
-      - name: Print sccache stats
-        run: sccache --show-stats
+          tar -cf linux-grate-${{ matrix.cc }}.tar -C /home/runner/.cache/tuxmake/builds/1 .
       - name: Stop sccache server
         run: sccache --stop-server || true
       - uses: "marvinpinto/action-automatic-releases@latest"
         if: ${{!startsWith(github.ref, 'refs/pull')}}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${{ env.KERNEL_NAME }}"
+          automatic_release_tag: "${{ env.KERNEL_NAME }}-${{ matrix.cc }}"
           prerelease: true
-          title: "Build ${{ env.KERNEL_NAME }}"
+          title: "Build of Grate kernel, compiled with ${{ matrix.cc }}"
           files: |
             *.tar
   dtbs:
