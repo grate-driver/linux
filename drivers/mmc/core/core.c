@@ -2150,6 +2150,19 @@ int mmc_detect_card_removed(struct mmc_host *host)
 }
 EXPORT_SYMBOL(mmc_detect_card_removed);
 
+/*
+ * This allows a kernel command line option 'gpt_sector=<sector>' to
+ * enable GPT header lookup at a non-standard location. This option
+ * is provided to kernel by NVIDIA's proprietary bootloader.
+ */
+static sector_t cmdline_gpt_sector;
+static int __init cmdline_gpt_sector_fn(char *str)
+{
+	WARN_ON(kstrtoull(str, 10, &cmdline_gpt_sector) < 0);
+	return 1;
+}
+__setup("gpt_sector=", cmdline_gpt_sector_fn);
+
 int mmc_card_alternative_gpt_sector(struct mmc_card *card, sector_t *gpt_sector)
 {
 	unsigned int boot_sectors_num;
@@ -2163,6 +2176,11 @@ int mmc_card_alternative_gpt_sector(struct mmc_card *card, sector_t *gpt_sector)
 	    !mmc_card_is_blockaddr(card) ||
 	     mmc_card_is_removable(card->host))
 		return -ENOENT;
+
+	if (cmdline_gpt_sector) {
+		*gpt_sector = cmdline_gpt_sector;
+		return 0;
+	}
 
 	/*
 	 * eMMC storage has two special boot partitions in addition to the
