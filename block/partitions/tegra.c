@@ -3,6 +3,7 @@
 #define pr_fmt(fmt) "tegra-partition: " fmt
 
 #include <linux/blkdev.h>
+#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
 #include <linux/sizes.h>
@@ -58,6 +59,19 @@ tegra_partition_table_emmc_boot_offset(struct parsed_partitions *state)
 	       SZ_512 * MMC_NUM_BOOT_PARTITION;
 }
 
+/*
+ * This allows a kernel command line option 'gpt_sector=<sector>' to
+ * enable GPT header lookup at a non-standard location. This option
+ * is provided to kernel by NVIDIA's proprietary bootloader.
+ */
+static sector_t tegra_gpt_sector;
+static int __init tegra_gpt_sector_fn(char *str)
+{
+	WARN_ON(kstrtoull(str, 10, &tegra_gpt_sector) < 0);
+	return 1;
+}
+__setup("gpt_sector=", tegra_gpt_sector_fn);
+
 int tegra_partition_forced_gpt(struct parsed_partitions *state)
 {
 	int ret, boot_offset;
@@ -78,6 +92,29 @@ int tegra_partition_forced_gpt(struct parsed_partitions *state)
 	 */
 	state->force_gpt_sector  = get_capacity(state->bdev->bd_disk);
 	state->force_gpt_sector -= boot_offset + 1;
+
+	ret = efi_partition(state);
+	state->force_gpt_sector = 0;
+
+	return ret;
+}
+
+int tegra_partition_forced_gpt_cmdline(struct parsed_partitions *state)
+{
+	int ret = 0;
+
+	if (!soc_is_tegra() || !tegra_gpt_sector)
+		return 0;
+
+	/*
+	 * All NVIDIA Tegra devices use a proprietary partition table.
+	 * This table may have GPT entry at any given sector.  Android
+	 * devices may have GPT entry at a proper location, at a fixed
+	 * sector that is calculated based on sectors number, or at any
+	 * sector that is conveyed using a non-standard kernel cmdline
+	 * argument.
+	 */
+	state->force_gpt_sector = tegra_gpt_sector;
 
 	ret = efi_partition(state);
 	state->force_gpt_sector = 0;
