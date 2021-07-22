@@ -19,7 +19,18 @@
 #include <linux/mfd/asus-ec.h>
 
 #define ASUSEC_CHARGER_DELAY_MSEC		1000
-#define ASUSEC_CHARGER_MASK			0x20
+#define ASUSEC_CHARGER_AC_MASK			0x20
+
+/*
+ * Embedded controller gives reaction on plug events from reg 0x0A 
+ * like in asusec_charger_callback function. This table represents all
+ * EC reactions on different 40-pin connector events. Use wise.
+ *
+ * PAD-ec no-plug  0x42 / PAD-ec DOCK     0x22 / DOCK-ec no-plug 0x42
+ * PAD-ec AC       0x27 / PAD-ec DOCK+AC  0x26 / DOCK-ec AC      0x27
+ * PAD-ec USB      0x47 / PAD-ec DOCK+USB 0x26 / DOCK-ec USB     0x43
+ *
+ */
 
 struct asusec_charger_data {
 	const struct asusec_info		*ec;
@@ -58,8 +69,8 @@ static int asusec_charger_callback(struct asusec_charger_data *priv)
 
 	mutex_unlock(&priv->charger_lock);
 
-	ret = priv->charger_data[1] & ASUSEC_CHARGER_MASK;
-	if (ret == ASUSEC_CHARGER_MASK)
+	ret = priv->charger_data[1] & ASUSEC_CHARGER_AC_MASK;
+	if (ret == ASUSEC_CHARGER_AC_MASK)
 		return 1;
 
 	return 0;

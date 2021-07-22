@@ -21,6 +21,8 @@
 #define ASUSEC_BATTERY_FULL_CHARGED		0x20
 #define ASUSEC_BATTERY_FULL_DISCHARGED		0x10
 
+#define ASUSEC_CHARGER_USB_MASK			0x43
+
 #define TEMP_CELSIUS_OFFSET			2731
 
 struct asusec_battery_data {
@@ -180,6 +182,23 @@ static int pad_battery_get_property(struct power_supply *psy,
 	return 0;
 }
 
+static int asusec_battery_no_usb(struct asusec_battery_data *priv)
+{
+	int ret = 0;
+	u8 buf[DOCKRAM_ENTRY_BUFSIZE];
+	char *plug = buf;
+
+	ret = asus_dockram_read(priv->ec->dockram, 0x0A, plug);
+	if (ret < 0)
+		return -EINVAL;
+
+	ret = plug[1] & ASUSEC_CHARGER_USB_MASK;
+	if (ret == ASUSEC_CHARGER_USB_MASK)
+		return 0;
+
+	return ret;
+}
+
 static void asusec_battery_poll_work(struct work_struct *work)
 {
 	struct asusec_battery_data *priv =
@@ -197,7 +216,7 @@ static void asusec_battery_poll_work(struct work_struct *work)
 	else
 		state = POWER_SUPPLY_STATUS_CHARGING;
 
-	if (priv->last_state != state) {
+	if (priv->last_state != state && asusec_battery_no_usb(priv)) {
 		priv->last_state = state;
 		power_supply_changed(priv->battery);
 	}
