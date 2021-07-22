@@ -42,6 +42,7 @@
 #include <linux/debugfs.h>
 
 #include <linux/mmc/ioctl.h>
+#include <linux/mmc/blkdev.h>
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/mmc.h>
@@ -831,6 +832,24 @@ static const struct block_device_operations mmc_bdops = {
 #endif
 	.alternative_gpt_sector	= mmc_blk_alternative_gpt_sector,
 };
+
+struct mmc_card *mmc_bdev_to_card(struct block_device *bdev)
+{
+	struct mmc_blk_data *md;
+	struct mmc_card *card;
+
+	if (bdev->bd_disk->fops != &mmc_bdops)
+		return NULL;
+
+	md = mmc_blk_get(bdev->bd_disk);
+	if (!md)
+		return NULL;
+
+	card = md->queue.card;
+	mmc_blk_put(md);
+
+	return card;
+}
 
 static int mmc_blk_part_switch_pre(struct mmc_card *card,
 				   unsigned int part_type)
