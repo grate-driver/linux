@@ -28,7 +28,9 @@
 
 #include <linux/firmware/trusted_foundations.h>
 
+#include <soc/tegra/bootdata.h>
 #include <soc/tegra/fuse.h>
+#include <soc/tegra/partition.h>
 #include <soc/tegra/pmc.h>
 
 #include <asm/firmware.h>
@@ -62,9 +64,61 @@ u32 tegra_uart_config[3] = {
 	0,
 };
 
+static void __init tegra_boot_config_table_init(void)
+{
+	struct tegra30_boot_config_table __iomem *t30_bct;
+	struct tegra20_boot_config_table __iomem *t20_bct;
+	struct tegra20_boot_info_table   __iomem *t20_bit;
+	u32 iram_end   = TEGRA_IRAM_BASE + TEGRA_IRAM_SIZE;
+	u32 iram_start = TEGRA_IRAM_BASE;
+	u32 pt_addr, pt_size, bct_size;
+
+	t20_bit = IO_ADDRESS(TEGRA_IRAM_BASE);
+
+	if (of_machine_is_compatible("nvidia,tegra20")) {
+		bct_size = sizeof(*t20_bct);
+
+		if (t20_bit->bct_size != bct_size ||
+		    t20_bit->bct_ptr < iram_start ||
+		    t20_bit->bct_ptr > iram_end - bct_size)
+			return;
+
+		t20_bct = IO_ADDRESS(t20_bit->bct_ptr);
+
+		if (t20_bct->boot_data_version != TEGRA_BOOTDATA_VERSION_T20)
+			return;
+
+		pt_addr = t20_bct->partition_table_logical_sector_address;
+		pt_size = t20_bct->partition_table_num_logical_sectors;
+
+	} else if (of_machine_is_compatible("nvidia,tegra30")) {
+		bct_size = sizeof(*t30_bct);
+
+		if (t20_bit->bct_size != bct_size ||
+		    t20_bit->bct_ptr < iram_start ||
+		    t20_bit->bct_ptr > iram_end - bct_size)
+			return;
+
+		t30_bct = IO_ADDRESS(t20_bit->bct_ptr);
+
+		if (t30_bct->boot_data_version != TEGRA_BOOTDATA_VERSION_T30)
+			return;
+
+		pt_addr = t30_bct->partition_table_logical_sector_address;
+		pt_size = t30_bct->partition_table_num_logical_sectors;
+	} else {
+		return;
+	}
+
+	pr_info("%s: BCT found in IRAM\n", __func__);
+
+	tegra_partition_table_setup(pt_addr, pt_size);
+}
+
 static void __init tegra_init_early(void)
 {
 	of_register_trusted_foundations();
+	tegra_boot_config_table_init();
 	tegra_cpu_reset_handler_init();
 	call_firmware_op(l2x0_init);
 }
