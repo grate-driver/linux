@@ -275,7 +275,8 @@ static irqreturn_t ast2600_timer_interrupt(int irq, void *dev_id)
 
 	val = readl(fttmr010->base + TIMER_INTR_STATE);
 	if (val & (TIMER_1_INT_MATCH1 | TIMER_1_INT_OVERFLOW)) {
-		writel(TIMER_1_INT_MATCH1, fttmr010->base + TIMER_INTR_STATE);
+		writel(TIMER_1_INT_MATCH1 | TIMER_1_INT_OVERFLOW,
+		       fttmr010->base + TIMER_INTR_STATE);
 		evt->event_handler(evt);
 	} else {
 		/* Just clear any spurious IRQs from the block */
