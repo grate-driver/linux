@@ -97,7 +97,19 @@
 		};
 	};
 
-	gpio@6000d000 {};	/* set up from downstream if necessary */
+	gpio@6000d000 {
+		init-mode-3g-hog {
+			gpio-hog;
+			gpios =	<TEGRA_GPIO(P, 0) GPIO_ACTIVE_HIGH>, // CHAGALL_3G_RESIN_N
+				<TEGRA_GPIO(V, 7) GPIO_ACTIVE_HIGH>, // CHAGALL_3G_PWRDWN_N
+				<TEGRA_GPIO(V, 6) GPIO_ACTIVE_HIGH>, // CHAGALL_3G_DISABLE_N
+				<TEGRA_GPIO(O, 2) GPIO_ACTIVE_HIGH>, // CHAGALL_3G_R_ON
+				<TEGRA_GPIO(X, 5) GPIO_ACTIVE_HIGH>, // CHAGALL_3G_RESOUT
+				<TEGRA_GPIO(N, 2) GPIO_ACTIVE_HIGH>, // CHAGALL_3G_WW_WAKE
+				<TEGRA_GPIO(Q, 2) GPIO_ACTIVE_HIGH>; // CHAGALL_SIM_DET
+			output-low;
+		};
+	};
 
 	vde@6001a000 {
 		assigned-clocks = <&tegra_car TEGRA30_CLK_VDE>;
@@ -1462,6 +1474,15 @@
 		enable-active-high;
 		vin-supply = <&vdd_5v0_sys>;
 	};
+	
+	vdd_vbus_3g: regulator@6 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_vbus_3g";
+		regulator-min-microvolt = <3800000>;
+		regulator-max-microvolt = <3800000>;
+		gpio = <&gpio TEGRA_GPIO(K, 7) GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
 
 	pmc@7000e400 {
 		status = "okay";
@@ -1577,8 +1598,17 @@
 		nvidia,xcvr-lsrslew = <2>;
 	};
 
+	usb@7d004000 {
+		status = "okay";
+	};
+
+	usb-phy@7d004000 {
+		status = "okay";
+		vbus-supply = <&vdd_vbus_3g>;
+	};
+	
 	usb@7d008000 {
-		status = "okay";		
+		status = "okay";
 	};
 
 	usb-phy@7d008000 {
