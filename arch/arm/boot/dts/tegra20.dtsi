@@ -57,6 +57,7 @@
 			resets = <&tegra_car 60>;
 			reset-names = "mpe";
 			power-domains = <&pd_mpe>;
+			status = "disabled";
 		};
 
 		vi@54080000 {
@@ -67,6 +68,7 @@
 			resets = <&tegra_car 20>;
 			reset-names = "vi";
 			power-domains = <&pd_venc>;
+			status = "disabled";
 		};
 
 		epp@540c0000 {
@@ -77,6 +79,7 @@
 			resets = <&tegra_car 19>;
 			reset-names = "epp";
 			power-domains = <&pd_core>;
+			status = "disabled";
 		};
 
 		isp@54100000 {
@@ -87,6 +90,7 @@
 			resets = <&tegra_car 23>;
 			reset-names = "isp";
 			power-domains = <&pd_venc>;
+			status = "disabled";
 		};
 
 		gr2d@54140000 {
