@@ -134,6 +134,11 @@
 		};
 	};
 
+	/* TF300T does not support SDR104 mode */
+	mmc@78000000 {
+		max-frequency = <104000000>;
+	};
+
 	pad_battery: pad-battery {
 		compatible = "simple-battery";
 		charge-full-design-microamp-hours = <2940000>;
