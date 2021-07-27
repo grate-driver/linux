@@ -519,7 +519,7 @@ static long add_nr_deferred(long nr, struct shrinker *shrinker,
 	return atomic_long_add_return(nr, &shrinker->nr_deferred[nid]);
 }
 
-static bool can_demote_anon_pages(int nid, struct scan_control *sc)
+static bool can_demote(int nid, struct scan_control *sc)
 {
 	if (!numa_demotion_enabled)
 		return false;
@@ -558,7 +558,7 @@ static inline bool can_reclaim_anon_pages(struct mem_cgroup *memcg,
 	 *
 	 * Can it be reclaimed from this node via demotion?
 	 */
-	return can_demote_anon_pages(nid, sc);
+	return can_demote(nid, sc);
 }
 
 /*
@@ -1379,7 +1379,7 @@ static unsigned int shrink_page_list(struct list_head *page_list,
 
 	memset(stat, 0, sizeof(*stat));
 	cond_resched();
-	do_demote_pass = can_demote_anon_pages(pgdat->node_id, sc);
+	do_demote_pass = can_demote(pgdat->node_id, sc);
 
 retry:
 	while (!list_empty(page_list)) {
@@ -2776,7 +2776,7 @@ static bool can_age_anon_pages(struct pglist_data *pgdat,
 		return true;
 
 	/* Also valuable if anon pages can be demoted: */
-	return can_demote_anon_pages(pgdat->node_id, sc);
+	return can_demote(pgdat->node_id, sc);
 }
 
 static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
