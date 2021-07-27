@@ -133,12 +133,13 @@ static int pad_battery_get_property(struct power_supply *psy,
 		val->intval = battery_info.charge_full_design_uah;
 		break;
 
+	/* Temperature from dts is read in decidegree C */
 	case POWER_SUPPLY_PROP_TEMP_MIN:
-		val->intval = battery_info.temp_min;
+		val->intval = battery_info.temp_min * 10;
 		break;
 
 	case POWER_SUPPLY_PROP_TEMP_MAX:
-		val->intval = battery_info.temp_max;
+		val->intval = battery_info.temp_max * 10;
 		break;
 
 	default:
