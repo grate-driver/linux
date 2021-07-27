@@ -558,31 +558,6 @@ static inline bool can_reclaim_anon_pages(struct mem_cgroup *memcg,
 	 *
 	 * Can it be reclaimed from this node via demotion?
 	 */
-	return can_demote_anon_pages(nid, sc);
-}
-
-static inline bool can_reclaim_anon_pages(struct mem_cgroup *memcg,
-					  int nid,
-					  struct scan_control *sc)
-{
-	if (memcg == NULL) {
-		/*
-		 * For non-memcg reclaim, is there
-		 * space in any swap device?
-		 */
-		if (get_nr_swap_pages() > 0)
-			return true;
-	} else {
-		/* Is the memcg below its swap limit? */
-		if (mem_cgroup_get_nr_swap_pages(memcg) > 0)
-			return true;
-	}
-
-	/*
-	 * The page can not be swapped.
-	 *
-	 * Can it be reclaimed from this node via demotion?
-	 */
 	return can_demote(nid, sc);
 }
 
