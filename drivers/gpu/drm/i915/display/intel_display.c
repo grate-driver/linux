@@ -975,7 +975,7 @@ void intel_enable_pipe(const struct intel_crtc_state *new_crtc_state)
 		/* FIXME: assert CPU port conditions for SNB+ */
 	}
 
-	/* Wa_22012358565:adlp */
+	/* Wa_22012358565:adl-p */
 	if (DISPLAY_VER(dev_priv) == 13)
 		intel_de_rmw(dev_priv, PIPE_ARB_CTL(pipe),
 			     0, PIPE_ARB_USE_PROG_SLOTS);
@@ -1034,6 +1034,10 @@ void intel_disable_pipe(const struct intel_crtc_state *old_crtc_state)
 	/* Don't disable pipe or pipe PLLs if needed */
 	if (!IS_I830(dev_priv))
 		val &= ~PIPECONF_ENABLE;
+
+	if (DISPLAY_VER(dev_priv) >= 12)
+		intel_de_rmw(dev_priv, CHICKEN_TRANS(cpu_transcoder),
+			     FECSTALL_DIS_DPTSTREAM_DPTTG, 0);
 
 	intel_de_write(dev_priv, reg, val);
 	if ((val & PIPECONF_ENABLE) == 0)
@@ -3471,7 +3475,8 @@ static void icl_ddi_bigjoiner_pre_enable(struct intel_atomic_state *state,
 		 * Enable sequence steps 1-7 on bigjoiner master
 		 */
 		intel_encoders_pre_pll_enable(state, master);
-		intel_enable_shared_dpll(master_crtc_state);
+		if (master_crtc_state->shared_dpll)
+			intel_enable_shared_dpll(master_crtc_state);
 		intel_encoders_pre_enable(state, master);
 
 		/* and DSC on slave */
@@ -3693,6 +3698,13 @@ bool intel_phy_is_combo(struct drm_i915_private *dev_priv, enum phy phy)
 {
 	if (phy == PHY_NONE)
 		return false;
+	else if (IS_DG2(dev_priv))
+		/*
+		 * DG2 outputs labelled as "combo PHY" in the bspec use
+		 * SNPS PHYs with completely different programming,
+		 * hence we always return false here.
+		 */
+		return false;
 	else if (IS_ALDERLAKE_S(dev_priv))
 		return phy <= PHY_E;
 	else if (IS_DG1(dev_priv) || IS_ROCKETLAKE(dev_priv))
@@ -3707,7 +3719,10 @@ bool intel_phy_is_combo(struct drm_i915_private *dev_priv, enum phy phy)
 
 bool intel_phy_is_tc(struct drm_i915_private *dev_priv, enum phy phy)
 {
-	if (IS_ALDERLAKE_P(dev_priv))
+	if (IS_DG2(dev_priv))
+		/* DG2's "TC1" output uses a SNPS PHY */
+		return false;
+	else if (IS_ALDERLAKE_P(dev_priv))
 		return phy >= PHY_F && phy <= PHY_I;
 	else if (IS_TIGERLAKE(dev_priv))
 		return phy >= PHY_D && phy <= PHY_I;
@@ -3715,6 +3730,20 @@ bool intel_phy_is_tc(struct drm_i915_private *dev_priv, enum phy phy)
 		return phy >= PHY_C && phy <= PHY_F;
 	else
 		return false;
+}
+
+bool intel_phy_is_snps(struct drm_i915_private *dev_priv, enum phy phy)
+{
+	if (phy == PHY_NONE)
+		return false;
+	else if (IS_DG2(dev_priv))
+		/*
+		 * All four "combo" ports and the TC1 port (PHY E) use
+		 * Synopsis PHYs.
+		 */
+		return phy <= PHY_E;
+
+	return false;
 }
 
 enum phy intel_port_to_phy(struct drm_i915_private *i915, enum port port)
@@ -8630,10 +8659,11 @@ intel_pipe_config_compare(const struct intel_crtc_state *current_config,
 
 	PIPE_CONF_CHECK_BOOL(double_wide);
 
-	PIPE_CONF_CHECK_P(shared_dpll);
+	if (dev_priv->dpll.mgr)
+		PIPE_CONF_CHECK_P(shared_dpll);
 
 	/* FIXME do the readout properly and get rid of this quirk */
-	if (!PIPE_CONF_QUIRK(PIPE_CONFIG_QUIRK_BIGJOINER_SLAVE)) {
+	if (dev_priv->dpll.mgr && !PIPE_CONF_QUIRK(PIPE_CONFIG_QUIRK_BIGJOINER_SLAVE)) {
 		PIPE_CONF_CHECK_X(dpll_hw_state.dpll);
 		PIPE_CONF_CHECK_X(dpll_hw_state.dpll_md);
 		PIPE_CONF_CHECK_X(dpll_hw_state.fp0);
@@ -8665,7 +8695,9 @@ intel_pipe_config_compare(const struct intel_crtc_state *current_config,
 		PIPE_CONF_CHECK_X(dpll_hw_state.mg_pll_ssc);
 		PIPE_CONF_CHECK_X(dpll_hw_state.mg_pll_bias);
 		PIPE_CONF_CHECK_X(dpll_hw_state.mg_pll_tdc_coldst_bias);
+	}
 
+	if (!PIPE_CONF_QUIRK(PIPE_CONFIG_QUIRK_BIGJOINER_SLAVE)) {
 		PIPE_CONF_CHECK_X(dsi_pll.ctrl);
 		PIPE_CONF_CHECK_X(dsi_pll.div);
 
@@ -9002,6 +9034,10 @@ verify_crtc_state(struct intel_crtc *crtc,
 
 	if (!new_crtc_state->hw.active)
 		return;
+
+	if (new_crtc_state->bigjoiner_slave)
+		/* No PLLs set for slave */
+		pipe_config->shared_dpll = NULL;
 
 	intel_pipe_config_sanity_check(dev_priv, pipe_config);
 
@@ -11322,7 +11358,12 @@ static void intel_setup_outputs(struct drm_i915_private *dev_priv)
 	if (!HAS_DISPLAY(dev_priv))
 		return;
 
-	if (IS_ALDERLAKE_P(dev_priv)) {
+	if (IS_DG2(dev_priv)) {
+		intel_ddi_init(dev_priv, PORT_A);
+		intel_ddi_init(dev_priv, PORT_B);
+		intel_ddi_init(dev_priv, PORT_C);
+		intel_ddi_init(dev_priv, PORT_D_XELPD);
+	} else if (IS_ALDERLAKE_P(dev_priv)) {
 		intel_ddi_init(dev_priv, PORT_A);
 		intel_ddi_init(dev_priv, PORT_B);
 		intel_ddi_init(dev_priv, PORT_TC1);
