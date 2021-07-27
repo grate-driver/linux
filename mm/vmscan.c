@@ -523,8 +523,6 @@ static bool can_demote(int nid, struct scan_control *sc)
 {
 	if (!numa_demotion_enabled)
 		return false;
-	if (sc && sc->no_demotion)
-		return false;
 	if (sc) {
 		if (sc->no_demotion)
 			return false;
