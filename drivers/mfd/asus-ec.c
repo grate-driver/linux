@@ -72,9 +72,16 @@ struct asus_ec_initdata {
 	unsigned int flags;
 };
 
+static struct asusec_platform_data asusec_pdata = {
+	.battery_addr = 0x14,
+	.charger_addr = 0x0A,
+};
+
 static const struct mfd_cell asus_ec_subdev[] = {
 	[ID_EC_PART_BATTERY] = {
 		.name = "asusec-battery",
+		.platform_data = &asusec_pdata,
+		.pdata_size = sizeof(asusec_pdata),
 	},
 	[ID_EC_PART_CHARGE_LED] = {
 		.name = "asusec-led",
@@ -87,6 +94,8 @@ static const struct mfd_cell asus_ec_subdev[] = {
 	},
 	[ID_EC_PART_CHARGER] = {
 		.name = "asusec-charger",
+		.platform_data = &asusec_pdata,
+		.pdata_size = sizeof(asusec_pdata),
 	},
 };
 

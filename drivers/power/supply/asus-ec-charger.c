@@ -39,6 +39,7 @@ struct asusec_charger_data {
 	struct mutex				charger_lock;
 	unsigned long				charger_data_ts;
 	int					last_state;
+	int					charger_addr;
 	u8					charger_data[DOCKRAM_ENTRY_BUFSIZE];
 };
 
@@ -59,7 +60,7 @@ static int asusec_charger_callback(struct asusec_charger_data *priv)
 		return priv->last_state;
 	}
 
-	ret = asus_dockram_read(priv->ec->dockram, 0x0A, priv->charger_data);
+	ret = asus_dockram_read(priv->ec->dockram, priv->charger_addr, priv->charger_data);
 	if (ret < 0) {
 		mutex_unlock(&priv->charger_lock);
 		return -EREMOTEIO;
@@ -120,8 +121,9 @@ static const struct power_supply_desc asusec_charger_desc = {
 static int asusec_charger_probe(struct platform_device *pdev)
 {
 	const struct asusec_info *ec = asusec_cell_to_ec(pdev);
-	struct power_supply_config cfg = {};
 	struct asusec_charger_data *priv;
+	struct asusec_platform_data *pdata = dev_get_platdata(&pdev->dev);
+	struct power_supply_config cfg = {};
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -132,6 +134,7 @@ static int asusec_charger_probe(struct platform_device *pdev)
 	mutex_init(&priv->charger_lock);
 
 	priv->ec = ec;
+	priv->charger_addr = pdata->charger_addr;
 	priv->charger_data_ts = jiffies - 1;
 	priv->last_state = asusec_charger_callback(priv);
 
