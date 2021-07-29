@@ -9,6 +9,7 @@ env:
   ARCH: arm # build for armv7
   SCCACHE_CACHE_SIZE: 2G
   SCCACHE_DIR: /home/runner/.cache/sccache
+  BUILD_PATH: /home/runner/.cache/tuxmake/builds/1
 
 on:
   push:
@@ -50,8 +51,21 @@ jobs:
           pip3 install -U --user tuxmake
       - name: Build
         run: |
-          tuxmake --directory ./ -w sccache --target-arch=arm -k $KBUILD_DEFCONFIG $TUXMAKE_EXTRA_OPTS
+          tuxmake --directory ./ -w sccache --target-arch=arm -k $KBUILD_DEFCONFIG $TUXMAKE_EXTRA_OPTS | sed "s|^/home/runner/work/linux/linux/|::error::|"
           tar -cf linux-grate-${{ matrix.cc }}.tar -C /home/runner/.cache/tuxmake/builds/1 .
+          export ERRS=`grep "errors" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
+          export WARNS=`grep "warnings" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
+          if [ $ERRS != "0" ]; then
+            echo "::error::Compilation failed due to $ERRS errors, please fix them."
+            RET=1
+          fi
+          if [ $WARNS != "0" ]; then
+            echo "::error::$WARNS warnings found, please fix them."
+            RET=1
+          fi
+          if [ $RET = 1 ]; then
+            exit 1
+          fi
       - name: Stop sccache server
         run: sccache --stop-server || true
       - uses: "marvinpinto/action-automatic-releases@latest"
