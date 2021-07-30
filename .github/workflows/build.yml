@@ -21,7 +21,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        config: ['tegra_defconfig', 'grate_defconfig']
+        option: ['default'] # , 'thumb2'] # FIXME after action-automatic-releases gets fixed https://github.com/marvinpinto/actions/issues/19
         cc: [gcc, clang]
+        include:
+          - config: 'tegra_defconfig'
+            additional_params: ''
+          - config: 'grate_defconfig'
+            additional_params: '-K pmos.config'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -41,7 +48,7 @@ jobs:
         continue-on-error: false
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: ${{ env.KERNEL_NAME }}-${{ matrix.cc }}
+          key: ${{ env.KERNEL_NAME }}-${{ matrix.config }}-${{ matrix.option }}-${{ matrix.cc }}
       - name: Start sccache server
         run: sccache --start-server
       - name: Install dependencies
@@ -51,31 +58,35 @@ jobs:
           pip3 install -U --user tuxmake
       - name: Build
         run: |
-          tuxmake --directory ./ -w sccache --target-arch=arm -k $KBUILD_DEFCONFIG $TUXMAKE_EXTRA_OPTS | sed "s|^/home/runner/work/linux/linux/|::error::|"
+          if [ "${{ matrix.option }}" = "thumb2" ]; then
+            export TUXMAKE_KCONFIG_OPTS="-K CONFIG_THUMB2_KERNEL=y"
+          fi
+          tuxmake --directory ./ -w sccache --target-arch=arm -k ${{ matrix.config }} ${{ matrix.additional_params }} ${TUXMAKE_KCONFIG_OPTS} | sed "s|^/home/runner/work/linux/linux/|::error::|"
           export ERRS=`grep "errors" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
           export WARNS=`grep "warnings" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
-          if [ $ERRS != "0" ]; then
+          RET=0
+          if [ "$ERRS" -gt 0 ]; then
             echo "::error::Compilation failed due to $ERRS errors, please fix them."
             RET=1
           fi
-          if [ $WARNS != "0" ]; then
+          if [ "$WARNS" -gt 0 ]; then
             echo "::error::$WARNS warnings found, please fix them."
             RET=1
           fi
-          if [ $RET = 1 ]; then
+          if [ $RET -eq 1 ]; then
             exit 1
           fi
           mv /home/runner/.cache/tuxmake/builds/1/vmlinux.xz ./debug-vmlinux.xz
-          tar -cf linux-grate-${{ matrix.cc }}.tar -C /home/runner/.cache/tuxmake/builds/1 .
+          tar -cf linux-grate-${{ matrix.config }}-${{ matrix.cc }}.tar -C /home/runner/.cache/tuxmake/builds/1 .
       - name: Stop sccache server
         run: sccache --stop-server || true
       - uses: "marvinpinto/action-automatic-releases@latest"
         if: ${{!startsWith(github.ref, 'refs/pull')}}
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${{ env.KERNEL_NAME }}-${{ matrix.cc }}"
+          automatic_release_tag: "${{ env.KERNEL_NAME }}-${{ matrix.config }}-${{ matrix.option }}-${{ matrix.cc }}"
           prerelease: true
-          title: "Build of Grate kernel, compiled with ${{ matrix.cc }}"
+          title: "Binary of ${{ matrix.config }} + ${{ matrix.option }} build with ${{ matrix.cc }}"
           files: |
             *.tar
             *.xz
