@@ -723,8 +723,8 @@ struct drm_tegra_channel_close {
  * DRM_TEGRA_CHANNEL_MAP_READ: create mapping that allows HW read access
  * DRM_TEGRA_CHANNEL_MAP_WRITE: create mapping that allows HW write access
  */
-#define DRM_TEGRA_CHANNEL_MAP_READ  (1 << 0)
-#define DRM_TEGRA_CHANNEL_MAP_WRITE (1 << 1)
+#define DRM_TEGRA_CHANNEL_MAP_READ  (1 << 1)
+#define DRM_TEGRA_CHANNEL_MAP_WRITE (1 << 0)
 #define DRM_TEGRA_CHANNEL_MAP_READ_WRITE (DRM_TEGRA_CHANNEL_MAP_READ | \
 					  DRM_TEGRA_CHANNEL_MAP_WRITE)
 
