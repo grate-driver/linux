@@ -1061,12 +1061,15 @@
 			clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
 			clock-names = "txco";
 
-			vbat-supply  = <&vdd_3v3_com>;
-			vddio-supply = <&vdd_1v8_vio>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(U, 6) IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "host-wakeup";
 
 			device-wakeup-gpios = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
-			host-wakeup-gpios =   <&gpio TEGRA_GPIO(U, 6) GPIO_ACTIVE_HIGH>;
 			shutdown-gpios =      <&gpio TEGRA_GPIO(U, 0) GPIO_ACTIVE_HIGH>;
+
+			vbat-supply  = <&vdd_3v3_com>;
+			vddio-supply = <&vdd_1v8_vio>;
 		};
 	};
 
