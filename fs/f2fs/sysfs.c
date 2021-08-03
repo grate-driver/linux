@@ -1076,6 +1076,48 @@ static int __maybe_unused segment_bits_seq_show(struct seq_file *seq,
 	return 0;
 }
 
+#ifdef CONFIG_F2FS_IOSTAT_IO_LATENCY
+static inline void __record_iostat_latency(struct f2fs_sb_info *sbi)
+{
+	int io, sync, idx = 0;
+	unsigned int cnt;
+	struct f2fs_iostat_latency iostat_lat[3][NR_PAGE_TYPE];
+
+	spin_lock_irq(&sbi->iostat_lat_lock);
+	for (io = 0; io < NR_PAGE_TYPE; io++) {
+		cnt = sbi->rd_bio_cnt[io];
+		iostat_lat[idx][io].peak_lat =
+			jiffies_to_msecs(sbi->rd_peak_lat[io]);
+		iostat_lat[idx][io].cnt = cnt;
+		iostat_lat[idx][io].avg_lat = cnt ?
+			jiffies_to_msecs(sbi->rd_sum_lat[io]) / cnt : 0;
+		sbi->rd_sum_lat[io] = 0;
+		sbi->rd_peak_lat[io] = 0;
+		sbi->rd_bio_cnt[io] = 0;
+	}
+
+	for (sync = 0; sync < 2; sync++) {
+		idx++;
+		for (io = 0; io < NR_PAGE_TYPE; io++) {
+			cnt = sbi->wr_bio_cnt[sync][io];
+			iostat_lat[idx][io].peak_lat =
+			  jiffies_to_msecs(sbi->wr_peak_lat[sync][io]);
+			iostat_lat[idx][io].cnt = cnt;
+			iostat_lat[idx][io].avg_lat = cnt ?
+			  jiffies_to_msecs(sbi->wr_sum_lat[sync][io]) / cnt : 0;
+			sbi->wr_sum_lat[sync][io] = 0;
+			sbi->wr_peak_lat[sync][io] = 0;
+			sbi->wr_bio_cnt[sync][io] = 0;
+		}
+	}
+	spin_unlock_irq(&sbi->iostat_lat_lock);
+
+	trace_f2fs_iostat_latency(sbi, iostat_lat);
+}
+#else
+static inline void __record_iostat_latency(struct f2fs_sb_info *sbi) {}
+#endif
+
 void f2fs_record_iostat(struct f2fs_sb_info *sbi)
 {
 	unsigned long long iostat_diff[NR_IO_TYPE];
@@ -1101,6 +1143,8 @@ void f2fs_record_iostat(struct f2fs_sb_info *sbi)
 	spin_unlock(&sbi->iostat_lock);
 
 	trace_f2fs_iostat(sbi, iostat_diff);
+
+	__record_iostat_latency(sbi);
 }
 
 static int __maybe_unused iostat_info_seq_show(struct seq_file *seq,
