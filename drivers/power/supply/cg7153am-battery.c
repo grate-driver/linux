@@ -23,8 +23,8 @@
 #define CG7153AM_BATTERY_FULL_CHARGED			0x20
 #define CG7153AM_BATTERY_FULL_DISCHARGED		0x10
 
-#define CG7153AM_BATTERY_INFO_BLOCK_START_ADDR		0xA0	// Manufacturer reg
-#define CG7153AM_BATTERY_INFO_BLOCK_SIZE		20	// (0xB4 - 0xA0)
+#define CG7153AM_BATTERY_INFO_BLOCK_START_ADDR		0xA0
+#define CG7153AM_BATTERY_INFO_BLOCK_SIZE		20
 
 #define CG7153AM_REG_AMBER_LED				0x60
 #define CG7153AM_REG_WHITE_LED				0x70
@@ -75,7 +75,7 @@ out_unlock:
 static int cg7153am_write_reg(struct cg7153am_battery_data *cg,
 			      u8 reg_addr, u8 value, bool state)
 {
-	unsigned char buf[] = {reg_addr, value};
+	unsigned char buf[] = { reg_addr, value };
 	int i, ret = 0;
 
 	for (i = 0; i < CG7153AM_BATTERY_RETRY_MAX; i++) {
