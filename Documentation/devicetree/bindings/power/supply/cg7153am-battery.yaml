@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: GPL-2.0
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/power/supply/cg7153am-battery.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Fuel gauge driver for Cypress CG7153AM based devices
+
+maintainers:
+  - Svyatoslav Ryhel <clamor95@gmail.com>
+
+description: |
+  The driver, apart from standard battery monitoring features,
+  can utilize information from a simple-battery linked via a
+  phandle in monitored-battery and gpio-charger. Additionally,
+  driver can control power indication leds if correct flag is
+  specified.
+
+properties:
+  compatible:
+    const: cg7153am,battery
+
+  reg:
+    maxItems: 1
+
+  cg7153am,leds-indication:
+    type: boolean
+    description: Enable power leds support
+
+  monitored-battery:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: |
+      This property must be a phandle to a node using the format described
+      in battery.yaml, with the following properties being required:
+      - charge-full-design-microamp-hours: battery design capacity in microAh,
+      - energy-full-design-microwatt-hours: battery design energy in microWh,
+      - operating-range-celsius: operating temperature range of a battery.
+
+  power-supplies:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Specifies supplies used for charging the battery connected to this gauge.
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+
+    i2c {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        fuel-gauge@10 {
+          compatible = "cg7153am,battery";
+          reg = <0x10>;
+
+          cg7153am,leds-indication;
+
+          monitored-battery = <&battery>;
+          power-supplies = <&mains>;
+        };
+    };
+
+    battery: battery-cell {
+      compatible = "simple-battery";
+      charge-full-design-microamp-hours = <3050000>;
+      energy-full-design-microwatt-hours = <23000000>;
+      operating-range-celsius = <0 45>;
+    };
+
+    mains: ac-adapter-detect {
+      compatible = "gpio-charger";
+      charger-type = "mains";
+      gpios = <&gpio 169 GPIO_ACTIVE_HIGH>;
+    };
+...
