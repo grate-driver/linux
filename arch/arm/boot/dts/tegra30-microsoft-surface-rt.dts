@@ -138,6 +138,14 @@
 		status = "okay";
 		clock-frequency = <400000>;
 
+		battery@a {
+			compatible = "microsoft,surface-rt-ec";
+			reg = <0x0a>;
+			enable-gpios = <&gpio TEGRA_GPIO(N, 3) GPIO_ACTIVE_HIGH>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(J, 0) IRQ_TYPE_EDGE_RISING>;
+		};
+
 		pmic: tps65911@2d {
 			compatible = "ti,tps65911";
 			reg = <0x2d>;

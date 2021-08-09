@@ -874,4 +874,11 @@ config CHARGER_SURFACE
 	  Microsoft Surface devices, i.e. Surface Pro 7, Surface Laptop 3,
 	  Surface Book 3, and Surface Laptop Go.
 
+config BATTERY_CHARGER_SURFACE_RT
+	tristate "Battery & Charger driver for 1st-generation Microsoft Surface RT"
+	depends on I2C && GPIOLIB
+	help
+	  UEFI/APX driver for Surface RT battery.
+	  Say M or Y here to include battery driver
+
 endif # POWER_SUPPLY
