@@ -944,4 +944,11 @@ config BATTERY_UG3105
 	  device is off or suspended, the functionality of this driver is
 	  limited to reporting capacity only.
 
+config BATTERY_CHARGER_SURFACE_RT
+	tristate "Battery & Charger driver for 1st-generation Microsoft Surface RT"
+	depends on I2C && GPIOLIB
+	help
+	  UEFI/APX driver for Surface RT battery.
+	  Say M or Y here to include battery driver
+
 endif # POWER_SUPPLY
