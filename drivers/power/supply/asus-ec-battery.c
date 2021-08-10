@@ -5,6 +5,7 @@
  * Written by: Michał Mirosław <mirq-linux@rere.qmqm.pl>
  *
  * Copyright (C) 2017 Michał Mirosław
+ * Copyright (C) 2021 Svyatoslav Ryhel
  *
  */
 
@@ -280,7 +281,8 @@ static int asusec_battery_probe(struct platform_device *pdev)
 
 	priv->battery = devm_power_supply_register(&pdev->dev, psd, &cfg);
 	if (IS_ERR(priv->battery))
-		return PTR_ERR(priv->battery);
+		return dev_err_probe(&pdev->dev, PTR_ERR(priv->battery),
+				     "Failed to register power supply\n");
 
 	if (power_supply_get_battery_info(priv->battery, &priv->batt_info))
 		dev_warn(&pdev->dev,
