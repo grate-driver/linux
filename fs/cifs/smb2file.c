@@ -111,7 +111,7 @@ smb2_unlock_range(struct cifsFileInfo *cfile, struct file_lock *flock,
 	struct cifs_tcon *tcon = tlink_tcon(cfile->tlink);
 	struct cifsInodeInfo *cinode = CIFS_I(d_inode(cfile->dentry));
 	struct cifsLockInfo *li, *tmp;
-	__u64 length = 1 + flock->fl_end - flock->fl_start;
+	__u64 length = cifs_flock_len(flock);
 	struct list_head tmp_llist;
 
 	INIT_LIST_HEAD(&tmp_llist);
