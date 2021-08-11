@@ -3164,7 +3164,8 @@ int btrfs_set_extent_delalloc(struct btrfs_inode *inode, u64 start, u64 end,
 			      struct extent_state **cached_state);
 int btrfs_create_subvol_root(struct btrfs_trans_handle *trans,
 			     struct btrfs_root *new_root,
-			     struct btrfs_root *parent_root);
+			     struct btrfs_root *parent_root,
+			     struct user_namespace *mnt_userns);
  void btrfs_set_delalloc_extent(struct inode *inode, struct extent_state *state,
 			       unsigned *bits);
 void btrfs_clear_delalloc_extent(struct inode *inode,
@@ -3561,6 +3562,11 @@ do {								\
 	__btrfs_handle_fs_error((fs_info), __func__, __LINE__,	\
 			  (errno), fmt, ##args);		\
 } while (0)
+
+static inline bool btrfs_has_fs_error(struct btrfs_fs_info *fs_info)
+{
+	return test_bit(BTRFS_FS_STATE_ERROR, &fs_info->fs_state);
+}
 
 __printf(5, 6)
 __cold

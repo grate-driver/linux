@@ -2006,7 +2006,7 @@ static int btrfs_remount(struct super_block *sb, int *flags, char *data)
 		if (ret)
 			goto restore;
 	} else {
-		if (test_bit(BTRFS_FS_STATE_ERROR, &fs_info->fs_state)) {
+		if (btrfs_has_fs_error(fs_info)) {
 			btrfs_err(fs_info,
 				"Remounting read-write after error is not allowed");
 			ret = -EINVAL;
@@ -2362,7 +2362,7 @@ static struct file_system_type btrfs_root_fs_type = {
 	.name		= "btrfs",
 	.mount		= btrfs_mount_root,
 	.kill_sb	= btrfs_kill_super,
-	.fs_flags	= FS_REQUIRES_DEV | FS_BINARY_MOUNTDATA,
+	.fs_flags	= FS_REQUIRES_DEV | FS_BINARY_MOUNTDATA | FS_ALLOW_IDMAP,
 };
 
 MODULE_ALIAS_FS("btrfs");
