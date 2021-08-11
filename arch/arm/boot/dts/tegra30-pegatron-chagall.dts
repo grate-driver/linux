@@ -1538,7 +1538,7 @@
 		vmmc-supply = <&vdd_3v3_sys>;
 		vqmmc-supply = <&vdd_1v8_vio>;
 
-		/* Azurewave AW-NH665 BCM4330 */
+		/* Azurewave AW-AH663 BCM4330 */
 		wifi@1 {
 			compatible = "brcm,bcm4329-fmac";
 			reg = <1>;
