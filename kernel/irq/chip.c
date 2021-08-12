@@ -173,6 +173,11 @@ static void irq_state_clr_masked(struct irq_desc *desc)
 	irqd_clear(&desc->irq_data, IRQD_IRQ_MASKED);
 }
 
+static void irq_state_clr_flow_masked(struct irq_desc *desc)
+{
+	irqd_clear(&desc->irq_data, IRQD_IRQ_FLOW_MASKED);
+}
+
 static void irq_state_clr_started(struct irq_desc *desc)
 {
 	irqd_clear(&desc->irq_data, IRQD_IRQ_STARTED);
@@ -403,15 +408,33 @@ void irq_percpu_disable(struct irq_desc *desc, unsigned int cpu)
 	cpumask_clear_cpu(cpu, desc->percpu_enabled);
 }
 
+void ack_irq(struct irq_desc *desc)
+{
+	desc->irq_data.chip->irq_ack(&desc->irq_data);
+
+	if (desc->irq_data.chip->flags & IRQCHIP_AUTOMASKS_FLOW)
+		irq_state_set_flow_masked(desc);
+}
+
+void eoi_irq(struct irq_desc *desc)
+{
+	desc->irq_data.chip->irq_eoi(&desc->irq_data);
+
+	if (desc->irq_data.chip->flags & IRQCHIP_AUTOMASKS_FLOW)
+		irq_state_clr_flow_masked(desc);
+}
+
 static inline void mask_ack_irq(struct irq_desc *desc)
 {
 	if (desc->irq_data.chip->irq_mask_ack) {
 		desc->irq_data.chip->irq_mask_ack(&desc->irq_data);
 		irq_state_set_masked(desc);
+		if (desc->irq_data.chip->flags & IRQCHIP_AUTOMASKS_FLOW)
+			irq_state_set_flow_masked(desc);
 	} else {
 		mask_irq(desc);
 		if (desc->irq_data.chip->irq_ack)
-			desc->irq_data.chip->irq_ack(&desc->irq_data);
+			ack_irq(desc);
 	}
 }
 
@@ -442,7 +465,7 @@ void unmask_threaded_irq(struct irq_desc *desc)
 	struct irq_chip *chip = desc->irq_data.chip;
 
 	if (chip->flags & IRQCHIP_EOI_THREADED)
-		chip->irq_eoi(&desc->irq_data);
+		eoi_irq(desc);
 
 	unmask_irq(desc);
 }
@@ -659,7 +682,7 @@ EXPORT_SYMBOL_GPL(handle_level_irq);
 static void cond_unmask_eoi_irq(struct irq_desc *desc, struct irq_chip *chip)
 {
 	if (!(desc->istate & IRQS_ONESHOT)) {
-		chip->irq_eoi(&desc->irq_data);
+		eoi_irq(desc);
 		return;
 	}
 	/*
@@ -670,10 +693,10 @@ static void cond_unmask_eoi_irq(struct irq_desc *desc, struct irq_chip *chip)
 	 */
 	if (!irqd_irq_disabled(&desc->irq_data) &&
 	    irqd_irq_masked(&desc->irq_data) && !desc->threads_oneshot) {
-		chip->irq_eoi(&desc->irq_data);
+		eoi_irq(desc);
 		unmask_irq(desc);
 	} else if (!(chip->flags & IRQCHIP_EOI_THREADED)) {
-		chip->irq_eoi(&desc->irq_data);
+		eoi_irq(desc);
 	}
 }
 
@@ -725,18 +748,16 @@ out:
 EXPORT_SYMBOL_GPL(handle_fasteoi_irq);
 
 /**
- *	handle_fasteoi_nmi - irq handler for NMI interrupt lines
+ *	handle_nmi - irq handler for NMI interrupt lines
  *	@desc:	the interrupt description structure for this irq
  *
  *	A simple NMI-safe handler, considering the restrictions
  *	from request_nmi.
  *
- *	Only a single callback will be issued to the chip: an ->eoi()
- *	call when the interrupt has been serviced. This enables support
- *	for modern forms of interrupt handlers, which handle the flow
- *	details in hardware, transparently.
+ *      An ->ack() callback will be issued before servicing the interrupt,
+ *      followed by an ->eoi() call.
  */
-void handle_fasteoi_nmi(struct irq_desc *desc)
+void handle_nmi(struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	struct irqaction *action = desc->action;
@@ -744,6 +765,9 @@ void handle_fasteoi_nmi(struct irq_desc *desc)
 	irqreturn_t res;
 
 	__kstat_incr_irqs_this_cpu(desc);
+
+	if (chip->irq_ack)
+		chip->irq_ack(&desc->irq_data);
 
 	trace_irq_handler_entry(irq, action);
 	/*
@@ -755,7 +779,7 @@ void handle_fasteoi_nmi(struct irq_desc *desc)
 	if (chip->irq_eoi)
 		chip->irq_eoi(&desc->irq_data);
 }
-EXPORT_SYMBOL_GPL(handle_fasteoi_nmi);
+EXPORT_SYMBOL_GPL(handle_nmi);
 
 /**
  *	handle_edge_irq - edge type IRQ handler
@@ -873,6 +897,70 @@ out_eoi:
 }
 #endif
 
+/*
+ * AUTOMASKS_FLOW tells us ack/eoi handle the masking, EOI_THREADED tells us
+ * that masking will persist until irq_finalize_oneshot()
+ */
+#define ONESHOT_AUTOMASK_FLAGS (IRQCHIP_AUTOMASKS_FLOW | IRQCHIP_EOI_THREADED)
+
+/**
+ *	handle_strict_flow_irq - irq handler for strict controllers
+ *	@desc:	the interrupt description structure for this irq
+ *
+ *      Ensures strict pairing of ->ack() and ->eoi() for any IRQ passing
+ *      through here. The ->eoi() may be deferred to the tail of the IRQ thread
+ *      for ONESHOT IRQs.
+ */
+void handle_strict_flow_irq(struct irq_desc *desc)
+{
+	struct irq_chip *chip = desc->irq_data.chip;
+
+	raw_spin_lock(&desc->lock);
+
+	if (!irq_may_run(desc))
+		goto out_mask;
+
+	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);
+
+	/*
+	 * If it's disabled or no action available then keep it masked and
+	 * get out of here:
+	 */
+	if (unlikely(!desc->action || irqd_irq_disabled(&desc->irq_data))) {
+		desc->istate |= IRQS_PENDING;
+		goto out_mask;
+	}
+
+	kstat_incr_irqs_this_cpu(desc);
+	/*
+	 * Masking is required if IRQ is ONESHOT and we can't rely on the
+	 * flow-masking persisting down to irq_finalize_oneshot()
+	 * (in the IRQ thread).
+	 */
+	if ((desc->istate & IRQS_ONESHOT) &&
+	    ((chip->flags & ONESHOT_AUTOMASK_FLAGS) != ONESHOT_AUTOMASK_FLAGS))
+		mask_ack_irq(desc);
+	else
+		ack_irq(desc);
+
+	handle_irq_event(desc);
+
+	cond_unmask_eoi_irq(desc, chip);
+
+	raw_spin_unlock(&desc->lock);
+	return;
+out_mask:
+	mask_ack_irq(desc);
+	/*
+	 * XXX: this is where IRQCHIP_EOI_IF_HANDLED would be checked, but
+	 * it's conceptually incompatible with this handler (it breaks the
+	 * strict pairing)
+	 */
+	eoi_irq(desc);
+	raw_spin_unlock(&desc->lock);
+}
+EXPORT_SYMBOL_GPL(handle_strict_flow_irq);
+
 /**
  *	handle_percpu_irq - Per CPU local irq handler
  *	@desc:	the interrupt description structure for this irq
@@ -945,14 +1033,13 @@ void handle_percpu_devid_irq(struct irq_desc *desc)
 }
 
 /**
- * handle_percpu_devid_fasteoi_nmi - Per CPU local NMI handler with per cpu
+ * handle_percpu_devid_nmi - Per CPU local NMI handler with per cpu
  *				     dev ids
  * @desc:	the interrupt description structure for this irq
  *
- * Similar to handle_fasteoi_nmi, but handling the dev_id cookie
- * as a percpu pointer.
+ * Similar to handle_nmi, but handling the dev_id cookie as a percpu pointer.
  */
-void handle_percpu_devid_fasteoi_nmi(struct irq_desc *desc)
+void handle_percpu_devid_nmi(struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	struct irqaction *action = desc->action;
@@ -960,6 +1047,9 @@ void handle_percpu_devid_fasteoi_nmi(struct irq_desc *desc)
 	irqreturn_t res;
 
 	__kstat_incr_irqs_this_cpu(desc);
+
+	if (chip->irq_ack)
+		chip->irq_ack(&desc->irq_data);
 
 	trace_irq_handler_entry(irq, action);
 	res = action->handler(irq, raw_cpu_ptr(action->percpu_dev_id));

@@ -21,7 +21,6 @@ static struct irq_chip its_msi_irq_chip = {
 	.name = "ITS-fMSI",
 	.irq_mask = irq_chip_mask_parent,
 	.irq_unmask = irq_chip_unmask_parent,
-	.irq_eoi = irq_chip_eoi_parent,
 	.irq_set_affinity = msi_domain_set_affinity
 };
 

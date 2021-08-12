@@ -33,6 +33,7 @@ static struct irq_chip mbi_irq_chip = {
 	.name			= "MBI",
 	.irq_mask		= irq_chip_mask_parent,
 	.irq_unmask		= irq_chip_unmask_parent,
+	.irq_ack		= irq_chip_ack_parent,
 	.irq_eoi		= irq_chip_eoi_parent,
 	.irq_set_type		= irq_chip_set_type_parent,
 	.irq_set_affinity	= irq_chip_set_affinity_parent,
@@ -169,7 +170,6 @@ static struct irq_chip mbi_msi_irq_chip = {
 	.name			= "MSI",
 	.irq_mask		= mbi_mask_msi_irq,
 	.irq_unmask		= mbi_unmask_msi_irq,
-	.irq_eoi		= irq_chip_eoi_parent,
 	.irq_compose_msi_msg	= mbi_compose_msi_msg,
 	.irq_write_msi_msg	= pci_msi_domain_write_msg,
 };

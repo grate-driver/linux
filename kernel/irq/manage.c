@@ -1107,7 +1107,7 @@ again:
 	desc->threads_oneshot &= ~action->thread_mask;
 
 	if (!desc->threads_oneshot && !irqd_irq_disabled(&desc->irq_data) &&
-	    irqd_irq_masked(&desc->irq_data))
+	    (irqd_irq_masked(&desc->irq_data) | irqd_irq_flow_masked(&desc->irq_data)))
 		unmask_threaded_irq(desc);
 
 out_unlock:
