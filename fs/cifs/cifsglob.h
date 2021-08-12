@@ -1611,6 +1611,11 @@ struct dfs_info3_param {
 	int ttl;
 };
 
+struct file_list {
+	struct list_head list;
+	struct cifsFileInfo *cfile;
+};
+
 /*
  * common struct for holding inode info when searching for or updating an
  * inode with new info
@@ -1962,6 +1967,11 @@ static inline bool is_tcon_dfs(struct cifs_tcon *tcon)
 		return false;
 	return is_smb1_server(tcon->ses->server) ? tcon->Flags & SMB_SHARE_IS_IN_DFS :
 		tcon->share_flags & (SHI1005_FLAGS_DFS | SHI1005_FLAGS_DFS_ROOT);
+}
+
+static inline u64 cifs_flock_len(struct file_lock *fl)
+{
+	return fl->fl_end == OFFSET_MAX ? fl->fl_end - fl->fl_start : fl->fl_end - fl->fl_start + 1;
 }
 
 #endif	/* _CIFS_GLOB_H */
