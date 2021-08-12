@@ -2641,7 +2641,8 @@ static int cifs_write_end(struct file *file, struct address_space *mapping,
 		spin_lock(&inode->i_lock);
 		if (pos > inode->i_size) {
 			i_size_write(inode, pos);
-			inode->i_blocks = (512 - 1 + pos) >> 9;
+			/* round up to block boundary, avoid overflow loff_t */
+			inode->i_blocks = ((__u64)pos + (512 - 1)) >> 9;
 		}
 		spin_unlock(&inode->i_lock);
 	}

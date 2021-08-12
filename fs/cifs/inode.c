@@ -2631,7 +2631,7 @@ set_size_out:
 		 * this is best estimate we have for blocks allocated for a file
 		 * Number of blocks must be rounded up so size 1 is not 0 blocks
 		 */
-		inode->i_blocks = (512 - 1 + attrs->ia_size) >> 9;
+		inode->i_blocks = ((__u64)attrs->ia_size + (512 - 1)) >> 9;
 
 		/*
 		 * The man page of truncate says if the size changed,
