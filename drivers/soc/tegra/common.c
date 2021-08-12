@@ -39,34 +39,6 @@ bool soc_is_tegra(void)
 	return match != NULL;
 }
 
-static int tegra_core_dev_init_opp_state(struct device *dev)
-{
-	unsigned long rate;
-	struct clk *clk;
-	int err;
-
-	clk = devm_clk_get(dev, NULL);
-	if (IS_ERR(clk)) {
-		dev_err(dev, "failed to get clk: %pe\n", clk);
-		return PTR_ERR(clk);
-	}
-
-	rate = clk_get_rate(clk);
-	if (!rate) {
-		dev_err(dev, "failed to get clk rate\n");
-		return -EINVAL;
-	}
-
-	/* first dummy rate-setting initializes voltage vote */
-	err = dev_pm_opp_set_rate(dev, rate);
-	if (err) {
-		dev_err(dev, "failed to initialize OPP clock: %d\n", err);
-		return err;
-	}
-
-	return 0;
-}
-
 /**
  * devm_tegra_core_dev_init_opp_table() - initialize OPP table
  * @dev: device for which OPP table is initialized
@@ -118,7 +90,7 @@ int devm_tegra_core_dev_init_opp_table(struct device *dev,
 	}
 
 	if (params->init_state) {
-		err = tegra_core_dev_init_opp_state(dev);
+		err = dev_pm_opp_sync(dev);
 		if (err)
 			return err;
 	}
