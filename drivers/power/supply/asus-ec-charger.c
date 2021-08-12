@@ -9,11 +9,9 @@
  */
 
 #include <linux/delay.h>
-#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/kernel.h>
-#include <linux/err.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/mfd/asus-ec.h>
@@ -71,7 +69,7 @@ static int asusec_charger_callback(struct asusec_charger_data *priv)
 	mutex_unlock(&priv->charger_lock);
 
 	ret = priv->charger_data[1] & ASUSEC_CHARGER_AC_MASK;
-	if (ret == ASUSEC_CHARGER_AC_MASK)
+	if (ret)
 		return 1;
 
 	return 0;
@@ -110,8 +108,16 @@ static void asusec_charger_poll_work(struct work_struct *work)
 			      msecs_to_jiffies(ASUSEC_CHARGER_DELAY_MSEC));
 }
 
-static const struct power_supply_desc asusec_charger_desc = {
-	.name = "asusec-charger",
+static const struct power_supply_desc pad_charger_desc = {
+	.name = "pad-ac",
+	.type = POWER_SUPPLY_TYPE_MAINS,
+	.properties = asusec_charger_properties,
+	.num_properties = ARRAY_SIZE(asusec_charger_properties),
+	.get_property = asusec_charger_get_property,
+};
+
+static const struct power_supply_desc dock_charger_desc = {
+	.name = "dock-ac",
 	.type = POWER_SUPPLY_TYPE_MAINS,
 	.properties = asusec_charger_properties,
 	.num_properties = ARRAY_SIZE(asusec_charger_properties),
@@ -121,6 +127,7 @@ static const struct power_supply_desc asusec_charger_desc = {
 static int asusec_charger_probe(struct platform_device *pdev)
 {
 	const struct asusec_info *ec = asusec_cell_to_ec(pdev);
+	const struct power_supply_desc *psd;
 	struct asusec_charger_data *priv;
 	struct asusec_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct power_supply_config cfg = {};
@@ -141,7 +148,12 @@ static int asusec_charger_probe(struct platform_device *pdev)
 	cfg.of_node = pdev->dev.parent->of_node;
 	cfg.drv_data = priv;
 
-	priv->charger = devm_power_supply_register(&pdev->dev, &asusec_charger_desc, &cfg);
+	if (of_device_is_compatible(cfg.of_node, "asus,pad-ec"))
+		psd = &pad_charger_desc;
+	else
+		psd = &dock_charger_desc;
+
+	priv->charger = devm_power_supply_register(&pdev->dev, psd, &cfg);
 	if (IS_ERR(priv->charger))
 		return dev_err_probe(&pdev->dev, PTR_ERR(priv->charger),
 				     "Failed to register power supply\n");
