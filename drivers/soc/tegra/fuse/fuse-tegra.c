@@ -13,6 +13,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
+#include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/sys_soc.h>
@@ -213,6 +214,10 @@ static int tegra_fuse_probe(struct platform_device *pdev)
 
 	pm_runtime_enable(&pdev->dev);
 
+	err = devm_tegra_core_dev_init_opp_table_simple(&pdev->dev);
+	if (err)
+		goto restore;
+
 	if (fuse->soc->probe) {
 		err = fuse->soc->probe(fuse);
 		if (err < 0)
@@ -258,6 +263,12 @@ restore:
 static int __maybe_unused tegra_fuse_runtime_resume(struct device *dev)
 {
 	int err;
+
+	err = dev_pm_opp_sync(dev);
+	if (err) {
+		dev_err(dev, "failed to sync OPP: %d\n", err);
+		return err;
+	}
 
 	err = clk_prepare_enable(fuse->clk);
 	if (err < 0) {
