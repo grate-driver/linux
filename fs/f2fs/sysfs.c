@@ -307,6 +307,14 @@ static ssize_t f2fs_sbi_show(struct f2fs_attr *a,
 		return sysfs_emit(buf, "%u\n", sbi->compr_new_inode);
 #endif
 
+	if (!strcmp(a->attr.name, "gc_segment_mode"))
+		return sysfs_emit(buf, "%u\n", sbi->gc_segment_mode);
+
+	if (!strcmp(a->attr.name, "gc_reclaimed_segments")) {
+		return sysfs_emit(buf, "%u\n",
+			sbi->gc_reclaimed_segs[sbi->gc_segment_mode]);
+	}
+
 	ui = (unsigned int *)(ptr + a->offset);
 
 	return sprintf(buf, "%u\n", *ui);
@@ -343,7 +351,7 @@ static ssize_t __sbi_store(struct f2fs_attr *a,
 			set = false;
 		}
 
-		if (strlen(name) >= F2FS_EXTENSION_LEN)
+		if (!strlen(name) || strlen(name) >= F2FS_EXTENSION_LEN)
 			return -EINVAL;
 
 		down_write(&sbi->sb_lock);
@@ -419,6 +427,8 @@ out:
 
 	if (!strcmp(a->attr.name, "discard_granularity")) {
 		if (t == 0 || t > MAX_PLIST_NUM)
+			return -EINVAL;
+		if (!f2fs_block_unit_discard(sbi))
 			return -EINVAL;
 		if (t == *ui)
 			return count;
@@ -512,6 +522,29 @@ out:
 		if (t > 100)
 			return -EINVAL;
 		sbi->am.age_weight = t;
+		return count;
+	}
+
+	if (!strcmp(a->attr.name, "gc_segment_mode")) {
+		if (t < MAX_GC_MODE)
+			sbi->gc_segment_mode = t;
+		else
+			return -EINVAL;
+		return count;
+	}
+
+	if (!strcmp(a->attr.name, "gc_reclaimed_segments")) {
+		if (t != 0)
+			return -EINVAL;
+		sbi->gc_reclaimed_segs[sbi->gc_segment_mode] = 0;
+		return count;
+	}
+
+	if (!strcmp(a->attr.name, "seq_file_ra_mul")) {
+		if (t >= MIN_RA_MUL && t <= MAX_RA_MUL)
+			sbi->seq_file_ra_mul = t;
+		else
+			return -EINVAL;
 		return count;
 	}
 
@@ -740,6 +773,10 @@ F2FS_RW_ATTR(ATGC_INFO, atgc_management, atgc_candidate_count, max_candidate_cou
 F2FS_RW_ATTR(ATGC_INFO, atgc_management, atgc_age_weight, age_weight);
 F2FS_RW_ATTR(ATGC_INFO, atgc_management, atgc_age_threshold, age_threshold);
 
+F2FS_RW_ATTR(F2FS_SBI, f2fs_sb_info, seq_file_ra_mul, seq_file_ra_mul);
+F2FS_RW_ATTR(F2FS_SBI, f2fs_sb_info, gc_segment_mode, gc_segment_mode);
+F2FS_RW_ATTR(F2FS_SBI, f2fs_sb_info, gc_reclaimed_segments, gc_reclaimed_segs);
+
 #define ATTR_LIST(name) (&f2fs_attr_##name.attr)
 static struct attribute *f2fs_attrs[] = {
 	ATTR_LIST(gc_urgent_sleep_time),
@@ -812,6 +849,9 @@ static struct attribute *f2fs_attrs[] = {
 	ATTR_LIST(atgc_candidate_count),
 	ATTR_LIST(atgc_age_weight),
 	ATTR_LIST(atgc_age_threshold),
+	ATTR_LIST(seq_file_ra_mul),
+	ATTR_LIST(gc_segment_mode),
+	ATTR_LIST(gc_reclaimed_segments),
 	NULL,
 };
 ATTRIBUTE_GROUPS(f2fs);
@@ -1036,6 +1076,48 @@ static int __maybe_unused segment_bits_seq_show(struct seq_file *seq,
 	return 0;
 }
 
+#ifdef CONFIG_F2FS_IOSTAT_IO_LATENCY
+static inline void __record_iostat_latency(struct f2fs_sb_info *sbi)
+{
+	int io, sync, idx = 0;
+	unsigned int cnt;
+	struct f2fs_iostat_latency iostat_lat[3][NR_PAGE_TYPE];
+
+	spin_lock_irq(&sbi->iostat_lat_lock);
+	for (io = 0; io < NR_PAGE_TYPE; io++) {
+		cnt = sbi->rd_bio_cnt[io];
+		iostat_lat[idx][io].peak_lat =
+			jiffies_to_msecs(sbi->rd_peak_lat[io]);
+		iostat_lat[idx][io].cnt = cnt;
+		iostat_lat[idx][io].avg_lat = cnt ?
+			jiffies_to_msecs(sbi->rd_sum_lat[io]) / cnt : 0;
+		sbi->rd_sum_lat[io] = 0;
+		sbi->rd_peak_lat[io] = 0;
+		sbi->rd_bio_cnt[io] = 0;
+	}
+
+	for (sync = 0; sync < 2; sync++) {
+		idx++;
+		for (io = 0; io < NR_PAGE_TYPE; io++) {
+			cnt = sbi->wr_bio_cnt[sync][io];
+			iostat_lat[idx][io].peak_lat =
+			  jiffies_to_msecs(sbi->wr_peak_lat[sync][io]);
+			iostat_lat[idx][io].cnt = cnt;
+			iostat_lat[idx][io].avg_lat = cnt ?
+			  jiffies_to_msecs(sbi->wr_sum_lat[sync][io]) / cnt : 0;
+			sbi->wr_sum_lat[sync][io] = 0;
+			sbi->wr_peak_lat[sync][io] = 0;
+			sbi->wr_bio_cnt[sync][io] = 0;
+		}
+	}
+	spin_unlock_irq(&sbi->iostat_lat_lock);
+
+	trace_f2fs_iostat_latency(sbi, iostat_lat);
+}
+#else
+static inline void __record_iostat_latency(struct f2fs_sb_info *sbi) {}
+#endif
+
 void f2fs_record_iostat(struct f2fs_sb_info *sbi)
 {
 	unsigned long long iostat_diff[NR_IO_TYPE];
@@ -1061,6 +1143,8 @@ void f2fs_record_iostat(struct f2fs_sb_info *sbi)
 	spin_unlock(&sbi->iostat_lock);
 
 	trace_f2fs_iostat(sbi, iostat_diff);
+
+	__record_iostat_latency(sbi);
 }
 
 static int __maybe_unused iostat_info_seq_show(struct seq_file *seq,
