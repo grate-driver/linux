@@ -278,6 +278,10 @@ static void msi_domain_update_chip_ops(struct msi_domain_info *info)
 	BUG_ON(!chip || !chip->irq_mask || !chip->irq_unmask);
 	if (!chip->irq_set_affinity)
 		chip->irq_set_affinity = msi_domain_set_affinity;
+	if (!chip->irq_ack)
+		chip->irq_ack = irq_chip_ack_parent;
+	if (!chip->irq_eoi)
+		chip->irq_eoi = irq_chip_eoi_parent;
 }
 
 /**

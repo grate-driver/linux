@@ -87,6 +87,8 @@ extern void irq_enable(struct irq_desc *desc);
 extern void irq_disable(struct irq_desc *desc);
 extern void irq_percpu_enable(struct irq_desc *desc, unsigned int cpu);
 extern void irq_percpu_disable(struct irq_desc *desc, unsigned int cpu);
+extern void ack_irq(struct irq_desc *desc);
+extern void eoi_irq(struct irq_desc *desc);
 extern void mask_irq(struct irq_desc *desc);
 extern void unmask_irq(struct irq_desc *desc);
 extern void unmask_threaded_irq(struct irq_desc *desc);
@@ -243,6 +245,11 @@ static inline void irq_state_set_disabled(struct irq_desc *desc)
 static inline void irq_state_set_masked(struct irq_desc *desc)
 {
 	irqd_set(&desc->irq_data, IRQD_IRQ_MASKED);
+}
+
+static inline void irq_state_set_flow_masked(struct irq_desc *desc)
+{
+	irqd_set(&desc->irq_data, IRQD_IRQ_FLOW_MASKED);
 }
 
 #undef __irqd_to_state
