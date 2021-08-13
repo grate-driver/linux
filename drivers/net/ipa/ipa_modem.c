@@ -19,6 +19,8 @@
 #include "ipa_modem.h"
 #include "ipa_smp2p.h"
 #include "ipa_qmi.h"
+#include "ipa_uc.h"
+#include "ipa_clock.h"
 
 #define IPA_NETDEV_NAME		"rmnet_ipa%d"
 #define IPA_NETDEV_TAILROOM	0	/* for padding by mux layer */
@@ -43,9 +45,14 @@ static int ipa_open(struct net_device *netdev)
 	struct ipa *ipa = priv->ipa;
 	int ret;
 
+	ret = ipa_clock_get(ipa);
+	if (WARN_ON(ret < 0))
+		goto err_clock_put;
+
 	ret = ipa_endpoint_enable_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]);
 	if (ret)
-		return ret;
+		goto err_clock_put;
+
 	ret = ipa_endpoint_enable_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]);
 	if (ret)
 		goto err_disable_tx;
@@ -56,6 +63,8 @@ static int ipa_open(struct net_device *netdev)
 
 err_disable_tx:
 	ipa_endpoint_disable_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]);
+err_clock_put:
+	(void)ipa_clock_put(ipa);
 
 	return ret;
 }
@@ -70,6 +79,8 @@ static int ipa_stop(struct net_device *netdev)
 
 	ipa_endpoint_disable_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]);
 	ipa_endpoint_disable_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]);
+
+	(void)ipa_clock_put(ipa);
 
 	return 0;
 }
@@ -169,6 +180,9 @@ void ipa_modem_suspend(struct net_device *netdev)
 	struct ipa_priv *priv = netdev_priv(netdev);
 	struct ipa *ipa = priv->ipa;
 
+	if (!(netdev->flags & IFF_UP))
+		return;
+
 	netif_stop_queue(netdev);
 
 	ipa_endpoint_suspend_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]);
@@ -184,6 +198,9 @@ void ipa_modem_resume(struct net_device *netdev)
 {
 	struct ipa_priv *priv = netdev_priv(netdev);
 	struct ipa *ipa = priv->ipa;
+
+	if (!(netdev->flags & IFF_UP))
+		return;
 
 	ipa_endpoint_resume_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]);
 	ipa_endpoint_resume_one(ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]);
@@ -216,13 +233,15 @@ int ipa_modem_start(struct ipa *ipa)
 	SET_NETDEV_DEV(netdev, &ipa->pdev->dev);
 	priv = netdev_priv(netdev);
 	priv->ipa = ipa;
+	ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]->netdev = netdev;
+	ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]->netdev = netdev;
+	ipa->modem_netdev = netdev;
 
 	ret = register_netdev(netdev);
-	if (!ret) {
-		ipa->modem_netdev = netdev;
-		ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]->netdev = netdev;
-		ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]->netdev = netdev;
-	} else {
+	if (ret) {
+		ipa->modem_netdev = NULL;
+		ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]->netdev = NULL;
+		ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]->netdev = NULL;
 		free_netdev(netdev);
 	}
 
@@ -256,13 +275,15 @@ int ipa_modem_stop(struct ipa *ipa)
 	/* Prevent the modem from triggering a call to ipa_setup() */
 	ipa_smp2p_disable(ipa);
 
-	/* Stop the queue and disable the endpoints if it's open */
+	/* Clean up the netdev and endpoints if it was started */
 	if (netdev) {
-		(void)ipa_stop(netdev);
+		/* If it was opened, stop it first */
+		if (netdev->flags & IFF_UP)
+			(void)ipa_stop(netdev);
+		unregister_netdev(netdev);
+		ipa->modem_netdev = NULL;
 		ipa->name_map[IPA_ENDPOINT_AP_MODEM_RX]->netdev = NULL;
 		ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX]->netdev = NULL;
-		ipa->modem_netdev = NULL;
-		unregister_netdev(netdev);
 		free_netdev(netdev);
 	}
 
@@ -277,6 +298,10 @@ static void ipa_modem_crashed(struct ipa *ipa)
 {
 	struct device *dev = &ipa->pdev->dev;
 	int ret;
+
+	ret = ipa_clock_get(ipa);
+	if (WARN_ON(ret < 0))
+		goto out_clock_put;
 
 	ipa_endpoint_modem_pause_all(ipa, true);
 
@@ -302,6 +327,9 @@ static void ipa_modem_crashed(struct ipa *ipa)
 	ret = ipa_mem_zero_modem(ipa);
 	if (ret)
 		dev_err(dev, "error %d zeroing modem memory regions\n", ret);
+
+out_clock_put:
+	(void)ipa_clock_put(ipa);
 }
 
 static int ipa_modem_notify(struct notifier_block *nb, unsigned long action,
@@ -314,6 +342,7 @@ static int ipa_modem_notify(struct notifier_block *nb, unsigned long action,
 	switch (action) {
 	case QCOM_SSR_BEFORE_POWERUP:
 		dev_info(dev, "received modem starting event\n");
+		ipa_uc_clock(ipa);
 		ipa_smp2p_notify_reset(ipa);
 		break;
 
@@ -376,14 +405,4 @@ void ipa_modem_deconfig(struct ipa *ipa)
 
 	ipa->notifier = NULL;
 	memset(&ipa->nb, 0, sizeof(ipa->nb));
-}
-
-int ipa_modem_setup(struct ipa *ipa)
-{
-	return ipa_qmi_setup(ipa);
-}
-
-void ipa_modem_teardown(struct ipa *ipa)
-{
-	ipa_qmi_teardown(ipa);
 }
