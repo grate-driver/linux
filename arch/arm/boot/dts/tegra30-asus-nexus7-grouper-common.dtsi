@@ -8,6 +8,7 @@
 #include "tegra30.dtsi"
 #include "tegra30-cpu-opp.dtsi"
 #include "tegra30-cpu-opp-microvolt.dtsi"
+#include "tegra30-asus-lvds-display.dtsi"
 
 / {
 	aliases {
@@ -65,8 +66,8 @@
 				status = "okay";
 
 				port@0 {
-					lcd_output: endpoint {
-						remote-endpoint = <&lvds_encoder_input>;
+					dpi_output: endpoint {
+						remote-endpoint = <&bridge_input>;
 						bus-width = <24>;
 					};
 				};
@@ -1112,20 +1113,11 @@
 		 */
 		compatible = "panel-lvds";
 
-		power-supply = <&vdd_pnl>;
-		backlight = <&backlight>;
-
 		width-mm = <94>;
 		height-mm = <150>;
 		rotation = <180>;
 
 		data-mapping = "jeida-24";
-
-		port {
-			panel_input: endpoint {
-				remote-endpoint = <&lvds_encoder_output>;
-			};
-		};
 	};
 
 	firmware {
@@ -1174,34 +1166,6 @@
 			debounce-interval = <10>;
 			wakeup-event-action = <EV_ACT_ASSERTED>;
 			wakeup-source;
-		};
-	};
-
-	lvds-encoder {
-		compatible = "ti,sn75lvds83", "lvds-encoder";
-
-		powerdown-gpios = <&gpio TEGRA_GPIO(N, 6) GPIO_ACTIVE_LOW>;
-		power-supply = <&vdd_3v3_sys>;
-
-		ports {
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			port@0 {
-				reg = <0>;
-
-				lvds_encoder_input: endpoint {
-					remote-endpoint = <&lcd_output>;
-				};
-			};
-
-			port@1 {
-				reg = <1>;
-
-				lvds_encoder_output: endpoint {
-					remote-endpoint = <&panel_input>;
-				};
-			};
 		};
 	};
 

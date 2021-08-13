@@ -5,6 +5,7 @@
 /* CPU Speedo ID 3, Soc Speedo ID 2, CPU Process: 1, Core Process: 0 */
 
 #include "tegra30-asus-transformer-common.dtsi"
+#include "tegra30-asus-lvds-display.dtsi"
 
 / {
 	model = "Asus Transformer Prime TF201";
@@ -123,65 +124,8 @@
 		operating-range-celsius = <0 45>;
 	};
 
-	/* HannStar HSD101PWW2 Rev0-A00/A01 LCD SuperIPS+ HD panel */
 	display-panel {
-		compatible = "panel-lvds";
-
-		power-supply = <&vdd_pnl>;
-		backlight = <&backlight>;
-
-		width-mm = <217>;
-		height-mm = <136>;
-
-		data-mapping = "jeida-24";
-
-		panel-timing {
-			/* 1280x800@60Hz */
-			clock-frequency = <68000000>;
-			hactive = <1280>;
-			vactive = <800>;
-			hfront-porch = <48>;
-			hback-porch = <18>;
-			hsync-len = <30>;
-			vsync-len = <5>;
-			vfront-porch = <3>;
-			vback-porch = <12>;
-		};
-
-		port {
-			panel_input: endpoint {
-				remote-endpoint = <&bridge_output>;
-			};
-		};
-	};
-
-	/* Texas Instruments SN75LVDS83B LVDS Transmitter */
-	lvds-encoder {
-		compatible = "ti,sn75lvds83", "lvds-encoder";
-
-		powerdown-gpios = <&gpio TEGRA_GPIO(N, 6) GPIO_ACTIVE_LOW>;
-		power-supply = <&vdd_3v3_sys>;
-
-		ports {
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			port@0 {
-				reg = <0>;
-
-				bridge_input: endpoint {
-					remote-endpoint = <&dpi_output>;
-				};
-			};
-
-			port@1 {
-				reg = <1>;
-
-				bridge_output: endpoint {
-					remote-endpoint = <&panel_input>;
-				};
-			};
-		};
+		compatible = "hannstar,hsd101pww2";
 	};
 
 	vibrator {
