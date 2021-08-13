@@ -939,7 +939,7 @@ static int _set_required_opps(struct device *dev,
 	return ret;
 }
 
-static void _find_current_opp(struct device *dev, struct opp_table *opp_table)
+static struct dev_pm_opp *_find_current_opp(struct opp_table *opp_table)
 {
 	struct dev_pm_opp *opp = ERR_PTR(-ENODEV);
 	unsigned long freq;
@@ -948,6 +948,18 @@ static void _find_current_opp(struct device *dev, struct opp_table *opp_table)
 		freq = clk_get_rate(opp_table->clk);
 		opp = _find_freq_ceil(opp_table, &freq);
 	}
+
+	return opp;
+}
+
+static void _find_and_set_current_opp(struct opp_table *opp_table)
+{
+	struct dev_pm_opp *opp;
+
+	if (opp_table->current_opp)
+		return;
+
+	opp = _find_current_opp(opp_table);
 
 	/*
 	 * Unable to find the current OPP ? Pick the first from the list since
@@ -1002,8 +1014,7 @@ static int _set_opp(struct device *dev, struct opp_table *opp_table,
 		return _disable_opp_table(dev, opp_table);
 
 	/* Find the currently set OPP if we don't know already */
-	if (unlikely(!opp_table->current_opp))
-		_find_current_opp(dev, opp_table);
+	_find_and_set_current_opp(opp_table);
 
 	old_opp = opp_table->current_opp;
 
@@ -2931,3 +2942,29 @@ put_table:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_sync_regulators);
+
+/**
+ * dev_pm_opp_get_current() - Get current OPP
+ * @dev:	device for which we do this operation
+ *
+ * Get OPP which corresponds to the current clock rate of a device.
+ *
+ * Return: pointer to 'struct dev_pm_opp' on success and errorno otherwise.
+ */
+struct dev_pm_opp *dev_pm_opp_get_current(struct device *dev)
+{
+	struct opp_table *opp_table;
+	struct dev_pm_opp *opp;
+
+	opp_table = _find_opp_table(dev);
+	if (IS_ERR(opp_table))
+		return ERR_CAST(opp_table);
+
+	opp = _find_current_opp(opp_table);
+
+	/* Drop reference taken by _find_opp_table() */
+	dev_pm_opp_put_opp_table(opp_table);
+
+	return opp;
+}
+EXPORT_SYMBOL_GPL(dev_pm_opp_get_current);
