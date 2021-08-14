@@ -96,9 +96,9 @@
 			/* External I2C interface */
 			i2c-gate {
 				accelerometer@f {
-					mount-matrix =   "0",  "1",  "0",
-							 "1",  "0",  "0",
-							 "0",  "0", "-1";
+					mount-matrix =   "0", "-1",  "0",
+							"-1",  "0",  "0",
+							 "0",  "0",  "1";
 				};
 			};
 		};
