@@ -124,6 +124,9 @@ static const struct power_supply_desc dock_charger_desc = {
 	.get_property = asusec_charger_get_property,
 };
 
+static char *supplied_to_pad[] = { "pad-battery" };
+static char *supplied_to_dock[] = { "pad-battery", "dock-battery" };
+
 static int asusec_charger_probe(struct platform_device *pdev)
 {
 	const struct asusec_info *ec = asusec_cell_to_ec(pdev);
@@ -148,10 +151,17 @@ static int asusec_charger_probe(struct platform_device *pdev)
 	cfg.of_node = pdev->dev.parent->of_node;
 	cfg.drv_data = priv;
 
-	if (of_device_is_compatible(cfg.of_node, "asus,pad-ec"))
+	if (of_device_is_compatible(cfg.of_node, "asus,pad-ec")) {
+		cfg.supplied_to = supplied_to_pad;
+		cfg.num_supplicants = ARRAY_SIZE(supplied_to_pad);
+
 		psd = &pad_charger_desc;
-	else
+	} else {
+		cfg.supplied_to = supplied_to_dock;
+		cfg.num_supplicants = ARRAY_SIZE(supplied_to_dock);
+
 		psd = &dock_charger_desc;
+	}
 
 	priv->charger = devm_power_supply_register(&pdev->dev, psd, &cfg);
 	if (IS_ERR(priv->charger))

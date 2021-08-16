@@ -240,6 +240,7 @@ static const struct power_supply_desc pad_battery_desc = {
 	.properties = pad_battery_properties,
 	.num_properties = ARRAY_SIZE(pad_battery_properties),
 	.get_property = pad_battery_get_property,
+	.external_power_changed = power_supply_changed,
 };
 
 static const struct power_supply_desc dock_battery_desc = {
@@ -248,6 +249,7 @@ static const struct power_supply_desc dock_battery_desc = {
 	.properties = pad_battery_properties,
 	.num_properties = ARRAY_SIZE(pad_battery_properties),
 	.get_property = pad_battery_get_property,
+	.external_power_changed = power_supply_changed,
 };
 
 static int asusec_battery_probe(struct platform_device *pdev)
