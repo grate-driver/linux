@@ -1686,6 +1686,7 @@ static const struct of_device_id tegra_dsi_of_match[] = {
 	{ .compatible = "nvidia,tegra132-dsi", },
 	{ .compatible = "nvidia,tegra124-dsi", },
 	{ .compatible = "nvidia,tegra114-dsi", },
+	{ .compatible = "nvidia,tegra30-dsi", },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, tegra_dsi_of_match);
