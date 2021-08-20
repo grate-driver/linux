@@ -260,7 +260,7 @@ xchk_bmap_iextent_xref(
 	agbno = XFS_FSB_TO_AGBNO(mp, irec->br_startblock);
 	len = irec->br_blockcount;
 
-	error = xchk_ag_init(info->sc, agno, &info->sc->sa);
+	error = xchk_ag_init_existing(info->sc, agno, &info->sc->sa);
 	if (!xchk_fblock_process_error(info->sc, info->whichfork,
 			irec->br_startoff, &error))
 		return;
@@ -383,7 +383,7 @@ xchk_bmap_iextent(
 STATIC int
 xchk_bmapbt_rec(
 	struct xchk_btree	*bs,
-	union xfs_btree_rec	*rec)
+	const union xfs_btree_rec *rec)
 {
 	struct xfs_bmbt_irec	irec;
 	struct xfs_bmbt_irec	iext_irec;
@@ -473,10 +473,11 @@ struct xchk_bmap_check_rmap_info {
 STATIC int
 xchk_bmap_check_rmap(
 	struct xfs_btree_cur		*cur,
-	struct xfs_rmap_irec		*rec,
+	const struct xfs_rmap_irec	*rec,
 	void				*priv)
 {
 	struct xfs_bmbt_irec		irec;
+	struct xfs_rmap_irec		check_rec;
 	struct xchk_bmap_check_rmap_info	*sbcri = priv;
 	struct xfs_ifork		*ifp;
 	struct xfs_scrub		*sc = sbcri->sc;
@@ -510,28 +511,30 @@ xchk_bmap_check_rmap(
 	 * length, so we have to loop through the bmbt to make sure that the
 	 * entire rmap is covered by bmbt records.
 	 */
+	check_rec = *rec;
 	while (have_map) {
-		if (irec.br_startoff != rec->rm_offset)
+		if (irec.br_startoff != check_rec.rm_offset)
 			xchk_fblock_set_corrupt(sc, sbcri->whichfork,
-					rec->rm_offset);
+					check_rec.rm_offset);
 		if (irec.br_startblock != XFS_AGB_TO_FSB(sc->mp,
-				cur->bc_ag.pag->pag_agno, rec->rm_startblock))
+				cur->bc_ag.pag->pag_agno,
+				check_rec.rm_startblock))
 			xchk_fblock_set_corrupt(sc, sbcri->whichfork,
-					rec->rm_offset);
-		if (irec.br_blockcount > rec->rm_blockcount)
+					check_rec.rm_offset);
+		if (irec.br_blockcount > check_rec.rm_blockcount)
 			xchk_fblock_set_corrupt(sc, sbcri->whichfork,
-					rec->rm_offset);
+					check_rec.rm_offset);
 		if (sc->sm->sm_flags & XFS_SCRUB_OFLAG_CORRUPT)
 			break;
-		rec->rm_startblock += irec.br_blockcount;
-		rec->rm_offset += irec.br_blockcount;
-		rec->rm_blockcount -= irec.br_blockcount;
-		if (rec->rm_blockcount == 0)
+		check_rec.rm_startblock += irec.br_blockcount;
+		check_rec.rm_offset += irec.br_blockcount;
+		check_rec.rm_blockcount -= irec.br_blockcount;
+		if (check_rec.rm_blockcount == 0)
 			break;
 		have_map = xfs_iext_next_extent(ifp, &sbcri->icur, &irec);
 		if (!have_map)
 			xchk_fblock_set_corrupt(sc, sbcri->whichfork,
-					rec->rm_offset);
+					check_rec.rm_offset);
 	}
 
 out:
