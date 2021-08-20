@@ -253,27 +253,42 @@ static int fttmr010_timer_set_periodic(struct clock_event_device *evt)
  */
 static irqreturn_t fttmr010_timer_interrupt(int irq, void *dev_id)
 {
-	struct clock_event_device *evt = dev_id;
+	struct fttmr010 *fttmr010 = dev_id;
+	struct clock_event_device *evt = &fttmr010->clkevt;
+	u32 val;
 
-	evt->event_handler(evt);
+	val = readl(fttmr010->base + TIMER_INTR_STATE);
+	if (val & (TIMER_1_INT_MATCH1 | TIMER_1_INT_OVERFLOW))
+		evt->event_handler(evt);
+	else
+		/* Spurious IRQ */
+		return IRQ_NONE;
+
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t ast2600_timer_interrupt(int irq, void *dev_id)
 {
-	struct clock_event_device *evt = dev_id;
-	struct fttmr010 *fttmr010 = to_fttmr010(evt);
+	struct fttmr010 *fttmr010 = dev_id;
+	struct clock_event_device *evt = &fttmr010->clkevt;
+	u32 val;
 
-	writel(0x1, fttmr010->base + TIMER_INTR_STATE);
+	val = readl(fttmr010->base + TIMER_INTR_STATE);
+	if (val & (TIMER_1_INT_MATCH1 | TIMER_1_INT_OVERFLOW)) {
+		writel(TIMER_1_INT_MATCH1 | TIMER_1_INT_OVERFLOW,
+		       fttmr010->base + TIMER_INTR_STATE);
+		evt->event_handler(evt);
+	} else {
+		/* Just clear any spurious IRQs from the block */
+		writel(val, fttmr010->base + TIMER_INTR_STATE);
+		return IRQ_NONE;
+	}
 
-	evt->event_handler(evt);
 	return IRQ_HANDLED;
 }
 
 static int __init fttmr010_common_init(struct device_node *np,
-		bool is_aspeed,
-		int (*timer_shutdown)(struct clock_event_device *),
-		irq_handler_t irq_handler)
+				       bool is_aspeed, bool is_ast2600)
 {
 	struct fttmr010 *fttmr010;
 	int irq;
@@ -374,8 +389,6 @@ static int __init fttmr010_common_init(struct device_node *np,
 				     fttmr010->tick_rate);
 	}
 
-	fttmr010->timer_shutdown = timer_shutdown;
-
 	/*
 	 * Setup clockevent timer (interrupt-driven) on timer 1.
 	 */
@@ -383,8 +396,18 @@ static int __init fttmr010_common_init(struct device_node *np,
 	writel(0, fttmr010->base + TIMER1_LOAD);
 	writel(0, fttmr010->base + TIMER1_MATCH1);
 	writel(0, fttmr010->base + TIMER1_MATCH2);
-	ret = request_irq(irq, irq_handler, IRQF_TIMER,
-			  "FTTMR010-TIMER1", &fttmr010->clkevt);
+
+	if (is_ast2600) {
+		fttmr010->timer_shutdown = ast2600_timer_shutdown;
+		ret = request_irq(irq, ast2600_timer_interrupt,
+				  IRQF_TIMER, "FTTMR010-TIMER1",
+				  fttmr010);
+	} else {
+		fttmr010->timer_shutdown = fttmr010_timer_shutdown;
+		ret = request_irq(irq, fttmr010_timer_interrupt,
+				  IRQF_TIMER, "FTTMR010-TIMER1",
+				  fttmr010);
+	}
 	if (ret) {
 		pr_err("FTTMR010-TIMER1 no IRQ\n");
 		goto out_unmap;
@@ -432,23 +455,17 @@ out_disable_clock:
 
 static __init int ast2600_timer_init(struct device_node *np)
 {
-	return fttmr010_common_init(np, true,
-			ast2600_timer_shutdown,
-			ast2600_timer_interrupt);
+	return fttmr010_common_init(np, true, true);
 }
 
 static __init int aspeed_timer_init(struct device_node *np)
 {
-	return fttmr010_common_init(np, true,
-			fttmr010_timer_shutdown,
-			fttmr010_timer_interrupt);
+	return fttmr010_common_init(np, true, false);
 }
 
 static __init int fttmr010_timer_init(struct device_node *np)
 {
-	return fttmr010_common_init(np, false,
-			fttmr010_timer_shutdown,
-			fttmr010_timer_interrupt);
+	return fttmr010_common_init(np, false, false);
 }
 
 TIMER_OF_DECLARE(fttmr010, "faraday,fttmr010", fttmr010_timer_init);
