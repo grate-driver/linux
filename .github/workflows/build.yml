@@ -52,7 +52,6 @@ jobs:
       - name: Build
         run: |
           tuxmake --directory ./ -w sccache --target-arch=arm -k $KBUILD_DEFCONFIG $TUXMAKE_EXTRA_OPTS | sed "s|^/home/runner/work/linux/linux/|::error::|"
-          tar -cf linux-grate-${{ matrix.cc }}.tar -C /home/runner/.cache/tuxmake/builds/1 .
           export ERRS=`grep "errors" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
           export WARNS=`grep "warnings" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
           if [ $ERRS != "0" ]; then
@@ -66,6 +65,8 @@ jobs:
           if [ $RET = 1 ]; then
             exit 1
           fi
+          mv /home/runner/.cache/tuxmake/builds/1/vmlinux.xz ./debug-vmlinux.xz
+          tar -cf linux-grate-${{ matrix.cc }}.tar -C /home/runner/.cache/tuxmake/builds/1 .
       - name: Stop sccache server
         run: sccache --stop-server || true
       - uses: "marvinpinto/action-automatic-releases@latest"
@@ -77,6 +78,7 @@ jobs:
           title: "Build of Grate kernel, compiled with ${{ matrix.cc }}"
           files: |
             *.tar
+            *.xz
   dtbs:
     strategy:
       fail-fast: false
