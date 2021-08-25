@@ -1287,6 +1287,8 @@ enum {
 enum {
 	FS_MODE_ADAPTIVE,	/* use both lfs/ssr allocation */
 	FS_MODE_LFS,		/* use lfs allocation only */
+	FS_MODE_FRAGMENT_SEG,	/* segment fragmentation mode */
+	FS_MODE_FRAGMENT_BLK,	/* block fragmentation mode */
 };
 
 enum {
@@ -1756,6 +1758,12 @@ struct f2fs_sb_info {
 	unsigned int gc_reclaimed_segs[MAX_GC_MODE];	/* Reclaimed segs for each mode */
 
 	unsigned long seq_file_ra_mul;		/* multiplier for ra_pages of seq. files in fadvise */
+
+	/* the maximum chunk size for fragment:block allocation mode */
+	int fragment_chunk_max;
+	/* the maximum hole size for fragment:block allocation mode */
+	int fragment_hole_max;
+	int fragment_remained_chunk;	/* remained size to make a full chunk */
 
 #ifdef CONFIG_F2FS_FS_COMPRESSION
 	struct kmem_cache *page_array_slab;	/* page array entry */
@@ -3516,6 +3524,16 @@ unsigned int f2fs_usable_segs_in_sec(struct f2fs_sb_info *sbi,
 			unsigned int segno);
 unsigned int f2fs_usable_blks_in_seg(struct f2fs_sb_info *sbi,
 			unsigned int segno);
+
+#define DEF_FRAGMENT_SIZE	4
+#define MIN_FRAGMENT_SIZE	1
+#define MAX_FRAGMENT_SIZE	512
+
+static inline bool f2fs_fragment_mode(struct f2fs_sb_info *sbi)
+{
+	return F2FS_OPTION(sbi).fs_mode == FS_MODE_FRAGMENT_SEG ||
+		F2FS_OPTION(sbi).fs_mode == FS_MODE_FRAGMENT_BLK;
+}
 
 /*
  * checkpoint.c

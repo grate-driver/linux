@@ -512,3 +512,21 @@ Date:		July 2021
 Contact:	"Daeho Jeong" <daehojeong@google.com>
 Description:	You can	control the multiplier value of	bdi device readahead window size
 		between 2 (default) and 256 for POSIX_FADV_SEQUENTIAL advise option.
+
+What:		/sys/fs/f2fs/<disk>/fragment_chunk_max
+Date:		August 2021
+Contact:	"Daeho Jeong" <daehojeong@google.com>
+Description:	With "mode=fragment:block" mount option, we can scatter block allocation.
+		Using this node, f2fs will allocate 1..<fragment_chunk_max> blocks in a chunk
+		and make a hole in the length of 1..<fragment_hole_max> by turns in a newly
+		allocated free segment. This value can be set between 1..512 and the default
+		value is 4.
+
+What:		/sys/fs/f2fs/<disk>/fragment_hole_max
+Date:		August 2021
+Contact:	"Daeho Jeong" <daehojeong@google.com>
+Description:	With "mode=fragment:block" mount option, we can scatter block allocation.
+		Using this node, f2fs will allocate 1..<fragment_chunk_max> blocks in a chunk
+		and make a hole in the length of 1..<fragment_hole_max> by turns in a newly
+		allocated free segment. This value can be set between 1..512 and the default
+		value is 4.

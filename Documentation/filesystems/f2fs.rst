@@ -201,6 +201,22 @@ fault_type=%d		 Support configuring fault injection type, should be
 mode=%s			 Control block allocation mode which supports "adaptive"
 			 and "lfs". In "lfs" mode, there should be no random
 			 writes towards main area.
+			 "fragment:segment" and "fragment:block" are newly added here.
+			 These are developer options for experiments to make the filesystem
+			 fragmented or simulate filesystem fragmentation/after-GC situation
+			 itself. The developers use these modes to understand filesystem
+			 fragmentation/after-GC condition well, and eventually get some
+			 insights to handle them better.
+			 In "fragment:segment", f2fs allocates a new segment in ramdom
+			 position. With this, we can simulate the after-GC condition.
+			 In "fragment:block", we can scatter block allocation with
+			 "fragment_chunk_max" and "fragment_hole_max" sysfs nodes. f2fs will
+			 allocate 1..<fragment_chunk_max> blocks in a chunk and make
+			 a hole in the length of 1..<fragment_hole_max> by turns in a newly
+			 allocated free segment. With this, the newly allocated blocks will
+			 be scattered throughout the whole partition. Please, use these
+			 options for your experiments and we strongly recommend to re-format
+			 the filesystem after using these options.
 io_bits=%u		 Set the bit size of write IO requests. It should be set
 			 with "mode=lfs".
 usrquota		 Enable plain user disk quota accounting.
