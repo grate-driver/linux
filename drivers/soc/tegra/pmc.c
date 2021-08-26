@@ -505,6 +505,96 @@ static void tegra_pmc_scratch_writel(struct tegra_pmc *pmc, u32 value,
 		writel(value, pmc->scratch + offset);
 }
 
+static const char * const tegra_pd_no_perf_compats[] = {
+	"nvidia,tegra20-sclk",
+	"nvidia,tegra30-sclk",
+	"nvidia,tegra30-pllc",
+	"nvidia,tegra30-plle",
+	"nvidia,tegra30-pllm",
+	"nvidia,tegra20-dc",
+	"nvidia,tegra30-dc",
+	"nvidia,tegra20-emc",
+	"nvidia,tegra30-emc",
+	NULL,
+};
+
+static int
+tegra_pmc_pd_dev_get_performance_state(struct generic_pm_domain *genpd,
+				       struct device *dev)
+{
+	struct opp_table *opp_table, *hw_opp_table;
+	struct dev_pm_opp *opp;
+	u32 hw_version;
+	int ret;
+
+	/*
+	 * The EMC devices are a special case because we have a protection
+	 * from non-EMC drivers getting clock handle before EMC driver is
+	 * fully initialized.  The goal of the protection is to prevent
+	 * devfreq driver from getting failures if it will try to change
+	 * EMC clock rate until clock is fully initialized.  The EMC drivers
+	 * will initialize the performance state by themselves.
+	 *
+	 * Display controller also is a special case because only controller
+	 * driver could get the clock rate based on configuration of internal
+	 * divider.
+	 *
+	 * Clock driver uses its own state syncing.
+	 */
+	if (of_device_compatible_match(dev->of_node, tegra_pd_no_perf_compats))
+		return 0;
+
+	/*
+	 * OPP table is already initialized in a case of GR3D driver on
+	 * Tegra30 since it attaches domains manually after the initialization.
+	 */
+	opp_table = dev_pm_opp_get_opp_table(dev);
+	ret = PTR_ERR_OR_ZERO(opp_table);
+	if (ret) {
+		if (ret != -ENODEV) {
+			dev_err(dev, "failed to get OPP table: %d\n", ret);
+			return ret;
+		}
+
+		if (of_machine_is_compatible("nvidia,tegra20"))
+			hw_version = BIT(tegra_sku_info.soc_process_id);
+		else
+			hw_version = BIT(tegra_sku_info.soc_speedo_id);
+
+		hw_opp_table = dev_pm_opp_set_supported_hw(dev, &hw_version, 1);
+		if (IS_ERR(hw_opp_table)) {
+			dev_err(dev, "failed to set OPP supported HW: %pe\n",
+				hw_opp_table);
+			return PTR_ERR(hw_opp_table);
+		}
+
+		ret = dev_pm_opp_of_add_table(dev);
+		if (ret) {
+			dev_err(dev, "failed to add OPP table: %d\n", ret);
+			goto put_table;
+		}
+	}
+
+	opp = dev_pm_opp_get_current(dev);
+	if (IS_ERR(opp)) {
+		dev_err(dev, "failed to get current OPP: %pe\n", opp);
+		ret = PTR_ERR(opp);
+	} else {
+		ret = dev_pm_opp_get_required_pstate(opp, 0);
+		dev_pm_opp_put(opp);
+	}
+
+	if (IS_ERR(opp_table))
+		dev_pm_opp_of_remove_table(dev);
+put_table:
+	if (IS_ERR(opp_table))
+		dev_pm_opp_put_supported_hw(hw_opp_table);
+	else
+		dev_pm_opp_put_opp_table(opp_table);
+
+	return ret;
+}
+
 /*
  * TODO Figure out a way to call this with the struct tegra_pmc * passed in.
  * This currently doesn't work because readx_poll_timeout() can only operate
@@ -1237,6 +1327,7 @@ static int tegra_powergate_add(struct tegra_pmc *pmc, struct device_node *np)
 
 	pg->id = id;
 	pg->genpd.name = np->name;
+	pg->genpd.dev_get_performance_state = tegra_pmc_pd_dev_get_performance_state;
 	pg->genpd.power_off = tegra_genpd_power_off;
 	pg->genpd.power_on = tegra_genpd_power_on;
 	pg->pmc = pmc;
@@ -1355,6 +1446,7 @@ static int tegra_pmc_core_pd_add(struct tegra_pmc *pmc, struct device_node *np)
 	genpd->name = np->name;
 	genpd->set_performance_state = tegra_pmc_core_pd_set_performance_state;
 	genpd->opp_to_performance_state = tegra_pmc_core_pd_opp_to_performance_state;
+	genpd->dev_get_performance_state = tegra_pmc_pd_dev_get_performance_state;
 
 	err = devm_pm_opp_set_regulators(pmc->dev, &rname, 1);
 	if (err)
