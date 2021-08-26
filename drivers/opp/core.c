@@ -2146,7 +2146,7 @@ struct opp_table *dev_pm_opp_set_clkname(struct device *dev, const char *name)
 	}
 
 	/* clk shouldn't be initialized at this point */
-	if (WARN_ON(opp_table->clk)) {
+	if (WARN_ON(!IS_ERR_OR_NULL(opp_table->clk))) {
 		ret = -EBUSY;
 		goto err;
 	}
