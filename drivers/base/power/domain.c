@@ -2644,12 +2644,82 @@ static void genpd_dev_pm_sync(struct device *dev)
 	genpd_queue_power_off_work(pd);
 }
 
+static int genpd_dev_get_current_performance_state(struct device *dev,
+						   struct device *base_dev,
+						   unsigned int index,
+						   bool *state_default,
+						   bool *suspended)
+{
+	struct generic_pm_domain *pd = dev_to_genpd(dev);
+	int ret;
+
+	ret = of_get_required_opp_performance_state(dev->of_node, index);
+	if (ret < 0 && ret != -ENODEV && ret != -EOPNOTSUPP) {
+		dev_err(dev, "failed to get required performance state for power-domain %s: %d\n",
+			pd->name, ret);
+		return ret;
+	} else if (ret >= 0) {
+		*state_default = true;
+		return ret;
+	}
+
+	if (pd->dev_get_performance_state) {
+		ret = pd->dev_get_performance_state(pd, base_dev, suspended);
+		if (ret < 0)
+			dev_err(dev, "failed to get performance state for power-domain %s: %d\n",
+				pd->name, ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int genpd_dev_configure_performance_state(struct device *dev,
+						 struct device *base_dev,
+						 unsigned int index)
+{
+	struct generic_pm_domain *pd = dev_to_genpd(dev);
+	bool state_default = false, suspended = false;
+	int pstate, err;
+
+	pstate = genpd_dev_get_current_performance_state(dev, base_dev, index,
+							 &state_default,
+							 &suspended);
+	if (pstate <= 0)
+		return pstate;
+
+	/*
+	 * If device is suspended, then it will be activated on RPM-resume.
+	 * Hardware will require the current performance state to be set
+	 * when device is resumed, hence only set rpm_pstate, otherwise extra
+	 * power may be consumed if device won't be resumed by a consumer
+	 * driver.
+	 *
+	 * If device is known to be active at the moment, then the performance
+	 * state should be updated immediately to sync state with hardware.
+	 */
+	if (suspended) {
+		dev_gpd_data(dev)->rpm_pstate = pstate;
+	} else {
+		err = dev_pm_genpd_set_performance_state(dev, pstate);
+		if (err) {
+			dev_err(dev, "failed to set performance state for power-domain %s: %d\n",
+				pd->name, err);
+			return err;
+		}
+
+		if (state_default)
+			dev_gpd_data(dev)->default_pstate = pstate;
+	}
+
+	return 0;
+}
+
 static int __genpd_dev_pm_attach(struct device *dev, struct device *base_dev,
 				 unsigned int index, bool power_on)
 {
 	struct of_phandle_args pd_args;
 	struct generic_pm_domain *pd;
-	int pstate;
 	int ret;
 
 	ret = of_parse_phandle_with_args(dev->of_node, "power-domains",
@@ -2693,22 +2763,13 @@ static int __genpd_dev_pm_attach(struct device *dev, struct device *base_dev,
 		return -EPROBE_DEFER;
 	}
 
-	/* Set the default performance state */
-	pstate = of_get_required_opp_performance_state(dev->of_node, index);
-	if (pstate < 0 && pstate != -ENODEV && pstate != -EOPNOTSUPP) {
-		ret = pstate;
+	ret = genpd_dev_configure_performance_state(dev, base_dev, index);
+	if (ret)
 		goto err;
-	} else if (pstate > 0) {
-		ret = dev_pm_genpd_set_performance_state(dev, pstate);
-		if (ret)
-			goto err;
-		dev_gpd_data(dev)->default_pstate = pstate;
-	}
+
 	return 1;
 
 err:
-	dev_err(dev, "failed to set required performance state for power-domain %s: %d\n",
-		pd->name, ret);
 	genpd_remove_device(pd, dev);
 	return ret;
 }
