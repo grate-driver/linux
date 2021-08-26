@@ -505,6 +505,107 @@ static void tegra_pmc_scratch_writel(struct tegra_pmc *pmc, u32 value,
 		writel(value, pmc->scratch + offset);
 }
 
+static const char * const tegra_pd_no_perf_compats[] = {
+	"nvidia,tegra20-sclk",
+	"nvidia,tegra30-sclk",
+	"nvidia,tegra30-pllc",
+	"nvidia,tegra30-plle",
+	"nvidia,tegra30-pllm",
+	"nvidia,tegra20-dc",
+	"nvidia,tegra30-dc",
+	"nvidia,tegra20-emc",
+	"nvidia,tegra30-emc",
+	NULL,
+};
+
+static int
+tegra_pmc_pd_dev_get_performance_state(struct generic_pm_domain *genpd,
+				       struct device *dev,
+				       bool *dev_suspended)
+{
+	struct opp_table *hw_opp_table, *clk_opp_table;
+	struct dev_pm_opp *opp;
+	u32 hw_version;
+	int ret;
+
+	/*
+	 * The EMC devices are a special case because we have a protection
+	 * from non-EMC drivers getting clock handle before EMC driver is
+	 * fully initialized.  The goal of the protection is to prevent
+	 * devfreq driver from getting failures if it will try to change
+	 * EMC clock rate until clock is fully initialized.  The EMC drivers
+	 * will initialize the performance state by themselves.
+	 *
+	 * Display controller also is a special case because only controller
+	 * driver could get the clock rate based on configuration of internal
+	 * divider.
+	 *
+	 * Clock driver uses its own state syncing.
+	 */
+	if (of_device_compatible_match(dev->of_node, tegra_pd_no_perf_compats))
+		return 0;
+
+	if (of_machine_is_compatible("nvidia,tegra20"))
+		hw_version = BIT(tegra_sku_info.soc_process_id);
+	else
+		hw_version = BIT(tegra_sku_info.soc_speedo_id);
+
+	hw_opp_table = dev_pm_opp_set_supported_hw(dev, &hw_version, 1);
+	if (IS_ERR(hw_opp_table)) {
+		dev_err(dev, "failed to set OPP supported HW: %pe\n",
+			hw_opp_table);
+		return PTR_ERR(hw_opp_table);
+	}
+
+	/*
+	 * Older device-trees don't have OPPs, meanwhile drivers use
+	 * dev_pm_opp_set_rate() and it requires OPP table to be set
+	 * up using dev_pm_opp_set_clkname().
+	 *
+	 * The devm_tegra_core_dev_init_opp_table() is a common helper
+	 * that sets up OPP table for Tegra drivers and it sets the clk
+	 * for compatibility with older device-tress.  GR3D driver uses that
+	 * helper, it also uses devm_pm_opp_attach_genpd() to manually attach
+	 * power domains, which now holds the reference to OPP table that
+	 * already has clk set up implicitly by OPP core for a newly created
+	 * table using dev_pm_opp_of_add_table() invoked below.
+	 *
+	 * Hence we need to explicitly set/put the clk, otherwise
+	 * further dev_pm_opp_set_clkname() will fail with -EBUSY.
+	 */
+	clk_opp_table = dev_pm_opp_set_clkname(dev, NULL);
+	if (IS_ERR(clk_opp_table)) {
+		dev_err(dev, "failed to set OPP clk: %pe\n", clk_opp_table);
+		ret = PTR_ERR(clk_opp_table);
+		goto put_hw;
+	}
+
+	ret = dev_pm_opp_of_add_table(dev);
+	if (ret) {
+		dev_err(dev, "failed to add OPP table: %d\n", ret);
+		goto put_clk;
+	}
+
+	opp = dev_pm_opp_get_current(dev);
+	if (IS_ERR(opp)) {
+		dev_err(dev, "failed to get current OPP: %pe\n", opp);
+		ret = PTR_ERR(opp);
+	} else {
+		ret = dev_pm_opp_get_required_pstate(opp, 0);
+		dev_pm_opp_put(opp);
+	}
+
+	*dev_suspended = true;
+
+	dev_pm_opp_of_remove_table(dev);
+put_clk:
+	dev_pm_opp_put_clkname(clk_opp_table);
+put_hw:
+	dev_pm_opp_put_supported_hw(hw_opp_table);
+
+	return ret;
+}
+
 /*
  * TODO Figure out a way to call this with the struct tegra_pmc * passed in.
  * This currently doesn't work because readx_poll_timeout() can only operate
@@ -1237,6 +1338,7 @@ static int tegra_powergate_add(struct tegra_pmc *pmc, struct device_node *np)
 
 	pg->id = id;
 	pg->genpd.name = np->name;
+	pg->genpd.dev_get_performance_state = tegra_pmc_pd_dev_get_performance_state;
 	pg->genpd.power_off = tegra_genpd_power_off;
 	pg->genpd.power_on = tegra_genpd_power_on;
 	pg->pmc = pmc;
@@ -1355,6 +1457,7 @@ static int tegra_pmc_core_pd_add(struct tegra_pmc *pmc, struct device_node *np)
 	genpd->name = np->name;
 	genpd->set_performance_state = tegra_pmc_core_pd_set_performance_state;
 	genpd->opp_to_performance_state = tegra_pmc_core_pd_opp_to_performance_state;
+	genpd->dev_get_performance_state = tegra_pmc_pd_dev_get_performance_state;
 
 	err = devm_pm_opp_set_regulators(pmc->dev, &rname, 1);
 	if (err)
