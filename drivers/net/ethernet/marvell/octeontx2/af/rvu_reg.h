@@ -53,7 +53,7 @@
 #define RVU_AF_SMMU_TXN_REQ		    (0x6008)
 #define RVU_AF_SMMU_ADDR_RSP_STS	    (0x6010)
 #define RVU_AF_SMMU_ADDR_TLN		    (0x6018)
-#define RVU_AF_SMMU_TLN_FLIT1		    (0x6030)
+#define RVU_AF_SMMU_TLN_FLIT0		    (0x6020)
 
 /* Admin function's privileged PF/VF registers */
 #define RVU_PRIV_CONST                      (0x8000000)
@@ -156,6 +156,7 @@
 #define NPA_AF_AQ_DONE_INT_W1S          (0x0688)
 #define NPA_AF_AQ_DONE_ENA_W1S          (0x0690)
 #define NPA_AF_AQ_DONE_ENA_W1C          (0x0698)
+#define NPA_AF_BATCH_CTL		(0x06a0)
 #define NPA_AF_LFX_AURAS_CFG(a)         (0x4000 | (a) << 18)
 #define NPA_AF_LFX_LOC_AURAS_BASE(a)    (0x4010 | (a) << 18)
 #define NPA_AF_LFX_QINTS_CFG(a)         (0x4100 | (a) << 18)
@@ -269,6 +270,8 @@
 #define NIX_AF_DEBUG_NPC_RESP_DATAX(a)          (0x680 | (a) << 3)
 #define NIX_AF_SMQX_CFG(a)                      (0x700 | (a) << 16)
 #define NIX_AF_SQM_DBG_CTL_STATUS               (0x750)
+#define NIX_AF_DWRR_SDP_MTU                     (0x790)
+#define NIX_AF_DWRR_RPM_MTU                     (0x7A0)
 #define NIX_AF_PSE_CHANNEL_LEVEL                (0x800)
 #define NIX_AF_PSE_SHAPER_CFG                   (0x810)
 #define NIX_AF_TX_EXPR_CREDIT			(0x830)
