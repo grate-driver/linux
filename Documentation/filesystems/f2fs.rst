@@ -185,6 +185,7 @@ fault_type=%d		 Support configuring fault injection type, should be
 			 FAULT_KVMALLOC		  0x000000002
 			 FAULT_PAGE_ALLOC	  0x000000004
 			 FAULT_PAGE_GET		  0x000000008
+			 FAULT_ALLOC_BIO	  0x000000010 (obsolete)
 			 FAULT_ALLOC_NID	  0x000000020
 			 FAULT_ORPHAN		  0x000000040
 			 FAULT_BLOCK		  0x000000080
@@ -195,10 +196,27 @@ fault_type=%d		 Support configuring fault injection type, should be
 			 FAULT_CHECKPOINT	  0x000001000
 			 FAULT_DISCARD		  0x000002000
 			 FAULT_WRITE_IO		  0x000004000
+			 FAULT_SLAB_ALLOC	  0x000008000
 			 ===================	  ===========
 mode=%s			 Control block allocation mode which supports "adaptive"
 			 and "lfs". In "lfs" mode, there should be no random
 			 writes towards main area.
+			 "fragment:segment" and "fragment:block" are newly added here.
+			 These are developer options for experiments to make the filesystem
+			 fragmented or simulate filesystem fragmentation/after-GC situation
+			 itself. The developers use these modes to understand filesystem
+			 fragmentation/after-GC condition well, and eventually get some
+			 insights to handle them better.
+			 In "fragment:segment", f2fs allocates a new segment in ramdom
+			 position. With this, we can simulate the after-GC condition.
+			 In "fragment:block", we can scatter block allocation with
+			 "fragment_chunk_max" and "fragment_hole_max" sysfs nodes. f2fs will
+			 allocate 1..<fragment_chunk_max> blocks in a chunk and make
+			 a hole in the length of 1..<fragment_hole_max> by turns in a newly
+			 allocated free segment. With this, the newly allocated blocks will
+			 be scattered throughout the whole partition. Please, use these
+			 options for your experiments and we strongly recommend to re-format
+			 the filesystem after using these options.
 io_bits=%u		 Set the bit size of write IO requests. It should be set
 			 with "mode=lfs".
 usrquota		 Enable plain user disk quota accounting.
@@ -312,6 +330,14 @@ inlinecrypt		 When possible, encrypt/decrypt the contents of encrypted
 			 Documentation/block/inline-encryption.rst.
 atgc			 Enable age-threshold garbage collection, it provides high
 			 effectiveness and efficiency on background GC.
+discard_unit=%s		 Control discard unit, the argument can be "block", "segment"
+			 and "section", issued discard command's offset/size will be
+			 aligned to the unit, by default, "discard_unit=block" is set,
+			 so that small discard functionality is enabled.
+			 For blkzoned device, "discard_unit=section" will be set by
+			 default, it is helpful for large sized SMR or ZNS devices to
+			 reduce memory cost by getting rid of fs metadata supports small
+			 discard.
 ======================== ============================================================
 
 Debugfs Entries
@@ -857,8 +883,11 @@ Compression implementation
   directly in order to guarantee potential data updates later to the space.
   Instead, the main goal is to reduce data writes to flash disk as much as
   possible, resulting in extending disk life time as well as relaxing IO
-  congestion. Alternatively, we've added ioctl interface to reclaim compressed
-  space and show it to user after putting the immutable bit.
+  congestion. Alternatively, we've added ioctl(F2FS_IOC_RELEASE_COMPRESS_BLOCKS)
+  interface to reclaim compressed space and show it to user after putting the
+  immutable bit. Immutable bit, after release, it doesn't allow writing/mmaping
+  on the file, until reserving compressed space via
+  ioctl(F2FS_IOC_RESERVE_COMPRESS_BLOCKS) or truncating filesize to zero.
 
 Compress metadata layout::
 
