@@ -38,9 +38,8 @@ static struct hns3_dbg_dentry_info hns3_dbg_dentry[] = {
 	},
 };
 
-static int hns3_dbg_bd_file_init(struct hnae3_handle *handle, unsigned int cmd);
-static int hns3_dbg_common_file_init(struct hnae3_handle *handle,
-				     unsigned int cmd);
+static int hns3_dbg_bd_file_init(struct hnae3_handle *handle, u32 cmd);
+static int hns3_dbg_common_file_init(struct hnae3_handle *handle, u32 cmd);
 
 static struct hns3_dbg_cmd_info hns3_dbg_cmd[] = {
 	{
@@ -696,7 +695,7 @@ static int hns3_dbg_queue_map(struct hnae3_handle *h, char *buf, int len)
 		sprintf(result[j++], "%u", i);
 		sprintf(result[j++], "%u",
 			h->ae_algo->ops->get_global_queue_id(h, i));
-		sprintf(result[j++], "%u",
+		sprintf(result[j++], "%d",
 			priv->ring[i].tqp_vector->vector_irq);
 		hns3_dbg_fill_content(content, sizeof(content), queue_map_items,
 				      (const char **)result,
@@ -868,7 +867,7 @@ static void
 hns3_dbg_dev_caps(struct hnae3_handle *h, char *buf, int len, int *pos)
 {
 	struct hnae3_ae_dev *ae_dev = pci_get_drvdata(h->pdev);
-	static const char * const str[] = {"no", "yes"};
+	const char * const str[] = {"no", "yes"};
 	unsigned long *caps = ae_dev->caps;
 	u32 i, state;
 
