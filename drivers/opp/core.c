@@ -1441,9 +1441,11 @@ static void _opp_kref_release(struct kref *kref)
 	kfree(opp);
 }
 
-void dev_pm_opp_get(struct dev_pm_opp *opp)
+struct dev_pm_opp *dev_pm_opp_get(struct dev_pm_opp *opp)
 {
 	kref_get(&opp->kref);
+
+	return opp;
 }
 
 void dev_pm_opp_put(struct dev_pm_opp *opp)
