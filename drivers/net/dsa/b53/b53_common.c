@@ -2612,9 +2612,10 @@ static int b53_switch_init(struct b53_device *dev)
 			dev->cpu_port = 5;
 	}
 
-	/* cpu port is always last */
-	dev->num_ports = dev->cpu_port + 1;
 	dev->enabled_ports |= BIT(dev->cpu_port);
+	dev->num_ports = fls(dev->enabled_ports);
+
+	dev->ds->num_ports = min_t(unsigned int, dev->num_ports, DSA_MAX_PORTS);
 
 	/* Include non standard CPU port built-in PHYs to be probed */
 	if (is539x(dev) || is531x5(dev)) {
@@ -2660,7 +2661,6 @@ struct b53_device *b53_switch_alloc(struct device *base,
 		return NULL;
 
 	ds->dev = base;
-	ds->num_ports = DSA_MAX_PORTS;
 
 	dev = devm_kzalloc(base, sizeof(*dev), GFP_KERNEL);
 	if (!dev)
