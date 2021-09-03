@@ -2351,7 +2351,7 @@ static void hci_cs_disconnect(struct hci_dev *hdev, u8 status)
 		mgmt_disconnect_failed(hdev, &conn->dst, conn->type,
 				       conn->dst_type, status);
 
-		if (conn->type == LE_LINK) {
+		if (conn->type == LE_LINK && conn->role == HCI_ROLE_SLAVE) {
 			hdev->cur_adv_instance = conn->adv_instance;
 			hci_req_reenable_advertising(hdev);
 		}
@@ -2367,6 +2367,28 @@ static void hci_cs_disconnect(struct hci_dev *hdev, u8 status)
 	hci_dev_unlock(hdev);
 }
 
+static u8 ev_bdaddr_type(struct hci_dev *hdev, u8 type, bool *resolved)
+{
+	/* When using controller based address resolution, then the new
+	 * address types 0x02 and 0x03 are used. These types need to be
+	 * converted back into either public address or random address type
+	 */
+	switch (type) {
+	case ADDR_LE_DEV_PUBLIC_RESOLVED:
+		if (resolved)
+			*resolved = true;
+		return ADDR_LE_DEV_PUBLIC;
+	case ADDR_LE_DEV_RANDOM_RESOLVED:
+		if (resolved)
+			*resolved = true;
+		return ADDR_LE_DEV_RANDOM;
+	}
+
+	if (resolved)
+		*resolved = false;
+	return type;
+}
+
 static void cs_le_create_conn(struct hci_dev *hdev, bdaddr_t *peer_addr,
 			      u8 peer_addr_type, u8 own_address_type,
 			      u8 filter_policy)
@@ -2378,21 +2400,7 @@ static void cs_le_create_conn(struct hci_dev *hdev, bdaddr_t *peer_addr,
 	if (!conn)
 		return;
 
-	/* When using controller based address resolution, then the new
-	 * address types 0x02 and 0x03 are used. These types need to be
-	 * converted back into either public address or random address type
-	 */
-	if (use_ll_privacy(hdev) &&
-	    hci_dev_test_flag(hdev, HCI_LL_RPA_RESOLUTION)) {
-		switch (own_address_type) {
-		case ADDR_LE_DEV_PUBLIC_RESOLVED:
-			own_address_type = ADDR_LE_DEV_PUBLIC;
-			break;
-		case ADDR_LE_DEV_RANDOM_RESOLVED:
-			own_address_type = ADDR_LE_DEV_RANDOM;
-			break;
-		}
-	}
+	own_address_type = ev_bdaddr_type(hdev, own_address_type, NULL);
 
 	/* Store the initiator and responder address information which
 	 * is needed for SMP. These values will not change during the
@@ -2961,7 +2969,7 @@ static void hci_disconn_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 	 * or until a connection is created or until the Advertising
 	 * is timed out due to Directed Advertising."
 	 */
-	if (conn->type == LE_LINK) {
+	if (conn->type == LE_LINK && conn->role == HCI_ROLE_SLAVE) {
 		hdev->cur_adv_instance = conn->adv_instance;
 		hci_req_reenable_advertising(hdev);
 	}
@@ -5282,22 +5290,7 @@ static void le_conn_complete_evt(struct hci_dev *hdev, u8 status,
 		conn->dst_type = irk->addr_type;
 	}
 
-	/* When using controller based address resolution, then the new
-	 * address types 0x02 and 0x03 are used. These types need to be
-	 * converted back into either public address or random address type
-	 */
-	if (use_ll_privacy(hdev) &&
-	    hci_dev_test_flag(hdev, HCI_ENABLE_LL_PRIVACY) &&
-	    hci_dev_test_flag(hdev, HCI_LL_RPA_RESOLUTION)) {
-		switch (conn->dst_type) {
-		case ADDR_LE_DEV_PUBLIC_RESOLVED:
-			conn->dst_type = ADDR_LE_DEV_PUBLIC;
-			break;
-		case ADDR_LE_DEV_RANDOM_RESOLVED:
-			conn->dst_type = ADDR_LE_DEV_RANDOM;
-			break;
-		}
-	}
+	conn->dst_type = ev_bdaddr_type(hdev, conn->dst_type, NULL);
 
 	if (status) {
 		hci_le_conn_failed(conn, status);
@@ -5479,8 +5472,8 @@ static void hci_le_conn_update_complete_evt(struct hci_dev *hdev,
 /* This function requires the caller holds hdev->lock */
 static struct hci_conn *check_pending_le_conn(struct hci_dev *hdev,
 					      bdaddr_t *addr,
-					      u8 addr_type, u8 adv_type,
-					      bdaddr_t *direct_rpa)
+					      u8 addr_type, bool addr_resolved,
+					      u8 adv_type, bdaddr_t *direct_rpa)
 {
 	struct hci_conn *conn;
 	struct hci_conn_params *params;
@@ -5532,9 +5525,9 @@ static struct hci_conn *check_pending_le_conn(struct hci_dev *hdev,
 		}
 	}
 
-	conn = hci_connect_le(hdev, addr, addr_type, BT_SECURITY_LOW,
-			      hdev->def_le_autoconnect_timeout, HCI_ROLE_MASTER,
-			      direct_rpa);
+	conn = hci_connect_le(hdev, addr, addr_type, addr_resolved,
+			      BT_SECURITY_LOW, hdev->def_le_autoconnect_timeout,
+			      HCI_ROLE_MASTER, direct_rpa);
 	if (!IS_ERR(conn)) {
 		/* If HCI_AUTO_CONN_EXPLICIT is set, conn is already owned
 		 * by higher layer that tried to connect, if no then
@@ -5575,7 +5568,7 @@ static void process_adv_report(struct hci_dev *hdev, u8 type, bdaddr_t *bdaddr,
 	struct discovery_state *d = &hdev->discovery;
 	struct smp_irk *irk;
 	struct hci_conn *conn;
-	bool match;
+	bool match, bdaddr_resolved;
 	u32 flags;
 	u8 *ptr;
 
@@ -5619,6 +5612,9 @@ static void process_adv_report(struct hci_dev *hdev, u8 type, bdaddr_t *bdaddr,
 	 * controller address.
 	 */
 	if (direct_addr) {
+		direct_addr_type = ev_bdaddr_type(hdev, direct_addr_type,
+						  &bdaddr_resolved);
+
 		/* Only resolvable random addresses are valid for these
 		 * kind of reports and others can be ignored.
 		 */
@@ -5646,13 +5642,15 @@ static void process_adv_report(struct hci_dev *hdev, u8 type, bdaddr_t *bdaddr,
 		bdaddr_type = irk->addr_type;
 	}
 
+	bdaddr_type = ev_bdaddr_type(hdev, bdaddr_type, &bdaddr_resolved);
+
 	/* Check if we have been requested to connect to this device.
 	 *
 	 * direct_addr is set only for directed advertising reports (it is NULL
 	 * for advertising reports) and is already verified to be RPA above.
 	 */
-	conn = check_pending_le_conn(hdev, bdaddr, bdaddr_type, type,
-								direct_addr);
+	conn = check_pending_le_conn(hdev, bdaddr, bdaddr_type, bdaddr_resolved,
+				     type, direct_addr);
 	if (!ext_adv && conn && type == LE_ADV_IND && len <= HCI_MAX_AD_LENGTH) {
 		/* Store report for later inclusion by
 		 * mgmt_device_connected
