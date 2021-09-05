@@ -28,7 +28,6 @@
 		display0 = &lcd;
 		display1 = &hdmi;
 
-		serial0 = &uartd; /* reserved: console */
 		serial1 = &uartc; /* Bluetooth */
 		serial2 = &uartb; /* GPS */
 	};
@@ -1074,7 +1073,7 @@
 					   <9600 115200 200>,
 					   <1000000 4000000 136>;
 
-		/* Azurewave AW-NH665 BCM4330B1 */
+		/* Azurewave AW-AH663 BCM4330B1 */
 		bluetooth {
 			compatible = "brcm,bcm4330-bt";
 			max-speed = <4000000>;
@@ -1082,16 +1081,19 @@
 			clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
 			clock-names = "txco";
 
-			vbat-supply  = <&vdd_3v3_sys>;
-			vddio-supply = <&vdd_1v8_vio>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(U, 6) IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "host-wakeup";
 
 			device-wakeup-gpios = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
-			host-wakeup-gpios =   <&gpio TEGRA_GPIO(U, 6) GPIO_ACTIVE_HIGH>;
 			shutdown-gpios =      <&gpio TEGRA_GPIO(U, 0) GPIO_ACTIVE_HIGH>;
+
+			vbat-supply  = <&vdd_3v3_sys>;
+			vddio-supply = <&vdd_1v8_vio>;
 		};
 	};
 
-	pwm@7000a000 {
+	pwm: pwm@7000a000 {
 		status = "okay";
 	};
 
@@ -1131,7 +1133,7 @@
 
 	};
 
-	i2c2: i2c@7000c400 {		/*i2c2*/
+	i2c@7000c400 {		/*i2c2*/
 		status = "okay";
 		clock-frequency = <400000>;
 
@@ -1159,7 +1161,8 @@
 			compatible = "isil,isl29023";
 			reg = <0x44>;
 
-			interrupts-extended = <&gpio TEGRA_GPIO(Q, 3) IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(Q, 3) IRQ_TYPE_LEVEL_HIGH>;
 
 			vcc-supply = <&vdd_3v3_sen>;
 		};
@@ -1338,7 +1341,7 @@
 				};
 
 				ldo5 {
-					regulator-name = "vdd_1v3_cameraisp";
+					regulator-name = "vdd_1v3_cam_isp";
 					regulator-min-microvolt = <1000000>;
 					regulator-max-microvolt = <1000000>;
 				};
