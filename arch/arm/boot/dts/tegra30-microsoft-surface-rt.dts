@@ -314,6 +314,13 @@
 		nvidia,sys-clock-req-active-high;
 
 		core-supply = <&vdd_core>;
+
+		i2c-thermtrip {
+			nvidia,i2c-controller-id = <4>;
+			nvidia,bus-addr = <0x2d>;
+			nvidia,reg-addr = <0x3f>;
+			nvidia,reg-data = <0x80>;
+		};
 	};
 
 	hda@70030000 {
