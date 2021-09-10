@@ -912,7 +912,7 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 	err = devfreq_add_governor(&tegra_devfreq_governor);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to add governor: %d\n", err);
-		goto remove_opps;
+		goto assert_reset;
 	}
 
 	tegra_devfreq_profile.initial_freq = clk_get_rate(tegra->emc_clock);
@@ -928,10 +928,7 @@ static int tegra_devfreq_probe(struct platform_device *pdev)
 
 remove_governor:
 	devfreq_remove_governor(&tegra_devfreq_governor);
-
-remove_opps:
-	dev_pm_opp_remove_all_dynamic(&pdev->dev);
-
+assert_reset:
 	reset_control_reset(tegra->reset);
 disable_clk:
 	clk_disable_unprepare(tegra->clock);
