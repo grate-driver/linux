@@ -94,4 +94,7 @@ static inline int devfreq_update_stats(struct devfreq *df)
 
 	return df->profile->get_dev_status(df->dev.parent, &df->last_status);
 }
+
+int devm_devfreq_add_governor(struct device *dev,
+			      struct devfreq_governor *governor);
 #endif /* _GOVERNOR_H */
