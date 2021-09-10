@@ -43,6 +43,9 @@ properties:
           - const: samsung,i927
           - const: nvidia,tegra20
       - items:
+          - const: samsung,p4wifi
+          - const: nvidia,tegra20
+      - items:
           - enum:
               - nvidia,beaver
           - const: nvidia,tegra30
