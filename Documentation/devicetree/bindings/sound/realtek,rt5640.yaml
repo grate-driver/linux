@@ -1,0 +1,138 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/sound/realtek,rt5640.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: RT5640/RT5639 audio codec
+
+description: |
+  This device supports I2C only.
+  Pins on the device (for linking into audio routes) for RT5639/RT5640:
+    * DMIC1
+    * DMIC2
+    * MICBIAS1
+    * IN1P
+    * IN1N
+    * IN2P
+    * IN2N
+    * IN3P
+    * IN3N
+    * HPOL
+    * HPOR
+    * LOUTL
+    * LOUTR
+    * SPOLP
+    * SPOLN
+    * SPORP
+    * SPORN
+
+  Additional pins on the device for RT5640:
+    * MONOP
+    * MONON
+
+maintainers:
+  - David Heidelberg <david@ixit.cz>
+
+properties:
+  compatible:
+    enum:
+      - realtek,rt5639
+      - realtek,rt5640
+
+  clocks:
+    items:
+      - description: The phandle of the master clock to the codec
+
+  clock-names:
+    items:
+      - const: mclk
+
+  reg: true
+  interrupts: true
+
+  realtek,in1-differential:
+    type: boolean
+    description: Indicate MIC1 input are differential, rather than single-ended.
+  realtek,in2-differential:
+    type: boolean
+    description: Indicate MIC2 input are differential, rather than single-ended.
+  realtek,in3-differential:
+    type: boolean
+    description: Indicate MIC3 input are differential, rather than single-ended.
+
+  realtek,ldo1-en-gpios:
+    maxItems: 1
+    description: The GPIO that controls the CODEC's LDO1_EN pin.
+
+  realtek,dmic1-data-pin:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum:
+      - 0 # DMIC1 is not used
+      - 1 # using IN1P pin as DMIC1 data pin
+      - 2 # using GPIO3 pin as DMIC1 data pin
+    description: DMIC1 data pin
+
+  realtek,dmic2-data-pin:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum:
+      - 0 # DMIC2 is not used
+      - 1 # using IN1N pin as DMIC2 data pin
+      - 2 # using GPIO4 pin as DMIC2 data pin
+    description: DMIC2 data pin
+
+  realtek,jack-detect-source:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum:
+      - 0 # jack-detect is not used
+      - 1 # Use GPIO1
+      - 2 # Use JD1_IN4P
+      - 3 # Use JD2_IN4P
+      - 4 # Use GPIO2
+      - 5 # Use GPIO3
+      - 6 # Use GPIO4
+    description: Jack detection source
+
+  realtek,jack-detect-not-inverted:
+    type: boolean
+    description: |
+      Normal jack-detect switches give an inverted signal, set this bool
+      in the rare case you've a jack-detect switch which is not inverted.
+
+  realtek,over-current-threshold-microamp:
+    description: micbias over-current detection threshold
+    minimum: 600
+    maximum: 2000
+    multipleOf: 100
+
+  realtek,over-current-scale-factor:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum:
+      - 0 # Scale current by 0.5
+      - 1 # Scale current by 0.75
+      - 2 # Scale current by 1.0
+      - 3 # Scale current by 1.5
+    description: micbias over-current detection scale-factor
+
+required:
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+    #include <dt-bindings/gpio/tegra-gpio.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
+    i2c {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      rt5640@1c {
+        compatible = "realtek,rt5640";
+        reg = <0x1c>;
+        interrupt-parent = <&gpio>;
+        interrupts = <TEGRA_GPIO(W, 3) IRQ_TYPE_LEVEL_HIGH>;
+        realtek,ldo1-en-gpios = <&gpio TEGRA_GPIO(V, 3) GPIO_ACTIVE_HIGH>;
+      };
+    };
