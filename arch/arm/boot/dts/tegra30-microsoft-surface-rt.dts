@@ -101,6 +101,13 @@
 		clock-frequency = <400000>;
 
 		/* Sensor Collection at 0x28 */
+		sensor@28 {
+			compatible = "hid-over-i2c";
+			reg = <0x28>;
+			hid-descr-addr = <0x0001>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(BB, 6) IRQ_TYPE_LEVEL_LOW>;
+		};
 		/* EDID at 0x50*/
 	};
 
@@ -582,5 +589,16 @@
 		regulator-max-microvolt = <2800000>;
 		enable-active-high;
 		gpio = <&gpio TEGRA_GPIO(R, 7) GPIO_ACTIVE_HIGH>;
+	};
+
+	regulator@5 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_sensor_hub";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+		gpio = <&gpio TEGRA_GPIO(N, 0) GPIO_ACTIVE_HIGH>;
 	};
 };
