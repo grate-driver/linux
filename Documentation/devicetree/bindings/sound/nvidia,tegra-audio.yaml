@@ -1,0 +1,190 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/sound/nvidia,tegra-audio.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: NVIDIA Tegra audio complex
+
+maintainers:
+  - Jon Hunter <jonathanh@nvidia.com>
+  - Thierry Reding <thierry.reding@gmail.com>
+
+properties:
+  compatible:
+    oneOf:
+      - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-alc5632(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-alc5632
+      - items:
+          - enum:
+              - nvidia,tegra-audio-max98090-nyan-big
+              - nvidia,tegra-audio-max98090-nyan-blaze
+          - const: nvidia,tegra-audio-max98090-nyan
+          - const: nvidia,tegra-audio-max98090
+      - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-max98090(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-max98090
+      - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-rt56(39|40)(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-rt5640
+      - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-rt5677(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-rt5677
+      - items:
+          - enum:
+              - toradex,tegra-audio-sgtl5000-apalis_t30
+              - toradex,tegra-audio-sgtl5000-colibri_t30
+              - toradex,tegra-audio-sgtl5000-apalis_tk1
+          - const: nvidia,tegra-audio-sgtl5000
+      - const: nvidia,tegra-audio-trimslice
+      - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-wm8753(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-wm8753
+      - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-(plutux|wm8903(-[a-z0-9])+)'
+          - const: nvidia,tegra-audio-wm8903
+      - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-wm9712(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-wm9712
+
+  clocks:
+    items:
+      - description: PLL A clock
+      - description: PLL A OUT0 clock
+      - description: The Tegra cdev1/extern1 clock, which feeds the card's mclk
+
+  clock-names:
+    items:
+      - const: pll_a
+      - const: pll_a_out0
+      - const: mclk
+
+  assigned-clocks: true
+
+  assigned-clock-parents: true
+
+  assigned-clock-rates: true
+
+  nvidia,model:
+    $ref: /schemas/types.yaml#/definitions/string
+    description: The user-visible name of this sound complex.
+
+  nvidia,audio-routing:
+    $ref: /schemas/types.yaml#/definitions/non-unique-string-array
+    description: |
+      A list of the connections between audio components.
+      Each entry is a pair of strings, the first being the connection's sink,
+      the second being the connection's source. Valid names for sources and
+      sinks are the pins (documented in the binding document),
+      and the jacks on the board:
+        ALC5632:
+          * Headset Stereophone
+          * Int Spk
+          * Headset Mic
+          * Digital Mic
+        MAXX98090:
+          * Headphones
+          * SPeakers
+          * Mic Jack
+          * Int Mic
+        RT5640:
+          * Headphones
+          * Speakers
+          * Mic Jack
+        RT5677:
+          * Headphone
+          * Speaker
+          * Headset Mic
+          * Internal Mic 1
+          * Internal Mic 2
+        SGTL5000:
+          * Headphone Jack
+          * Line In Jack
+          * Mic Jack
+        WM8753:
+          * Headphone Jack
+          * Mic Jack
+        WM8903:
+          * Headphone Jack
+          * Int Spk
+          * Mic Jack
+          * Int Mic
+        WM9712:
+          * Headphone
+          * LineIn
+          * Mic
+
+  nvidia,ac97-controller:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: The phandle of the AC97 controller
+
+  nvidia,i2s-controller:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: The phandle of the Tegra I2S controller
+
+  nvidia,audio-codec:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: The phandle of audio codec
+
+  nvidia,spkr-en-gpios:
+    maxItems: 1
+    description: The GPIO that enables the speakers
+
+  nvidia,hp-mute-gpios:
+    maxItems: 1
+    description: The GPIO that mutes the headphones
+
+  nvidia,hp-det-gpios:
+    maxItems: 1
+    description: The GPIO that detect headphones are plugged in
+
+  nvidia,mic-det-gpios:
+    maxItems: 1
+    description: The GPIO that detect microphone is plugged in
+
+  nvidia,int-mic-en-gpios:
+    maxItems: 1
+    description: The GPIO that enables the internal microphone
+
+  nvidia,ext-mic-en-gpios:
+    maxItems: 1
+    description: The GPIO that enables the external microphone
+
+  nvidia,headset:
+    type: boolean
+    description: The Mic Jack represents state of the headset microphone pin
+
+additionalProperties: false
+
+required:
+  - compatible
+  - clocks
+  - clock-names
+
+oneOf:
+  - required:
+      - nvidia,audio-codec
+      - nvidia,i2s-controller
+  - required:
+      - nvidia,ac97-controller
+
+examples:
+  - |
+    #include <dt-bindings/clock/tegra30-car.h>
+
+    sound {
+      compatible = "toradex,tegra-audio-sgtl5000-apalis_t30",
+                   "nvidia,tegra-audio-sgtl5000";
+      nvidia,model = "Toradex Apalis T30 SGTL5000";
+      nvidia,audio-routing =
+              "Headphone Jack", "HP_OUT",
+              "LINE_IN", "Line In Jack",
+              "MIC_IN", "Mic Jack";
+      nvidia,i2s-controller = <&tegra_i2s2>;
+      nvidia,audio-codec = <&codec>;
+      clocks = <&tegra_car TEGRA30_CLK_PLL_A>,
+               <&tegra_car TEGRA30_CLK_PLL_A_OUT0>,
+               <&tegra_car TEGRA30_CLK_EXTERN1>;
+      clock-names = "pll_a", "pll_a_out0", "mclk";
+    };
