@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/sound/nvidia,tegra-audio-rt5640.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: NVIDIA Tegra audio complex, with RT5640 codec
+
+description: |
+  The device node for a USB controller that is part of a Tegra
+  SOC is as described in the document
+  "Open Firmware Recommended Practice Universal Serial Bus"
+  with the following modifications and additions
+
+maintainers:
+  - Jon Hunter <jonathanh@nvidia.com>
+  - Thierry Reding <thierry.reding@gmail.com>
+
+properties:
+  compatible:
+    oneOf:
+      - items:
+          - pattern: '^nvidia,tegra-audio-rt5640-.*$'
+          - const: nvidia,tegra-audio-rt5640
+      - items:
+          - const: nvidia,tegra-audio-rt5640
+
+  clocks:
+    items:
+      - description: PLL A clock
+      - description: PLL A OUT 0 clock
+      - description: The Tegra cdev1/extern1 clock, which feeds the CODEC's mclk
+
+  clock-names:
+    items:
+      - const: pll_a
+      - const: pll_a_out0
+      - const: mclk
+
+  nvidia,model:
+    $ref: /schemas/types.yaml#/definitions/string
+    description: The user-visible name of this sound complex.
+
+  nvidia,audio-routing:
+    $ref: /schemas/types.yaml#/definitions/non-unique-string-array
+    description: |
+      A list of the connections between audio components.
+      Each entry is a pair of strings, the first being the connection's sink,
+      the second being the connection's source. Valid names for sources and
+      sinks are the RT5640's pins (as documented in its binding), and the jacks
+      on the board:
+
+      * Headphones
+      * Speakers
+      * Mic Jack
+
+  nvidia,i2s-controller:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: |
+      The phandle of the Tegra I2S controller that's
+      connected to the CODEC.
+
+  nvidia,audio-codec:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: Phandle of the RT5640 audio codec.
+
+  nvidia,hp-det-gpios:
+    description: GPIO that detects headphones plug-in.
+    maxItems: 1
+
+additionalProperties: false
+
+required:
+  - compatible
+  - clocks
+  - clock-names
+  - nvidia,model
+  - nvidia,audio-routing
+  - nvidia,i2s-controller
+  - nvidia,audio-codec
+
+
+examples:
+  - |
+    #include <dt-bindings/clock/tegra30-car.h>
+    #include <dt-bindings/soc/tegra-pmc.h>
+    #include <dt-bindings/gpio/gpio.h>
+    sound {
+      compatible = "nvidia,tegra-audio-rt5640-dalmore",
+                   "nvidia,tegra-audio-rt5640";
+      nvidia,model = "NVIDIA Tegra Dalmore";
+
+      nvidia,audio-routing =
+              "Headphones", "HPOR",
+              "Headphones", "HPOL",
+              "Speakers", "SPORP",
+              "Speakers", "SPORN",
+              "Speakers", "SPOLP",
+              "Speakers", "SPOLN";
+
+      nvidia,i2s-controller = <&tegra_i2s1>;
+      nvidia,audio-codec = <&rt5640>;
+
+      nvidia,hp-det-gpios = <&gpio 143 0>; /* GPIO PR7 */
+
+      clocks = <&tegra_car 216>, <&tegra_car 217>, <&tegra_car 120>;
+      clock-names = "pll_a", "pll_a_out0", "mclk";
+    };
