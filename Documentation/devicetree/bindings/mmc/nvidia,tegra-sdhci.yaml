@@ -1,0 +1,289 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/mmc/nvidia,tegra-sdhci.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: NVIDIA Tegra Secure Digital Host Controller
+
+description: |
+  This controller on Tegra family SoCs provides an interface for MMC, SD,
+  and SDIO types of memory cards.
+
+  This file documents differences between the core properties described
+  by mmc.txt and the properties used by the sdhci-tegra driver.
+
+maintainers:
+  - Dmitry Osipenko <digetx@gmail.com>
+
+properties:
+  compatible:
+    oneOf:
+      - items:
+          enum:
+            - nvidia,tegra20-sdhci
+            - nvidia,tegra30-sdhci
+            - nvidia,tegra114-sdhci
+            - nvidia,tegra124-sdhci
+            - nvidia,tegra186-sdhci
+            - nvidia,tegra194-sdhci
+            - nvidia,tegra210-sdhci
+
+  reg: true
+  interrupts: true
+
+  clocks:
+    description: |
+      For Tegra210, Tegra186 and Tegra194 must contain two entries.
+      One for the module clock and one for the timeout clock.
+      For all other Tegra devices, must contain a single entry for
+      the module clock.
+
+  clock-names: true
+
+  resets:
+    maxItems: 1
+
+  reset-names:
+    items:
+      - const: sdhci
+
+  power-gpios:
+    description: Specify GPIOs for power control
+
+
+  #  Optional properties for Tegra210, Tegra186 and Tegra194:
+  pinctrl-0: true
+
+  pinctrl-1:
+    description:
+      Specify pad voltage
+      configurations. Valid pinctrl-names are "sdmmc-3v3" and "sdmmc-1v8"
+      for controllers supporting multiple voltage levels. The order of names
+      should correspond to the pin configuration states in pinctrl-0 and
+      pinctrl-1.
+
+  pinctrl-names:
+    description: |
+      "sdmmc-3v3-drv" and "sdmmc-1v8-drv" are applicable for
+      Tegra210 where pad config registers are in the pinmux register domain
+      for pull-up-strength and pull-down-strength values configuration when
+      using pads at 3V3 and 1V8 levels.
+
+  bus-width:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [4, 8]
+
+  # FIXME ? no-1-8-v really?
+  no-1-8-v:
+    type: boolean
+    description: |
+      The presence of this property indicates that the
+      controller doesn't operates at a 1.8 V fixed I/O voltage.
+
+  nvidia,pad-autocal-pull-up-offset-3v3:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: FIXME TODO
+
+  nvidia,pad-autocal-pull-down-offset-3v3:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Specify drive strength
+      calibration offsets for 3.3 V signaling modes.
+
+  nvidia,pad-autocal-pull-up-offset-1v8:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: FIXME TODO
+
+  nvidia,pad-autocal-pull-down-offset-1v8:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Specify drive strength
+      calibration offsets for 1.8 V signaling modes.
+      nvidia,pad-autocal-pull-up-offset-3v3-timeout,
+
+  nvidia,pad-autocal-pull-down-offset-3v3-timeout:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Specify drive
+      strength used as a fallback in case the automatic calibration times
+      out on a 3.3 V signaling mode.
+
+  nvidia,pad-autocal-pull-up-offset-1v8-timeout:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: FIXME TODO
+
+  nvidia,pad-autocal-pull-down-offset-1v8-timeout:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Specify drive
+      strength used as a fallback in case the automatic calibration times
+      out on a 1.8 V signaling mode.
+
+  nvidia,pad-autocal-pull-up-offset-sdr104:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: FIXME TODO
+
+  nvidia,pad-autocal-pull-down-offset-sdr104:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Specify drive strength
+      calibration offsets for SDR104 mode.
+
+  nvidia,default-tap:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Specify the default inbound sampling clock trimmer value for non-tunable modes.
+
+  nvidia,default-trim:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Specify the default outbound clock trimmer value.
+
+  power-domains: true
+
+  operating-points-v2: true
+
+# TODO FIXME
+#  Notes on the pad calibration pull up and pulldown offset values:
+#    - The property values are drive codes which are programmed into the
+#      PD_OFFSET and PU_OFFSET sections of the
+#      SDHCI_TEGRA_AUTO_CAL_CONFIG register.
+#    - A higher value corresponds to higher drive strength. Please refer
+#      to the reference manual of the SoC for correct values.
+#    - The SDR104 and HS400 timing specific values are used in
+#      corresponding modes if specified.
+#
+#  Notes on tap and trim values:
+#    - The values are used for compensating trace length differences
+#      by adjusting the sampling point.
+#    - The values are programmed to the Vendor Clock Control Register.
+#      Please refer to the reference manual of the SoC for correct
+#      values.
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - nvidia,tegra186-sdhci
+              - nvidia,tegra194-sdhci
+              - nvidia,tegra210-sdhci
+    then:
+      properties:
+        clocks:
+          minItems: 2
+          maxItems: 2
+
+        clock-names:
+          items:
+            - const: sdhci # the module clock
+            - const: tmclk # the timeout clock
+    else:
+      properties:
+        clocks:
+          maxItems: 1
+
+        clock-names:
+          items:
+            - const: sdhci # the module clock
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - nvidia,tegra186-sdhci
+              - nvidia,tegra210-sdhci
+    then:
+      properties:
+        nvidia,pad-autocal-pull-up-offset-hs400:
+          $ref: /schemas/types.yaml#/definitions/uint32
+          minimum: 0x00
+          maximum: 0xff
+          description: |
+            Specify drive strength calibration pull-up offset for HS400 mode.
+
+        nvidia,pad-autocal-pull-down-offset-hs400:
+          $ref: /schemas/types.yaml#/definitions/uint32
+          minimum: 0x00
+          maximum: 0xff
+          description: |
+            Specify drive strength calibration pull-down offset for HS400 mode.
+
+        nvidia,dqs-trim:
+          $ref: /schemas/types.yaml#/definitions/uint32
+          description: |
+            Specify DQS trim value for HS400 timing.
+            Supported only on SDMMC4.
+
+required:
+  - clocks
+  - clock-names
+  - resets
+  - reset-names
+
+additionalProperties: true
+
+examples:
+  - |
+    sdhci@c8000200 {
+        compatible = "nvidia,tegra20-sdhci";
+        reg = <0xc8000200 0x200>;
+        interrupts = <47>;
+        clocks = <&tegra_car 14>;
+        clock-names = "sdhci";
+        resets = <&tegra_car 14>;
+        reset-names = "sdhci";
+        cd-gpios = <&gpio 69 0>;
+        wp-gpios = <&gpio 57 0>;
+        power-gpios = <&gpio 155 0>;
+        bus-width = <8>;
+    };
+
+  - |
+    #include <dt-bindings/clock/tegra210-car.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
+
+    sdhci@700b0000 {
+        compatible = "nvidia,tegra124-sdhci";
+        reg = <0x700b0000 0x200>;
+        interrupts = <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>;
+        clocks = <&tegra_car TEGRA210_CLK_SDMMC1>;
+        clock-names = "sdhci";
+        resets = <&tegra_car 14>;
+        reset-names = "sdhci";
+        pinctrl-names = "sdmmc-3v3", "sdmmc-1v8";
+        pinctrl-0 = <&sdmmc1_3v3>;
+        pinctrl-1 = <&sdmmc1_1v8>;
+        nvidia,pad-autocal-pull-up-offset-3v3 = <0x00>;
+        nvidia,pad-autocal-pull-down-offset-3v3 = <0x7d>;
+        nvidia,pad-autocal-pull-up-offset-1v8 = <0x7b>;
+        nvidia,pad-autocal-pull-down-offset-1v8 = <0x7b>;
+        status = "disabled";
+    };
+
+  - |
+    #include <dt-bindings/clock/tegra210-car.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
+
+    sdhci@700b0000 {
+        compatible = "nvidia,tegra210-sdhci";
+        reg = <0x700b0000 0x200>;
+        interrupts = <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>;
+        clocks = <&tegra_car TEGRA210_CLK_SDMMC1>,
+                 <&tegra_car TEGRA210_CLK_SDMMC_LEGACY>;
+        clock-names = "sdhci", "tmclk";
+        resets = <&tegra_car 14>;
+        reset-names = "sdhci";
+        pinctrl-names = "sdmmc-3v3", "sdmmc-1v8";
+        pinctrl-0 = <&sdmmc1_3v3>;
+        pinctrl-1 = <&sdmmc1_1v8>;
+        nvidia,pad-autocal-pull-up-offset-3v3 = <0x00>;
+        nvidia,pad-autocal-pull-down-offset-3v3 = <0x7d>;
+        nvidia,pad-autocal-pull-up-offset-1v8 = <0x7b>;
+        nvidia,pad-autocal-pull-down-offset-1v8 = <0x7b>;
+        status = "disabled";
+    };
