@@ -1358,7 +1358,7 @@
 		};
 	};
 
-	vdd_5v0_bat: regulator@0 {
+	vdd_5v0_bat: regulator-0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_ac_bat";
 		regulator-min-microvolt = <5000000>;
@@ -1367,7 +1367,7 @@
 		regulator-boot-on;
 	};
 
-	vdd_5v0_cp: regulator@1 {
+	vdd_5v0_cp: regulator-1 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0_sby";
 		regulator-min-microvolt = <5000000>;
@@ -1379,7 +1379,7 @@
 		vin-supply = <&vdd_5v0_bat>;
 	};
 
-	vdd_5v0_sys: regulator@2 {
+	vdd_5v0_sys: regulator-2 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0_sys";
 		regulator-min-microvolt = <5000000>;
@@ -1391,7 +1391,7 @@
 		vin-supply = <&vdd_5v0_bat>;
 	};
 
-	vdd_1v5_ddr: regulator@3 {
+	vdd_1v5_ddr: regulator-3 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_ddr";
 		regulator-min-microvolt = <1500000>;
@@ -1403,7 +1403,7 @@
 		vin-supply = <&vdd_5v0_bat>;
 	};
 
-	vdd_3v3_sys: regulator@4 {
+	vdd_3v3_sys: regulator-4 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3_sys";
 		regulator-min-microvolt = <3300000>;
@@ -1415,7 +1415,7 @@
 		vin-supply = <&vdd_5v0_bat>;
 	};
 
-	vdd_pnl: regulator@5 {
+	vdd_pnl: regulator-5 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_panel";
 		regulator-min-microvolt = <3300000>;
@@ -1428,7 +1428,7 @@
 
 	/* fixed regulator 6 is used by tf700t */
 
-	vdd_3v3_com: regulator@7 {
+	vdd_3v3_com: regulator-7 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3_com";
 		regulator-min-microvolt = <3300000>;
@@ -1439,7 +1439,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	hdmi_5v0_sys: regulator@8 {
+	hdmi_5v0_sys: regulator-8 {
 		compatible = "regulator-fixed";
 		regulator-name = "hdmi_5v0_sys";
 		regulator-min-microvolt = <5000000>;
@@ -1449,7 +1449,7 @@
 		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	vdd_2v85_cam2: regulator@9 {
+	vdd_2v85_cam2: regulator-9 {
 		compatible = "regulator-fixed";
 		regulator-name = "cam3_ldo_en";
 		regulator-min-microvolt = <2850000>;
@@ -1459,7 +1459,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	vddio_1v8_cam: regulator@10 {
+	vddio_1v8_cam: regulator-10 {
 		compatible = "regulator-fixed";
 		regulator-name = "vddio_1v8_cam";
 		regulator-min-microvolt = <1800000>;

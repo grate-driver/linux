@@ -193,7 +193,7 @@
 		};
 	};
 
-	vdd_1v2_mipi: regulator@6 {
+	vdd_1v2_mipi: regulator-6 {
 		compatible = "regulator-fixed";
 		regulator-name = "tc358768_1v2_vdd";
 		regulator-min-microvolt = <1200000>;
