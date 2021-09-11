@@ -21,6 +21,22 @@ allOf:
       properties:
         reg:
           maxItems: 1
+  - if:
+      properties:
+        compatible:
+          contains:
+            pattern: '^nvidia,tegra-.*'
+    then:
+      properties:
+        reset-names:
+          items:
+            - const: usb
+      required:
+        - clocks
+        - resets
+        - reset-names
+        - nvidia,phy
+
 
 properties:
   compatible:
@@ -69,6 +85,31 @@ properties:
               - nintendo,hollywood-usb-ehci
               - st,spear600-ehci
           - const: usb-ehci
+      - items:
+          - enum:
+              - nvidia,tegra114-ehci
+              - nvidia,tegra124-ehci
+              - nvidia,tegra132-ehci
+              - nvidia,tegra210-ehci
+          - const: nvidia,tegra30-ehci
+          - const: usb-ehci
+      - items:
+          - enum:
+              - nvidia,tegra20-ehci
+              - nvidia,tegra30-ehci
+              - nvidia,tegra114-ehci
+              - nvidia,tegra124-ehci
+              - nvidia,tegra132-ehci
+              - nvidia,tegra210-ehci
+          - const: usb-ehci
+      - items:
+          - enum:
+              - nvidia,tegra20-ehci
+              - nvidia,tegra30-ehci
+              - nvidia,tegra114-ehci
+              - nvidia,tegra124-ehci
+              - nvidia,tegra132-ehci
+              - nvidia,tegra210-ehci
       - enum:
           - generic-ehci
           - usb-ehci
@@ -83,6 +124,8 @@ properties:
   resets:
     minItems: 1
     maxItems: 4
+
+  reset-names: true
 
   clocks:
     minItems: 1
@@ -148,12 +191,23 @@ properties:
       - host
       - otg
 
+  operating-points-v2: true
+
+  nvidia,phy:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: The PHY that the controller is connected to.
+
+  nvidia,needs-double-reset:
+    type: boolean
+    description: |
+      Some of the Tegra20 USB ports, need reset twice due to hardware issues.
+
 required:
   - compatible
   - reg
   - interrupts
 
-additionalProperties: false
+unevaluatedProperties: false
 
 examples:
   - |
