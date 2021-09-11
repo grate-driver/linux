@@ -1453,7 +1453,7 @@
 	};
 
 	/* PMIC has a built-in 32KHz oscillator which is used by PMC */
-	clk32k_in: clock@0 {
+	clk32k_in: clock-32k {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <32768>;
@@ -1558,7 +1558,7 @@
 		};
 	};
 
-	vdd_5v0_sys: regulator@0 {
+	vdd_5v0_sys: regulator-5v0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0";
 		regulator-min-microvolt = <5000000>;
@@ -1567,7 +1567,7 @@
 		regulator-boot-on;
 	};
 
-	vdd_3v3_sys: regulator@1 {
+	vdd_3v3_sys: regulator-3v3 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3_sys";
 		gpio = <&pmic 3 GPIO_ACTIVE_HIGH>;
@@ -1579,7 +1579,7 @@
 		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	avdd_hdmi_usb: regulator@2 {
+	avdd_hdmi_usb: regulator-hdmi {
 		compatible = "regulator-fixed";
 		regulator-name = "avdd_hdmi_usb";
 		gpio = <&pmic 2 GPIO_ACTIVE_HIGH>;
@@ -1589,7 +1589,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	vddio_vid: regulator@3 {
+	vddio_vid: regulator-vid {
 		compatible = "regulator-fixed";
 		regulator-name = "vddio_vid";
 		gpio = <&gpio TEGRA_GPIO(B, 2) GPIO_ACTIVE_HIGH>;
@@ -1599,7 +1599,7 @@
 		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	vdd_pnl: regulator@4 {
+	vdd_pnl: regulator-pnl {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_pnl";
 		gpio = <&gpio TEGRA_GPIO(W, 1) GPIO_ACTIVE_HIGH>;
@@ -1611,7 +1611,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	regulator@5 {
+	regulator-com {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_com";
 		gpio = <&gpio TEGRA_GPIO(D, 0) GPIO_ACTIVE_HIGH>;
@@ -1622,7 +1622,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	vddio_sd_slot: regulator@6 {
+	vddio_sd_slot: regulator-sd {
 		compatible = "regulator-fixed";
 		regulator-name = "vddio_sd_slot";
 		gpio = <&gpio TEGRA_GPIO(C, 6) GPIO_ACTIVE_HIGH>;
