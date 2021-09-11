@@ -544,7 +544,7 @@
 		assigned-clock-parents =<&tegra_car TEGRA20_CLK_PLL_P>;
 	};
 
-	i2c@5 {
+	i2c-5 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(Y, 2) TEGRA_I2C_GPIO_FLAGS
@@ -560,7 +560,7 @@
 		};
 	};
 
-	i2c@6 {
+	i2c-6 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(O, 0) TEGRA_I2C_GPIO_FLAGS
@@ -584,7 +584,7 @@
 		};
 	};
 
-	i2c@8 {
+	i2c-8 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(G, 3) TEGRA_I2C_GPIO_FLAGS
@@ -608,7 +608,7 @@
 		};
 	};
 
-	i2c@9 {
+	i2c-9 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(Y, 3) TEGRA_I2C_GPIO_FLAGS
@@ -627,7 +627,7 @@
 		};
 	};
 
-	i2c@10 {
+	i2c-10 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(Z, 3) TEGRA_I2C_GPIO_FLAGS
@@ -655,7 +655,7 @@
 			bl-reset-gpio = <&gpio TEGRA_GPIO(R, 3) GPIO_ACTIVE_HIGH>;
 		};
 	};
-	i2c@11 {
+	i2c-11 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(G, 2) TEGRA_I2C_GPIO_FLAGS
@@ -688,7 +688,7 @@
 		};
 	};
 
-	i2c@12 {
+	i2c-12 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(O, 4) TEGRA_I2C_GPIO_FLAGS
@@ -715,7 +715,7 @@
 		};
 	};
 
-	i2c@15 {
+	i2c-15 {
 		compatible = "i2c-gpio";
 		gpios = <
 			&gpio TEGRA_GPIO(I, 3) TEGRA_I2C_GPIO_FLAGS
