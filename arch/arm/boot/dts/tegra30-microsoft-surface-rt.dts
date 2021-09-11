@@ -259,7 +259,7 @@
 		status = "okay";
 	};
 	
-	usb_vbus_reg: regulator@103 {
+	usb_vbus_reg: regulator-103 {
 		compatible = "regulator-fixed";
 		regulator-name = "usb_vbus";
 		regulator-min-microvolt = <5000000>;
