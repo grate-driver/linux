@@ -93,6 +93,16 @@ properties:
           - const: ouya,ouya
           - const: nvidia,tegra30
       - items:
+          - const: pegatron,chagall
+          - const: nvidia,tegra30
+      - items:
+          - const: microsoft,surface-rt
+          - const: nvidia,tegra30
+      - items:
+          - const: microsoft,surface-rt-efi
+          - const: microsoft,surface-rt
+          - const: nvidia,tegra30
+      - items:
           - enum:
               - nvidia,dalmore
               - nvidia,roth
