@@ -994,7 +994,7 @@
 		};
 	};
 
-	vdd_5v0_sys: regulator@0 {
+	vdd_5v0_sys: regulator-0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0";
 		regulator-min-microvolt = <5000000>;
@@ -1002,7 +1002,7 @@
 		regulator-always-on;
 	};
 
-	vdd_3v3_sys: regulator@1 {
+	vdd_3v3_sys: regulator-1 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3_vs";
 		regulator-min-microvolt = <3300000>;
@@ -1011,7 +1011,7 @@
 		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	regulator@2 {
+	regulator-2 {
 		compatible = "regulator-fixed";
 		regulator-name = "pcie_vdd";
 		regulator-min-microvolt = <1500000>;
@@ -1020,7 +1020,7 @@
 		regulator-always-on;
 	};
 
-	vdd_pnl_reg: regulator@3 {
+	vdd_pnl_reg: regulator-3 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_pnl";
 		regulator-min-microvolt = <2800000>;
@@ -1029,7 +1029,7 @@
 		enable-active-high;
 	};
 
-	vdd_1v8_sys: regulator@4 {
+	vdd_1v8_sys: regulator-4 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_1v8_vs";
 		regulator-min-microvolt = <1800000>;
@@ -1038,7 +1038,7 @@
 		vin-supply = <&vdd_5v0_sys>;
 	};
 
-	vdd_hdmi_en: regulator@5 {
+	vdd_hdmi_en: regulator-5 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0_hdmi_en";
 		regulator-min-microvolt = <5000000>;
