@@ -32,15 +32,14 @@ jobs:
       - name: Run yamllint review
         run: |
           YAMLS="${{ steps.files.outputs.added_modified }}"
-          RULES='"{rules: {line-length: {level: warning, max: 100}}}"'
           touch out.txt
           for item in ${YAMLS}; do
             if [[ "${item}" != **/*yaml ]]; then
               continue
             fi
-            yamllint -d "$RULES" \
+            yamllint -d "{rules: {line-length: {level: warning, max: 100}}}" \
                      -f github ${item}
-            yamllint -d "$RULES" \
+            yamllint -d "{rules: {line-length: {level: warning, max: 100}}}" \
                      -f standard ${item} >> out.txt
           done
           cat out.txt
