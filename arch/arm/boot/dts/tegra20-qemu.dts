@@ -81,7 +81,7 @@
 		status = "okay";
 	};
 
-	vdd_3v3_reg: regulator@0 {
+	vdd_3v3_reg: regulator-0 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3";
 		regulator-min-microvolt = <3300000>;
@@ -89,14 +89,14 @@
 		regulator-always-on;
 	};
 
-	vdd_pnl_reg: regulator@1 {
+	vdd_pnl_reg: regulator-1 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_pnl";
 		regulator-min-microvolt = <2800000>;
 		regulator-max-microvolt = <2800000>;
 	};
 
-	vdd_core: regulator@2 {
+	vdd_core: regulator-2 {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_core";
 		regulator-min-microvolt = <1300000>;
