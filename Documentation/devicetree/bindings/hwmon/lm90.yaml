@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: (GPL-2.0-only or BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/hwmon/lm90.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: LM90 hwmon sensor
+
+maintainers:
+  - David Heidelberg <david@ixit.cz>
+
+properties:
+  compatible:
+    enum:
+      - adi,adm1032
+      - adi,adt7461
+      - adi,adt7461a
+      - gmt,g781
+      - national,lm90
+      - national,lm86
+      - national,lm89
+      - national,lm99
+      - dallas,max6646
+      - dallas,max6647
+      - dallas,max6649
+      - dallas,max6657
+      - dallas,max6658
+      - dallas,max6659
+      - dallas,max6680
+      - dallas,max6681
+      - dallas,max6695
+      - dallas,max6696
+      - onnn,nct1008
+      - winbond,w83l771
+      - nxp,sa56004
+      - ti,tmp451
+
+  reg:
+    maxItems: 1
+
+  vcc-supply:
+    description: phandle to the regulator that provides the +VCC supply
+
+  interrupts:
+    maxItems: 1
+    description: Contains interrupt specifier which describes the -ALERT pin output.
+
+  '#thermal-sensor-cells':
+    const: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/tegra-gpio.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
+    i2c {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      sensor@4c {
+        compatible = "onnn,nct1008";
+        reg = <0x4c>;
+        vcc-supply = <&palmas_ldo6_reg>;
+        interrupt-parent = <&gpio>;
+        interrupts = <TEGRA_GPIO(O, 4) IRQ_TYPE_LEVEL_LOW>;
+        #thermal-sensor-cells = <1>;
+      };
+    };
