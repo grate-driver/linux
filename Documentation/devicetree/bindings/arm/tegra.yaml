@@ -43,6 +43,9 @@ properties:
           - const: acer,picasso
           - const: nvidia,tegra20
       - items:
+          - const: samsung,i927
+          - const: nvidia,tegra20
+      - items:
           - const: samsung,p4wifi
           - const: nvidia,tegra20
       - items:
