@@ -44,6 +44,11 @@ properties:
     maxItems: 1
     description: USB suspend pin (active high, output)
 
+  otg-vbus:
+    maxItems: 1
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: USB OTG VBUS input
+
 required:
   - compatible
 
