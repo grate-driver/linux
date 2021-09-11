@@ -29,12 +29,19 @@ properties:
     maxItems: 1
 
   clock-names:
-    items:
-      - const: sata
-      - const: sata-oob
+    anyOf:
+      - items:
+          - const: sata
+          - const: sata-oob
+      - items:
+          - const: sata
+          - const: sata-oob
+          - const: cml1
+          - const: pll_e
 
   clocks:
-    maxItems: 2
+    minItems: 2
+    maxItems: 4
 
   reset-names:
     minItems: 2
