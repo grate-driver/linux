@@ -19,6 +19,7 @@ properties:
           - enum:
               - compal,paz00
               - compulab,trimslice
+              - grate,qemu
               - nvidia,harmony
               - nvidia,seaboard
               - nvidia,ventana
