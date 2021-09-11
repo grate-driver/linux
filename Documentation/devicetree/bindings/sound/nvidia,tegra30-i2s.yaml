@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/sound/nvidia,tegra30-i2s.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Tegra30 I2S Controller Device Tree Bindings
+
+description: |
+  The Inter-IC Sound (I2S) controller implements full-duplex,
+  bi-directional and single direction point-to-point serial
+  interfaces. It can interface with I2S compatible devices.
+  I2S controller can operate both in master and slave mode.
+
+maintainers:
+  - Jon Hunter <jonathanh@nvidia.com>
+  - Sameer Pujar <spujar@nvidia.com>
+
+properties:
+  $nodename:
+    pattern: "^i2s@[0-9a-f]*$"
+
+  compatible:
+    oneOf:
+      - const: nvidia,tegra30-i2s
+      - const: nvidia,tegra124-i2s
+      - items:
+          - enum:
+              - nvidia,tegra114-i2s
+              - nvidia,tegra132-i2s
+          - enum:
+              - nvidia,tegra30-i2s
+              - nvidia,tegra124-i2s
+
+  reg:
+    maxItems: 1
+
+  clocks:
+    maxItems: 1
+
+  resets:
+    maxItems: 1
+
+  reset-names:
+    enum: [i2s]
+
+  nvidia,ahub-cif-ids:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: |
+      The list of AHUB CIF IDs for this port, rx (playback)
+      first, tx (capture) second. See nvidia,tegra30-ahub.txt for values.
+
+additionalProperties: false
+
+examples:
+  - |
+    i2s@70080300 {
+      compatible = "nvidia,tegra30-i2s";
+      reg = <0x70080300 0x100>;
+      nvidia,ahub-cif-ids = <4 4>;
+      clocks = <&tegra_car 11>;
+      resets = <&tegra_car 11>;
+      reset-names = "i2s";
+    };
