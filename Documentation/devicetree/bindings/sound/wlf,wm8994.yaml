@@ -1,0 +1,192 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/sound/wlf,wm8994.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: WM1811/WM8994/WM8958 audio codec
+
+description: |
+  These devices support both I2C and SPI (configured with pin strapping on the board).
+  Pins on the device (for linking into audio routes):
+    * IN1LN
+    * IN1LP
+    * IN2LN
+    * IN2LP:VXRN
+    * IN1RN
+    * IN1RP
+    * IN2RN
+    * IN2RP:VXRP
+    * SPKOUTLP
+    * SPKOUTLN
+    * SPKOUTRP
+    * SPKOUTRN
+    * HPOUT1L
+    * HPOUT1R
+    * HPOUT2P
+    * HPOUT2N
+    * LINEOUT1P
+    * LINEOUT1N
+    * LINEOUT2P
+    * LINEOUT2N
+
+maintainers:
+  - patches@opensource.cirrus.com
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - wlf,wm1811
+              - wlf,wm8958
+    then:
+      required:
+        - DBVDD1-supply
+        - DBVDD2-supply
+        - DBVDD3-supply
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: wlf,wm8994
+    then:
+      required:
+        - DBVDD-supply
+
+properties:
+  compatible:
+    enum:
+      - wlf,wm1811
+      - wlf,wm8994
+      - wlf,wm8958
+
+  reg:
+    description: the I2C address of the device, the chip select number for SPI.
+
+  gpio-controller: true
+
+  '#gpio-cells':
+    const: 2
+    description: |
+      The first cell is the pin number and the second cell is used to
+      specify optional parameters (currently unused).
+
+
+  interrupts:
+    maxItems: 1
+
+  interrupt-controller: true
+
+  '#interrupt-cells':
+    const: 2
+    description: |
+      The first cell is the IRQ number.
+      The second cell is the flags, encoded as the trigger masks from
+      Documentation/devicetree/bindings/interrupt-controller/interrupts.txt
+
+  clocks:
+    maxItems: 2
+
+  clock-names:
+    enum:
+      - MCLK1
+      - MCLK2
+
+  wlf,gpio-cfg:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 11
+    maxItems: 11
+    description: |
+      A list of GPIO configuration register values.
+      If absent, no configuration of these registers is performed.
+      If any value is over 0xffff then the register will be left as default.
+
+  wlf,micbias-cfg:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 1
+    maxItems: 2
+    description: |
+      Two MICBIAS register values for WM1811 or WM8958.
+      If absent the register defaults will be used.
+
+  wlf,ldoena-always-driven:
+    type: boolean
+    description: If present LDOENA is always driven.
+
+  wlf,spkmode-pu:
+    type: boolean
+    description: If present enable the internal pull-up resistor on the SPKMODE pin.
+
+  wlf,csnaddr-pd:
+    type: boolean
+    description: If present enable the internal pull-down resistor on the CS/ADDR pin.
+
+  CPVDD-supply:
+    description: Charge pump supply regulator on the CPVDD pin.
+
+  DBVDD-supply:
+    description: Digital buffer supply regulator for the DBVDD pin.
+
+  DCVDD-supply:
+    description: Digital core supply regulator for the DCVDD pin.
+
+patternProperties:
+  "^wlf,ldo[1-2]ena$":
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: GPIO specifier for control of LDOxENA input to device.
+
+  "^wlf,lineout[1-2]-se$":
+    type: boolean
+    description: If present LINEOUT is in single ended mode.
+
+  "^wlf,lineout[1-2]-feedback$":
+    type: boolean
+    description: If present LINEOUT has common mode feedback connected.
+
+  "^AVDD[1-2]-supply$":
+    description: Analog power supply regulator on the AVDD pin.
+
+  "^SPKVDD[1-2]-supply$":
+    description: Speaker power supply regulator on the SPKVDD pin.
+
+required:
+  - compatible
+  - reg
+  - gpio-controller
+  - '#gpio-cells'
+  - AVDD1-supply
+  - AVDD2-supply
+  - DCVDD-supply
+  - CPVDD-supply
+  - SPKVDD1-supply
+  - SPKVDD2-supply
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      wm8994: codec@1a {
+        compatible = "wlf,wm8994";
+        reg = <0x1a>;
+
+        gpio-controller;
+        #gpio-cells = <2>;
+
+        wlf,lineout1-se;
+
+        AVDD1-supply = <&regulator>;
+        AVDD2-supply = <&regulator>;
+        CPVDD-supply = <&regulator>;
+        DBVDD-supply = <&regulator>;
+        DCVDD-supply = <&regulator>;
+        SPKVDD1-supply = <&regulator>;
+        SPKVDD2-supply = <&regulator>;
+      };
+    };
