@@ -845,7 +845,7 @@
 		};
 	};
 
-	i2c@5 {
+	i2c-5 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(O, 0) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(O, 7) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -881,7 +881,7 @@
 		charger_supply: otg-vbus {};
         };
 
-	i2c@7 {
+	i2c-7 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(O, 4) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(O, 2) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -897,7 +897,7 @@
 		};
 	};
 
-	i2c@8 {
+	i2c-8 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(G, 3) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(I, 0) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -927,7 +927,7 @@
 		};
 	};
 
-	i2c@9 {
+	i2c-9 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(Y, 2) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(Y, 0) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -943,7 +943,7 @@
 		}; */
 	};
 
-	i2c@11 {
+	i2c-11 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(BB, 4) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(BB, 1) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -959,7 +959,7 @@
 		};
 	};
 
-	hdmi_ddc: i2c@13 {
+	hdmi_ddc: i2c-13 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(D, 4) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(D, 3) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -968,7 +968,7 @@
 		#size-cells = <0>;
 	};
 
-	i2c@14 {
+	i2c-14 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(K, 3) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(J, 0) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -995,7 +995,7 @@
 		};
 	};
 
-	i2c@15 {
+	i2c-15 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(Y, 3) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(Y, 1) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -1015,7 +1015,7 @@
 		};
 	};
 
-	i2c@16 {
+	i2c-16 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(L, 7) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(L, 6) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -1067,7 +1067,7 @@
 		};
 	};
 
-	i2c@17 {
+	i2c-17 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(Z, 3) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(C, 6) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -1098,7 +1098,7 @@
 		};
 	};
 
-	i2c@19 {
+	i2c-19 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(T, 6) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(T, 5) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
@@ -1116,7 +1116,7 @@
 		};
 	};
 
-	i2c@20 {
+	i2c-20 {
 		compatible = "i2c-gpio";
 		sda-gpios = <&gpio TEGRA_GPIO(X, 2) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&gpio TEGRA_GPIO(X, 0) (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
