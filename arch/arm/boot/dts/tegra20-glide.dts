@@ -987,10 +987,14 @@
 			interrupts = <TEGRA_GPIO(H, 0) IRQ_TYPE_LEVEL_HIGH>;
 			reset-gpios = <&gpio TEGRA_GPIO(H, 1) GPIO_ACTIVE_LOW>;
 
-			port {
+			port@0 {
 				mhl_to_hdmi: endpoint {
 					remote-endpoint = <&hdmi_to_mhl>;
 				};
+			};
+
+			port@1 {
+				// FIXME TODO!
 			};
 		};
 	};
