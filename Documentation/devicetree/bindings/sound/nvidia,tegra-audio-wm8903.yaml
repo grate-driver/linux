@@ -1,0 +1,130 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/sound/nvidia,tegra-audio-wm8903.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: NVIDIA Tegra audio complex
+
+maintainers:
+  - Jon Hunter <jonathanh@nvidia.com>
+  - Thierry Reding <thierry.reding@gmail.com>
+
+properties:
+  compatible:
+    oneOf:
+      - items:
+          - enum:
+              - ad,tegra-audio-wm8903-tec
+              - ad,tegra-audio-wm8903-medcom-wide
+              - ad,tegra-audio-plutux
+              - nvidia,tegra-audio-wm8903-harmony
+              - nvidia,tegra-audio-wm8903-seaboard
+              - nvidia,tegra-audio-wm8903-ventana
+              - nvidia,tegra-audio-wm8903-cardhu
+              - nvidia,tegra-audio-wm8903-chagall
+              - nvidia,tegra-audio-wm8903-tf101
+              - nvidia,tegra-audio-wm8903-tf300t
+              - nvidia,tegra-audio-wm8903-picasso
+          - const: nvidia,tegra-audio-wm8903
+      - const: nvidia,tegra-audio-wm8903
+
+  clocks:
+    items:
+      - description: PLL A clock
+      - description: PLL A OUT0 clock
+      - description: The Tegra cdev1/extern1 clock, which feeds the card's mclk
+  clock-names:
+    items:
+      - const: pll_a
+      - const: pll_a_out0
+      - const: mclk
+
+  nvidia,model:
+    $ref: /schemas/types.yaml#/definitions/string
+    description: The user-visible name of this sound complex.
+
+  nvidia,audio-routing:
+    $ref: /schemas/types.yaml#/definitions/non-unique-string-array
+    description: |
+      A list of the connections between audio components.
+      Each entry is a pair of strings, the first being the connection's sink,
+      the second being the connection's source. Valid names for sources and
+      sinks are the WM8903's pins (documented in the WM8903 binding document),
+      and the jacks on the board:
+        * Headphone Jack
+        * Int Spk
+        * Mic Jack
+        * Int Mic
+
+  nvidia,i2s-controller:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: The phandle of the Tegra I2S1 controller
+
+  nvidia,audio-codec:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: The phandle of the WM8903 audio codec
+
+  nvidia,spkr-en-gpios:
+    maxItems: 1
+    description: The GPIO that enables the speakers
+
+  nvidia,hp-mute-gpios:
+    maxItems: 1
+    description: The GPIO that mutes the headphones
+
+  nvidia,hp-det-gpios:
+    maxItems: 1
+    description: The GPIO that detect headphones are plugged in
+
+  nvidia,int-mic-en-gpios:
+    maxItems: 1
+    description: The GPIO that enables the internal microphone
+
+  nvidia,ext-mic-en-gpios:
+    maxItems: 1
+    description: The GPIO that enables the external microphone
+
+  nvidia,headset:
+    type: boolean
+    description: The Mic Jack represents state of the headset microphone pin
+
+additionalProperties: false
+
+required:
+  - compatible
+  - clocks
+  - clock-names
+  - nvidia,model
+  - nvidia,audio-routing
+  - nvidia,i2s-controller
+  - nvidia,audio-codec
+
+examples:
+  - |
+    sound {
+      compatible = "nvidia,tegra-audio-wm8903-harmony",
+                   "nvidia,tegra-audio-wm8903";
+      nvidia,model = "tegra-wm8903-harmony";
+
+      nvidia,audio-routing =
+              "Headphone Jack", "HPOUTR",
+              "Headphone Jack", "HPOUTL",
+              "Int Spk", "ROP",
+              "Int Spk", "RON",
+              "Int Spk", "LOP",
+              "Int Spk", "LON",
+              "Mic Jack", "MICBIAS",
+              "IN1L", "Mic Jack";
+
+      nvidia,i2s-controller = <&i2s1>;
+      nvidia,audio-codec = <&wm8903>;
+
+      nvidia,spkr-en-gpios = <&codec 2 0>;
+      nvidia,hp-det-gpios = <&gpio 178 0>; /* gpio PW2 */
+      nvidia,int-mic-en-gpios = <&gpio 184 0>; /*gpio PX0 */
+      nvidia,ext-mic-en-gpios = <&gpio 185 0>; /* gpio PX1 */
+
+      clocks = <&tegra_car 112>, <&tegra_car 113>, <&tegra_car 93>;
+      clock-names = "pll_a", "pll_a_out0", "mclk";
+    };
