@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/input/imagis,isa1200.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Imagis ISA1200 Haptic Driver - ERM/LRA Actuator, PWM Input Control, Serial Interface
+
+maintainers:
+  - David Heidelberg <david@ixit.cz>
+
+properties:
+  compatible:
+    const: imagis,isa1200
+
+  reg:
+    maxItems: 1
+
+  clocks: true
+  clock-names:
+    maxItems: 1
+
+  enable-gpio: true
+
+  max-timeout: true
+  pll: true
+  duty: true
+  period: true
+
+  pinctrl-names:
+    items:
+      - const: on
+      - const: off
+  pinctrl-0: true
+  pinctrl-1: true
+
+patternProperties:
+  '^ctrl[0-4]$':
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/clock/tegra20-car.h>
+    #include <dt-bindings/gpio/tegra-gpio.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    i2c {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      isa1200@48 {
+        compatible = "imagis,isa1200";
+        reg = <0x48>;
+        enable-gpio = <&gpio TEGRA_GPIO(R, 6) GPIO_ACTIVE_HIGH>;
+
+        max-timeout = <10000>;
+        ctrl0 = <17>;
+        ctrl1 = <192>;
+        ctrl2 = <0>;
+        ctrl4 = <0>;
+        pll = <0x23>;
+        duty = <0x85>;
+        period = <0x86>;
+
+        clocks = <&tegra_car TEGRA20_CLK_CDEV2>;
+        clock-names = "vibrator-clk";
+
+        pinctrl-names = "on", "off";
+        pinctrl-0 = <&state_isa1200_on>;
+        pinctrl-1 = <&state_isa1200_off>;
+      };
+    };
