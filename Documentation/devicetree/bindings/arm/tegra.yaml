@@ -92,6 +92,9 @@ properties:
           - const: asus,grouper
           - const: nvidia,tegra30
       - items:
+          - const: lenovo,cl2n
+          - const: nvidia,tegra30
+      - items:
           - const: ouya,ouya
           - const: nvidia,tegra30
       - items:
