@@ -1,17 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * drivers/motor/isa1200_vibrator.c
- *
+ * Imagis ISA1200 Haptic Driver
  * Copyright (C) 2011 Samsung Electronics Co. Ltd. All Rights Reserved.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #include <linux/kernel.h>
@@ -542,13 +532,11 @@ static const struct i2c_device_id isa1200_vibrator_device_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, isa1200_vibrator_device_id);
 
-#ifdef CONFIG_OF
 static const struct of_device_id isa1200_dt_match[] = {
-	{ .compatible = "samsung_p3,isa1200_vibrator" },
+	{ .compatible = "imagis,isa1200" },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, isa1200_dt_match);
-#endif
 
 static struct i2c_driver isa1200_vibrator_i2c_driver = {
 	.driver = {
