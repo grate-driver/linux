@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/input/mcs-touchkey.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: MELFAS MCS5000/5080 controller
+
+maintainers:
+  - Rob Herring <robh@kernel.org>
+
+properties:
+  compatible:
+    enum:
+      - mcs5000_touchkey
+      - mcs5080_touchkey
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  key_maxval:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: size of keycode table
+
+  linux,code:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: key code for this device
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - linux,code
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c-gpio-0 {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      melfas-touchkey@20 {
+        compatible = "mcs5080_touchkey";
+        reg = <0x20>;
+        interrupts = <100>;
+        key_maxval = <4>;
+        linux,code = <139 102 158 217>;
+      };
+    };
