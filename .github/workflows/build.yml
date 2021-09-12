@@ -103,11 +103,31 @@ jobs:
           pip3 install -U --user git+https://github.com/devicetree-org/dt-schema.git@master
       - name: Build
         run: |
-          make $KBUILD_DEFCONFIG
+          make grate_defconfig # verify against grate instead KBUILD_DEFCONFIG, since tegra builds lot of non-required stuff
           status=0
-          make -j3 dtbs || status=1
-          make -j3 dtbs_check || status=1
-          exit $status
+          make -j3 dtbs || echo "dtbs " > status
+          make -j3 dtbs_check 2> warn.log || echo "dtbs_check" > status
+
+      - name: Evaluate warnings
+        run: |
+          warn=$(wc -l warn.log| cut -f1 -d" ")
+          cat warn.log
+          echo ":: warnings: $warn"
+
+      - name: Evaluate critical warnings
+        run: |
+          grep -v "failed to match any schema with compatible:" warn.log > warn_crit.log
+          warn_crit=$(wc -l warn_crit.log| cut -f1 -d" ")
+          sed -i "s/^/::warning ::/" warn_crit.log
+          cat warn_crit.log
+          echo ":: warnings: $warn_crit"
+      - name: Evaluate success
+        run: |
+          if [ -f status ]; then
+            echo ":: failed on: "
+            cat status
+            exit 1
+          fi
 
   dt_bindings_check:
     strategy:
@@ -122,4 +142,8 @@ jobs:
           pip3 install -U --user git+https://github.com/devicetree-org/dt-schema.git@master
       - name: Build
         run: |
-          make -j3 dt_binding_check
+          make -j8 dt_binding_check 2> >(tee warn.log >&2) > /dev/null
+      - name: Evaluate warnings
+        run: |
+          sed -i "s/^/::warning ::/" warn.log
+          cat warn.log
