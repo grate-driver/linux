@@ -1076,7 +1076,7 @@
 		#size-cells = <0>;
 
 		isa1200@48 {
-			compatible = "samsung_p3,isa1200_vibrator";
+			compatible = "imagis,isa1200";
 			reg = <0x48>;
 			enable-gpio = <&gpio TEGRA_GPIO(R, 6) GPIO_ACTIVE_HIGH>;
 
