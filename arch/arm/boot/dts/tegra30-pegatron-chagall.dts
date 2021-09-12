@@ -1059,10 +1059,6 @@
 		status = "okay";
 
 		/* Broadcom GPS BCM47511 */
-		gnss {
-			compatible = "gps,nmea";
-			vcc-supply = <&vdd_3v3_sys>;
-		};
 	};
 
 	uartc: serial@70006200 {
@@ -1221,10 +1217,7 @@
 		status = "okay";
 		clock-frequency = <93750>;
 
-		nvhdcp@3a {
-			compatible = "nvidia,hdcp";
-			reg = <0x3a>;
-		};
+		/* Nvidia Tegra HDCP device */
 	};
 
 	i2c@7000d000 {		/*i2c5*/
