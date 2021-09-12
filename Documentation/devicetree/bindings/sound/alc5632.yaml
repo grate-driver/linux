@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/sound/alc5632.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: ALC5632 audio codec
+
+description: |
+  This device supports I2C only.
+  Pins on the device (for linking into audio routes) for ALC5632:
+  * SPK_OUTP
+  * SPK_OUTN
+  * HP_OUT_L
+  * HP_OUT_R
+  * AUX_OUT_P
+  * AUX_OUT_N
+  * LINE_IN_L
+  * LINE_IN_R
+  * PHONE_P
+  * PHONE_N
+  * MIC1_P
+  * MIC1_N
+  * MIC2_P
+  * MIC2_N
+  * MICBIAS1
+  * DMICDAT
+
+maintainers:
+  - David Heidelberg <david@ixit.cz>
+
+properties:
+  compatible:
+    const: realtek,alc5632
+
+  reg: true
+
+  gpio-controller: true
+  '#gpio-cells':
+    const: 2
+
+required:
+  - compatible
+  - reg
+  - gpio-controller
+  - '#gpio-cells'
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      alc5632@1e {
+        compatible = "realtek,alc5632";
+        reg = <0x1e>;
+
+        gpio-controller;
+        #gpio-cells = <2>;
+      };
+    };
