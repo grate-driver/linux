@@ -63,7 +63,9 @@ properties:
           - const: asus,tf201
           - const: nvidia,tegra30
       - items:
-          - const: asus,tf300t
+          - enum:
+              - asus,tf300t
+              - asus,tf300tg
           - const: nvidia,tegra30
       - items:
           - const: asus,tf700t
