@@ -267,11 +267,17 @@
 				pinctrl-0 = <&i2c3_pins>;
 				pinctrl-names = "default";
 
-				trackpad@10 {
+				touchscreen@10 {
 					compatible = "elan,ekth3500";
 					reg = <0x10>;
+
 					interrupt-parent = <&tlmm_pinmux>;
 					interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
+
+					touchscreen-size-x = <2240>;
+					touchscreen-size-y = <1350>;
+					touchscreen-swapped-x-y;
+					touchscreen-inverted-x;
 				};
 			};
 		};
