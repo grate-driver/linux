@@ -49,7 +49,7 @@ examples:
     #include <dt-bindings/clock/tegra20-car.h>
     #include <dt-bindings/gpio/tegra-gpio.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    i2c@17 {
+    i2c {
       #address-cells = <1>;
       #size-cells = <0>;
 
