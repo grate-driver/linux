@@ -1205,9 +1205,9 @@
 					vdd-supply = <&vdd_1v8_vio>;
 					vddio-supply = <&vdd_1v8_vio>;
 
-					mount-matrix =   "1",  "0",  "0",
-							 "0", "-1",  "0",
-							 "0",  "0", "-1";
+					mount-matrix =  "-1",  "0",  "0",
+							 "0",  "1",  "0",
+							 "0",  "0",  "1";
 				};
 			};
 		};
