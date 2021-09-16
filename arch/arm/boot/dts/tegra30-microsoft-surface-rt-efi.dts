@@ -2,7 +2,7 @@
 
 #include "tegra30-microsoft-surface-rt.dts"
 
-/* 
+/*
  * Temporary Microsoft Surface RT device-tree for EFI booting.
  * Replacing PMIC with fixed regulators.
  */
@@ -28,13 +28,13 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
 	};
-	
+
 	/* Core regulator cannot work with UEFI, delete it */
 	i2c@7000d000 {
 		/delete-node/ core-regulator@60;
 	};
 
-	/* DVFS cannot work with UEF, delete it */
+	/* DVFS cannot work with UEFI, delete it */
 	cpus {
 		cpu@0 {
 			/delete-property/ cpu-supply;
