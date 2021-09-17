@@ -229,18 +229,25 @@ static const struct of_device_id vc4_dpi_dt_match[] = {
 static int vc4_dpi_init_bridge(struct vc4_dpi *dpi)
 {
 	struct device *dev = &dpi->pdev->dev;
+	struct drm_panel *panel;
 	struct drm_bridge *bridge;
+	int ret;
 
-	bridge = devm_drm_of_get_bridge(dev, dev->of_node, 0, 0);
-	if (IS_ERR(bridge)) {
+	ret = drm_of_find_panel_or_bridge(dev->of_node, 0, 0,
+					  &panel, &bridge);
+	if (ret) {
 		/* If nothing was connected in the DT, that's not an
 		 * error.
 		 */
-		if (PTR_ERR(bridge) == -ENODEV)
+		if (ret == -ENODEV)
 			return 0;
 		else
-			return PTR_ERR(bridge);
+			return ret;
 	}
+
+	if (panel)
+		bridge = drm_panel_bridge_add_typed(panel,
+						    DRM_MODE_CONNECTOR_DPI);
 
 	return drm_bridge_attach(dpi->encoder, bridge, NULL, 0);
 }
