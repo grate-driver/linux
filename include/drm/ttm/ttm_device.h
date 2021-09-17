@@ -266,7 +266,6 @@ struct ttm_device {
 	 * @ddestroy: Destroyed but not yet cleaned up buffer objects.
 	 */
 	struct list_head ddestroy;
-	struct list_head pinned;
 
 	/**
 	 * @pinned: Buffer objects which are pinned and so not on any LRU list.
