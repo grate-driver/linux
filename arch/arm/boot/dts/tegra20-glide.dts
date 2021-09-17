@@ -1602,7 +1602,7 @@
 		keep-power-in-suspend;
 	};
 
-	clk32k_in: clock@0 {
+	clk32k_in: clock-32k {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <32768>;
@@ -1681,7 +1681,7 @@
 
 	};
 
-	pmic_reg: regulator@0 {
+	pmic_reg: regulator-pmic {
 		compatible = "regulator-fixed";
 		regulator-name = "usb0_vbus";
 		regulator-min-microvolt = <5000000>;
@@ -1690,14 +1690,14 @@
 		regulator-boot-on;
 	};
 
-	vdd_5v0_hdmi: regulator@1 {
+	vdd_5v0_hdmi: regulator-hdmicon {
 		compatible = "regulator-fixed";
 		regulator-name = "+5V_HDMI_CON";
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 	};
 
-	vdd_hdmi_ldo: regulator@2 {
+	vdd_hdmi_ldo: regulator-hdmildo {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd-hdmi-ldo";
 		regulator-min-microvolt = <1200000>;
@@ -1706,7 +1706,7 @@
 		enable-active-high;
 	};
 
-	otg_reg: regulator@3 {
+	otg_reg: regulator-otg {
 		compatible = "regulator-fixed";
 		regulator-name = "otg-en";
 		regulator-min-microvolt = <5000000>;
@@ -1721,7 +1721,7 @@
 		vin-supply = <&charger_supply>;
 	};
 
-	gps_en: regulator@4 {
+	gps_en: regulator-gps {
 		compatible = "regulator-fixed";
 		regulator-name = "gps-en";
 		regulator-min-microvolt = <3300000>;
@@ -1730,7 +1730,7 @@
 		// gpio = <&gpio TEGRA_GPIO(B, 2) GPIO_ACTIVE_HIGH>;
 	};
 
-	front_2_back_3: regulator@5 {
+	front_2_back_3: regulator-cam2 {
 		compatible = "regulator-fixed";
 		regulator-name = "cam-pmic-en2";
 		/* voltage is unknown */
@@ -1746,7 +1746,7 @@
 		* write this here properly. Probably will need
 		* to dance with pinmux?
 		*/
-	front_6_back_8_10: regulator@6 {
+	front_6_back_8_10: regulator-cam6 {
 		compatible = "regulator-fixed";
 		regulator-name = "cam-vt-nstby";
 		/* voltage is unknown */
@@ -1756,7 +1756,7 @@
 		enable-active-high;
 	};
 
-	front_7_back_9: regulator@7 {
+	front_7_back_9: regulator-cam7 {
 		compatible = "regulator-fixed";
 		regulator-name = "cam-vt-nrst";
 		/* voltage is unknown */
@@ -1766,7 +1766,7 @@
 		enable-active-high;
 	};
 
-	back_2: regulator@8 {
+	back_2: regulator-cam2 {
 		compatible = "regulator-fixed";
 		regulator-name = "cam-mega-core-1p2-en";
 		regulator-min-microvolt = <1200000>;
@@ -1775,7 +1775,7 @@
 		enable-active-high;
 	};
 
-	wlf_ldo: regulator@9 {
+	wlf_ldo: regulator-wlf {
 		compatible = "regulator-fixed";
 		regulator-name = "wlf-wm8994-ldo";
 		gpio = <&gpio TEGRA_GPIO(X, 5) GPIO_ACTIVE_HIGH>;

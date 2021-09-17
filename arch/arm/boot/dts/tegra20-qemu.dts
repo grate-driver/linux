@@ -53,7 +53,7 @@
 		power-supply = <&vdd_pnl_reg>;
 	};
 
-	clk32k_in: clock@0 {
+	clk32k_in: clock-32k {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <32768>;
