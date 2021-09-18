@@ -590,7 +590,7 @@
 
 		wm8994: wm8994@1b {
 			compatible = "wlf,wm8994";
-			reg = <0x1B>;
+			reg = <0x1b>;
 
 			gpio-controller;
 			#gpio-cells = <2>;
@@ -599,6 +599,15 @@
 			wlf,gpio-cfg = <0xA101 0 0 0 0 0 0 0 0 0 0>;
 
 			lineout1-se;
+
+			// TODO: supplies not tested
+			AVDD1-supply = <&sm2_reg>;
+			AVDD2-supply = <&sm2_reg>;
+			CPVDD-supply = <&sm2_reg>;
+			DBVDD-supply = <&sm2_reg>;
+			DCVDD-supply = <&sm2_reg>;
+			SPKVDD1-supply = <&sm2_reg>;
+			SPKVDD2-supply = <&sm2_reg>;
 		};
 	};
 
