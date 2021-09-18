@@ -1098,7 +1098,7 @@
 			shutdown-gpio = <&gpio TEGRA_GPIO(W, 1) GPIO_ACTIVE_HIGH>;
 
 			clocks = <&tegra_car TEGRA20_CLK_UARTC>;
-			clock-names = "uartc";
+			clock-names = "txco";
 
 			max-speed = <2000000>;
 		};
