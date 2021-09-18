@@ -1675,8 +1675,6 @@
 					vsync-len = <2>;
 					hsync-active = <0>;
 					vsync-active = <0>;
-					nvidia,h-ref-to-sync = <1>; // 0
-					nvidia,v-ref-to-sync = <1>;
 				};
 			};
 		};
