@@ -1376,7 +1376,7 @@
 		/* CyberTAN NC223 802.11a/b/g/n BT 4.0 + HS Combo Module */
 		wifi@1 {
 			reg = <1>;
-			compatible = "brcm,bcm4329-fmac", "brcm,bcm4330-fmac";
+			compatible = "brcm,bcm4330-fmac";
 
 			interrupt-parent = <&gpio>;
 			interrupts = <TEGRA_GPIO(W, 3) IRQ_TYPE_LEVEL_HIGH>;
