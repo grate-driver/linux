@@ -351,7 +351,7 @@
 
 	/* IDT V103 */
 	lvds-encoder {
-		compatible = "lvds-encoder";
+		compatible = "thine,thc63lvd103", "lvds-encoder";
 
 		powerdown-gpios = <&gpio TEGRA_GPIO(B, 2) GPIO_ACTIVE_LOW>;
 
