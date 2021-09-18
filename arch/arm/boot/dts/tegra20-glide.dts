@@ -484,14 +484,13 @@
 		status = "okay";
 
 		bluetooth {
-			// can be changed to 4330 in linux v5.0
-			compatible = "brcm,bcm43438-bt";
+			compatible = "brcm,bcm4330-bt";
 			max-speed = <921600>;
 			shutdown-gpios = <&gpio TEGRA_GPIO(W, 1) GPIO_ACTIVE_HIGH>;
 			device-wakeup-gpios = <&gpio TEGRA_GPIO(S, 1) GPIO_ACTIVE_HIGH>;
 			host-wakeup-gpios = <&gpio TEGRA_GPIO(S, 2) GPIO_ACTIVE_HIGH>;
 			clocks = <&tegra_car TEGRA20_CLK_UARTC>;
-			clock-names = "uartc";
+			clock-names = "txco";
 
 		};
 	};
