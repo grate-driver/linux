@@ -1697,10 +1697,6 @@
 		};
 	};
 
-	power-domain-core {
-		power-supply = <&vdd_core>;
-	};
-
 	sound {
 		compatible = "nvidia,tegra-audio-wm8903-chagall",
 			     "nvidia,tegra-audio-wm8903";
