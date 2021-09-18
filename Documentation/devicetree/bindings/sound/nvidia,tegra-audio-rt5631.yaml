@@ -17,8 +17,15 @@ maintainers:
 
 properties:
   compatible:
-    enum:
-      - nvidia,tegra-audio-rt5631
+    oneOf:
+      - items:
+          - enum:
+              - nvidia,tegra-audio-rt5631-tf201
+              - nvidia,tegra-audio-rt5631-tf300tg
+              - nvidia,tegra-audio-rt5631-tf700t
+          - const: nvidia,tegra-audio-rt5631
+      - items:
+          const: nvidia,tegra-audio-rt5631
 
   clocks:
     minItems: 3
