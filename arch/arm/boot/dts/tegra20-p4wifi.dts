@@ -437,13 +437,13 @@
 		 * According to TRM gpio A0 is linked to pinctrl dte
 		 * but this pinctrl doesn't seem to affect the GPIO.
 		 */
-		wm8994-bh1721-enable {
+		wm8994-bh1721-enable-hog {
 			gpio-hog;
 			gpios = <TEGRA_GPIO(A, 0) GPIO_ACTIVE_HIGH>;
 			output-high;
 		};
 
-		wm8994-mic-bias {
+		wm8994-mic-bias-hog {
 			gpio-hog;
 			gpios = <TEGRA_GPIO(X, 6) GPIO_ACTIVE_HIGH>;
 			output-high;
