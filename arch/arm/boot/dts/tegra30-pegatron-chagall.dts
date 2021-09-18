@@ -1094,7 +1094,7 @@
 		clock-frequency = <400000>;
 
 		embedded-controller@10 {
-			compatible = "pegatron,chagall-ec";
+			compatible = "pegatron,chagall-ec", "cypress,cg7153am";
 			reg = <0x10>;
 
 			monitored-battery = <&battery>;
