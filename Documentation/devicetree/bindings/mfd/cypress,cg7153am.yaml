@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/mfd/cypress,cg7153am.yaml#
@@ -15,10 +15,13 @@ description: |
 
 properties:
   compatible:
-    items:
-      - enum:
-          - pegatron,chagall-ec # Pegatron Chagall tablet device
-      - const: cypress,cg7153am
+    oneOf:
+      - items:
+          - enum:
+              - pegatron,chagall-ec # Pegatron Chagall tablet device
+          - const: cypress,cg7153am
+      - items:
+          const: cypress,cg7153am
 
   reg:
     maxItems: 1
@@ -41,7 +44,7 @@ examples:
         #size-cells = <0>;
 
         embedded-controller@10 {
-          compatible = "pegatron,chagall-ec";
+          compatible = "pegatron,chagall-ec", "cypress,cg7153am";
           reg = <0x10>;
 
           monitored-battery = <&battery>;
