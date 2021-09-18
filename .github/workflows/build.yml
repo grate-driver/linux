@@ -111,16 +111,20 @@ jobs:
       - name: Evaluate warnings
         run: |
           warn=$(wc -l warn.log| cut -f1 -d" ")
-          cat warn.log
-          echo ":: warnings: $warn"
+          if [ "$warn" -gt "0" ]; then
+            cat warn.log
+            echo "::warning :: $warn warnings"
+          fi
 
       - name: Evaluate critical warnings
         run: |
-          grep -v "failed to match any schema with compatible:" warn.log > warn_crit.log
+          grep -v "failed to match any schema with compatible:" warn.log > warn_crit.log || exit 0
           warn_crit=$(wc -l warn_crit.log| cut -f1 -d" ")
-          sed -i "s/^/::warning ::/" warn_crit.log
-          cat warn_crit.log
-          echo ":: warnings: $warn_crit"
+          if [ "$warn_crit" -gt "0" ]; then
+            cat warn_crit.log
+            echo "::warning :: $warn_crit critical warnings"
+          fi
+          exit 1
       - name: Evaluate success
         run: |
           if [ -f status ]; then
@@ -145,5 +149,8 @@ jobs:
           make -j8 dt_binding_check 2> >(tee warn.log >&2) > /dev/null
       - name: Evaluate warnings
         run: |
-          sed -i "s/^/::warning ::/" warn.log
-          cat warn.log
+          warn=$(wc -l warn.log| cut -f1 -d" ")
+          if [ "$warn" -gt "0" ]; then
+            cat warn.log
+            echo "::warning :: $warn warnings"
+          fi
