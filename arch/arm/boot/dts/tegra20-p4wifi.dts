@@ -517,7 +517,7 @@
 				interrupt-parent = <&gpio>;
 				interrupts = <TEGRA_GPIO(D, 4) IRQ_TYPE_LEVEL_LOW>;
 
-				reset-gpio = <&gpio TEGRA_GPIO(D, 3) GPIO_ACTIVE_LOW>;
+				reset-gpios = <&gpio TEGRA_GPIO(D, 3) GPIO_ACTIVE_LOW>;
 
 				atmel,wakeup-method = <ATMEL_MXT_WAKEUP_I2C_SCL>;
 			};
@@ -596,7 +596,7 @@
 			wlf,ldo1ena =  <&gpio TEGRA_GPIO(X, 5) GPIO_ACTIVE_HIGH>;
 			wlf,gpio-cfg = <0xA101 0 0 0 0 0 0 0 0 0 0>;
 
-			lineout1-se;
+			wlf,lineout1-se;
 
 			// TODO: supplies not tested
 			AVDD1-supply = <&sm2_reg>;
@@ -1061,8 +1061,11 @@
 		broken-cd;
 		no-1-8-v;
 		non-removable;
+		#address-cells = <1>;
+		#size-cells = <0>;
 
 		brcmf: wifi@1 {
+			reg = <1>;
 			compatible = "brcm,bcm4329-fmac";
 		};
 	};
