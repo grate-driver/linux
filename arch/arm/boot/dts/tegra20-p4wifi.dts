@@ -1092,10 +1092,10 @@
 		bluetooth {
 			compatible = "brcm,bcm43438-bt";
 
-			device-wakeup-gpio = <&gpio TEGRA_GPIO(S, 1) GPIO_ACTIVE_HIGH>;
+			device-wakeup-gpios = <&gpio TEGRA_GPIO(S, 1) GPIO_ACTIVE_HIGH>;
 			host-wakeup-gpios = <&gpio TEGRA_GPIO(S, 2) GPIO_ACTIVE_HIGH>;
 
-			shutdown-gpio = <&gpio TEGRA_GPIO(W, 1) GPIO_ACTIVE_HIGH>;
+			shutdown-gpios = <&gpio TEGRA_GPIO(W, 1) GPIO_ACTIVE_HIGH>;
 
 			clocks = <&tegra_car TEGRA20_CLK_UARTC>;
 			clock-names = "txco";
