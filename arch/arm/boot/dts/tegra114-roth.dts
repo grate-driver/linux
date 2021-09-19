@@ -39,9 +39,8 @@
 
 			avdd-dsi-csi-supply = <&vdd_1v2_ap>;
 
-			panel@0 {
+			panel {
 				compatible = "lg,lh500wx1-sd03";
-				reg = <0>;
 
 				power-supply = <&vdd_lcd>;
 				backlight = <&backlight>;
