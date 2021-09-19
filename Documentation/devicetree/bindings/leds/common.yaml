@@ -96,6 +96,8 @@ properties:
       - timer
         # LED alters the brightness for the specified duration with one software
         # timer (requires "led-pattern" property)
+      - rfkill0
+        # LED indicates rfkill state
       - pattern
 
   led-pattern:
