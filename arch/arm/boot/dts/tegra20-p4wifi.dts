@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /dts-v1/;
 
 #include <dt-bindings/input/input.h>
@@ -37,13 +38,13 @@
 
 		/* bootloader reads/writes magic values in this region */
 		bootloader_data: bootloader_data@1FF00000 {
-			reg = <0x1FF00000 0x00100000>;
+			reg = <0x1ff00000 0x00100000>;
 			no-map;
 		};
 
 		ramoops: ramoops@2E500000 {
 			compatible = "ramoops";
-			reg = <0x2E500000 0x00100000>;
+			reg = <0x2e500000 0x00100000>;
 			record-size	= <0x00020000>;
 			console-size	= <0x00020000>;
 			ftrace-size	= <0x00020000>;
@@ -540,9 +541,8 @@
 
 	i2c-5 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(Y, 2) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(Y, 0) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(Y, 2) TEGRA_I2C_GPIO_FLAGS>;
+		scl-gpios = <&gpio TEGRA_GPIO(Y, 0) TEGRA_I2C_GPIO_FLAGS>;
 		i2c-gpio,delay-us = <1>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
@@ -556,9 +556,8 @@
 
 	i2c-6 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(O, 0) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(O, 7) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(O, 0) TEGRA_I2C_GPIO_FLAGS>;
+		scl-gpios = <&gpio TEGRA_GPIO(O, 7) TEGRA_I2C_GPIO_FLAGS>;
 		i2c-gpio,delay-us = <1>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
@@ -580,9 +579,8 @@
 
 	i2c-8 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(G, 3) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(I, 0) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(G, 3) TEGRA_I2C_GPIO_FLAGS>;
+		scl-gpios = <&gpio TEGRA_GPIO(I, 0) TEGRA_I2C_GPIO_FLAGS>;
 		i2c-gpio,delay-us = <1>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
@@ -613,9 +611,8 @@
 
 	i2c-9 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(Y, 3) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(Y, 1) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(Y, 3) TEGRA_I2C_GPIO_FLAGS>;
+		scl-gpios = <&gpio TEGRA_GPIO(Y, 1) TEGRA_I2C_GPIO_FLAGS>;
 		i2c-gpio,delay-us = <1>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
@@ -632,9 +629,8 @@
 
 	i2c-10 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(Z, 3) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(C, 6) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(Z, 3) TEGRA_I2C_GPIO_FLAGS>;
+		scl-gpios = <&gpio TEGRA_GPIO(C, 6) TEGRA_I2C_GPIO_FLAGS>;
 		i2c-gpio,delay-us = <3>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
@@ -660,9 +656,8 @@
 	};
 	i2c-11 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(G, 2) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(I, 7) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(G, 2) TEGRA_I2C_GPIO_FLAGS >;
+		scl-gpios = <&gpio TEGRA_GPIO(I, 7) TEGRA_I2C_GPIO_FLAGS >;
 		i2c-gpio,delay-us = <3>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
@@ -693,9 +688,8 @@
 
 	i2c-12 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(O, 4) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(O, 2) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(O, 4) TEGRA_I2C_GPIO_FLAGS >;
+		scl-gpios = <&gpio TEGRA_GPIO(O, 2) TEGRA_I2C_GPIO_FLAGS >;
 		i2c-gpio,delay-us = <1>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
@@ -720,9 +714,8 @@
 
 	i2c-15 {
 		compatible = "i2c-gpio";
-		gpios = <
-			&gpio TEGRA_GPIO(I, 3) TEGRA_I2C_GPIO_FLAGS
-			&gpio TEGRA_GPIO(K, 2) TEGRA_I2C_GPIO_FLAGS >;
+		sda-gpios = <&gpio TEGRA_GPIO(I, 3) TEGRA_I2C_GPIO_FLAGS >;
+		scl-gpios = <&gpio TEGRA_GPIO(K, 2) TEGRA_I2C_GPIO_FLAGS >;
 		i2c-gpio,delay-us = <1>;
 		i2c-gpio,timeout-ms = <0>;
 		#address-cells = <1>;
