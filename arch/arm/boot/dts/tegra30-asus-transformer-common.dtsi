@@ -1351,7 +1351,7 @@
 		};
 	};
 
-	vdd_5v0_bat: regulator-acbat {
+	vdd_5v0_bat: regulator-bat {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_ac_bat";
 		regulator-min-microvolt = <5000000>;
@@ -1360,7 +1360,7 @@
 		regulator-boot-on;
 	};
 
-	vdd_5v0_cp: regulator-5v0sby {
+	vdd_5v0_cp: regulator-sby {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0_sby";
 		regulator-min-microvolt = <5000000>;
@@ -1372,7 +1372,7 @@
 		vin-supply = <&vdd_5v0_bat>;
 	};
 
-	vdd_5v0_sys: regulator-5v0sys {
+	vdd_5v0_sys: regulator-5v {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0_sys";
 		regulator-min-microvolt = <5000000>;
@@ -1396,7 +1396,7 @@
 		vin-supply = <&vdd_5v0_bat>;
 	};
 
-	vdd_3v3_sys: regulator-3v3sys {
+	vdd_3v3_sys: regulator-3v {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3_sys";
 		regulator-min-microvolt = <3300000>;
@@ -1419,9 +1419,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	/* fixed regulator 6 is used by tf700t */
-
-	vdd_3v3_com: regulator-3v3com {
+	vdd_3v3_com: regulator-com {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_3v3_com";
 		regulator-min-microvolt = <3300000>;
@@ -1432,7 +1430,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	hdmi_5v0_sys: regulator-5v0sys {
+	hdmi_5v0_sys: regulator-hdmi {
 		compatible = "regulator-fixed";
 		regulator-name = "hdmi_5v0_sys";
 		regulator-min-microvolt = <5000000>;
@@ -1452,7 +1450,7 @@
 		vin-supply = <&vdd_3v3_sys>;
 	};
 
-	vddio_1v8_cam: regulator-1v8cam {
+	vddio_1v8_cam: regulator-camvio {
 		compatible = "regulator-fixed";
 		regulator-name = "vddio_1v8_cam";
 		regulator-min-microvolt = <1800000>;
