@@ -73,6 +73,13 @@
 		};
 	};
 
+	uartc: serial@70006200 {
+		/* Azurewave AW-NH665 BCM4330B1 */
+		bluetooth {
+			compatible = "brcm,bcm4330-bt";
+		};
+	};
+
 	tc358768_refclk: tc358768-refclk {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;

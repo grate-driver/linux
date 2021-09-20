@@ -1049,9 +1049,7 @@
 					   <9600 115200 200>,
 					   <1000000 4000000 136>;
 
-		/* Azurewave AW-NH615 BCM4329B1 or AW-NH665 BCM4330B1 */
 		bluetooth {
-			compatible = "brcm,bcm4329-bt", "brcm,bcm4330-bt";
 			max-speed = <4000000>;
 
 			clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
