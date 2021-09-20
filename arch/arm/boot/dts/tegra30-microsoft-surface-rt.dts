@@ -339,13 +339,13 @@
 		bus-width = <4>;
 		cap-power-off-card;
 		keep-power-in-suspend;
-		max-frequency = <50000000>;
+		max-frequency = <100000000>;
 
 		assigned-clocks = <&tegra_car TEGRA30_CLK_SDMMC3>;
 		assigned-clock-parents = <&tegra_car TEGRA30_CLK_PLL_C>;
-		assigned-clock-rates = <50000000>;
+		assigned-clock-rates = <100000000>;
 
-		mmc-pwrseq = <&brcm_wifi_pwrseq>;
+		mmc-pwrseq = <&mrvl_wifi_pwrseq>;
 		vqmmc-supply = <&vqmmc_wifi_reg>;
 
 		/* Marvell 88W8797 WiFi */
@@ -357,7 +357,7 @@
 		};
 	};
 
-	brcm_wifi_pwrseq: wifi-pwrseq {
+	mrvl_wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 
 		clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
