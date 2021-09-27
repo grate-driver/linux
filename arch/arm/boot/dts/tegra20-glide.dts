@@ -886,7 +886,7 @@
 		 * (specified as uok since USB is detected)
 		 */
 
-		charger_supply: otg-vbus {};
+		// charger_supply: otg-vbus {}; // not implemented yet
         };
 
 	i2c-7 {
@@ -1731,7 +1731,7 @@
 			* this thing is so slow!
 			*/
 		regulator-enable-ramp-delay = <350000>;
-		vin-supply = <&charger_supply>;
+		// vin-supply = <&charger_supply>;
 	};
 
 	gps_en: regulator-gps {
