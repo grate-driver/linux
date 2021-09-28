@@ -665,13 +665,11 @@ static void vduse_vdpa_set_config(struct vdpa_device *vdpa, unsigned int offset,
 static int vduse_vdpa_reset(struct vdpa_device *vdpa)
 {
 	struct vduse_dev *dev = vdpa_to_vduse(vdpa);
-
-	if (vduse_dev_set_status(dev, 0))
-		return -EIO;
+	int ret = vduse_dev_set_status(dev, 0);
 
 	vduse_dev_reset(dev);
 
-	return 0;
+	return ret;
 }
 
 static u32 vduse_vdpa_get_generation(struct vdpa_device *vdpa)
@@ -968,6 +966,10 @@ static long vduse_dev_ioctl(struct file *file, unsigned int cmd,
 		break;
 	}
 	case VDUSE_DEV_INJECT_CONFIG_IRQ:
+		ret = -EINVAL;
+		if (!(dev->status & VIRTIO_CONFIG_S_DRIVER_OK))
+			break;
+
 		ret = 0;
 		queue_work(vduse_irq_wq, &dev->inject);
 		break;
@@ -1046,6 +1048,10 @@ static long vduse_dev_ioctl(struct file *file, unsigned int cmd,
 	}
 	case VDUSE_VQ_INJECT_IRQ: {
 		u32 index;
+
+		ret = -EINVAL;
+		if (!(dev->status & VIRTIO_CONFIG_S_DRIVER_OK))
+			break;
 
 		ret = -EFAULT;
 		if (get_user(index, (u32 __user *)argp))
@@ -1593,8 +1599,10 @@ static int vduse_init(void)
 
 	vduse_irq_wq = alloc_workqueue("vduse-irq",
 				WQ_HIGHPRI | WQ_SYSFS | WQ_UNBOUND, 0);
-	if (!vduse_irq_wq)
+	if (!vduse_irq_wq) {
+		ret = -ENOMEM;
 		goto err_wq;
+	}
 
 	ret = vduse_domain_init();
 	if (ret)
