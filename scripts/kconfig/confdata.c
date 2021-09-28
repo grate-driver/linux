@@ -784,7 +784,8 @@ static void conf_write_symbol(FILE *fp, struct symbol *sym,
 	case S_UNKNOWN:
 		break;
 	case S_STRING:
-		str = sym_escape_string(sym);
+		str = sym_get_string_value(sym);
+		str = sym_escape_string_value(str);
 		printer->print_symbol(fp, sym, str, printer_arg);
 		free((void *)str);
 		break;

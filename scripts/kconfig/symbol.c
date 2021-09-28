@@ -871,14 +871,12 @@ struct symbol *sym_find(const char *name)
 	return symbol;
 }
 
-const char *sym_escape_string(struct symbol *sym)
+const char *sym_escape_string_value(const char *in)
 {
-	const char *in, *p;
+	const char *p;
 	size_t reslen;
 	char *res;
 	size_t l;
-
-	in = sym_get_string_value(sym);
 
 	reslen = strlen(in) + strlen("\"\"") + 1;
 
