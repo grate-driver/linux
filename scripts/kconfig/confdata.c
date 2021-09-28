@@ -666,7 +666,7 @@ static void rustc_cfg_print_symbol(FILE *fp, struct symbol *sym, const char *val
 	case S_HEX:
 	case S_BOOLEAN:
 	case S_TRISTATE:
-		str = sym_escape_string(sym);
+		str = sym_escape_string_value(value);
 
 		/*
 		 * We don't care about disabled ones, i.e. no need for
