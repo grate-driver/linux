@@ -778,7 +778,7 @@ static struct conf_printer header_printer_cb =
 static void conf_write_symbol(FILE *fp, struct symbol *sym,
 			      struct conf_printer *printer, void *printer_arg)
 {
-	char *str;
+	const char *str;
 
 	switch (sym->type) {
 	case S_UNKNOWN:
@@ -786,11 +786,11 @@ static void conf_write_symbol(FILE *fp, struct symbol *sym,
 	case S_STRING:
 		str = sym_escape_string(sym);
 		printer->print_symbol(fp, sym, str, printer_arg);
-		free(str);
+		free((void *)str);
 		break;
 	default:
-		printer->print_symbol(fp, sym, sym_get_string_value(sym),
-				      printer_arg);
+		str = sym_get_string_value(sym);
+		printer->print_symbol(fp, sym, str, printer_arg);
 	}
 }
 
