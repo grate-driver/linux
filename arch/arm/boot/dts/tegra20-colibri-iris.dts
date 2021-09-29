@@ -70,11 +70,11 @@
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 			};
 
-			pwm-a-b {
+			pin-pwm-a-b {
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 			};
 
-			pwm-c-d {
+			pin-pwm-c-d {
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 			};
 
