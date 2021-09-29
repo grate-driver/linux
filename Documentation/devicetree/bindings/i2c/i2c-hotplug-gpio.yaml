@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/i2c/i2c-hotplug-gpio.yaml#
@@ -9,7 +9,10 @@ title: hot-plugged I2C bus detected by GPIO.
 maintainers:
   - Michał Mirosław <mirq-linux@rere.qmqm.pl>
 
-description: |+
+allOf:
+  - $ref: /schemas/i2c/i2c-controller.yaml#
+
+description: |
   Driver for hot-plugged I2C busses: where some devices on a bus
   are hot-pluggable and their presence is indicated by GPIO line.
 
@@ -41,18 +44,17 @@ required:
   - detect-gpios
   - i2c-parent
 
-additionalProperties: false
+unevaluatedProperties: false
 
 examples:
   - |
     /*
      * Asus Transformers use I2C hotplug for attachable dock keyboard
      */
-
     #include <dt-bindings/gpio/gpio.h>
     #include <dt-bindings/interrupt-controller/irq.h>
 
-    dock-i2c {
+    i2c-dock {
         compatible = "i2c-hotplug-gpio";
 
         #address-cells = <1>;
