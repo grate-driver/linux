@@ -227,6 +227,20 @@
 		vcc-supply = <&vdd_3v3_sys>;
 	};
 
+	pad_battery: pad-battery {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <3380000>;
+		energy-full-design-microwatt-hours = <25000000>;
+		operating-range-celsius = <0 45>;
+	};
+
+	dock_battery: dock-battery {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <2940000>;
+		energy-full-design-microwatt-hours = <22000000>;
+		operating-range-celsius = <0 45>;
+	};
+
 	memory-controller@7000f000 {
 		emc-timings-0 {
 			/* Micron 1GB 800MHZ */
