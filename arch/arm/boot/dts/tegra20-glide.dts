@@ -1229,7 +1229,7 @@
 	leds {
 		compatible = "gpio-leds";
 
-		kbd {
+		led-kbd {
 			label = "Keyboard backlight";
 			gpios = <&gpio TEGRA_GPIO(L, 5) GPIO_ACTIVE_HIGH>;
 			/*
@@ -1240,7 +1240,6 @@
 			 * echo gpio > /sys/class/leds/Keyboard\ backlight/trigger
 			 * echo 179 > /sys/class/leds/Keyboard\ backlight/gpio
 			 */
-			linux,default-trigger = "gpio";
 			default-state = "off";
 		};
 	};
