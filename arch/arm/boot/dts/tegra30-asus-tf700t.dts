@@ -132,6 +132,20 @@
 		};
 	};
 
+	dock_battery: battery-dock {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <2940000>;
+		energy-full-design-microwatt-hours = <22000000>;
+		operating-range-celsius = <0 45>;
+	};
+
+	pad_battery: battery-pad {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <3380000>;
+		energy-full-design-microwatt-hours = <25000000>;
+		operating-range-celsius = <0 45>;
+	};
+
 	haptic-feedback {
 		compatible = "gpio-vibrator";
 		enable-gpios = <&gpio TEGRA_GPIO(H, 7) GPIO_ACTIVE_HIGH>;
