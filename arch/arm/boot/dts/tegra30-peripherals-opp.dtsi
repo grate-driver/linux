@@ -305,12 +305,14 @@
 			opp-microvolt = <1200000 1200000 1350000>;
 			opp-hz = /bits/ 64 <500000000>;
 			opp-supported-hw = <0x0007>;
+			required-opps = <&core_opp_1200>;
 		};
 
 		opp@500000000,1250 {
 			opp-microvolt = <1250000 1250000 1350000>;
 			opp-hz = /bits/ 64 <500000000>;
 			opp-supported-hw = <0x0008>;
+			required-opps = <&core_opp_1250>;
 		};
 
 		opp@533000000,1200 {
