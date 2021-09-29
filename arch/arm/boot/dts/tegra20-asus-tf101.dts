@@ -571,7 +571,7 @@
 		};
 	};
 
-	dock-i2c {
+	i2c-dock {
 		compatible = "i2c-hotplug-gpio";
 
 		#address-cells = <1>;
