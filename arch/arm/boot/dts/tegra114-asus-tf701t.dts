@@ -326,6 +326,28 @@
 		status = "okay";
 		clock-frequency = <100000>;
 
+		/* Nuvoton NPCE69ALA0DX embedded controller */
+		embedded-controller@15 {
+			compatible = "asus,pad-ec", "asus,ec";
+			reg = <0x15>;
+
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(Q, 5) IRQ_TYPE_LEVEL_LOW>;
+
+			request-gpio = <&gpio TEGRA_GPIO(Q, 2) GPIO_ACTIVE_LOW>;
+			asus,dockram = <&dockram_pec>;
+
+			monitored-battery = <&pad_battery>;
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&asus_pad_ec_default>;
+		};
+
+		dockram_pec: dockram@17 {
+			compatible = "asus,dockram";
+			reg = <0x17>;
+		};
+
 		power-sensor@44 {
 			compatible = "ti,ina230";
 			reg = <0x44>;
@@ -658,6 +680,20 @@
 
 		pinctrl-names = "default";
 		pinctrl-0 = <&backlight_default>;
+	};
+
+	pad_battery: battery-pad {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <8150000>;
+		energy-full-design-microwatt-hours = <31000000>;
+		operating-range-celsius = <0 45>;
+	};
+
+	dock_battery: battery-dock {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <420000>;
+		energy-full-design-microwatt-hours = <16000000>;
+		operating-range-celsius = <0 45>;
 	};
 
 	/* PMIC has a built-in 32KHz oscillator which is used by PMC */

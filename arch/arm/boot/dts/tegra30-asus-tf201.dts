@@ -586,6 +586,20 @@
 		};
 	};
 
+	pad_battery: battery-pad {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <3380000>;
+		energy-full-design-microwatt-hours = <25000000>;
+		operating-range-celsius = <0 45>;
+	};
+
+	dock_battery: battery-dock {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <2940000>;
+		energy-full-design-microwatt-hours = <22000000>;
+		operating-range-celsius = <0 45>;
+	};
+
 	usb-phy@7d000000 {
 		/delete-property/ nvidia,xcvr-setup-use-fuses;
 		nvidia,xcvr-setup = <5>;      /* Based on TF201 fuse value - 48 */
