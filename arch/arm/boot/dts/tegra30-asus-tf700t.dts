@@ -252,6 +252,24 @@
 		#clock-cells = <0>;
 	};
 
+	/* FIXME: Sound only works, if booted from downstream kernel */
+	sound {
+		compatible = "asus,tegra-audio-rt5631-tf700t",
+			     "nvidia,tegra-audio-rt5631";
+		nvidia,model = "Asus Transformer Infinity TF700T RT5631";
+
+		nvidia,audio-routing =
+			"Headphone Jack", "HPOL",
+			"Headphone Jack", "HPOR",
+			"Int Spk", "SPOL",
+			"Int Spk", "SPOR",
+			"MIC1", "MIC Bias1",
+			"MIC Bias1", "Mic Jack",
+			"DMIC", "Int Mic";
+
+		nvidia,audio-codec = <&rt5631>;
+	};
+
 	memory-controller@7000f000 {
 		emc-timings-0 {
 			/* Micron 1GB 800MHZ */
