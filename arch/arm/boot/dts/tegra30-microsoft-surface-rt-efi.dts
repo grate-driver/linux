@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 
 #include "tegra30-microsoft-surface-rt.dts"
 
@@ -26,7 +26,7 @@
 		regulator-always-on;
 	};
 	
-	cover-i2c {
+	i2c-cover {
 		compatible = "i2c-hotplug-gpio";
 
 		#address-cells = <1>;
