@@ -1417,6 +1417,7 @@
 
 		enable-gpios = <&gpio TEGRA_GPIO(H, 3) GPIO_ACTIVE_HIGH>;
 		pwms = <&pwm 0 100000>;
+		power-supply = <&vdd_3v3_sys>;
 
 		brightness-levels = <
 			0 6 6 6 6 6 6 7
