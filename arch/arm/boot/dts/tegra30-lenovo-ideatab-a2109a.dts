@@ -1560,6 +1560,12 @@
 			vfront-porch = <15>;
 			vback-porch = <15>;
 		};
+
+		/* dummy port, remove before upstreaming! */
+		port {
+			endpoint {
+			};
+		};
 	};
 
 	vdd_5v0_sys: regulator-5v0 {
