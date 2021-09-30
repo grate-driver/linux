@@ -140,7 +140,7 @@
 				 * Panasonic VVX10F004B00 or HYDIS HV101WU1-1E1
 				 * LCD SuperIPS+ Full HD panel.
 				 */
-				display-panel@1 {
+				panel@1 {
 					compatible = "panasonic,vvx10f004b00";
 					reg = <1>;
 
