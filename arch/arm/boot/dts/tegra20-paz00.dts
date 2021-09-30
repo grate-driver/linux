@@ -612,6 +612,7 @@
 
 		enable-gpios = <&gpio TEGRA_GPIO(U, 4) GPIO_ACTIVE_HIGH>;
 		pwms = <&pwm 0 5000000>;
+		power-supply = <&vdd_pnl_reg>;
 
 		brightness-levels = <0 16 32 48 64 80 96 112 128 144 160 176 192 208 224 240 255>;
 		default-brightness-level = <10>;
