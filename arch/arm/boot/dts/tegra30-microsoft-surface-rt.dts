@@ -110,9 +110,29 @@
 		status = "okay";
 	};
 
-	i2c1: i2c@7000c000 {
+	i2c@7000c000 {
 		status = "okay";
 		clock-frequency = <400000>;
+	};
+
+	cover-i2c {
+		compatible = "i2c-hotplug-gpio";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupts-extended = <&gpio TEGRA_GPIO(S,0) IRQ_TYPE_EDGE_BOTH>;
+		detect-gpios = <&gpio TEGRA_GPIO(S,0) GPIO_ACTIVE_HIGH>;
+
+		i2c-parent = <&i2c1>;
+
+		cover@0 {
+			compatible = "hid-over-i2c";
+			reg = <0x00>;
+			hid-descr-addr = <0x0041>;
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(O, 5) IRQ_TYPE_LEVEL_LOW>;
+		};
 	};
 
 	i2c@7000c400 {
@@ -160,6 +180,22 @@
 			gpio-controller;
 
 			regulators {
+				ldo1_reg: ldo1 {
+					regulator-name = "tCoverAndSensorCollection";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
+					regulator-always-on;
+					regulator-boot-on;
+				};
+
+				ldo3_reg: ldo3 {
+					regulator-name = "tCoverPower";
+					regulator-min-microvolt = <2800000>;
+					regulator-max-microvolt = <2800000>;
+					regulator-always-on;
+					regulator-boot-on;
+				};
+
 				ldo5_reg: ldo5 {
 					regulator-name = "vddio_sdmmc";
 					regulator-min-microvolt = <1800000>;
