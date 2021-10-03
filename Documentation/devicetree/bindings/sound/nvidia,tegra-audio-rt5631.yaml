@@ -28,14 +28,12 @@ properties:
           const: nvidia,tegra-audio-rt5631
 
   clocks:
-    minItems: 3
     items:
       - description: PLL A clock
       - description: PLL A OUT0 clock
       - description: The Tegra cdev1/extern1 clock, which feeds the card's mclk
 
   clock-names:
-    minItems: 3
     items:
       - const: pll_a
       - const: pll_a_out0
