@@ -451,10 +451,31 @@
 	};
 
 	panel: display-panel {
-		compatible = "samsung,ltn140at29-301";
+		compatible = "panel-lvds";
 
 		power-supply = <&vdd_pnl1_reg>;
 		backlight = <&backlight>;
+
+		width-mm = <235>;
+		height-mm = <132>;
+		rotation = <0>;
+
+		data-mapping = "jeida-24";
+
+		panel-timing {
+			clock-frequency = <71980000>;
+
+			hactive = <1366>;
+			vactive = <768>;
+
+			hfront-porch = <56>;
+			hsync-len = <14>;
+			hback-porch = <106>;
+
+			vfront-porch = <3>;
+			vsync-len = <1>;
+			vback-porch = <6>;
+		};
 
 		port {
 			panel_input: endpoint {
