@@ -27,6 +27,7 @@
 #define MS_DUPLICATE_USAGES	BIT(5)
 #define MS_SURFACE_DIAL		BIT(6)
 #define MS_QUIRK_FF		BIT(7)
+#define MS_T_COVER_2		BIT(8)
 
 struct ms_data {
 	unsigned long quirks;
@@ -202,6 +203,12 @@ static int ms_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		if (ret)
 			return ret;
 	}
+
+	if (quirks & MS_T_COVER_2)
+		// tCover 2nd gen will send KEY_F23 on trackpad left/right click
+		// despite this BTN_LEFT/RIGHT event is send correctly
+		// just ignore the KEY_F23 event
+		ms_map_key_clear(KEY_F23);
 
 	return 0;
 }
@@ -450,6 +457,11 @@ static const struct hid_device_id ms_devices[] = {
 		.driver_data = MS_QUIRK_FF },
 	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_MICROSOFT, USB_DEVICE_ID_8BITDO_SN30_PRO_PLUS),
 		.driver_data = MS_QUIRK_FF },
+
+	{ HID_I2C_DEVICE(USB_VENDOR_ID_MICROSOFT, USB_DEVICE_ID_MS_TYPE_COVER_2),
+		.driver_data = MS_T_COVER_2 },
+	{ HID_I2C_DEVICE(USB_VENDOR_ID_MICROSOFT, USB_DEVICE_ID_MS_TOUCH_COVER_2),
+		.driver_data = MS_T_COVER_2 },
 	{ }
 };
 MODULE_DEVICE_TABLE(hid, ms_devices);
