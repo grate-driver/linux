@@ -8,6 +8,7 @@
 #ifndef _MFD_MAX77620_H_
 #define _MFD_MAX77620_H_
 
+#include <linux/notifier.h>
 #include <linux/types.h>
 
 /* GLOBAL, PMIC, GPIO, FPS, ONOFFC, CID Registers */
@@ -327,6 +328,7 @@ enum max77620_chip_id {
 struct max77620_chip {
 	struct device *dev;
 	struct regmap *rmap;
+	struct notifier_block pm_off_nb;
 
 	int chip_irq;
 
