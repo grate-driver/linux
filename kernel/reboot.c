@@ -170,27 +170,11 @@ static ATOMIC_NOTIFIER_HEAD(restart_handler_list);
  *	hardware is expected to register with low priority to ensure that
  *	it only runs if no other means to restart the system is available.
  *
- *	Currently always returns zero, as atomic_notifier_chain_register()
- *	always returns zero.
+ *	Returns zero on success, -EBUSY otherwise.
  */
 static int register_restart_handler(struct notifier_block *nb)
 {
-	int ret;
-
-	ret = atomic_notifier_chain_register_unique_prio(&restart_handler_list, nb);
-	if (ret != -EBUSY)
-		return ret;
-
-	/*
-	 * Handler must have unique priority. Otherwise call order is
-	 * determined by registration order, which is unreliable.
-	 *
-	 * This requirement will become mandatory once all drivers
-	 * will be converted to use new sys-off API.
-	 */
-	pr_err("failed to register restart handler using unique priority\n");
-
-	return atomic_notifier_chain_register(&restart_handler_list, nb);
+	return atomic_notifier_chain_register_unique_prio(&restart_handler_list, nb);
 }
 
 /**
@@ -329,27 +313,11 @@ static BLOCKING_NOTIFIER_HEAD(power_off_handler_list);
  *	that it only runs if no other means to power off the system is
  *	available.
  *
- *	Currently always returns zero, as blocking_notifier_chain_register()
- *	always returns zero.
+ *	Returns zero on success, -EBUSY otherwise.
  */
 static int register_power_off_handler(struct notifier_block *nb)
 {
-	int ret;
-
-	ret = blocking_notifier_chain_register_unique_prio(&power_off_handler_list, nb);
-	if (ret != -EBUSY)
-		return ret;
-
-	/*
-	 * Handler must have unique priority. Otherwise call order is
-	 * determined by registration order, which is unreliable.
-	 *
-	 * This requirement will become mandatory once all drivers
-	 * will be converted to use new sys-off API.
-	 */
-	pr_err("failed to register power-off handler using unique priority\n");
-
-	return blocking_notifier_chain_register(&power_off_handler_list, nb);
+	return blocking_notifier_chain_register_unique_prio(&power_off_handler_list, nb);
 }
 
 static int unregister_power_off_handler(struct notifier_block *nb)
