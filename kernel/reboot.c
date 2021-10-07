@@ -200,6 +200,33 @@ int unregister_restart_handler(struct notifier_block *nb)
 }
 EXPORT_SYMBOL(unregister_restart_handler);
 
+static void devm_unregister_restart_handler(struct device *dev, void *res)
+{
+	WARN_ON(unregister_restart_handler(*(struct notifier_block **)res));
+}
+
+int devm_register_restart_handler(struct device *dev, struct notifier_block *nb)
+{
+	struct notifier_block **rcnb;
+	int ret;
+
+	rcnb = devres_alloc(devm_unregister_restart_handler,
+			    sizeof(*rcnb), GFP_KERNEL);
+	if (!rcnb)
+		return -ENOMEM;
+
+	ret = register_restart_handler(nb);
+	if (!ret) {
+		*rcnb = nb;
+		devres_add(dev, rcnb);
+	} else {
+		devres_free(rcnb);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(devm_register_restart_handler);
+
 /**
  *	do_kernel_restart - Execute kernel restart handler call chain
  *
