@@ -296,6 +296,546 @@ void kernel_halt(void)
 }
 EXPORT_SYMBOL_GPL(kernel_halt);
 
+/*
+ *	Notifier list for kernel code which wants to be called
+ *	to power off the system.
+ */
+static BLOCKING_NOTIFIER_HEAD(power_off_handler_list);
+
+/*
+ * Temporary stub that prevents linkage failure while we're in process
+ * of removing all uses of legacy pm_power_off() around the kernel.
+ */
+void __weak (*pm_power_off)(void);
+
+static void dummy_pm_power_off(void)
+{
+	/* temporary stub until pm_power_off() is gone, see more below */
+}
+
+static struct notifier_block *pm_power_off_nb;
+
+/**
+ *	register_power_off_handler - Register function to be called to power off
+ *				     the system
+ *	@nb: Info about handler function to be called
+ *	@nb->priority:	Handler priority. Handlers should follow the
+ *			following guidelines for setting priorities.
+ *			0:	Reserved
+ *			1:	Power-off handler of last resort,
+ *				with limited power-off capabilities
+ *			128:	Default power-off handler; use if no other
+ *				power-off handler is expected to be available,
+ *				and/or if power-off functionality is
+ *				sufficient to power-off the entire system
+ *			255:	Highest priority power-off handler, will
+ *				preempt all other power-off handlers
+ *
+ *	Registers a function with code to be called to power off the
+ *	system.
+ *
+ *	Registered functions will be called as last step of the power-off
+ *	sequence.
+ *
+ *	Registered functions are expected to power off the system immediately.
+ *	If more than one function is registered, the power-off handler priority
+ *	selects which function will be called first.
+ *
+ *	Power-off handlers are expected to be registered from non-architecture
+ *	code, typically from drivers. A typical use case would be a system
+ *	where power-off functionality is provided through a PMIC. Multiple
+ *	power-off handlers may exist; for example, one power-off handler might
+ *	turn off the entire system, while another only turns off part of
+ *	system. In such cases, the power-off handler which only disables part
+ *	of the hardware is expected to register with low priority to ensure
+ *	that it only runs if no other means to power off the system is
+ *	available.
+ *
+ *	Currently always returns zero, as blocking_notifier_chain_register()
+ *	always returns zero.
+ */
+static int register_power_off_handler(struct notifier_block *nb)
+{
+	int ret;
+
+	ret = blocking_notifier_chain_register_unique_prio(&power_off_handler_list, nb);
+	if (ret && ret != -EBUSY)
+		return ret;
+
+	if (!ret)
+		goto set_pm_power_off;
+
+	/*
+	 * Handler must have unique priority. Otherwise call order is
+	 * determined by registration order, which is unreliable.
+	 *
+	 * This requirement will become mandatory once all drivers
+	 * will be converted to use new sys-off API.
+	 */
+	pr_err("failed to register power-off handler using unique priority\n");
+
+	ret = blocking_notifier_chain_register(&power_off_handler_list, nb);
+	if (ret)
+		return ret;
+
+	/*
+	 * Some drivers check whether pm_power_off was already installed.
+	 * Install dummy callback using new API to preserve old behaviour
+	 * for those drivers during period of transition to the new API.
+	 */
+set_pm_power_off:
+	if (!pm_power_off) {
+		pm_power_off = dummy_pm_power_off;
+		pm_power_off_nb = nb;
+	}
+
+	return 0;
+}
+
+static int unregister_power_off_handler(struct notifier_block *nb)
+{
+	if (nb == pm_power_off_nb) {
+		if (pm_power_off == dummy_pm_power_off)
+			pm_power_off = NULL;
+
+		pm_power_off_nb = NULL;
+	}
+
+	return blocking_notifier_chain_unregister(&power_off_handler_list, nb);
+}
+
+static void devm_unregister_power_off_handler(void *data)
+{
+	struct notifier_block *nb = data;
+
+	unregister_power_off_handler(nb);
+}
+
+static int devm_register_power_off_handler(struct device *dev,
+					   struct notifier_block *nb)
+{
+	int err;
+
+	err = register_power_off_handler(nb);
+	if (err)
+		return err;
+
+	return devm_add_action_or_reset(dev, devm_unregister_power_off_handler,
+					nb);
+}
+
+static int sys_off_handler_power_off(struct notifier_block *nb,
+				     unsigned long mode, void *unused)
+{
+	struct power_off_prep_data prep_data = {};
+	struct sys_off_handler_private_data *priv;
+	struct power_off_data data = {};
+	struct sys_off_handler *h;
+	int ret = NOTIFY_DONE;
+
+	priv = container_of(nb, struct sys_off_handler_private_data, power_off_nb);
+	h = container_of(priv, struct sys_off_handler, priv);
+	prep_data.cb_data = h->cb_data;
+	data.cb_data = h->cb_data;
+
+	switch (mode) {
+	case POWEROFF_NORMAL:
+		if (h->power_off_cb)
+			h->power_off_cb(&data);
+
+		if (priv->simple_power_off_cb)
+			priv->simple_power_off_cb(priv->simple_power_off_cb_data);
+
+		if (priv->platform_power_off_cb)
+			priv->platform_power_off_cb();
+
+		if (!h->power_off_chaining_allowed)
+			ret = NOTIFY_STOP;
+
+		break;
+
+	case POWEROFF_PREPARE:
+		if (h->power_off_prepare_cb)
+			h->power_off_prepare_cb(&prep_data);
+
+		break;
+
+	default:
+		unreachable();
+	}
+
+	return ret;
+}
+
+static int sys_off_handler_restart(struct notifier_block *nb,
+				   unsigned long mode, void *cmd)
+{
+	struct sys_off_handler_private_data *priv;
+	struct restart_data data = {};
+	struct sys_off_handler *h;
+
+	priv = container_of(nb, struct sys_off_handler_private_data, restart_nb);
+	h = container_of(priv, struct sys_off_handler, priv);
+
+	data.stop_chain = h->restart_chaining_disallowed;
+	data.cb_data = h->cb_data;
+	data.mode = mode;
+	data.cmd = cmd;
+
+	h->restart_cb(&data);
+
+	return data.stop_chain ? NOTIFY_STOP : NOTIFY_DONE;
+}
+
+static int sys_off_handler_reboot(struct notifier_block *nb,
+				  unsigned long mode, void *cmd)
+{
+	struct sys_off_handler_private_data *priv;
+	struct reboot_prep_data data = {};
+	struct sys_off_handler *h;
+
+	priv = container_of(nb, struct sys_off_handler_private_data, reboot_nb);
+	h = container_of(priv, struct sys_off_handler, priv);
+
+	data.cb_data = h->cb_data;
+	data.stop_chain = false;
+	data.mode = mode;
+	data.cmd = cmd;
+
+	h->reboot_prepare_cb(&data);
+
+	return data.stop_chain ? NOTIFY_STOP : NOTIFY_DONE;
+}
+
+static struct sys_off_handler_private_data *
+sys_off_handler_private_data(struct sys_off_handler *handler)
+{
+	return (struct sys_off_handler_private_data *)&handler->priv;
+}
+
+/**
+ *	devm_register_sys_off_handler - Register system power-off/restart handler
+ *	@dev: Device that registers handler
+ *	@handler: System-off handler
+ *
+ *	Registers handler that will be called as last step of the power-off
+ *	and restart sequences.
+ *
+ *	Returns zero on success, or error code on failure.
+ */
+int register_sys_off_handler(struct sys_off_handler *handler)
+{
+	struct sys_off_handler_private_data *priv;
+	int err, priority;
+
+	priv = sys_off_handler_private_data(handler);
+
+	/* sanity-check whether handler is registered twice */
+	if (priv->registered)
+		return -EBUSY;
+
+	if (handler->power_off_cb || handler->power_off_prepare_cb) {
+		if (handler->power_off_priority == POWEROFF_PRIO_RESERVED)
+			priority = POWEROFF_PRIO_DEFAULT;
+		else
+			priority = handler->power_off_priority;
+
+		priv->power_off_nb.notifier_call = sys_off_handler_power_off;
+		priv->power_off_nb.priority = priority;
+
+		err = register_power_off_handler(&priv->power_off_nb);
+		if (err)
+			goto reset_sys_off_handler;
+	}
+
+	if (handler->restart_cb) {
+		if (handler->restart_priority == RESTART_PRIO_RESERVED)
+			priority = RESTART_PRIO_DEFAULT;
+		else
+			priority = handler->restart_priority;
+
+		priv->restart_nb.notifier_call = sys_off_handler_restart;
+		priv->restart_nb.priority = priority;
+
+		err = register_restart_handler(&priv->restart_nb);
+		if (err)
+			goto unreg_power_off_handler;
+	}
+
+	if (handler->reboot_prepare_cb) {
+		priv->reboot_nb.notifier_call = sys_off_handler_reboot;
+		priv->reboot_nb.priority = handler->reboot_priority;
+
+		err = register_reboot_notifier(&priv->reboot_nb);
+		if (err)
+			goto unreg_restart_handler;
+	}
+
+	priv->registered = true;
+
+	return 0;
+
+unreg_restart_handler:
+	if (handler->restart_cb)
+		unregister_restart_handler(&priv->restart_nb);
+
+unreg_power_off_handler:
+	if (handler->power_off_cb)
+		unregister_power_off_handler(&priv->power_off_nb);
+
+reset_sys_off_handler:
+	memset(priv, 0, sizeof(*priv));
+
+	return err;
+}
+EXPORT_SYMBOL(register_sys_off_handler);
+
+/**
+ *	unregister_sys_off_handler - Unregister system power-off/restart handler
+ *	@handler: System-off handler
+ *
+ *	Unregisters sys-off handler. Does nothing and returns zero if handler
+ *	is NULL.
+ *
+ *	Returns zero on success, or error code on failure.
+ */
+int unregister_sys_off_handler(struct sys_off_handler *handler)
+{
+	struct sys_off_handler_private_data *priv;
+
+	if (!handler)
+		return 0;
+
+	priv = sys_off_handler_private_data(handler);
+
+	/* sanity-check whether handler is unregistered twice */
+	if (!priv->registered)
+		return -EINVAL;
+
+	if (handler->reboot_prepare_cb)
+		unregister_reboot_notifier(&priv->reboot_nb);
+
+	if (handler->restart_cb)
+		unregister_restart_handler(&priv->restart_nb);
+
+	if (handler->power_off_cb)
+		unregister_power_off_handler(&priv->power_off_nb);
+
+	memset(priv, 0, sizeof(*priv));
+
+	return 0;
+}
+EXPORT_SYMBOL(unregister_sys_off_handler);
+
+static void devm_unregister_sys_off_handler(void *data)
+{
+	struct sys_off_handler *handler = data;
+
+	unregister_sys_off_handler(handler);
+}
+
+/**
+ *	devm_register_sys_off_handler - Register system power-off/restart handler
+ *	@dev: Device that registers handler
+ *	@handler: System-off handler
+ *
+ *	Resource-managed variant of register_sys_off_handler().
+ *
+ *	Returns zero on success, or error code on failure.
+ */
+int devm_register_sys_off_handler(struct device *dev,
+				  struct sys_off_handler *handler)
+{
+	int err;
+
+	err = register_sys_off_handler(handler);
+	if (err)
+		return err;
+
+	return devm_add_action_or_reset(dev, devm_unregister_sys_off_handler,
+					handler);
+}
+EXPORT_SYMBOL(devm_register_sys_off_handler);
+
+/**
+ *	devm_register_prioritized_power_off_handler - Register prioritized power-off callback
+ *	@dev: Device that registers callback
+ *	@priority: Callback's priority
+ *	@callback: Callback function
+ *	@cb_data: Callback's argument
+ *
+ *	Registers resource-managed power-off callback with a given priority.
+ *	It will be called as last step of the power-off sequence. Callbacks
+ *	chaining is disabled, i.e. further lower priority callbacks won't
+ *	be executed if this @callback will fail to execute.
+ *
+ *	Returns zero on success, or error code on failure.
+ */
+int devm_register_prioritized_power_off_handler(struct device *dev,
+						int priority,
+						void (*callback)(void *data),
+						void *cb_data)
+{
+	struct sys_off_handler_private_data *priv;
+	struct sys_off_handler *handler;
+
+	handler = devm_kzalloc(dev, sizeof(*handler), GFP_KERNEL);
+	if (!handler)
+		return -ENOMEM;
+
+	if (priority == POWEROFF_PRIO_RESERVED)
+		priority = POWEROFF_PRIO_DEFAULT;
+
+	priv = sys_off_handler_private_data(handler);
+
+	priv->power_off_nb.notifier_call = sys_off_handler_power_off;
+	priv->power_off_nb.priority = priority;
+	priv->simple_power_off_cb_data = cb_data;
+	priv->simple_power_off_cb = callback;
+
+	return devm_register_power_off_handler(dev, &priv->power_off_nb);
+}
+EXPORT_SYMBOL(devm_register_prioritized_power_off_handler);
+
+/**
+ *	devm_register_prioritized_restart_handler - Register prioritized restart callback
+ *	@dev: Device that registers callback
+ *	@priority: Callback's priority
+ *	@callback: Callback function
+ *	@cb_data: Callback's argument
+ *
+ *	Registers resource-managed restart callback with a given priority.
+ *	It will be called as a part of the restart sequence. Callbacks
+ *	chaining is disabled, i.e. further lower priority callbacks won't
+ *	be executed if this @callback will fail to execute.
+ *
+ *	Returns zero on success, or error code on failure.
+ */
+int devm_register_prioritized_restart_handler(struct device *dev,
+					      int priority,
+					      void (*callback)(struct restart_data *data),
+					      void *cb_data)
+{
+	struct sys_off_handler *handler;
+
+	handler = devm_kzalloc(dev, sizeof(*handler), GFP_KERNEL);
+	if (!handler)
+		return -ENOMEM;
+
+	if (priority == RESTART_PRIO_RESERVED)
+		priority = RESTART_PRIO_DEFAULT;
+
+	handler->restart_priority = priority;
+	handler->restart_cb = callback;
+	handler->cb_data = cb_data;
+
+	return devm_register_sys_off_handler(dev, handler);
+}
+EXPORT_SYMBOL(devm_register_prioritized_restart_handler);
+
+static struct sys_off_handler platform_power_off_handler = {
+	.priv = {
+		.power_off_nb = {
+			.notifier_call = sys_off_handler_power_off,
+			.priority = POWEROFF_PRIO_PLATFORM,
+		},
+	},
+};
+
+static DEFINE_SPINLOCK(platform_power_off_lock);
+
+/**
+ *	register_platform_power_off - Register platform-level power-off callback
+ *	@power_off: Power-off callback
+ *
+ *	Registers power-off callback that will be called as last step
+ *	of the power-off sequence. This callback is expected to be invoked
+ *	for the last resort. Further lower priority callbacks won't be
+ *	executed if @power_off fails. Only one platform power-off callback
+ *	is allowed to be registered at a time.
+ *
+ *	Returns zero on success, or error code on failure.
+ */
+int register_platform_power_off(void (*power_off)(void))
+{
+	struct sys_off_handler_private_data *priv;
+	int ret = 0;
+
+	priv = sys_off_handler_private_data(&platform_power_off_handler);
+
+	spin_lock(&platform_power_off_lock);
+	if (priv->platform_power_off_cb)
+		ret = -EBUSY;
+	else
+		priv->platform_power_off_cb = power_off;
+	spin_unlock(&platform_power_off_lock);
+
+	if (ret)
+		return ret;
+
+	ret = register_power_off_handler(&priv->power_off_nb);
+	if (ret)
+		priv->platform_power_off_cb = NULL;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(register_platform_power_off);
+
+/**
+ *	unregister_platform_power_off - Unregister platform-level power-off callback
+ *	@power_off: Power-off callback
+ *
+ *	Unregisters previously registered platform power-off callback.
+ *
+ *	Returns zero on success, or error code on failure.
+ */
+int unregister_platform_power_off(void (*power_off)(void))
+{
+	struct sys_off_handler_private_data *priv;
+	int ret;
+
+	priv = sys_off_handler_private_data(&platform_power_off_handler);
+
+	if (priv->platform_power_off_cb != power_off)
+		return -EINVAL;
+
+	ret = unregister_power_off_handler(&priv->power_off_nb);
+	priv->platform_power_off_cb = NULL;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(unregister_platform_power_off);
+
+/**
+ *	do_kernel_power_off - Execute kernel power-off handler call chain
+ *
+ *	Calls functions registered with register_power_off_handler.
+ *
+ *	Expected to be called as last step of the power-off sequence.
+ *
+ *	Powers off the system immediately if a power-off handler function has
+ *	been registered. Otherwise does nothing.
+ */
+void do_kernel_power_off(void)
+{
+	/* legacy pm_power_off() is unchained and has highest priority */
+	if (pm_power_off && pm_power_off != dummy_pm_power_off)
+		return pm_power_off();
+
+	blocking_notifier_call_chain(&power_off_handler_list, POWEROFF_NORMAL,
+				     NULL);
+}
+
+static void do_kernel_power_off_prepare(void)
+{
+	/* legacy pm_power_off_prepare() is unchained and has highest priority */
+	if (pm_power_off_prepare)
+		return pm_power_off_prepare();
+
+	blocking_notifier_call_chain(&power_off_handler_list, POWEROFF_PREPARE,
+				     NULL);
+}
+
 /**
  *	kernel_power_off - power_off the system
  *
@@ -304,8 +844,7 @@ EXPORT_SYMBOL_GPL(kernel_halt);
 void kernel_power_off(void)
 {
 	kernel_shutdown_prepare(SYSTEM_POWER_OFF);
-	if (pm_power_off_prepare)
-		pm_power_off_prepare();
+	do_kernel_power_off_prepare();
 	migrate_to_reboot_cpu();
 	syscore_shutdown();
 	pr_emerg("Power down\n");
@@ -313,6 +852,16 @@ void kernel_power_off(void)
 	machine_power_off();
 }
 EXPORT_SYMBOL_GPL(kernel_power_off);
+
+bool kernel_can_power_off(void)
+{
+	if (!pm_power_off &&
+	    blocking_notifier_call_chain_is_empty(&power_off_handler_list))
+		return false;
+
+	return true;
+}
+EXPORT_SYMBOL_GPL(kernel_can_power_off);
 
 DEFINE_MUTEX(system_transition_mutex);
 
@@ -355,7 +904,7 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	/* Instead of trying to make the power_off code look like
 	 * halt when pm_power_off is not set do it the easy way.
 	 */
-	if ((cmd == LINUX_REBOOT_CMD_POWER_OFF) && !pm_power_off)
+	if (cmd == LINUX_REBOOT_CMD_POWER_OFF && !kernel_can_power_off())
 		cmd = LINUX_REBOOT_CMD_HALT;
 
 	mutex_lock(&system_transition_mutex);
