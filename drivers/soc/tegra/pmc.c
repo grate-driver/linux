@@ -39,6 +39,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_opp.h>
+#include <linux/power_supply.h>
 #include <linux/reboot.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
@@ -107,6 +108,7 @@
 #define PMC_USB_DEBOUNCE_DEL		0xec
 #define PMC_USB_AO			0xf0
 
+#define PMC_SCRATCH37			0x130
 #define PMC_SCRATCH41			0x140
 
 #define PMC_WAKE2_MASK			0x160
@@ -393,6 +395,7 @@ struct tegra_pmc_soc {
  * @domain: IRQ domain provided by the PMC
  * @irq: chip implementation for the IRQ domain
  * @clk_nb: pclk clock changes handler
+ * @sys_off: power-off/restart handler
  */
 struct tegra_pmc {
 	struct device *dev;
@@ -433,6 +436,8 @@ struct tegra_pmc {
 
 	bool core_domain_state_synced;
 	bool core_domain_registered;
+
+	struct sys_off_handler sys_off;
 };
 
 static struct tegra_pmc *pmc = &(struct tegra_pmc) {
@@ -1085,21 +1090,7 @@ static void tegra_pmc_program_reboot_reason(const char *cmd)
 	tegra_pmc_scratch_writel(pmc, value, pmc->soc->regs->scratch0);
 }
 
-static int tegra_pmc_reboot_notify(struct notifier_block *this,
-				   unsigned long action, void *data)
-{
-	if (action == SYS_RESTART)
-		tegra_pmc_program_reboot_reason(data);
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block tegra_pmc_reboot_notifier = {
-	.notifier_call = tegra_pmc_reboot_notify,
-};
-
-static int tegra_pmc_restart_notify(struct notifier_block *this,
-				    unsigned long action, void *data)
+static void tegra_pmc_restart(void)
 {
 	u32 value;
 
@@ -1107,14 +1098,33 @@ static int tegra_pmc_restart_notify(struct notifier_block *this,
 	value = tegra_pmc_readl(pmc, PMC_CNTRL);
 	value |= PMC_CNTRL_MAIN_RST;
 	tegra_pmc_writel(pmc, value, PMC_CNTRL);
-
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block tegra_pmc_restart_handler = {
-	.notifier_call = tegra_pmc_restart_notify,
-	.priority = 128,
-};
+static void tegra_pmc_reboot_handler(struct reboot_prep_data *data)
+{
+	if (data->mode == SYS_RESTART)
+		tegra_pmc_program_reboot_reason(data->cmd);
+}
+
+static void tegra_pmc_restart_handler(struct restart_data *data)
+{
+	tegra_pmc_restart();
+}
+
+static void tegra_pmc_power_off_handler(struct power_off_data *data)
+{
+	/*
+	 * Reboot Nexus 7 into special bootloader mode if USB cable is
+	 * connected in order to display battery status and power off.
+	 */
+	if (of_machine_is_compatible("asus,grouper") &&
+	    power_supply_is_system_supplied()) {
+		const u32 go_to_charger_mode = 0xa5a55a5a;
+
+		tegra_pmc_writel(pmc, go_to_charger_mode, PMC_SCRATCH37);
+		tegra_pmc_restart();
+	}
+}
 
 static int powergate_show(struct seq_file *s, void *data)
 {
@@ -2877,6 +2887,29 @@ static int tegra_pmc_probe(struct platform_device *pdev)
 	}
 
 	/*
+	 * PMC should be last resort for restarting since it soft-resets
+	 * CPU without resetting everything else.
+	 */
+	pmc->sys_off.reboot_prepare_cb = tegra_pmc_reboot_handler;
+	pmc->sys_off.restart_cb = tegra_pmc_restart_handler;
+	pmc->sys_off.restart_priority = RESTART_PRIO_LOW;
+
+	/*
+	 * PMC should be primary power-off method if it soft-resets CPU,
+	 * asking bootloader to shutdown hardware.
+	 */
+	pmc->sys_off.power_off_cb = tegra_pmc_power_off_handler;
+	pmc->sys_off.power_off_priority = POWEROFF_PRIO_FIRMWARE;
+	pmc->sys_off.power_off_chaining_allowed = true;
+
+	err = devm_register_sys_off_handler(&pdev->dev, &pmc->sys_off);
+	if (err) {
+		dev_err(&pdev->dev, "unable to register sys-off handler, %d\n",
+			err);
+		return err;
+	}
+
+	/*
 	 * PCLK clock rate can't be retrieved using CLK API because it
 	 * causes lockup if CPU enters LP2 idle state from some other
 	 * CLK notifier, hence we're caching the rate's value locally.
@@ -2907,28 +2940,13 @@ static int tegra_pmc_probe(struct platform_device *pdev)
 			goto cleanup_sysfs;
 	}
 
-	err = devm_register_reboot_notifier(&pdev->dev,
-					    &tegra_pmc_reboot_notifier);
-	if (err) {
-		dev_err(&pdev->dev, "unable to register reboot notifier, %d\n",
-			err);
-		goto cleanup_debugfs;
-	}
-
-	err = register_restart_handler(&tegra_pmc_restart_handler);
-	if (err) {
-		dev_err(&pdev->dev, "unable to register restart handler, %d\n",
-			err);
-		goto cleanup_debugfs;
-	}
-
 	err = tegra_pmc_pinctrl_init(pmc);
 	if (err)
-		goto cleanup_restart_handler;
+		goto cleanup_debugfs;
 
 	err = tegra_pmc_regmap_init(pmc);
 	if (err < 0)
-		goto cleanup_restart_handler;
+		goto cleanup_debugfs;
 
 	err = tegra_powergate_init(pmc, pdev->dev.of_node);
 	if (err < 0)
@@ -2951,8 +2969,6 @@ static int tegra_pmc_probe(struct platform_device *pdev)
 
 cleanup_powergates:
 	tegra_powergate_remove_all(pdev->dev.of_node);
-cleanup_restart_handler:
-	unregister_restart_handler(&tegra_pmc_restart_handler);
 cleanup_debugfs:
 	debugfs_remove(pmc->debugfs);
 cleanup_sysfs:
