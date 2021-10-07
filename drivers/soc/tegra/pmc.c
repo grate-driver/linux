@@ -39,6 +39,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_opp.h>
+#include <linux/power_supply.h>
 #include <linux/reboot.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
@@ -107,6 +108,7 @@
 #define PMC_USB_DEBOUNCE_DEL		0xec
 #define PMC_USB_AO			0xf0
 
+#define PMC_SCRATCH37			0x130
 #define PMC_SCRATCH41			0x140
 
 #define PMC_WAKE2_MASK			0x160
@@ -1063,10 +1065,8 @@ int tegra_pmc_cpu_remove_clamping(unsigned int cpuid)
 	return tegra_powergate_remove_clamping(id);
 }
 
-static int tegra_pmc_restart_notify(struct notifier_block *this,
-				    unsigned long action, void *data)
+static void tegra_pmc_restart(const char *cmd)
 {
-	const char *cmd = data;
 	u32 value;
 
 	value = tegra_pmc_scratch_readl(pmc, pmc->soc->regs->scratch0);
@@ -1089,6 +1089,12 @@ static int tegra_pmc_restart_notify(struct notifier_block *this,
 	value = tegra_pmc_readl(pmc, PMC_CNTRL);
 	value |= PMC_CNTRL_MAIN_RST;
 	tegra_pmc_writel(pmc, value, PMC_CNTRL);
+}
+
+static int tegra_pmc_restart_notify(struct notifier_block *this,
+				    unsigned long action, void *data)
+{
+	tegra_pmc_restart(data);
 
 	return NOTIFY_DONE;
 }
@@ -1096,6 +1102,29 @@ static int tegra_pmc_restart_notify(struct notifier_block *this,
 static struct notifier_block tegra_pmc_restart_handler = {
 	.notifier_call = tegra_pmc_restart_notify,
 	.priority = 128,
+};
+
+static int tegra_pmc_poweroff_notify(struct notifier_block *this,
+				     unsigned long action, void *data)
+{
+	/*
+	 * Reboot Nexus 7 into special bootloader mode if USB cable is
+	 * connected in order to display battery status and power off.
+	 */
+	if (of_machine_is_compatible("asus,grouper") &&
+	    power_supply_is_system_supplied()) {
+		const u32 go_to_charger_mode = 0xa5a55a5a;
+
+		tegra_pmc_writel(pmc, go_to_charger_mode, PMC_SCRATCH37);
+		tegra_pmc_restart(NULL);
+	}
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block tegra_pmc_poweroff_handler = {
+	.notifier_call = tegra_pmc_poweroff_notify,
+	.priority = 200,
 };
 
 static int powergate_show(struct seq_file *s, void *data)
@@ -2862,6 +2891,13 @@ static int tegra_pmc_probe(struct platform_device *pdev)
 	err = devm_register_restart_handler(&pdev->dev, &tegra_pmc_restart_handler);
 	if (err) {
 		dev_err(&pdev->dev, "unable to register restart handler, %d\n",
+			err);
+		return err;
+	}
+
+	err = devm_register_poweroff_handler(&pdev->dev, &tegra_pmc_poweroff_handler);
+	if (err) {
+		dev_err(&pdev->dev, "unable to register poweroff handler, %d\n",
 			err);
 		return err;
 	}
