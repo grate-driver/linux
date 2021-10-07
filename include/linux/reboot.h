@@ -49,6 +49,8 @@ extern int register_restart_handler(struct notifier_block *);
 extern int unregister_restart_handler(struct notifier_block *);
 extern void do_kernel_restart(char *cmd);
 
+extern int devm_register_restart_handler(struct device *, struct notifier_block *);
+
 extern int register_poweroff_handler(struct notifier_block *);
 extern int unregister_poweroff_handler(struct notifier_block *);
 
