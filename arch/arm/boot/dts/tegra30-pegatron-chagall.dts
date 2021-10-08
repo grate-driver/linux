@@ -1089,7 +1089,7 @@
 		status = "okay";
 	};
 
-	i2c1: i2c@7000c000 {
+	lcd_ddc: i2c@7000c000 {
 		status = "okay";
 		clock-frequency = <400000>;
 
@@ -1207,7 +1207,7 @@
 		};
 	};
 
-	hdmi_ddc: i2c@7000c700 {		/*i2c4*/
+	hdmi_ddc: i2c@7000c700 {
 		status = "okay";
 		clock-frequency = <93750>;
 

@@ -840,6 +840,11 @@
 		status = "okay";
 	};
 
+	lcd_ddc: i2c@7000c000 {
+		status = "okay";
+		clock-frequency = <100000>;
+	};
+
 	i2c@7000c400 {
 		clock-frequency = <400000>;
 		status = "okay";

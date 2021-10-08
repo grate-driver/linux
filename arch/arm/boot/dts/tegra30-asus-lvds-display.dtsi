@@ -4,6 +4,8 @@
 
 / {
 	display-panel {
+		ddc-i2c-bus = <&lcd_ddc>;
+
 		power-supply = <&vdd_pnl>;
 		backlight = <&backlight>;
 

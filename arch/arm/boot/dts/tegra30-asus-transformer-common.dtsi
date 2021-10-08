@@ -1068,7 +1068,7 @@
 		status = "okay";
 	};
 
-	i2c1: i2c@7000c000 {
+	lcd_ddc: i2c@7000c000 {
 		status = "okay";
 		clock-frequency = <100000>;
 	};
@@ -1180,9 +1180,11 @@
 		};
 	};
 
-	hdmi_ddc: i2c@7000c700 {		/*i2c4*/
+	hdmi_ddc: i2c@7000c700 {
 		status = "okay";
 		clock-frequency = <93750>;
+
+		/* Nvidia Tegra HDCP device */
 	};
 
 	i2c5: i2c@7000d000 {
