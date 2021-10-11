@@ -163,37 +163,6 @@ void recalc_intercepts(struct vcpu_svm *svm)
 	vmcb_set_intercept(c, INTERCEPT_VMSAVE);
 }
 
-static void copy_vmcb_control_area(struct vmcb_control_area *dst,
-				   struct vmcb_control_area *from)
-{
-	unsigned int i;
-
-	for (i = 0; i < MAX_INTERCEPT; i++)
-		dst->intercepts[i] = from->intercepts[i];
-
-	dst->iopm_base_pa         = from->iopm_base_pa;
-	dst->msrpm_base_pa        = from->msrpm_base_pa;
-	dst->tsc_offset           = from->tsc_offset;
-	/* asid not copied, it is handled manually for svm->vmcb.  */
-	dst->tlb_ctl              = from->tlb_ctl;
-	dst->int_ctl              = from->int_ctl;
-	dst->int_vector           = from->int_vector;
-	dst->int_state            = from->int_state;
-	dst->exit_code            = from->exit_code;
-	dst->exit_code_hi         = from->exit_code_hi;
-	dst->exit_info_1          = from->exit_info_1;
-	dst->exit_info_2          = from->exit_info_2;
-	dst->exit_int_info        = from->exit_int_info;
-	dst->exit_int_info_err    = from->exit_int_info_err;
-	dst->nested_ctl           = from->nested_ctl;
-	dst->event_inj            = from->event_inj;
-	dst->event_inj_err        = from->event_inj_err;
-	dst->nested_cr3           = from->nested_cr3;
-	dst->virt_ext              = from->virt_ext;
-	dst->pause_filter_count   = from->pause_filter_count;
-	dst->pause_filter_thresh  = from->pause_filter_thresh;
-}
-
 static bool nested_svm_vmrun_msrpm(struct vcpu_svm *svm)
 {
 	/*
@@ -317,12 +286,36 @@ static bool nested_vmcb_valid_sregs(struct kvm_vcpu *vcpu,
 	return true;
 }
 
-void nested_load_control_from_vmcb12(struct vcpu_svm *svm,
-				     struct vmcb_control_area *control)
+void nested_copy_vmcb_control_to_cache(struct vcpu_svm *svm,
+				       struct vmcb_control_area *control)
 {
-	copy_vmcb_control_area(&svm->nested.ctl, control);
+	unsigned int i;
 
-	/* Copy it here because nested_svm_check_controls will check it.  */
+	for (i = 0; i < MAX_INTERCEPT; i++)
+		svm->nested.ctl.intercepts[i] = control->intercepts[i];
+
+	svm->nested.ctl.iopm_base_pa        = control->iopm_base_pa;
+	svm->nested.ctl.msrpm_base_pa       = control->msrpm_base_pa;
+	svm->nested.ctl.tsc_offset          = control->tsc_offset;
+	svm->nested.ctl.tlb_ctl             = control->tlb_ctl;
+	svm->nested.ctl.int_ctl             = control->int_ctl;
+	svm->nested.ctl.int_vector          = control->int_vector;
+	svm->nested.ctl.int_state           = control->int_state;
+	svm->nested.ctl.exit_code           = control->exit_code;
+	svm->nested.ctl.exit_code_hi        = control->exit_code_hi;
+	svm->nested.ctl.exit_info_1         = control->exit_info_1;
+	svm->nested.ctl.exit_info_2         = control->exit_info_2;
+	svm->nested.ctl.exit_int_info       = control->exit_int_info;
+	svm->nested.ctl.exit_int_info_err   = control->exit_int_info_err;
+	svm->nested.ctl.nested_ctl          = control->nested_ctl;
+	svm->nested.ctl.event_inj           = control->event_inj;
+	svm->nested.ctl.event_inj_err       = control->event_inj_err;
+	svm->nested.ctl.nested_cr3          = control->nested_cr3;
+	svm->nested.ctl.virt_ext            = control->virt_ext;
+	svm->nested.ctl.pause_filter_count  = control->pause_filter_count;
+	svm->nested.ctl.pause_filter_thresh = control->pause_filter_thresh;
+
+	/* Copy asid here because nested_vmcb_check_controls will check it.  */
 	svm->nested.ctl.asid           = control->asid;
 	svm->nested.ctl.msrpm_base_pa &= ~0x0fffULL;
 	svm->nested.ctl.iopm_base_pa  &= ~0x0fffULL;
@@ -685,7 +678,7 @@ int nested_svm_vmrun(struct kvm_vcpu *vcpu)
 	if (WARN_ON_ONCE(!svm->nested.initialized))
 		return -EINVAL;
 
-	nested_load_control_from_vmcb12(svm, &vmcb12->control);
+	nested_copy_vmcb_control_to_cache(svm, &vmcb12->control);
 	nested_copy_vmcb_save_to_cache(svm, &vmcb12->save);
 
 	if (!nested_vmcb_valid_sregs(vcpu, &vmcb12->save) ||
@@ -1430,7 +1423,7 @@ static int svm_set_nested_state(struct kvm_vcpu *vcpu,
 	svm->nested.vmcb12_gpa = kvm_state->hdr.svm.vmcb_pa;
 
 	svm_copy_vmrun_state(&svm->vmcb01.ptr->save, save);
-	nested_load_control_from_vmcb12(svm, ctl);
+	nested_copy_vmcb_control_to_cache(svm, ctl);
 	nested_copy_vmcb_save_to_cache(svm, save);
 
 	svm_switch_vmcb(svm, &svm->nested.vmcb02);
