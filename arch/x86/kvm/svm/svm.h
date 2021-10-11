@@ -156,7 +156,7 @@ struct svm_nested_state {
 	bool nested_run_pending;
 
 	/* cache for control fields of the guest */
-	struct vmcb_control_area ctl;
+	struct vmcb_ctrl_area_cached ctl;
 	struct vmcb_save_area_cached save;
 
 	bool initialized;
@@ -494,17 +494,17 @@ static inline bool nested_svm_virtualize_tpr(struct kvm_vcpu *vcpu)
 
 static inline bool nested_exit_on_smi(struct vcpu_svm *svm)
 {
-	return vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_SMI);
+	return vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_SMI);
 }
 
 static inline bool nested_exit_on_intr(struct vcpu_svm *svm)
 {
-	return vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_INTR);
+	return vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_INTR);
 }
 
 static inline bool nested_exit_on_nmi(struct vcpu_svm *svm)
 {
-	return vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_NMI);
+	return vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_NMI);
 }
 
 int enter_svm_guest_mode(struct kvm_vcpu *vcpu,

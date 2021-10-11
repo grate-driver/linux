@@ -58,8 +58,9 @@ static void svm_inject_page_fault_nested(struct kvm_vcpu *vcpu, struct x86_excep
        struct vcpu_svm *svm = to_svm(vcpu);
        WARN_ON(!is_guest_mode(vcpu));
 
-       if (vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_EXCEPTION_OFFSET + PF_VECTOR) &&
-	   !svm->nested.nested_run_pending) {
+	if (vmcb12_is_intercept(&svm->nested.ctl,
+				INTERCEPT_EXCEPTION_OFFSET + PF_VECTOR) &&
+	    !svm->nested.nested_run_pending) {
                svm->vmcb->control.exit_code = SVM_EXIT_EXCP_BASE + PF_VECTOR;
                svm->vmcb->control.exit_code_hi = 0;
                svm->vmcb->control.exit_info_1 = fault->error_code;
@@ -121,7 +122,8 @@ static void nested_svm_uninit_mmu_context(struct kvm_vcpu *vcpu)
 
 void recalc_intercepts(struct vcpu_svm *svm)
 {
-	struct vmcb_control_area *c, *h, *g;
+	struct vmcb_control_area *c, *h;
+	struct vmcb_ctrl_area_cached *g;
 	unsigned int i;
 
 	vmcb_mark_dirty(svm->vmcb, VMCB_INTERCEPTS);
@@ -172,7 +174,7 @@ static bool nested_svm_vmrun_msrpm(struct vcpu_svm *svm)
 	 */
 	int i;
 
-	if (!(vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_MSR_PROT)))
+	if (!(vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_MSR_PROT)))
 		return true;
 
 	for (i = 0; i < MSRPM_OFFSETS; i++) {
@@ -220,9 +222,9 @@ static bool nested_svm_check_tlb_ctl(struct kvm_vcpu *vcpu, u8 tlb_ctl)
 }
 
 static bool nested_vmcb_check_controls(struct kvm_vcpu *vcpu,
-				       struct vmcb_control_area *control)
+				       struct vmcb_ctrl_area_cached *control)
 {
-	if (CC(!vmcb_is_intercept(control, INTERCEPT_VMRUN)))
+	if (CC(!vmcb12_is_intercept(control, INTERCEPT_VMRUN)))
 		return false;
 
 	if (CC(control->asid == 0))
@@ -979,7 +981,7 @@ static int nested_svm_exit_handled_msr(struct vcpu_svm *svm)
 	u32 offset, msr, value;
 	int write, mask;
 
-	if (!(vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_MSR_PROT)))
+	if (!(vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_MSR_PROT)))
 		return NESTED_EXIT_HOST;
 
 	msr    = svm->vcpu.arch.regs[VCPU_REGS_RCX];
@@ -1006,7 +1008,7 @@ static int nested_svm_intercept_ioio(struct vcpu_svm *svm)
 	u8 start_bit;
 	u64 gpa;
 
-	if (!(vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_IOIO_PROT)))
+	if (!(vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_IOIO_PROT)))
 		return NESTED_EXIT_HOST;
 
 	port = svm->vmcb->control.exit_info_1 >> 16;
@@ -1037,12 +1039,12 @@ static int nested_svm_intercept(struct vcpu_svm *svm)
 		vmexit = nested_svm_intercept_ioio(svm);
 		break;
 	case SVM_EXIT_READ_CR0 ... SVM_EXIT_WRITE_CR8: {
-		if (vmcb_is_intercept(&svm->nested.ctl, exit_code))
+		if (vmcb12_is_intercept(&svm->nested.ctl, exit_code))
 			vmexit = NESTED_EXIT_DONE;
 		break;
 	}
 	case SVM_EXIT_READ_DR0 ... SVM_EXIT_WRITE_DR7: {
-		if (vmcb_is_intercept(&svm->nested.ctl, exit_code))
+		if (vmcb12_is_intercept(&svm->nested.ctl, exit_code))
 			vmexit = NESTED_EXIT_DONE;
 		break;
 	}
@@ -1060,7 +1062,7 @@ static int nested_svm_intercept(struct vcpu_svm *svm)
 		break;
 	}
 	default: {
-		if (vmcb_is_intercept(&svm->nested.ctl, exit_code))
+		if (vmcb12_is_intercept(&svm->nested.ctl, exit_code))
 			vmexit = NESTED_EXIT_DONE;
 	}
 	}
@@ -1138,7 +1140,7 @@ static void nested_svm_inject_exception_vmexit(struct vcpu_svm *svm)
 
 static inline bool nested_exit_on_init(struct vcpu_svm *svm)
 {
-	return vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_INIT);
+	return vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_INIT);
 }
 
 static int svm_check_nested_events(struct kvm_vcpu *vcpu)
@@ -1279,6 +1281,7 @@ static int svm_get_nested_state(struct kvm_vcpu *vcpu,
 				u32 user_data_size)
 {
 	struct vcpu_svm *svm;
+	struct vmcb_control_area *ctl;
 	struct kvm_nested_state kvm_state = {
 		.flags = 0,
 		.format = KVM_STATE_NESTED_FORMAT_SVM,
@@ -1286,6 +1289,7 @@ static int svm_get_nested_state(struct kvm_vcpu *vcpu,
 	};
 	struct vmcb __user *user_vmcb = (struct vmcb __user *)
 		&user_kvm_nested_state->data.svm[0];
+	int r;
 
 	if (!vcpu)
 		return kvm_state.size + KVM_STATE_NESTED_SVM_VMCB_SIZE;
@@ -1320,9 +1324,17 @@ static int svm_get_nested_state(struct kvm_vcpu *vcpu,
 	 */
 	if (clear_user(user_vmcb, KVM_STATE_NESTED_SVM_VMCB_SIZE))
 		return -EFAULT;
-	if (copy_to_user(&user_vmcb->control, &svm->nested.ctl,
-			 sizeof(user_vmcb->control)))
+
+	ctl = kzalloc(sizeof(*ctl), GFP_KERNEL);
+	if (!ctl)
+		return -ENOMEM;
+	nested_copy_vmcb_cache_to_control(ctl, &svm->nested.ctl);
+	r = copy_to_user(&user_vmcb->control, ctl,
+			 sizeof(user_vmcb->control));
+	kfree(ctl);
+	if (r)
 		return -EFAULT;
+
 	if (copy_to_user(&user_vmcb->save, &svm->vmcb01.ptr->save,
 			 sizeof(user_vmcb->save)))
 		return -EFAULT;
@@ -1391,7 +1403,8 @@ static int svm_set_nested_state(struct kvm_vcpu *vcpu,
 		goto out_free;
 
 	ret = -EINVAL;
-	if (!nested_vmcb_check_controls(vcpu, ctl))
+	nested_copy_vmcb_control_to_cache(svm, ctl);
+	if (!nested_vmcb_check_controls(vcpu, &svm->nested.ctl))
 		goto out_free;
 
 	/*
@@ -1446,7 +1459,6 @@ static int svm_set_nested_state(struct kvm_vcpu *vcpu,
 	svm->nested.vmcb12_gpa = kvm_state->hdr.svm.vmcb_pa;
 
 	svm_copy_vmrun_state(&svm->vmcb01.ptr->save, save);
-	nested_copy_vmcb_control_to_cache(svm, ctl);
 
 	svm_switch_vmcb(svm, &svm->nested.vmcb02);
 	nested_vmcb02_prepare_control(svm);
