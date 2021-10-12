@@ -400,12 +400,6 @@ int ksmbd_smb2_check_message(struct ksmbd_work *work)
 		}
 	}
 
-	if ((work->conn->vals->capabilities & SMB2_GLOBAL_CAP_LARGE_MTU) &&
-	    smb2_validate_credit_charge(work->conn, hdr)) {
-		work->conn->ops->set_rsp_status(work, STATUS_INVALID_PARAMETER);
-		return 1;
-	}
-
 	if (smb2_calc_size(hdr, &clc_len))
 		return 1;
 
@@ -440,6 +434,12 @@ int ksmbd_smb2_check_message(struct ksmbd_work *work)
 			    len, clc_len, command,
 			    le64_to_cpu(hdr->MessageId));
 
+		return 1;
+	}
+
+	if ((work->conn->vals->capabilities & SMB2_GLOBAL_CAP_LARGE_MTU) &&
+	    smb2_validate_credit_charge(work->conn, hdr)) {
+		work->conn->ops->set_rsp_status(work, STATUS_INVALID_PARAMETER);
 		return 1;
 	}
 
