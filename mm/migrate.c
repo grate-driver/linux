@@ -3066,7 +3066,7 @@ void migrate_vma_finalize(struct migrate_vma *migrate)
 EXPORT_SYMBOL(migrate_vma_finalize);
 #endif /* CONFIG_DEVICE_PRIVATE */
 
-#if defined(CONFIG_MEMORY_HOTPLUG) || defined(CONFIG_HOTPLUG_CPU)
+#if defined(CONFIG_HOTPLUG_CPU)
 /* Disable reclaim-based migration. */
 static void __disable_all_migrate_targets(void)
 {
@@ -3208,7 +3208,6 @@ static void set_migration_target_nodes(void)
 	put_online_mems();
 }
 
-#if defined(CONFIG_MEMORY_HOTPLUG)
 /*
  * This leaves migrate-on-reclaim transiently disabled between
  * the MEM_GOING_OFFLINE and MEM_OFFLINE events.  This runs
@@ -3265,9 +3264,7 @@ static int __meminit migrate_on_reclaim_callback(struct notifier_block *self,
 
 	return notifier_from_errno(0);
 }
-#endif /* CONFIG_MEMORY_HOTPLUG */
 
-#ifdef CONFIG_HOTPLUG_CPU
 /*
  * React to hotplug events that might affect the migration targets
  * like events that online or offline NUMA nodes.
@@ -3309,4 +3306,3 @@ static int __init migrate_on_reclaim_init(void)
 }
 late_initcall(migrate_on_reclaim_init);
 #endif /* CONFIG_HOTPLUG_CPU */
-#endif /* CONFIG_MEMORY_HOTPLUG || CONFIG_HOTPLUG_CPU */
