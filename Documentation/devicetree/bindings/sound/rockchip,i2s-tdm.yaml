@@ -104,7 +104,6 @@ properties:
       Defines the mapping of I2S RX sdis to I2S data bus lines.
       By default, they are mapped one-to-one.
       rockchip,i2s-rx-route = <3> would mean sdi3 is receiving from data0.
-    maxItems: 4
     items:
       enum: [0, 1, 2, 3]
 
@@ -114,7 +113,6 @@ properties:
       Defines the mapping of I2S TX sdos to I2S data bus lines.
       By default, they are mapped one-to-one.
       rockchip,i2s-tx-route = <3> would mean sdo3 is sending to data0.
-    maxItems: 4
     items:
       enum: [0, 1, 2, 3]
 
