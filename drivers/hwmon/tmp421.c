@@ -29,6 +29,7 @@ static const unsigned short normal_i2c[] = { 0x2a, 0x4c, 0x4d, 0x4e, 0x4f,
 
 enum chips { tmp421, tmp422, tmp423, tmp441, tmp442 };
 
+#define MAX_CHANNELS				4
 /* The TMP421 registers */
 #define TMP421_STATUS_REG			0x08
 #define TMP421_CONFIG_REG_1			0x09
@@ -36,8 +37,8 @@ enum chips { tmp421, tmp422, tmp423, tmp441, tmp442 };
 #define TMP421_MANUFACTURER_ID_REG		0xFE
 #define TMP421_DEVICE_ID_REG			0xFF
 
-static const u8 TMP421_TEMP_MSB[4]		= { 0x00, 0x01, 0x02, 0x03 };
-static const u8 TMP421_TEMP_LSB[4]		= { 0x10, 0x11, 0x12, 0x13 };
+static const u8 TMP421_TEMP_MSB[MAX_CHANNELS]	= { 0x00, 0x01, 0x02, 0x03 };
+static const u8 TMP421_TEMP_LSB[MAX_CHANNELS]	= { 0x10, 0x11, 0x12, 0x13 };
 
 /* Flags */
 #define TMP421_CONFIG_SHUTDOWN			0x40
@@ -86,18 +87,22 @@ static const struct of_device_id __maybe_unused tmp421_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, tmp421_of_match);
 
+struct tmp421_channel {
+	s16 temp;
+};
+
 struct tmp421_data {
 	struct i2c_client *client;
 	struct mutex update_lock;
-	u32 temp_config[5];
+	u32 temp_config[MAX_CHANNELS + 1];
 	struct hwmon_channel_info temp_info;
 	const struct hwmon_channel_info *info[2];
 	struct hwmon_chip_info chip;
-	char valid;
+	bool valid;
 	unsigned long last_updated;
 	unsigned long channels;
 	u8 config;
-	s16 temp[4];
+	struct tmp421_channel channel[MAX_CHANNELS];
 };
 
 static int temp_from_raw(u16 reg, bool extended)
@@ -132,22 +137,22 @@ static int tmp421_update_device(struct tmp421_data *data)
 			ret = i2c_smbus_read_byte_data(client, TMP421_TEMP_MSB[i]);
 			if (ret < 0)
 				goto exit;
-			data->temp[i] = ret << 8;
+			data->channel[i].temp = ret << 8;
 
 			ret = i2c_smbus_read_byte_data(client, TMP421_TEMP_LSB[i]);
 			if (ret < 0)
 				goto exit;
-			data->temp[i] |= ret;
+			data->channel[i].temp |= ret;
 		}
 		data->last_updated = jiffies;
-		data->valid = 1;
+		data->valid = true;
 	}
 
 exit:
 	mutex_unlock(&data->update_lock);
 
 	if (ret < 0) {
-		data->valid = 0;
+		data->valid = false;
 		return ret;
 	}
 
@@ -166,7 +171,7 @@ static int tmp421_read(struct device *dev, enum hwmon_sensor_types type,
 
 	switch (attr) {
 	case hwmon_temp_input:
-		*val = temp_from_raw(tmp421->temp[channel],
+		*val = temp_from_raw(tmp421->channel[channel].temp,
 				     tmp421->config & TMP421_CONFIG_RANGE);
 		return 0;
 	case hwmon_temp_fault:
@@ -174,7 +179,7 @@ static int tmp421_read(struct device *dev, enum hwmon_sensor_types type,
 		 * Any of OPEN or /PVLD bits indicate a hardware mulfunction
 		 * and the conversion result may be incorrect
 		 */
-		*val = !!(tmp421->temp[channel] & 0x03);
+		*val = !!(tmp421->channel[channel].temp & 0x03);
 		return 0;
 	default:
 		return -EOPNOTSUPP;
