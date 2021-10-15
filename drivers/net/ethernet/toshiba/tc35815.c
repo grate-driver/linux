@@ -708,7 +708,7 @@ static int tc35815_read_plat_dev_addr(struct net_device *dev)
 					    lp->pci_dev, tc35815_mac_match);
 	if (pd) {
 		if (pd->platform_data)
-			memcpy(dev->dev_addr, pd->platform_data, ETH_ALEN);
+			eth_hw_addr_set(dev, pd->platform_data);
 		put_device(pd);
 		return is_valid_ether_addr(dev->dev_addr) ? 0 : -ENODEV;
 	}
@@ -1859,7 +1859,8 @@ static struct net_device_stats *tc35815_get_stats(struct net_device *dev)
 	return &dev->stats;
 }
 
-static void tc35815_set_cam_entry(struct net_device *dev, int index, unsigned char *addr)
+static void tc35815_set_cam_entry(struct net_device *dev, int index,
+				  const unsigned char *addr)
 {
 	struct tc35815_local *lp = netdev_priv(dev);
 	struct tc35815_regs __iomem *tr =

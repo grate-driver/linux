@@ -2955,6 +2955,7 @@ struct net_device *__dev_get_by_flags(struct net *net, unsigned short flags,
 struct net_device *dev_get_by_name(struct net *net, const char *name);
 struct net_device *dev_get_by_name_rcu(struct net *net, const char *name);
 struct net_device *__dev_get_by_name(struct net *net, const char *name);
+bool netdev_name_in_use(struct net *net, const char *name);
 int dev_alloc_name(struct net_device *dev, const char *name);
 int dev_open(struct net_device *dev, struct netlink_ext_ack *extack);
 void dev_close(struct net_device *dev);
@@ -4642,7 +4643,7 @@ void __hw_addr_init(struct netdev_hw_addr_list *list);
 
 /* Functions used for device addresses handling */
 static inline void
-__dev_addr_set(struct net_device *dev, const u8 *addr, size_t len)
+__dev_addr_set(struct net_device *dev, const void *addr, size_t len)
 {
 	memcpy(dev->dev_addr, addr, len);
 }
@@ -4654,7 +4655,7 @@ static inline void dev_addr_set(struct net_device *dev, const u8 *addr)
 
 static inline void
 dev_addr_mod(struct net_device *dev, unsigned int offset,
-	     const u8 *addr, size_t len)
+	     const void *addr, size_t len)
 {
 	memcpy(&dev->dev_addr[offset], addr, len);
 }
@@ -4799,8 +4800,6 @@ struct netdev_nested_priv {
 
 bool netdev_has_upper_dev(struct net_device *dev, struct net_device *upper_dev);
 struct net_device *netdev_upper_get_next_dev_rcu(struct net_device *dev,
-						     struct list_head **iter);
-struct net_device *netdev_all_upper_get_next_dev_rcu(struct net_device *dev,
 						     struct list_head **iter);
 
 #ifdef CONFIG_LOCKDEP
@@ -5236,7 +5235,7 @@ static inline void netif_keep_dst(struct net_device *dev)
 static inline bool netif_reduces_vlan_mtu(struct net_device *dev)
 {
 	/* TODO: reserve and use an additional IFF bit, if we get more users */
-	return dev->priv_flags & IFF_MACSEC;
+	return netif_is_macsec(dev);
 }
 
 extern struct pernet_operations __net_initdata loopback_net_ops;
