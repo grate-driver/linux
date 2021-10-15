@@ -6,6 +6,7 @@
 
 #include <linux/blkdev.h>
 #include <linux/blk-mq.h>
+#include <linux/blk-integrity.h>
 #include <linux/compat.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
@@ -631,7 +632,7 @@ static inline void nvme_init_request(struct request *req,
 
 	req->cmd_flags |= REQ_FAILFAST_DRIVER;
 	if (req->mq_hctx->type == HCTX_TYPE_POLL)
-		req->cmd_flags |= REQ_HIPRI;
+		req->cmd_flags |= REQ_POLLED;
 	nvme_clear_nvme_request(req);
 	memcpy(nvme_req(req)->cmd, cmd, sizeof(*cmd));
 }
@@ -922,9 +923,16 @@ static inline blk_status_t nvme_setup_rw(struct nvme_ns *ns,
 		dsmgmt |= NVME_RW_DSM_FREQ_PREFETCH;
 
 	cmnd->rw.opcode = op;
+	cmnd->rw.flags = 0;
+	cmnd->rw.command_id = 0;
 	cmnd->rw.nsid = cpu_to_le32(ns->head->ns_id);
+	cmnd->rw.rsvd2 = 0;
+	cmnd->rw.metadata = 0;
 	cmnd->rw.slba = cpu_to_le64(nvme_sect_to_lba(ns, blk_rq_pos(req)));
 	cmnd->rw.length = cpu_to_le16((blk_rq_bytes(req) >> ns->lba_shift) - 1);
+	cmnd->rw.reftag = 0;
+	cmnd->rw.apptag = 0;
+	cmnd->rw.appmask = 0;
 
 	if (req_op(req) == REQ_OP_WRITE && ctrl->nr_streams)
 		nvme_assign_write_stream(ctrl, req, &control, &dsmgmt);
@@ -975,16 +983,19 @@ void nvme_cleanup_cmd(struct request *req)
 }
 EXPORT_SYMBOL_GPL(nvme_cleanup_cmd);
 
+static void nvme_clear_cmd(struct request *req)
+{
+	if (!(req->rq_flags & RQF_DONTPREP)) {
+		nvme_clear_nvme_request(req);
+		memset(nvme_req(req)->cmd, 0, sizeof(struct nvme_command));
+	}
+}
+
 blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req)
 {
 	struct nvme_command *cmd = nvme_req(req)->cmd;
 	struct nvme_ctrl *ctrl = nvme_req(req)->ctrl;
 	blk_status_t ret = BLK_STS_OK;
-
-	if (!(req->rq_flags & RQF_DONTPREP)) {
-		nvme_clear_nvme_request(req);
-		memset(cmd, 0, sizeof(*cmd));
-	}
 
 	switch (req_op(req)) {
 	case REQ_OP_DRV_IN:
@@ -992,34 +1003,44 @@ blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req)
 		/* these are setup prior to execution in nvme_init_request() */
 		break;
 	case REQ_OP_FLUSH:
+		nvme_clear_cmd(req);
 		nvme_setup_flush(ns, cmd);
 		break;
 	case REQ_OP_ZONE_RESET_ALL:
 	case REQ_OP_ZONE_RESET:
+		nvme_clear_cmd(req);
 		ret = nvme_setup_zone_mgmt_send(ns, req, cmd, NVME_ZONE_RESET);
 		break;
 	case REQ_OP_ZONE_OPEN:
+		nvme_clear_cmd(req);
 		ret = nvme_setup_zone_mgmt_send(ns, req, cmd, NVME_ZONE_OPEN);
 		break;
 	case REQ_OP_ZONE_CLOSE:
+		nvme_clear_cmd(req);
 		ret = nvme_setup_zone_mgmt_send(ns, req, cmd, NVME_ZONE_CLOSE);
 		break;
 	case REQ_OP_ZONE_FINISH:
+		nvme_clear_cmd(req);
 		ret = nvme_setup_zone_mgmt_send(ns, req, cmd, NVME_ZONE_FINISH);
 		break;
 	case REQ_OP_WRITE_ZEROES:
+		nvme_clear_cmd(req);
 		ret = nvme_setup_write_zeroes(ns, req, cmd);
 		break;
 	case REQ_OP_DISCARD:
+		nvme_clear_cmd(req);
 		ret = nvme_setup_discard(ns, req, cmd);
 		break;
 	case REQ_OP_READ:
+		nvme_clear_nvme_request(req);
 		ret = nvme_setup_rw(ns, req, cmd, nvme_cmd_read);
 		break;
 	case REQ_OP_WRITE:
+		nvme_clear_nvme_request(req);
 		ret = nvme_setup_rw(ns, req, cmd, nvme_cmd_write);
 		break;
 	case REQ_OP_ZONE_APPEND:
+		nvme_clear_nvme_request(req);
 		ret = nvme_setup_rw(ns, req, cmd, nvme_cmd_zone_append);
 		break;
 	default:

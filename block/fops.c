@@ -17,7 +17,7 @@
 #include <linux/fs.h>
 #include "blk.h"
 
-static struct inode *bdev_file_inode(struct file *file)
+static inline struct inode *bdev_file_inode(struct file *file)
 {
 	return file->f_mapping->host;
 }
@@ -54,14 +54,12 @@ static void blkdev_bio_end_io_simple(struct bio *bio)
 static ssize_t __blkdev_direct_IO_simple(struct kiocb *iocb,
 		struct iov_iter *iter, unsigned int nr_pages)
 {
-	struct file *file = iocb->ki_filp;
-	struct block_device *bdev = I_BDEV(bdev_file_inode(file));
+	struct block_device *bdev = iocb->ki_filp->private_data;
 	struct bio_vec inline_vecs[DIO_INLINE_BIO_VECS], *vecs;
 	loff_t pos = iocb->ki_pos;
 	bool should_dirty = false;
 	struct bio bio;
 	ssize_t ret;
-	blk_qc_t qc;
 
 	if ((pos | iov_iter_alignment(iter)) &
 	    (bdev_logical_block_size(bdev) - 1))
@@ -102,13 +100,12 @@ static ssize_t __blkdev_direct_IO_simple(struct kiocb *iocb,
 	if (iocb->ki_flags & IOCB_HIPRI)
 		bio_set_polled(&bio, iocb);
 
-	qc = submit_bio(&bio);
+	submit_bio(&bio);
 	for (;;) {
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		if (!READ_ONCE(bio.bi_private))
 			break;
-		if (!(iocb->ki_flags & IOCB_HIPRI) ||
-		    !blk_poll(bdev_get_queue(bdev), qc, true))
+		if (!(iocb->ki_flags & IOCB_HIPRI) || !bio_poll(&bio, 0))
 			blk_io_schedule();
 	}
 	__set_current_state(TASK_RUNNING);
@@ -141,14 +138,6 @@ struct blkdev_dio {
 
 static struct bio_set blkdev_dio_pool;
 
-static int blkdev_iopoll(struct kiocb *kiocb, bool wait)
-{
-	struct block_device *bdev = I_BDEV(kiocb->ki_filp->f_mapping->host);
-	struct request_queue *q = bdev_get_queue(bdev);
-
-	return blk_poll(q, READ_ONCE(kiocb->ki_cookie), wait);
-}
-
 static void blkdev_bio_end_io(struct bio *bio)
 {
 	struct blkdev_dio *dio = bio->bi_private;
@@ -161,6 +150,8 @@ static void blkdev_bio_end_io(struct bio *bio)
 		if (!dio->is_sync) {
 			struct kiocb *iocb = dio->iocb;
 			ssize_t ret;
+
+			WRITE_ONCE(iocb->private, NULL);
 
 			if (likely(!dio->bio.bi_status)) {
 				ret = dio->size;
@@ -191,16 +182,13 @@ static void blkdev_bio_end_io(struct bio *bio)
 static ssize_t __blkdev_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 		unsigned int nr_pages)
 {
-	struct file *file = iocb->ki_filp;
-	struct inode *inode = bdev_file_inode(file);
-	struct block_device *bdev = I_BDEV(inode);
+	struct block_device *bdev = iocb->ki_filp->private_data;
 	struct blk_plug plug;
 	struct blkdev_dio *dio;
 	struct bio *bio;
-	bool is_poll = (iocb->ki_flags & IOCB_HIPRI) != 0;
+	bool do_poll = (iocb->ki_flags & IOCB_HIPRI);
 	bool is_read = (iov_iter_rw(iter) == READ), is_sync;
 	loff_t pos = iocb->ki_pos;
-	blk_qc_t qc = BLK_QC_T_NONE;
 	int ret = 0;
 
 	if ((pos | iov_iter_alignment(iter)) &
@@ -226,7 +214,7 @@ static ssize_t __blkdev_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 	 * Don't plug for HIPRI/polled IO, as those should go straight
 	 * to issue
 	 */
-	if (!is_poll)
+	if (!(iocb->ki_flags & IOCB_HIPRI))
 		blk_start_plug(&plug);
 
 	for (;;) {
@@ -260,20 +248,13 @@ static ssize_t __blkdev_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 
 		nr_pages = bio_iov_vecs_to_alloc(iter, BIO_MAX_VECS);
 		if (!nr_pages) {
-			bool polled = false;
-
-			if (iocb->ki_flags & IOCB_HIPRI) {
+			if (do_poll)
 				bio_set_polled(bio, iocb);
-				polled = true;
-			}
-
-			qc = submit_bio(bio);
-
-			if (polled)
-				WRITE_ONCE(iocb->ki_cookie, qc);
+			submit_bio(bio);
+			if (do_poll)
+				WRITE_ONCE(iocb->private, bio);
 			break;
 		}
-
 		if (!dio->multi_bio) {
 			/*
 			 * AIO needs an extra reference to ensure the dio
@@ -284,6 +265,7 @@ static ssize_t __blkdev_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 				bio_get(bio);
 			dio->multi_bio = true;
 			atomic_set(&dio->ref, 2);
+			do_poll = false;
 		} else {
 			atomic_inc(&dio->ref);
 		}
@@ -292,7 +274,7 @@ static ssize_t __blkdev_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 		bio = bio_alloc(GFP_KERNEL, nr_pages);
 	}
 
-	if (!is_poll)
+	if (!(iocb->ki_flags & IOCB_HIPRI))
 		blk_finish_plug(&plug);
 
 	if (!is_sync)
@@ -303,8 +285,7 @@ static ssize_t __blkdev_direct_IO(struct kiocb *iocb, struct iov_iter *iter,
 		if (!READ_ONCE(dio->waiter))
 			break;
 
-		if (!(iocb->ki_flags & IOCB_HIPRI) ||
-		    !blk_poll(bdev_get_queue(bdev), qc, true))
+		if (!do_poll || !bio_poll(bio, 0))
 			blk_io_schedule();
 	}
 	__set_current_state(TASK_RUNNING);
@@ -405,8 +386,7 @@ static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
 static int blkdev_fsync(struct file *filp, loff_t start, loff_t end,
 		int datasync)
 {
-	struct inode *bd_inode = bdev_file_inode(filp);
-	struct block_device *bdev = I_BDEV(bd_inode);
+	struct block_device *bdev = filp->private_data;
 	int error;
 
 	error = file_write_and_wait_range(filp, start, end);
@@ -448,6 +428,8 @@ static int blkdev_open(struct inode *inode, struct file *filp)
 	bdev = blkdev_get_by_dev(inode->i_rdev, filp->f_mode, filp);
 	if (IS_ERR(bdev))
 		return PTR_ERR(bdev);
+
+	filp->private_data = bdev;
 	filp->f_mapping = bdev->bd_inode->i_mapping;
 	filp->f_wb_err = filemap_sample_wb_err(filp->f_mapping);
 	return 0;
@@ -455,27 +437,10 @@ static int blkdev_open(struct inode *inode, struct file *filp)
 
 static int blkdev_close(struct inode *inode, struct file *filp)
 {
-	struct block_device *bdev = I_BDEV(bdev_file_inode(filp));
+	struct block_device *bdev = filp->private_data;
 
 	blkdev_put(bdev, filp->f_mode);
 	return 0;
-}
-
-static long block_ioctl(struct file *file, unsigned cmd, unsigned long arg)
-{
-	struct block_device *bdev = I_BDEV(bdev_file_inode(file));
-	fmode_t mode = file->f_mode;
-
-	/*
-	 * O_NDELAY can be altered using fcntl(.., F_SETFL, ..), so we have
-	 * to updated it before every ioctl.
-	 */
-	if (file->f_flags & O_NDELAY)
-		mode |= FMODE_NDELAY;
-	else
-		mode &= ~FMODE_NDELAY;
-
-	return blkdev_ioctl(bdev, mode, cmd, arg);
 }
 
 /*
@@ -487,14 +452,14 @@ static long block_ioctl(struct file *file, unsigned cmd, unsigned long arg)
  */
 static ssize_t blkdev_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
-	struct file *file = iocb->ki_filp;
-	struct inode *bd_inode = bdev_file_inode(file);
+	struct block_device *bdev = iocb->ki_filp->private_data;
+	struct inode *bd_inode = bdev->bd_inode;
 	loff_t size = i_size_read(bd_inode);
 	struct blk_plug plug;
 	size_t shorted = 0;
 	ssize_t ret;
 
-	if (bdev_read_only(I_BDEV(bd_inode)))
+	if (bdev_read_only(bdev))
 		return -EPERM;
 
 	if (IS_SWAPFILE(bd_inode) && !is_hibernate_resume_dev(bd_inode->i_rdev))
@@ -526,9 +491,8 @@ static ssize_t blkdev_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 static ssize_t blkdev_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
-	struct file *file = iocb->ki_filp;
-	struct inode *bd_inode = bdev_file_inode(file);
-	loff_t size = i_size_read(bd_inode);
+	struct block_device *bdev = iocb->ki_filp->private_data;
+	loff_t size = i_size_read(bdev->bd_inode);
 	loff_t pos = iocb->ki_pos;
 	size_t shorted = 0;
 	ssize_t ret;
@@ -618,10 +582,10 @@ const struct file_operations def_blk_fops = {
 	.llseek		= blkdev_llseek,
 	.read_iter	= blkdev_read_iter,
 	.write_iter	= blkdev_write_iter,
-	.iopoll		= blkdev_iopoll,
+	.iopoll		= iocb_bio_iopoll,
 	.mmap		= generic_file_mmap,
 	.fsync		= blkdev_fsync,
-	.unlocked_ioctl	= block_ioctl,
+	.unlocked_ioctl	= blkdev_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl	= compat_blkdev_ioctl,
 #endif
