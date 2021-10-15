@@ -121,6 +121,7 @@
 #define AUDIT_DM_CTRL		1336	/* Device Mapper target control */
 #define AUDIT_DM_EVENT		1337	/* Device Mapper events */
 #define AUDIT_URINGOP		1338	/* io_uring operation */
+#define AUDIT_OPENAT2		1339	/* Record showing openat2 how args */
 
 #define AUDIT_AVC		1400	/* SE Linux avc denial or grant */
 #define AUDIT_SELINUX_ERR	1401	/* Internal SE Linux Errors */
