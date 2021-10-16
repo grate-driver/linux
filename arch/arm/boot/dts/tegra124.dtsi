@@ -292,7 +292,6 @@
 		clock-names = "actmon", "emc";
 		resets = <&tegra_car 119>;
 		reset-names = "actmon";
-		operating-points-v2 = <&emc_bw_dfs_opp_table>;
 		interconnects = <&mc TEGRA124_MC_MPCORER &emc>;
 		interconnect-names = "cpu-read";
 		#cooling-cells = <2>;
@@ -666,7 +665,6 @@
 		clock-names = "emc";
 
 		nvidia,memory-controller = <&mc>;
-		operating-points-v2 = <&emc_icc_dvfs_opp_table>;
 
 		#interconnect-cells = <0>;
 	};
