@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 / {
-	emc_icc_dvfs_opp_table: emc-dvfs-opp-table {
+	emc_icc_dvfs_opp_table: opp-table-emc-dvfs {
 		compatible = "operating-points-v2";
 
 		opp@12750000,800 {
@@ -327,7 +327,7 @@
 		};
 	};
 
-	emc_bw_dfs_opp_table: emc-bandwidth-opp-table {
+	emc_bw_dfs_opp_table: opp-table-emc-bandwidth {
 		compatible = "operating-points-v2";
 
 		opp@12750000 {
