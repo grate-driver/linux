@@ -122,6 +122,19 @@ static int notifier_call_chain_robust(struct notifier_block **nl,
 	return ret;
 }
 
+static int notifier_has_unique_priority(struct notifier_block **nl,
+					struct notifier_block *n)
+{
+	while (*nl && (*nl)->priority >= n->priority) {
+		if ((*nl)->priority == n->priority && *nl != n)
+			return false;
+
+		nl = &((*nl)->next);
+	}
+
+	return true;
+}
+
 /*
  *	Atomic notifier chain routines.  Registration and unregistration
  *	use a spinlock, and call_chain is synchronized by RCU (no locks).
@@ -202,6 +215,30 @@ int atomic_notifier_call_chain(struct atomic_notifier_head *nh,
 }
 EXPORT_SYMBOL_GPL(atomic_notifier_call_chain);
 NOKPROBE_SYMBOL(atomic_notifier_call_chain);
+
+/**
+ *	atomic_notifier_has_unique_priority - Checks whether notifier's priority is unique
+ *	@nh: Pointer to head of the atomic notifier chain
+ *	@n: Entry in notifier chain to check
+ *
+ *	Checks whether there is another notifier in the chain with the same priority.
+ *	Must be called in process context.
+ *
+ *	Returns true if priority is unique, false otherwise.
+ */
+bool atomic_notifier_has_unique_priority(struct atomic_notifier_head *nh,
+		struct notifier_block *n)
+{
+	unsigned long flags;
+	bool ret;
+
+	spin_lock_irqsave(&nh->lock, flags);
+	ret = notifier_has_unique_priority(&nh->head, n);
+	spin_unlock_irqrestore(&nh->lock, flags);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(atomic_notifier_has_unique_priority);
 
 /*
  *	Blocking notifier chain routines.  All access to the chain is
@@ -335,6 +372,38 @@ bool blocking_notifier_call_chain_is_empty(struct blocking_notifier_head *nh)
 	return !rcu_access_pointer(nh->head);
 }
 EXPORT_SYMBOL_GPL(blocking_notifier_call_chain_is_empty);
+
+/**
+ *	blocking_notifier_has_unique_priority - Checks whether notifier's priority is unique
+ *	@nh: Pointer to head of the blocking notifier chain
+ *	@n: Entry in notifier chain to check
+ *
+ *	Checks whether there is another notifier in the chain with the same priority.
+ *	Must be called in process context.
+ *
+ *	Returns true if priority is unique, false otherwise.
+ */
+bool blocking_notifier_has_unique_priority(struct blocking_notifier_head *nh,
+		struct notifier_block *n)
+{
+	bool ret;
+
+	/*
+	 * This code gets used during boot-up, when task switching is
+	 * not yet working and interrupts must remain disabled. At such
+	 * times we must not call down_read().
+	 */
+	if (system_state != SYSTEM_BOOTING)
+		down_read(&nh->rwsem);
+
+	ret = notifier_has_unique_priority(&nh->head, n);
+
+	if (system_state != SYSTEM_BOOTING)
+		up_read(&nh->rwsem);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(blocking_notifier_has_unique_priority);
 
 /*
  *	Raw notifier chain routines.  There is no protection;
