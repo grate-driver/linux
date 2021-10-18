@@ -31,7 +31,6 @@
 
 struct lpc18xx_rgu_data {
 	struct reset_controller_dev rcdev;
-	struct notifier_block restart_nb;
 	struct clk *clk_delay;
 	struct clk *clk_reg;
 	void __iomem *base;
@@ -41,18 +40,14 @@ struct lpc18xx_rgu_data {
 
 #define to_rgu_data(p) container_of(p, struct lpc18xx_rgu_data, rcdev)
 
-static int lpc18xx_rgu_restart(struct notifier_block *nb, unsigned long mode,
-			       void *cmd)
+static void lpc18xx_rgu_restart(struct restart_data *data)
 {
-	struct lpc18xx_rgu_data *rc = container_of(nb, struct lpc18xx_rgu_data,
-						   restart_nb);
+	struct lpc18xx_rgu_data *rc = data->cb_data;
 
 	writel(BIT(LPC18XX_RGU_CORE_RST), rc->base + LPC18XX_RGU_CTRL0);
 	mdelay(2000);
 
 	pr_emerg("%s: unable to restart system\n", __func__);
-
-	return NOTIFY_DONE;
 }
 
 /*
@@ -198,9 +193,9 @@ static int lpc18xx_rgu_probe(struct platform_device *pdev)
 		goto dis_clks;
 	}
 
-	rc->restart_nb.priority = 192,
-	rc->restart_nb.notifier_call = lpc18xx_rgu_restart,
-	ret = register_restart_handler(&rc->restart_nb);
+	ret = devm_register_prioritized_restart_handler(&pdev->dev,
+							RESTART_PRIO_HIGH,
+							lpc18xx_rgu_restart, rc);
 	if (ret)
 		dev_warn(&pdev->dev, "failed to register restart handler\n");
 
