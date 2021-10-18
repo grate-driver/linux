@@ -8,6 +8,7 @@
 #ifndef __LINUX_MFD_RN5T618_H
 #define __LINUX_MFD_RN5T618_H
 
+#include <linux/reboot.h>
 #include <linux/regmap.h>
 
 #define RN5T618_LSIVER			0x00
@@ -272,6 +273,8 @@ struct rn5t618 {
 
 	int irq;
 	struct regmap_irq_chip_data *irq_data;
+
+	struct sys_off_handler sys_off;
 };
 
 #endif /* __LINUX_MFD_RN5T618_H */
