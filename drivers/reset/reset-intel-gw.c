@@ -28,7 +28,6 @@ struct intel_reset_soc {
 
 struct intel_reset_data {
 	struct reset_controller_dev rcdev;
-	struct notifier_block restart_nb;
 	const struct intel_reset_soc *soc_data;
 	struct regmap *regmap;
 	struct device *dev;
@@ -154,15 +153,11 @@ static int intel_reset_xlate(struct reset_controller_dev *rcdev,
 	return id;
 }
 
-static int intel_reset_restart_handler(struct notifier_block *nb,
-				       unsigned long action, void *data)
+static void intel_reset_restart_handler(struct restart_data *data)
 {
-	struct intel_reset_data *reset_data;
+	struct intel_reset_data *reset_data = data->cb_data;
 
-	reset_data = container_of(nb, struct intel_reset_data, restart_nb);
 	intel_assert_device(&reset_data->rcdev, reset_data->reboot_id);
-
-	return NOTIFY_DONE;
 }
 
 static int intel_reset_probe(struct platform_device *pdev)
@@ -216,9 +211,8 @@ static int intel_reset_probe(struct platform_device *pdev)
 	if (data->soc_data->legacy)
 		data->reboot_id |= FIELD_PREP(STAT_BIT_OFFSET_MASK, rb_id[2]);
 
-	data->restart_nb.notifier_call =	intel_reset_restart_handler;
-	data->restart_nb.priority =		128;
-	register_restart_handler(&data->restart_nb);
+	devm_register_simple_restart_handler(dev, intel_reset_restart_handler,
+					     data);
 
 	return 0;
 }
