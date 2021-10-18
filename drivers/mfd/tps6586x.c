@@ -22,6 +22,7 @@
 #include <linux/err.h>
 #include <linux/i2c.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/regmap.h>
 #include <linux/of.h>
 
@@ -461,9 +462,10 @@ static const struct regmap_config tps6586x_regmap_config = {
 	.cache_type = REGCACHE_RBTREE,
 };
 
-static struct device *tps6586x_dev;
-static void tps6586x_power_off(void)
+static void tps6586x_power_off(void *data)
 {
+	struct device *tps6586x_dev = data;
+
 	if (tps6586x_clr_bits(tps6586x_dev, TPS6586X_SUPPLYENE, EXITSLREQ_BIT))
 		return;
 
@@ -540,6 +542,16 @@ static int tps6586x_i2c_probe(struct i2c_client *client,
 		return ret;
 	}
 
+	if (pdata->pm_off) {
+		ret = devm_register_simple_power_off_handler(&client->dev,
+							     tps6586x_power_off,
+							     &client->dev);
+		if (ret) {
+			dev_err(&client->dev,
+				"failed to register power-off handler: %d\n", ret);
+			return ret;
+		}
+	}
 
 	if (client->irq) {
 		ret = tps6586x_irq_init(tps6586x, client->irq,
@@ -562,11 +574,6 @@ static int tps6586x_i2c_probe(struct i2c_client *client,
 	if (ret) {
 		dev_err(&client->dev, "add devices failed: %d\n", ret);
 		goto err_add_devs;
-	}
-
-	if (pdata->pm_off && !pm_power_off) {
-		tps6586x_dev = &client->dev;
-		pm_power_off = tps6586x_power_off;
 	}
 
 	return 0;
