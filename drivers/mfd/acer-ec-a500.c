@@ -31,8 +31,6 @@ enum {
 	REG_COLD_REBOOT = 0x55,
 };
 
-static struct i2c_client *a500_ec_client_pm_off;
-
 static int a500_ec_read(void *context, const void *reg_buf, size_t reg_size,
 			void *val_buf, size_t val_sizel)
 {
@@ -104,33 +102,28 @@ static const struct regmap_bus a500_ec_regmap_bus = {
 	.max_raw_read = 2,
 };
 
-static void a500_ec_poweroff(void)
+static void a500_ec_power_off_handler(struct power_off_data *data)
 {
-	i2c_smbus_write_word_data(a500_ec_client_pm_off,
-				  REG_SHUTDOWN, CMD_SHUTDOWN);
+	struct i2c_client *client = data->cb_data;
+
+	i2c_smbus_write_word_data(client, REG_SHUTDOWN, CMD_SHUTDOWN);
 
 	mdelay(A500_EC_POWER_CMD_TIMEOUT);
 }
 
-static int a500_ec_restart_notify(struct notifier_block *this,
-				  unsigned long reboot_mode, void *data)
+static void a500_ec_restart_handler(struct restart_data *data)
 {
-	if (reboot_mode == REBOOT_WARM)
-		i2c_smbus_write_word_data(a500_ec_client_pm_off,
+	struct i2c_client *client = data->cb_data;
+
+	if (data->mode == REBOOT_WARM)
+		i2c_smbus_write_word_data(client,
 					  REG_WARM_REBOOT, CMD_WARM_REBOOT);
 	else
-		i2c_smbus_write_word_data(a500_ec_client_pm_off,
+		i2c_smbus_write_word_data(client,
 					  REG_COLD_REBOOT, CMD_COLD_REBOOT);
 
 	mdelay(A500_EC_POWER_CMD_TIMEOUT);
-
-	return NOTIFY_DONE;
 }
-
-static struct notifier_block a500_ec_restart_handler = {
-	.notifier_call = a500_ec_restart_notify,
-	.priority = 200,
-};
 
 static const struct mfd_cell a500_ec_cells[] = {
 	{ .name = "acer-a500-iconia-battery", },
@@ -139,6 +132,7 @@ static const struct mfd_cell a500_ec_cells[] = {
 
 static int a500_ec_probe(struct i2c_client *client)
 {
+	struct sys_off_handler *sys_off;
 	struct regmap *regmap;
 	int err;
 
@@ -156,26 +150,20 @@ static int a500_ec_probe(struct i2c_client *client)
 	}
 
 	if (of_device_is_system_power_controller(client->dev.of_node)) {
-		a500_ec_client_pm_off = client;
+		sys_off = devm_kzalloc(&client->dev, sizeof(*sys_off),
+				       GFP_KERNEL);
+		if (!sys_off)
+			return -ENOMEM;
 
-		err = register_restart_handler(&a500_ec_restart_handler);
+		sys_off->cb_data = client;
+		sys_off->restart_cb = a500_ec_restart_handler;
+		sys_off->restart_priority = RESTART_PRIO_HIGH;
+		sys_off->power_off_cb = a500_ec_power_off_handler;
+		sys_off->power_off_priority = POWEROFF_PRIO_HIGH;
+
+		err = devm_register_sys_off_handler(&client->dev, sys_off);
 		if (err)
 			return err;
-
-		if (!pm_power_off)
-			pm_power_off = a500_ec_poweroff;
-	}
-
-	return 0;
-}
-
-static int a500_ec_remove(struct i2c_client *client)
-{
-	if (of_device_is_system_power_controller(client->dev.of_node)) {
-		if (pm_power_off == a500_ec_poweroff)
-			pm_power_off = NULL;
-
-		unregister_restart_handler(&a500_ec_restart_handler);
 	}
 
 	return 0;
@@ -193,7 +181,6 @@ static struct i2c_driver a500_ec_driver = {
 		.of_match_table = a500_ec_match,
 	},
 	.probe_new = a500_ec_probe,
-	.remove = a500_ec_remove,
 };
 module_i2c_driver(a500_ec_driver);
 
