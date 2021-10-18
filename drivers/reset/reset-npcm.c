@@ -54,7 +54,6 @@
 
 struct npcm_rc_data {
 	struct reset_controller_dev rcdev;
-	struct notifier_block restart_nb;
 	u32 sw_reset_number;
 	void __iomem *base;
 	spinlock_t lock;
@@ -62,18 +61,14 @@ struct npcm_rc_data {
 
 #define to_rc_data(p) container_of(p, struct npcm_rc_data, rcdev)
 
-static int npcm_rc_restart(struct notifier_block *nb, unsigned long mode,
-			   void *cmd)
+static void npcm_rc_restart(struct restart_data *data)
 {
-	struct npcm_rc_data *rc = container_of(nb, struct npcm_rc_data,
-					       restart_nb);
+	struct npcm_rc_data *rc = data->cb_data;
 
 	writel(NPCM_SWRST << rc->sw_reset_number, rc->base + NPCM_SWRSTR);
 	mdelay(1000);
 
 	pr_emerg("%s: unable to restart system\n", __func__);
-
-	return NOTIFY_DONE;
 }
 
 static int npcm_rc_setclear_reset(struct reset_controller_dev *rcdev,
@@ -269,9 +264,9 @@ static int npcm_rc_probe(struct platform_device *pdev)
 	if (!of_property_read_u32(pdev->dev.of_node, "nuvoton,sw-reset-number",
 				  &rc->sw_reset_number)) {
 		if (rc->sw_reset_number && rc->sw_reset_number < 5) {
-			rc->restart_nb.priority = 192,
-			rc->restart_nb.notifier_call = npcm_rc_restart,
-			ret = register_restart_handler(&rc->restart_nb);
+			ret = devm_register_prioritized_restart_handler(&pdev->dev,
+									RESTART_PRIO_HIGH,
+									npcm_rc_restart, rc);
 			if (ret)
 				dev_warn(&pdev->dev, "failed to register restart handler\n");
 		}
