@@ -8,6 +8,7 @@
 #ifndef __LINUX_MFD_AXP20X_H
 #define __LINUX_MFD_AXP20X_H
 
+#include <linux/reboot.h>
 #include <linux/regmap.h>
 
 enum axp20x_variants {
@@ -643,6 +644,7 @@ struct axp20x_dev {
 	const struct mfd_cell           *cells;
 	const struct regmap_config	*regmap_cfg;
 	const struct regmap_irq_chip	*regmap_irq_chip;
+	struct sys_off_handler		sys_off;
 };
 
 /* generic helper function for reading 9-16 bit wide regs */
