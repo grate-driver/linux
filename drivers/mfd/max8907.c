@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/reboot.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
 
@@ -174,9 +175,10 @@ static const struct regmap_irq_chip max8907_rtc_irq_chip = {
 	.num_irqs = ARRAY_SIZE(max8907_rtc_irqs),
 };
 
-static struct max8907 *max8907_pm_off;
-static void max8907_power_off(void)
+static void max8907_power_off(void *data)
 {
+	struct max8907 *max8907_pm_off = data;
+
 	regmap_update_bits(max8907_pm_off->regmap_gen, MAX8907_REG_RESET_CNFG,
 			MAX8907_MASK_POWER_OFF, MAX8907_MASK_POWER_OFF);
 }
@@ -212,6 +214,17 @@ static int max8907_i2c_probe(struct i2c_client *i2c,
 		ret = PTR_ERR(max8907->regmap_gen);
 		dev_err(&i2c->dev, "gen regmap init failed: %d\n", ret);
 		goto err_regmap_gen;
+	}
+
+	if (pm_off) {
+		ret = devm_register_simple_power_off_handler(&i2c->dev,
+							     max8907_power_off,
+							     max8907);
+		if (ret) {
+			dev_err(&i2c->dev,
+				"failed to register power-off handler: %d\n", ret);
+			return ret;
+		}
 	}
 
 	max8907->i2c_rtc = i2c_new_dummy_device(i2c->adapter, MAX8907_RTC_I2C_ADDR);
@@ -258,11 +271,6 @@ static int max8907_i2c_probe(struct i2c_client *i2c,
 	if (ret != 0) {
 		dev_err(&i2c->dev, "failed to add MFD devices %d\n", ret);
 		goto err_add_devices;
-	}
-
-	if (pm_off && !pm_power_off) {
-		max8907_pm_off = max8907;
-		pm_power_off = max8907_power_off;
 	}
 
 	return 0;
