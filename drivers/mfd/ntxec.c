@@ -32,12 +32,11 @@
 #define NTXEC_POWERKEEP_VALUE	0x0800
 #define NTXEC_RESET_VALUE	0xff00
 
-static struct i2c_client *poweroff_restart_client;
-
-static void ntxec_poweroff(void)
+static void ntxec_poweroff(struct power_off_data *data)
 {
 	int res;
 	u8 buf[3] = { NTXEC_REG_POWEROFF };
+	struct i2c_client *poweroff_restart_client = data->cb_data;
 	struct i2c_msg msgs[] = {
 		{
 			.addr = poweroff_restart_client->addr,
@@ -62,8 +61,7 @@ static void ntxec_poweroff(void)
 	msleep(5000);
 }
 
-static int ntxec_restart(struct notifier_block *nb,
-			 unsigned long action, void *data)
+static void ntxec_restart(struct restart_data *data)
 {
 	int res;
 	u8 buf[3] = { NTXEC_REG_RESET };
@@ -72,6 +70,7 @@ static int ntxec_restart(struct notifier_block *nb,
 	 * it causes an I2C error. (The reset handler in the downstream driver
 	 * does send the full two-byte value, but doesn't check the result).
 	 */
+	struct i2c_client *poweroff_restart_client = data->cb_data;
 	struct i2c_msg msgs[] = {
 		{
 			.addr = poweroff_restart_client->addr,
@@ -87,13 +86,11 @@ static int ntxec_restart(struct notifier_block *nb,
 	if (res < 0)
 		dev_warn(&poweroff_restart_client->dev,
 			 "Failed to restart (err = %d)\n", res);
-
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block ntxec_restart_handler = {
-	.notifier_call = ntxec_restart,
-	.priority = 128,
+static struct power_handler ntxec_power_handler = {
+	.restart_cb = ntxec_restart,
+	.power_off_cb = ntxec_poweroff,
 };
 
 static int regmap_ignore_write(void *context,
@@ -208,25 +205,12 @@ static int ntxec_probe(struct i2c_client *client)
 		if (res < 0)
 			return res;
 
-		if (poweroff_restart_client)
-			/*
-			 * Another instance of the driver already took
-			 * poweroff/restart duties.
-			 */
-			dev_err(ec->dev, "poweroff_restart_client already assigned\n");
-		else
-			poweroff_restart_client = client;
+		ntxec_power_handler.cb_data = client;
 
-		if (pm_power_off)
-			/* Another driver already registered a poweroff handler. */
-			dev_err(ec->dev, "pm_power_off already assigned\n");
-		else
-			pm_power_off = ntxec_poweroff;
-
-		res = register_restart_handler(&ntxec_restart_handler);
+		res = devm_register_power_handler(ec->dev, &ntxec_power_handler);
 		if (res)
 			dev_err(ec->dev,
-				"Failed to register restart handler: %d\n", res);
+				"Failed to register power handler: %d\n", res);
 	}
 
 	i2c_set_clientdata(client, ec);
@@ -237,17 +221,6 @@ static int ntxec_probe(struct i2c_client *client)
 		dev_err(ec->dev, "Failed to add subdevices: %d\n", res);
 
 	return res;
-}
-
-static int ntxec_remove(struct i2c_client *client)
-{
-	if (client == poweroff_restart_client) {
-		poweroff_restart_client = NULL;
-		pm_power_off = NULL;
-		unregister_restart_handler(&ntxec_restart_handler);
-	}
-
-	return 0;
 }
 
 static const struct of_device_id of_ntxec_match_table[] = {
@@ -262,7 +235,6 @@ static struct i2c_driver ntxec_driver = {
 		.of_match_table = of_ntxec_match_table,
 	},
 	.probe_new = ntxec_probe,
-	.remove = ntxec_remove,
 };
 module_i2c_driver(ntxec_driver);
 
