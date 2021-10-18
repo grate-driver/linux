@@ -9,6 +9,7 @@
 #ifndef NTXEC_H
 #define NTXEC_H
 
+#include <linux/reboot.h>
 #include <linux/types.h>
 
 struct device;
@@ -17,6 +18,7 @@ struct regmap;
 struct ntxec {
 	struct device *dev;
 	struct regmap *regmap;
+	struct sys_off_handler sys_off;
 };
 
 /*
