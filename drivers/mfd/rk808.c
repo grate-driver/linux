@@ -18,6 +18,7 @@
 #include <linux/mfd/core.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/reboot.h>
 #include <linux/regmap.h>
 
 struct rk808_reg_data {
@@ -526,12 +527,11 @@ static const struct regmap_irq_chip rk818_irq_chip = {
 	.init_ack_masked = true,
 };
 
-static struct i2c_client *rk808_i2c_client;
-
-static void rk808_pm_power_off(void)
+static void rk808_pm_power_off(void *data)
 {
 	int ret;
 	unsigned int reg, bit;
+	struct i2c_client *rk808_i2c_client = data;
 	struct rk808 *rk808 = i2c_get_clientdata(rk808_i2c_client);
 
 	switch (rk808->variant) {
@@ -725,8 +725,14 @@ static int rk808_probe(struct i2c_client *client,
 	}
 
 	if (of_property_read_bool(np, "rockchip,system-power-controller")) {
-		rk808_i2c_client = client;
-		pm_power_off = rk808_pm_power_off;
+		ret = devm_register_simple_power_off_handler(&client->dev,
+							     rk808_pm_power_off,
+							     client);
+		if (ret) {
+			dev_err(&client->dev,
+				"failed to register power-off handler %d\n", ret);
+			goto err_irq;
+		}
 	}
 
 	return 0;
@@ -741,13 +747,6 @@ static int rk808_remove(struct i2c_client *client)
 	struct rk808 *rk808 = i2c_get_clientdata(client);
 
 	regmap_del_irq_chip(client->irq, rk808->irq_data);
-
-	/**
-	 * pm_power_off may points to a function from another module.
-	 * Check if the pointer is set by us and only then overwrite it.
-	 */
-	if (pm_power_off == rk808_pm_power_off)
-		pm_power_off = NULL;
 
 	return 0;
 }
