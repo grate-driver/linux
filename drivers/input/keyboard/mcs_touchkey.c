@@ -129,7 +129,6 @@ static irqreturn_t mcs_touchkey_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-#ifdef CONFIG_OF
 static struct mcs_platform_data *mcs_touchkey_parse_dt(struct device *dev)
 {
 	struct mcs_platform_data *pdata;
@@ -176,13 +175,6 @@ static struct mcs_platform_data *mcs_touchkey_parse_dt(struct device *dev)
 	pdata->keymap = keymap;
 	return pdata;
 }
-#else
-static inline struct mcs_platform_data *mcs_touchkey_parse_dt
-						(struct device *dev)
-{
-	return NULL;
-}
-#endif
 
 static int mcs_touchkey_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
@@ -385,7 +377,6 @@ static struct i2c_driver mcs_touchkey_driver = {
 
 module_i2c_driver(mcs_touchkey_driver);
 
-/* Module information */
 MODULE_AUTHOR("Joonyoung Shim <jy0922.shim@samsung.com>");
 MODULE_AUTHOR("HeungJun Kim <riverful.kim@samsung.com>");
 MODULE_DESCRIPTION("Touchkey driver for MELFAS MCS5000/5080 controller");
