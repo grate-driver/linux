@@ -1454,10 +1454,13 @@ static int tegra_xusb_probe(struct platform_device *pdev)
 		goto put_padctl;
 	}
 
-	tegra->padctl_irq = of_irq_get(np, 0);
-	if (tegra->padctl_irq <= 0) {
-		err = (tegra->padctl_irq == 0) ? -ENODEV : tegra->padctl_irq;
-		goto put_padctl;
+	/* Older device-trees don't specify padctrl interrupt */
+	if (of_property_read_bool(np, "interrupts")) {
+		tegra->padctl_irq = of_irq_get(np, 0);
+		if (tegra->padctl_irq <= 0) {
+			err = (tegra->padctl_irq == 0) ? -ENODEV : tegra->padctl_irq;
+			goto put_padctl;
+		}
 	}
 
 	tegra->host_clk = devm_clk_get(&pdev->dev, "xusb_host");
@@ -1696,11 +1699,15 @@ static int tegra_xusb_probe(struct platform_device *pdev)
 		goto remove_usb3;
 	}
 
-	err = devm_request_threaded_irq(&pdev->dev, tegra->padctl_irq, NULL, tegra_xusb_padctl_irq,
-					IRQF_ONESHOT, dev_name(&pdev->dev), tegra);
-	if (err < 0) {
-		dev_err(&pdev->dev, "failed to request padctl IRQ: %d\n", err);
-		goto remove_usb3;
+	if (tegra->padctl_irq) {
+		err = devm_request_threaded_irq(&pdev->dev, tegra->padctl_irq,
+						NULL, tegra_xusb_padctl_irq,
+						IRQF_ONESHOT, dev_name(&pdev->dev),
+						tegra);
+		if (err < 0) {
+			dev_err(&pdev->dev, "failed to request padctl IRQ: %d\n", err);
+			goto remove_usb3;
+		}
 	}
 
 	err = tegra_xusb_enable_firmware_messages(tegra);
@@ -2132,7 +2139,7 @@ out:
 		tegra->suspended = true;
 		pm_runtime_disable(dev);
 
-		if (device_may_wakeup(dev)) {
+		if (device_may_wakeup(dev) && tegra->padctl_irq) {
 			if (enable_irq_wake(tegra->padctl_irq))
 				dev_err(dev, "failed to enable padctl wakes\n");
 		}
@@ -2161,7 +2168,7 @@ static __maybe_unused int tegra_xusb_resume(struct device *dev)
 		return err;
 	}
 
-	if (device_may_wakeup(dev)) {
+	if (device_may_wakeup(dev) && tegra->padctl_irq) {
 		if (disable_irq_wake(tegra->padctl_irq))
 			dev_err(dev, "failed to disable padctl wakes\n");
 	}
@@ -2178,6 +2185,9 @@ static __maybe_unused int tegra_xusb_runtime_suspend(struct device *dev)
 {
 	struct tegra_xusb *tegra = dev_get_drvdata(dev);
 	int ret;
+
+	if (!tegra->padctl_irq)
+		return -EOPNOTSUPP;
 
 	synchronize_irq(tegra->mbox_irq);
 	mutex_lock(&tegra->lock);
