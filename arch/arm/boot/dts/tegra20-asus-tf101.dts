@@ -1008,6 +1008,13 @@
 		};
 	};
 
+	dock_battery: dock-battery {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <3300000>;
+		energy-full-design-microwatt-hours = <24000000>;
+		operating-range-celsius = <0 45>;
+	};
+
 	display-panel {
 		compatible = "panel-lvds";
 
@@ -1071,6 +1078,36 @@
 				sbs,poll-retry-count = <10>;
 				power-supplies = <&mains>;
 			};
+		};
+	};
+
+	i2c-dock {
+		compatible = "i2c-hotplug-gpio";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupts-extended = <&gpio TEGRA_GPIO(X, 5) IRQ_TYPE_EDGE_BOTH>;
+		detect-gpios = <&gpio TEGRA_GPIO(X, 5) GPIO_ACTIVE_LOW>;
+
+		i2c-parent = <&lvds_ddc>;
+
+		embedded-controller@19 {
+			compatible = "asus,dock-ec", "asus,ec";
+			reg = <0x19>;
+
+			interrupt-parent = <&gpio>;
+			interrupts = <TEGRA_GPIO(S, 2) IRQ_TYPE_LEVEL_LOW>;
+
+			request-gpio = <&gpio TEGRA_GPIO(S, 3) GPIO_ACTIVE_LOW>;
+			asus,dockram = <&dockram_dec>;
+
+			monitored-battery = <&dock_battery>;
+		};
+
+		dockram_dec: dockram@1b {
+			compatible = "asus,dockram";
+			reg = <0x1b>;
 		};
 	};
 
