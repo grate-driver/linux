@@ -133,7 +133,7 @@ struct request {
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
 	struct bio_crypt_ctx *crypt_ctx;
-	struct blk_ksm_keyslot *crypt_keyslot;
+	struct blk_crypto_keyslot *crypt_keyslot;
 #endif
 
 	unsigned short write_hint;
@@ -565,11 +565,6 @@ struct blk_mq_ops {
 	 */
 	void (*exit_request)(struct blk_mq_tag_set *set, struct request *,
 			     unsigned int);
-
-	/**
-	 * @initialize_rq_fn: Called from inside blk_get_request().
-	 */
-	void (*initialize_rq_fn)(struct request *rq);
 
 	/**
 	 * @cleanup_rq: Called before freeing one request which isn't completed
