@@ -83,7 +83,7 @@ config ALIBABA_ENI_VDPA
 	select VIRTIO_PCI_LEGACY_LIB
 	depends on PCI_MSI && !CPU_BIG_ENDIAN
 	help
-	  VDPA driver for Alibaba ENI(Elastic Network Interface) which is build upon
+	  VDPA driver for Alibaba ENI (Elastic Network Interface) which is built upon
 	  virtio 0.9.5 specification.
 
 endif # VDPA
