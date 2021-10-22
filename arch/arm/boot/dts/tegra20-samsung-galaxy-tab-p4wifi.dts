@@ -1030,8 +1030,8 @@
 	};
 
 	sound {
-		compatible = "nvidia,tegra-audio-wm8994";
-		nvidia,model = "wm8994-aif1";
+		compatible = "samsung,tegra-audio-wm8994-p4wifi", "nvidia,tegra-audio-wm8994";
+		nvidia,model = "Samsung Galaxy Tab 10.1 WM8994";
 
 		nvidia,i2s-controller = <&tegra_i2s1>;
 		nvidia,audio-codec = <&wm8994>;
