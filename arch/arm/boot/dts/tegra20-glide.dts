@@ -1798,8 +1798,8 @@
 	};
 
 	sound {
-		compatible = "nvidia,tegra-audio-wm8994";
-		nvidia,model = "wm8994-aif1";
+		compatible = "samsung,tegra-audio-wm8994-glide", "nvidia,tegra-audio-wm8994";
+		nvidia,model = "Samsung SGH-I927 Captivate Glide WM8994";
 
 		nvidia,i2s-controller = <&tegra_i2s1>;
 		nvidia,audio-codec = <&wm8994>;
