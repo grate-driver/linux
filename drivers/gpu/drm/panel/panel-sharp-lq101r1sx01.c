@@ -304,6 +304,7 @@ static const struct drm_panel_funcs sharp_panel_funcs = {
 
 static const struct of_device_id sharp_of_match[] = {
 	{ .compatible = "sharp,lq101r1sx01", },
+	{ .compatible = "sharp,lq101r1sx03", },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, sharp_of_match);
