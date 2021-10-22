@@ -91,8 +91,19 @@ extern void save_stack_trace_tsk(struct task_struct *tsk,
 extern int save_stack_trace_tsk_reliable(struct task_struct *tsk,
 					 struct stack_trace *trace);
 extern void save_stack_trace_user(struct stack_trace *trace);
+
 #endif /* !CONFIG_ARCH_STACKWALK */
-#endif /* CONFIG_STACKTRACE */
+
+#else /* !CONFIG_STACKTRACE: */
+static inline unsigned int
+stack_trace_save_tsk(struct task_struct *task,
+		     unsigned long *store, unsigned int size,
+		     unsigned int skipnr)
+{
+	return -ENOSYS;
+}
+
+#endif /* !CONFIG_STACKTRACE */
 
 #if defined(CONFIG_STACKTRACE) && defined(CONFIG_HAVE_RELIABLE_STACKTRACE)
 int stack_trace_save_tsk_reliable(struct task_struct *tsk, unsigned long *store,
