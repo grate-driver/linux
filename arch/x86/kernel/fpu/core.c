@@ -25,6 +25,10 @@
 #define CREATE_TRACE_POINTS
 #include <asm/trace/fpu.h>
 
+/* The FPU state configuration data for kernel and user space */
+struct fpu_state_config	fpu_kernel_cfg __ro_after_init;
+struct fpu_state_config fpu_user_cfg __ro_after_init;
+
 /*
  * Represents the initial FPU state. It's mostly (but not completely) zeroes,
  * depending on the FPU hardware format:
@@ -146,6 +150,17 @@ void restore_fpregs_from_fpstate(struct fpstate *fpstate, u64 mask)
 	}
 
 	if (use_xsave()) {
+		/*
+		 * Restoring state always needs to modify all features
+		 * which are in @mask even if the current task cannot use
+		 * extended features.
+		 *
+		 * So fpstate->xfeatures cannot be used here, because then
+		 * a feature for which the task has no permission but was
+		 * used by the previous task would not go into init state.
+		 */
+		mask = fpu_kernel_cfg.max_features & mask;
+
 		os_xrstor(&fpstate->regs.xsave, mask);
 	} else {
 		if (use_fxsr())
@@ -157,7 +172,7 @@ void restore_fpregs_from_fpstate(struct fpstate *fpstate, u64 mask)
 
 void fpu_reset_from_exception_fixup(void)
 {
-	restore_fpregs_from_fpstate(&init_fpstate, xfeatures_mask_fpstate());
+	restore_fpregs_from_fpstate(&init_fpstate, XFEATURE_MASK_FPSTATE);
 }
 
 #if IS_ENABLED(CONFIG_KVM)
@@ -175,7 +190,7 @@ void fpu_swap_kvm_fpu(struct fpu *save, struct fpu *rstor, u64 restore_mask)
 	}
 
 	if (rstor) {
-		restore_mask &= xfeatures_mask_fpstate();
+		restore_mask &= XFEATURE_MASK_FPSTATE;
 		restore_fpregs_from_fpstate(rstor->fpstate, restore_mask);
 	}
 
@@ -233,7 +248,7 @@ int fpu_copy_kvm_uabi_to_fpstate(struct fpu *fpu, const void *buf, u64 xcr0,
 	}
 
 	/* Ensure that XCOMP_BV is set up for XSAVES */
-	xstate_init_xcomp_bv(&kstate->regs.xsave, xfeatures_mask_uabi());
+	xstate_init_xcomp_bv(&kstate->regs.xsave, kstate->xfeatures);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(fpu_copy_kvm_uabi_to_fpstate);
@@ -294,7 +309,7 @@ void fpu_sync_fpstate(struct fpu *fpu)
 static inline unsigned int init_fpstate_copy_size(void)
 {
 	if (!use_xsave())
-		return fpu_kernel_xstate_size;
+		return fpu_kernel_cfg.default_size;
 
 	/* XSAVE(S) just needs the legacy and the xstate header part */
 	return sizeof(init_fpstate.regs.xsave);
@@ -329,7 +344,7 @@ void fpstate_init_user(struct fpstate *fpstate)
 		return;
 	}
 
-	xstate_init_xcomp_bv(&fpstate->regs.xsave, xfeatures_mask_uabi());
+	xstate_init_xcomp_bv(&fpstate->regs.xsave, fpstate->xfeatures);
 
 	if (cpu_feature_enabled(X86_FEATURE_FXSR))
 		fpstate_init_fxstate(fpstate);
@@ -343,10 +358,10 @@ void fpstate_reset(struct fpu *fpu)
 	fpu->fpstate = &fpu->__fpstate;
 
 	/* Initialize sizes and feature masks */
-	fpu->fpstate->size		= fpu_kernel_xstate_size;
-	fpu->fpstate->user_size		= fpu_user_xstate_size;
-	fpu->fpstate->xfeatures		= xfeatures_mask_all;
-	fpu->fpstate->user_xfeatures	= xfeatures_mask_uabi();
+	fpu->fpstate->size		= fpu_kernel_cfg.default_size;
+	fpu->fpstate->user_size		= fpu_user_cfg.default_size;
+	fpu->fpstate->xfeatures		= fpu_kernel_cfg.default_features;
+	fpu->fpstate->user_xfeatures	= fpu_user_cfg.default_features;
 }
 
 #if IS_ENABLED(CONFIG_KVM)
@@ -416,7 +431,7 @@ int fpu_clone(struct task_struct *dst)
 void fpu_thread_struct_whitelist(unsigned long *offset, unsigned long *size)
 {
 	*offset = offsetof(struct thread_struct, fpu.__fpstate.regs);
-	*size = fpu_kernel_xstate_size;
+	*size = fpu_kernel_cfg.default_size;
 }
 
 /*
@@ -514,7 +529,7 @@ void fpu__clear_user_states(struct fpu *fpu)
 	}
 
 	/* Reset user states in registers. */
-	restore_fpregs_from_init_fpstate(xfeatures_mask_restore_user());
+	restore_fpregs_from_init_fpstate(XFEATURE_MASK_USER_RESTORE);
 
 	/*
 	 * Now all FPU registers have their desired values.  Inform the FPU

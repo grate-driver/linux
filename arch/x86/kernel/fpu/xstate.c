@@ -62,12 +62,6 @@ static short xsave_cpuid_features[] __initdata = {
 	X86_FEATURE_ENQCMD,
 };
 
-/*
- * This represents the full set of bits that should ever be set in a kernel
- * XSAVE buffer, both supervisor and user xstates.
- */
-u64 xfeatures_mask_all __ro_after_init;
-
 static unsigned int xstate_offsets[XFEATURE_MAX] __ro_after_init =
 	{ [ 0 ... XFEATURE_MAX - 1] = -1};
 static unsigned int xstate_sizes[XFEATURE_MAX] __ro_after_init =
@@ -78,20 +72,13 @@ static unsigned int xstate_supervisor_only_offsets[XFEATURE_MAX] __ro_after_init
 	{ [ 0 ... XFEATURE_MAX - 1] = -1};
 
 /*
- * The XSAVE area of kernel can be in standard or compacted format;
- * it is always in standard format for user mode. This is the user
- * mode standard format size used for signal and ptrace frames.
- */
-unsigned int fpu_user_xstate_size __ro_after_init;
-
-/*
  * Return whether the system supports a given xfeature.
  *
  * Also return the name of the (most advanced) feature that the caller requested:
  */
 int cpu_has_xfeatures(u64 xfeatures_needed, const char **feature_name)
 {
-	u64 xfeatures_missing = xfeatures_needed & ~xfeatures_mask_all;
+	u64 xfeatures_missing = xfeatures_needed & ~fpu_kernel_cfg.max_features;
 
 	if (unlikely(feature_name)) {
 		long xfeature_idx, max_idx;
@@ -141,7 +128,7 @@ static bool xfeature_is_supervisor(int xfeature_nr)
  */
 void fpu__init_cpu_xstate(void)
 {
-	if (!boot_cpu_has(X86_FEATURE_XSAVE) || !xfeatures_mask_all)
+	if (!boot_cpu_has(X86_FEATURE_XSAVE) || !fpu_kernel_cfg.max_features)
 		return;
 
 	cr4_set_bits(X86_CR4_OSXSAVE);
@@ -151,7 +138,7 @@ void fpu__init_cpu_xstate(void)
 	 * managed by XSAVE{C, OPT, S} and XRSTOR{S}.  Only XSAVE user
 	 * states can be set here.
 	 */
-	xsetbv(XCR_XFEATURE_ENABLED_MASK, xfeatures_mask_uabi());
+	xsetbv(XCR_XFEATURE_ENABLED_MASK, fpu_user_cfg.max_features);
 
 	/*
 	 * MSR_IA32_XSS sets supervisor states managed by XSAVES.
@@ -164,7 +151,7 @@ void fpu__init_cpu_xstate(void)
 
 static bool xfeature_enabled(enum xfeature xfeature)
 {
-	return xfeatures_mask_all & BIT_ULL(xfeature);
+	return fpu_kernel_cfg.max_features & BIT_ULL(xfeature);
 }
 
 /*
@@ -190,7 +177,7 @@ static void __init setup_xstate_features(void)
 	xstate_sizes[XFEATURE_SSE]	= sizeof_field(struct fxregs_state,
 						       xmm_space);
 
-	for_each_extended_xfeature(i, xfeatures_mask_all) {
+	for_each_extended_xfeature(i, fpu_kernel_cfg.max_features) {
 		cpuid_count(XSTATE_CPUID, i, &eax, &ebx, &ecx, &edx);
 
 		xstate_sizes[i] = eax;
@@ -295,14 +282,14 @@ static void __init setup_xstate_comp_offsets(void)
 						     xmm_space);
 
 	if (!cpu_feature_enabled(X86_FEATURE_XSAVES)) {
-		for_each_extended_xfeature(i, xfeatures_mask_all)
+		for_each_extended_xfeature(i, fpu_kernel_cfg.max_features)
 			xstate_comp_offsets[i] = xstate_offsets[i];
 		return;
 	}
 
 	next_offset = FXSAVE_SIZE + XSAVE_HDR_SIZE;
 
-	for_each_extended_xfeature(i, xfeatures_mask_all) {
+	for_each_extended_xfeature(i, fpu_kernel_cfg.max_features) {
 		if (xfeature_is_aligned(i))
 			next_offset = ALIGN(next_offset, 64);
 
@@ -326,7 +313,7 @@ static void __init setup_supervisor_only_offsets(void)
 
 	next_offset = FXSAVE_SIZE + XSAVE_HDR_SIZE;
 
-	for_each_extended_xfeature(i, xfeatures_mask_all) {
+	for_each_extended_xfeature(i, fpu_kernel_cfg.max_features) {
 		if (!xfeature_is_supervisor(i))
 			continue;
 
@@ -345,7 +332,7 @@ static void __init print_xstate_offset_size(void)
 {
 	int i;
 
-	for_each_extended_xfeature(i, xfeatures_mask_all) {
+	for_each_extended_xfeature(i, fpu_kernel_cfg.max_features) {
 		pr_info("x86/fpu: xstate_offset[%d]: %4d, xstate_sizes[%d]: %4d\n",
 			 i, xstate_comp_offsets[i], i, xstate_sizes[i]);
 	}
@@ -357,7 +344,7 @@ static void __init print_xstate_offset_size(void)
  */
 static __init void os_xrstor_booting(struct xregs_state *xstate)
 {
-	u64 mask = xfeatures_mask_fpstate();
+	u64 mask = fpu_kernel_cfg.max_features & XFEATURE_MASK_FPSTATE;
 	u32 lmask = mask;
 	u32 hmask = mask >> 32;
 	int err;
@@ -408,7 +395,7 @@ static void __init setup_init_fpu_buf(void)
 	setup_xstate_features();
 	print_xstate_features();
 
-	xstate_init_xcomp_bv(&init_fpstate.regs.xsave, xfeatures_mask_all);
+	xstate_init_xcomp_bv(&init_fpstate.regs.xsave, fpu_kernel_cfg.max_features);
 
 	/*
 	 * Init all the features state with header.xfeatures being 0x0
@@ -527,7 +514,7 @@ static void __init __xstate_dump_leaves(void)
  * that our software representation matches what the CPU
  * tells us about the state's size.
  */
-static void __init check_xstate_against_struct(int nr)
+static bool __init check_xstate_against_struct(int nr)
 {
 	/*
 	 * Ask the CPU for the size of the state.
@@ -557,7 +544,9 @@ static void __init check_xstate_against_struct(int nr)
 	    ((nr >= XFEATURE_RSRVD_COMP_11) && (nr <= XFEATURE_LBR))) {
 		WARN_ONCE(1, "no structure for xstate: %d\n", nr);
 		XSTATE_WARN_ON(1);
+		return false;
 	}
+	return true;
 }
 
 /*
@@ -569,38 +558,44 @@ static void __init check_xstate_against_struct(int nr)
  * covered by these checks. Only the size of the buffer for task->fpu
  * is checked here.
  */
-static void __init do_extra_xstate_size_checks(void)
+static bool __init paranoid_xstate_size_valid(unsigned int kernel_size)
 {
-	int paranoid_xstate_size = FXSAVE_SIZE + XSAVE_HDR_SIZE;
+	bool compacted = cpu_feature_enabled(X86_FEATURE_XSAVES);
+	unsigned int size = FXSAVE_SIZE + XSAVE_HDR_SIZE;
 	int i;
 
-	for_each_extended_xfeature(i, xfeatures_mask_all) {
-		check_xstate_against_struct(i);
+	for_each_extended_xfeature(i, fpu_kernel_cfg.max_features) {
+		if (!check_xstate_against_struct(i))
+			return false;
 		/*
 		 * Supervisor state components can be managed only by
 		 * XSAVES.
 		 */
-		if (!cpu_feature_enabled(X86_FEATURE_XSAVES))
-			XSTATE_WARN_ON(xfeature_is_supervisor(i));
+		if (!compacted && xfeature_is_supervisor(i)) {
+			XSTATE_WARN_ON(1);
+			return false;
+		}
 
 		/* Align from the end of the previous feature */
 		if (xfeature_is_aligned(i))
-			paranoid_xstate_size = ALIGN(paranoid_xstate_size, 64);
+			size = ALIGN(size, 64);
 		/*
-		 * The offset of a given state in the non-compacted
-		 * format is given to us in a CPUID leaf.  We check
-		 * them for being ordered (increasing offsets) in
-		 * setup_xstate_features(). XSAVES uses compacted format.
+		 * In compacted format the enabled features are packed,
+		 * i.e. disabled features do not occupy space.
+		 *
+		 * In non-compacted format the offsets are fixed and
+		 * disabled states still occupy space in the memory buffer.
 		 */
-		if (!cpu_feature_enabled(X86_FEATURE_XSAVES))
-			paranoid_xstate_size = xfeature_uncompacted_offset(i);
+		if (!compacted)
+			size = xfeature_uncompacted_offset(i);
 		/*
-		 * The compacted-format offset always depends on where
-		 * the previous state ended.
+		 * Add the feature size even for non-compacted format
+		 * to make the end result correct
 		 */
-		paranoid_xstate_size += xfeature_size(i);
+		size += xfeature_size(i);
 	}
-	XSTATE_WARN_ON(paranoid_xstate_size != fpu_kernel_xstate_size);
+	XSTATE_WARN_ON(size != kernel_size);
+	return size == kernel_size;
 }
 
 /*
@@ -653,7 +648,7 @@ static unsigned int __init get_xsaves_size_no_independent(void)
 	return size;
 }
 
-static unsigned int __init get_xsave_size(void)
+static unsigned int __init get_xsave_size_user(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	/*
@@ -684,31 +679,36 @@ static bool __init is_supported_xstate_size(unsigned int test_xstate_size)
 static int __init init_xstate_size(void)
 {
 	/* Recompute the context size for enabled features: */
-	unsigned int possible_xstate_size;
-	unsigned int xsave_size;
+	unsigned int user_size, kernel_size;
 
-	xsave_size = get_xsave_size();
+	/* Uncompacted user space size */
+	user_size = get_xsave_size_user();
 
-	if (boot_cpu_has(X86_FEATURE_XSAVES))
-		possible_xstate_size = get_xsaves_size_no_independent();
+	/*
+	 * XSAVES kernel size includes supervisor states and
+	 * uses compacted format.
+	 *
+	 * XSAVE does not support supervisor states so
+	 * kernel and user size is identical.
+	 */
+	if (cpu_feature_enabled(X86_FEATURE_XSAVES))
+		kernel_size = get_xsaves_size_no_independent();
 	else
-		possible_xstate_size = xsave_size;
+		kernel_size = user_size;
 
-	/* Ensure we have the space to store all enabled: */
-	if (!is_supported_xstate_size(possible_xstate_size))
+	/* Ensure we have the space to store all enabled features. */
+	if (!is_supported_xstate_size(kernel_size))
 		return -EINVAL;
 
-	/*
-	 * The size is OK, we are definitely going to use xsave,
-	 * make it known to the world that we need more space.
-	 */
-	fpu_kernel_xstate_size = possible_xstate_size;
-	do_extra_xstate_size_checks();
+	if (!paranoid_xstate_size_valid(kernel_size))
+		return -EINVAL;
 
-	/*
-	 * User space is always in standard format.
-	 */
-	fpu_user_xstate_size = xsave_size;
+	/* Keep it the same for now */
+	fpu_kernel_cfg.max_size = kernel_size;
+	fpu_kernel_cfg.default_size = kernel_size;
+	fpu_user_cfg.max_size = user_size;
+	fpu_user_cfg.default_size = user_size;
+
 	return 0;
 }
 
@@ -716,11 +716,18 @@ static int __init init_xstate_size(void)
  * We enabled the XSAVE hardware, but something went wrong and
  * we can not use it.  Disable it.
  */
-static void __init fpu__init_disable_system_xstate(void)
+static void __init fpu__init_disable_system_xstate(unsigned int legacy_size)
 {
-	xfeatures_mask_all = 0;
+	fpu_kernel_cfg.max_features = 0;
 	cr4_clear_bits(X86_CR4_OSXSAVE);
 	setup_clear_cpu_cap(X86_FEATURE_XSAVE);
+
+	/* Restore the legacy size.*/
+	fpu_kernel_cfg.max_size = legacy_size;
+	fpu_kernel_cfg.default_size = legacy_size;
+	fpu_user_cfg.max_size = legacy_size;
+	fpu_user_cfg.default_size = legacy_size;
+
 	fpstate_reset(&current->thread.fpu);
 }
 
@@ -728,7 +735,7 @@ static void __init fpu__init_disable_system_xstate(void)
  * Enable and initialize the xsave feature.
  * Called once per system bootup.
  */
-void __init fpu__init_system_xstate(void)
+void __init fpu__init_system_xstate(unsigned int legacy_size)
 {
 	unsigned int eax, ebx, ecx, edx;
 	u64 xfeatures;
@@ -755,22 +762,22 @@ void __init fpu__init_system_xstate(void)
 	 * Find user xstates supported by the processor.
 	 */
 	cpuid_count(XSTATE_CPUID, 0, &eax, &ebx, &ecx, &edx);
-	xfeatures_mask_all = eax + ((u64)edx << 32);
+	fpu_kernel_cfg.max_features = eax + ((u64)edx << 32);
 
 	/*
 	 * Find supervisor xstates supported by the processor.
 	 */
 	cpuid_count(XSTATE_CPUID, 1, &eax, &ebx, &ecx, &edx);
-	xfeatures_mask_all |= ecx + ((u64)edx << 32);
+	fpu_kernel_cfg.max_features |= ecx + ((u64)edx << 32);
 
-	if ((xfeatures_mask_uabi() & XFEATURE_MASK_FPSSE) != XFEATURE_MASK_FPSSE) {
+	if ((fpu_kernel_cfg.max_features & XFEATURE_MASK_FPSSE) != XFEATURE_MASK_FPSSE) {
 		/*
 		 * This indicates that something really unexpected happened
 		 * with the enumeration.  Disable XSAVE and try to continue
 		 * booting without it.  This is too early to BUG().
 		 */
 		pr_err("x86/fpu: FP/SSE not present amongst the CPU's xstate features: 0x%llx.\n",
-		       xfeatures_mask_all);
+		       fpu_kernel_cfg.max_features);
 		goto out_disable;
 	}
 
@@ -779,14 +786,21 @@ void __init fpu__init_system_xstate(void)
 	 */
 	for (i = 0; i < ARRAY_SIZE(xsave_cpuid_features); i++) {
 		if (!boot_cpu_has(xsave_cpuid_features[i]))
-			xfeatures_mask_all &= ~BIT_ULL(i);
+			fpu_kernel_cfg.max_features &= ~BIT_ULL(i);
 	}
 
-	xfeatures_mask_all &= XFEATURE_MASK_USER_SUPPORTED |
+	fpu_kernel_cfg.max_features &= XFEATURE_MASK_USER_SUPPORTED |
 			      XFEATURE_MASK_SUPERVISOR_SUPPORTED;
 
+	fpu_user_cfg.max_features = fpu_kernel_cfg.max_features;
+	fpu_user_cfg.max_features &= XFEATURE_MASK_USER_SUPPORTED;
+
+	/* Identical for now */
+	fpu_kernel_cfg.default_features = fpu_kernel_cfg.max_features;
+	fpu_user_cfg.default_features = fpu_user_cfg.max_features;
+
 	/* Store it for paranoia check at the end */
-	xfeatures = xfeatures_mask_all;
+	xfeatures = fpu_kernel_cfg.max_features;
 
 	/* Enable xstate instructions to be able to continue with initialization: */
 	fpu__init_cpu_xstate();
@@ -800,7 +814,8 @@ void __init fpu__init_system_xstate(void)
 	 * Update info used for ptrace frames; use standard-format size and no
 	 * supervisor xstates:
 	 */
-	update_regset_xstate_info(fpu_user_xstate_size, xfeatures_mask_uabi());
+	update_regset_xstate_info(fpu_user_cfg.max_size,
+				  fpu_user_cfg.max_features);
 
 	fpu__init_prepare_fx_sw_frame();
 	setup_init_fpu_buf();
@@ -811,22 +826,22 @@ void __init fpu__init_system_xstate(void)
 	 * Paranoia check whether something in the setup modified the
 	 * xfeatures mask.
 	 */
-	if (xfeatures != xfeatures_mask_all) {
+	if (xfeatures != fpu_kernel_cfg.max_features) {
 		pr_err("x86/fpu: xfeatures modified from 0x%016llx to 0x%016llx during init, disabling XSAVE\n",
-		       xfeatures, xfeatures_mask_all);
+		       xfeatures, fpu_kernel_cfg.max_features);
 		goto out_disable;
 	}
 
 	print_xstate_offset_size();
 	pr_info("x86/fpu: Enabled xstate features 0x%llx, context size is %d bytes, using '%s' format.\n",
-		xfeatures_mask_all,
-		fpu_kernel_xstate_size,
+		fpu_kernel_cfg.max_features,
+		fpu_kernel_cfg.max_size,
 		boot_cpu_has(X86_FEATURE_XSAVES) ? "compacted" : "standard");
 	return;
 
 out_disable:
 	/* something went wrong, try to boot without any XSAVE support */
-	fpu__init_disable_system_xstate();
+	fpu__init_disable_system_xstate(legacy_size);
 }
 
 /*
@@ -838,7 +853,7 @@ void fpu__resume_cpu(void)
 	 * Restore XCR0 on xsave capable CPUs:
 	 */
 	if (cpu_feature_enabled(X86_FEATURE_XSAVE))
-		xsetbv(XCR_XFEATURE_ENABLED_MASK, xfeatures_mask_uabi());
+		xsetbv(XCR_XFEATURE_ENABLED_MASK, fpu_user_cfg.max_features);
 
 	/*
 	 * Restore IA32_XSS. The same CPUID bit enumerates support
@@ -894,7 +909,7 @@ void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr)
 	 * We should not ever be requesting features that we
 	 * have not enabled.
 	 */
-	WARN_ONCE(!(xfeatures_mask_all & BIT_ULL(xfeature_nr)),
+	WARN_ONCE(!(fpu_kernel_cfg.max_features & BIT_ULL(xfeature_nr)),
 		  "get of unsupported state");
 	/*
 	 * This assumes the last 'xsave*' instruction to
