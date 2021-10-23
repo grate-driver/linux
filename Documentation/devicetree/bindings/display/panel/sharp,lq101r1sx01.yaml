@@ -31,8 +31,8 @@ allOf:
 properties:
   compatible:
     enum:
-    - sharp,lq101r1sx01
-    - sharp,lq101r1sx03
+      - sharp,lq101r1sx01
+      - sharp,lq101r1sx03
 
   reg: true
   power-supply: true
