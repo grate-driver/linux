@@ -176,33 +176,79 @@ void fpu_reset_from_exception_fixup(void)
 }
 
 #if IS_ENABLED(CONFIG_KVM)
-void fpu_swap_kvm_fpu(struct fpu *save, struct fpu *rstor, u64 restore_mask)
+static void __fpstate_reset(struct fpstate *fpstate);
+
+bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu)
 {
+	struct fpstate *fpstate;
+	unsigned int size;
+
+	size = fpu_user_cfg.default_size + ALIGN(offsetof(struct fpstate, regs), 64);
+	fpstate = vzalloc(size);
+	if (!fpstate)
+		return false;
+
+	__fpstate_reset(fpstate);
+	fpstate_init_user(fpstate);
+	fpstate->is_valloc	= true;
+	fpstate->is_guest	= true;
+
+	gfpu->fpstate = fpstate;
+	return true;
+}
+EXPORT_SYMBOL_GPL(fpu_alloc_guest_fpstate);
+
+void fpu_free_guest_fpstate(struct fpu_guest *gfpu)
+{
+	struct fpstate *fps = gfpu->fpstate;
+
+	if (!fps)
+		return;
+
+	if (WARN_ON_ONCE(!fps->is_valloc || !fps->is_guest || fps->in_use))
+		return;
+
+	gfpu->fpstate = NULL;
+	vfree(fps);
+}
+EXPORT_SYMBOL_GPL(fpu_free_guest_fpstate);
+
+int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+{
+	struct fpstate *guest_fps = guest_fpu->fpstate;
+	struct fpu *fpu = &current->thread.fpu;
+	struct fpstate *cur_fps = fpu->fpstate;
+
 	fpregs_lock();
+	if (!cur_fps->is_confidential && !test_thread_flag(TIF_NEED_FPU_LOAD))
+		save_fpregs_to_fpstate(fpu);
 
-	if (save) {
-		struct fpstate *fpcur = current->thread.fpu.fpstate;
-
-		if (test_thread_flag(TIF_NEED_FPU_LOAD))
-			memcpy(&save->fpstate->regs, &fpcur->regs, fpcur->size);
-		else
-			save_fpregs_to_fpstate(save);
+	/* Swap fpstate */
+	if (enter_guest) {
+		fpu->__task_fpstate = cur_fps;
+		fpu->fpstate = guest_fps;
+		guest_fps->in_use = true;
+	} else {
+		guest_fps->in_use = false;
+		fpu->fpstate = fpu->__task_fpstate;
+		fpu->__task_fpstate = NULL;
 	}
 
-	if (rstor) {
-		restore_mask &= XFEATURE_MASK_FPSTATE;
-		restore_fpregs_from_fpstate(rstor->fpstate, restore_mask);
-	}
+	cur_fps = fpu->fpstate;
+
+	if (!cur_fps->is_confidential)
+		restore_fpregs_from_fpstate(cur_fps, XFEATURE_MASK_FPSTATE);
 
 	fpregs_mark_activate();
 	fpregs_unlock();
+	return 0;
 }
-EXPORT_SYMBOL_GPL(fpu_swap_kvm_fpu);
+EXPORT_SYMBOL_GPL(fpu_swap_kvm_fpstate);
 
-void fpu_copy_fpstate_to_kvm_uabi(struct fpu *fpu, void *buf,
-			       unsigned int size, u32 pkru)
+void fpu_copy_guest_fpstate_to_uabi(struct fpu_guest *gfpu, void *buf,
+				    unsigned int size, u32 pkru)
 {
-	struct fpstate *kstate = fpu->fpstate;
+	struct fpstate *kstate = gfpu->fpstate;
 	union fpregs_state *ustate = buf;
 	struct membuf mb = { .p = buf, .left = size };
 
@@ -215,12 +261,12 @@ void fpu_copy_fpstate_to_kvm_uabi(struct fpu *fpu, void *buf,
 		ustate->xsave.header.xfeatures = XFEATURE_MASK_FPSSE;
 	}
 }
-EXPORT_SYMBOL_GPL(fpu_copy_fpstate_to_kvm_uabi);
+EXPORT_SYMBOL_GPL(fpu_copy_guest_fpstate_to_uabi);
 
-int fpu_copy_kvm_uabi_to_fpstate(struct fpu *fpu, const void *buf, u64 xcr0,
-				 u32 *vpkru)
+int fpu_copy_uabi_to_guest_fpstate(struct fpu_guest *gfpu, const void *buf,
+				   u64 xcr0, u32 *vpkru)
 {
-	struct fpstate *kstate = fpu->fpstate;
+	struct fpstate *kstate = gfpu->fpstate;
 	const union fpregs_state *ustate = buf;
 	struct pkru_state *xpkru;
 	int ret;
@@ -251,7 +297,7 @@ int fpu_copy_kvm_uabi_to_fpstate(struct fpu *fpu, const void *buf, u64 xcr0,
 	xstate_init_xcomp_bv(&kstate->regs.xsave, kstate->xfeatures);
 	return 0;
 }
-EXPORT_SYMBOL_GPL(fpu_copy_kvm_uabi_to_fpstate);
+EXPORT_SYMBOL_GPL(fpu_copy_uabi_to_guest_fpstate);
 #endif /* CONFIG_KVM */
 
 void kernel_fpu_begin_mask(unsigned int kfpu_mask)
@@ -352,26 +398,21 @@ void fpstate_init_user(struct fpstate *fpstate)
 		fpstate_init_fstate(fpstate);
 }
 
+static void __fpstate_reset(struct fpstate *fpstate)
+{
+	/* Initialize sizes and feature masks */
+	fpstate->size		= fpu_kernel_cfg.default_size;
+	fpstate->user_size	= fpu_user_cfg.default_size;
+	fpstate->xfeatures	= fpu_kernel_cfg.default_features;
+	fpstate->user_xfeatures	= fpu_user_cfg.default_features;
+}
+
 void fpstate_reset(struct fpu *fpu)
 {
 	/* Set the fpstate pointer to the default fpstate */
 	fpu->fpstate = &fpu->__fpstate;
-
-	/* Initialize sizes and feature masks */
-	fpu->fpstate->size		= fpu_kernel_cfg.default_size;
-	fpu->fpstate->user_size		= fpu_user_cfg.default_size;
-	fpu->fpstate->xfeatures		= fpu_kernel_cfg.default_features;
-	fpu->fpstate->user_xfeatures	= fpu_user_cfg.default_features;
+	__fpstate_reset(fpu->fpstate);
 }
-
-#if IS_ENABLED(CONFIG_KVM)
-void fpu_init_fpstate_user(struct fpu *fpu)
-{
-	fpstate_reset(fpu);
-	fpstate_init_user(fpu->fpstate);
-}
-EXPORT_SYMBOL_GPL(fpu_init_fpstate_user);
-#endif
 
 /* Clone current's FPU state on fork */
 int fpu_clone(struct task_struct *dst)
