@@ -15,6 +15,7 @@
 #include <linux/uaccess.h>
 #include <linux/kprobes.h>
 #include <linux/ptrace.h>
+#include <linux/jump_label.h>
 
 #include <asm/assembly.h>
 #include <asm/sections.h>
@@ -23,6 +24,7 @@
 
 #define __hot __section(".text.hot")
 
+static DEFINE_STATIC_KEY_FALSE(ftrace_graph_enable);
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 /*
  * Hook the return address and push it in the stack of return addrs
@@ -60,9 +62,7 @@ void notrace __hot ftrace_function_trampoline(unsigned long parent,
 	ftrace_func(self_addr, parent, function_trace_op, fregs);
 
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
-	if (dereference_function_descriptor(ftrace_graph_return) !=
-	    dereference_function_descriptor(ftrace_stub) ||
-	    ftrace_graph_entry != ftrace_graph_entry_stub) {
+	if (static_branch_unlikely(&ftrace_graph_enable)) {
 		unsigned long *parent_rp;
 
 		/* calculate pointer to %rp in stack */
@@ -80,11 +80,13 @@ void notrace __hot ftrace_function_trampoline(unsigned long parent,
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 int ftrace_enable_ftrace_graph_caller(void)
 {
+	static_key_enable(&ftrace_graph_enable.key);
 	return 0;
 }
 
 int ftrace_disable_ftrace_graph_caller(void)
 {
+	static_key_enable(&ftrace_graph_enable.key);
 	return 0;
 }
 #endif
