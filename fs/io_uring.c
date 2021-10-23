@@ -2809,8 +2809,7 @@ static inline bool io_file_supports_nowait(struct io_kiocb *req)
 	return req->flags & REQ_F_SUPPORT_NOWAIT;
 }
 
-static int io_prep_rw(struct io_kiocb *req, const struct io_uring_sqe *sqe,
-		      int rw)
+static int io_prep_rw(struct io_kiocb *req, const struct io_uring_sqe *sqe)
 {
 	struct io_ring_ctx *ctx = req->ctx;
 	struct kiocb *kiocb = &req->rw.kiocb;
@@ -2841,16 +2840,6 @@ static int io_prep_rw(struct io_kiocb *req, const struct io_uring_sqe *sqe,
 	    ((file->f_flags & O_NONBLOCK) && !io_file_supports_nowait(req)))
 		req->flags |= REQ_F_NOWAIT;
 
-	ioprio = READ_ONCE(sqe->ioprio);
-	if (ioprio) {
-		ret = ioprio_check_cap(ioprio);
-		if (ret)
-			return ret;
-
-		kiocb->ki_ioprio = ioprio;
-	} else
-		kiocb->ki_ioprio = get_current_ioprio();
-
 	if (ctx->flags & IORING_SETUP_IOPOLL) {
 		if (!(kiocb->ki_flags & IOCB_DIRECT) || !file->f_op->iopoll)
 			return -EOPNOTSUPP;
@@ -2862,6 +2851,17 @@ static int io_prep_rw(struct io_kiocb *req, const struct io_uring_sqe *sqe,
 		if (kiocb->ki_flags & IOCB_HIPRI)
 			return -EINVAL;
 		kiocb->ki_complete = io_complete_rw;
+	}
+
+	ioprio = READ_ONCE(sqe->ioprio);
+	if (ioprio) {
+		ret = ioprio_check_cap(ioprio);
+		if (ret)
+			return ret;
+
+		kiocb->ki_ioprio = ioprio;
+	} else {
+		kiocb->ki_ioprio = get_current_ioprio();
 	}
 
 	req->imu = NULL;
@@ -3352,7 +3352,7 @@ static int io_read_prep(struct io_kiocb *req, const struct io_uring_sqe *sqe)
 {
 	if (unlikely(!(req->file->f_mode & FMODE_READ)))
 		return -EBADF;
-	return io_prep_rw(req, sqe, READ);
+	return io_prep_rw(req, sqe);
 }
 
 /*
@@ -3568,7 +3568,7 @@ static int io_write_prep(struct io_kiocb *req, const struct io_uring_sqe *sqe)
 {
 	if (unlikely(!(req->file->f_mode & FMODE_WRITE)))
 		return -EBADF;
-	return io_prep_rw(req, sqe, WRITE);
+	return io_prep_rw(req, sqe);
 }
 
 static int io_write(struct io_kiocb *req, unsigned int issue_flags)
@@ -5584,11 +5584,9 @@ static int io_arm_poll_handler(struct io_kiocb *req)
 	struct io_poll_table ipt;
 	__poll_t ret, mask = EPOLLONESHOT | POLLERR | POLLPRI;
 
-	if (!req->file || !file_can_poll(req->file))
-		return IO_APOLL_ABORTED;
-	if (req->flags & REQ_F_POLLED)
-		return IO_APOLL_ABORTED;
 	if (!def->pollin && !def->pollout)
+		return IO_APOLL_ABORTED;
+	if (!file_can_poll(req->file) || (req->flags & REQ_F_POLLED))
 		return IO_APOLL_ABORTED;
 
 	if (def->pollin) {
@@ -6115,7 +6113,9 @@ static int io_timeout_prep(struct io_kiocb *req, const struct io_uring_sqe *sqe,
 	if (unlikely(off && !req->ctx->off_timeout_used))
 		req->ctx->off_timeout_used = true;
 
-	if (!req_has_async_data(req) && io_alloc_async_data(req))
+	if (WARN_ON_ONCE(req_has_async_data(req)))
+		return -EFAULT;
+	if (io_alloc_async_data(req))
 		return -ENOMEM;
 
 	data = req->async_data;
@@ -6721,6 +6721,8 @@ static struct io_wq_work *io_wq_free_work(struct io_wq_work *work)
 static void io_wq_submit_work(struct io_wq_work *work)
 {
 	struct io_kiocb *req = container_of(work, struct io_kiocb, work);
+	unsigned int issue_flags = IO_URING_F_UNLOCKED;
+	bool needs_poll = false;
 	struct io_kiocb *timeout;
 	int ret = 0;
 
@@ -6735,56 +6737,41 @@ static void io_wq_submit_work(struct io_wq_work *work)
 		io_queue_linked_timeout(timeout);
 
 	/* either cancelled or io-wq is dying, so don't touch tctx->iowq */
-	if (work->flags & IO_WQ_WORK_CANCEL)
-		ret = -ECANCELED;
+	if (work->flags & IO_WQ_WORK_CANCEL) {
+		io_req_task_queue_fail(req, -ECANCELED);
+		return;
+	}
 
-	if (!ret) {
-		bool needs_poll = false;
-		unsigned int issue_flags = IO_URING_F_UNLOCKED;
+	if (req->flags & REQ_F_FORCE_ASYNC) {
+		const struct io_op_def *def = &io_op_defs[req->opcode];
+		bool opcode_poll = def->pollin || def->pollout;
 
-		if (req->flags & REQ_F_FORCE_ASYNC) {
-			needs_poll = req->file && file_can_poll(req->file);
-			if (needs_poll)
-				issue_flags |= IO_URING_F_NONBLOCK;
+		if (opcode_poll && file_can_poll(req->file)) {
+			needs_poll = true;
+			issue_flags |= IO_URING_F_NONBLOCK;
+		}
+	}
+
+	do {
+		ret = io_issue_sqe(req, issue_flags);
+		if (ret != -EAGAIN)
+			break;
+		/*
+		 * We can get EAGAIN for iopolled IO even though we're
+		 * forcing a sync submission from here, since we can't
+		 * wait for request slots on the block side.
+		 */
+		if (!needs_poll) {
+			cond_resched();
+			continue;
 		}
 
-		do {
-issue_sqe:
-			ret = io_issue_sqe(req, issue_flags);
-			/*
-			 * We can get EAGAIN for polled IO even though we're
-			 * forcing a sync submission from here, since we can't
-			 * wait for request slots on the block side.
-			 */
-			if (ret != -EAGAIN)
-				break;
-			if (needs_poll) {
-				bool armed = false;
-
-				ret = 0;
-				needs_poll = false;
-				issue_flags &= ~IO_URING_F_NONBLOCK;
-
-				switch (io_arm_poll_handler(req)) {
-				case IO_APOLL_READY:
-					goto issue_sqe;
-				case IO_APOLL_ABORTED:
-					/*
-					 * somehow we failed to arm the poll infra,
-					 * fallback it to a normal async worker try.
-					 */
-					break;
-				case IO_APOLL_OK:
-					armed = true;
-					break;
-				}
-
-				if (armed)
-					break;
-			}
-			cond_resched();
-		} while (1);
-	}
+		if (io_arm_poll_handler(req) == IO_APOLL_OK)
+			return;
+		/* aborted or ready, in either case retry blocking */
+		needs_poll = false;
+		issue_flags &= ~IO_URING_F_NONBLOCK;
+	} while (1);
 
 	/* avoid locking problems by failing it from a clean context */
 	if (ret)
