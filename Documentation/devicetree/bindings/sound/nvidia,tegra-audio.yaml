@@ -48,6 +48,9 @@ properties:
           - pattern: '^[a-z0-9]+,tegra-audio-(plutux|wm8903(-[a-z0-9])+)'
           - const: nvidia,tegra-audio-wm8903
       - items:
+          - pattern: '^[a-z0-9]+,tegra-audio-wm8994(-[a-z0-9])+'
+          - const: nvidia,tegra-audio-wm8994
+      - items:
           - pattern: '^[a-z0-9]+,tegra-audio-wm9712(-[a-z0-9])+'
           - const: nvidia,tegra-audio-wm9712
 
@@ -150,6 +153,10 @@ properties:
   nvidia,mic-det-gpios:
     maxItems: 1
     description: The GPIO that detect microphone is plugged in
+
+  nvidia,ear-sel-gpios:
+    maxItems: 1
+    description: The GPIO that switch between the microphones
 
   nvidia,int-mic-en-gpios:
     maxItems: 1
