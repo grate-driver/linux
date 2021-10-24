@@ -455,6 +455,7 @@
 
 	sound {
 		compatible = "nvidia,tegra-audio-trimslice";
+		nvidia,model = "tegra-trimslice";
 		nvidia,i2s-controller = <&tegra_i2s1>;
 		nvidia,audio-codec = <&codec>;
 
