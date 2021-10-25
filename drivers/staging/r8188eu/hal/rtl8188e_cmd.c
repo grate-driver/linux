@@ -109,21 +109,6 @@ exit:
 	return ret;
 }
 
-u8 rtl8188e_set_rssi_cmd(struct adapter *adapt, u8 *param)
-{
-	u8 res = _SUCCESS;
-	struct hal_data_8188e *haldata = GET_HAL_DATA(adapt);
-
-	if (haldata->fw_ractrl) {
-		;
-	} else {
-		DBG_88E("==>%s fw dont support RA\n", __func__);
-		res = _FAIL;
-	}
-
-	return res;
-}
-
 u8 rtl8188e_set_raid_cmd(struct adapter *adapt, u32 mask)
 {
 	u8 buf[3];
@@ -241,14 +226,13 @@ static void ConstructBeacon(struct adapter *adapt, u8 *pframe, u32 *pLength)
 	struct mlme_ext_priv *pmlmeext = &adapt->mlmeextpriv;
 	struct mlme_ext_info	*pmlmeinfo = &pmlmeext->mlmext_info;
 	struct wlan_bssid_ex		*cur_network = &pmlmeinfo->network;
-	u8 bc_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 	pwlanhdr = (struct rtw_ieee80211_hdr *)pframe;
 
 	fctrl = &pwlanhdr->frame_ctl;
 	*(fctrl) = 0;
 
-	memcpy(pwlanhdr->addr1, bc_addr, ETH_ALEN);
+	eth_broadcast_addr(pwlanhdr->addr1);
 	memcpy(pwlanhdr->addr2, myid(&adapt->eeprompriv), ETH_ALEN);
 	memcpy(pwlanhdr->addr3, get_my_bssid(cur_network), ETH_ALEN);
 
@@ -561,7 +545,7 @@ static void SetFwRsvdPagePkt(struct adapter *adapt, bool bDLFinished)
 	pattrib->pktlen = pattrib->last_txcmdsz;
 	memcpy(pmgntframe->buf_addr, ReservedPagePacket, TotalPacketLen);
 
-	rtw_hal_mgnt_xmit(adapt, pmgntframe);
+	rtl8188eu_mgnt_xmit(adapt, pmgntframe);
 
 	DBG_88E("%s: Set RSVD page location to Fw\n", __func__);
 	FillH2CCmd_88E(adapt, H2C_COM_RSVD_PAGE, sizeof(RsvdPageLoc), (u8 *)&RsvdPageLoc);
@@ -608,7 +592,7 @@ void rtl8188e_set_FwJoinBssReport_cmd(struct adapter *adapt, u8 mstatus)
 		haldata->RegFwHwTxQCtrl &= (~BIT(6));
 
 		/*  Clear beacon valid check bit. */
-		rtw_hal_set_hwreg(adapt, HW_VAR_BCN_VALID, NULL);
+		SetHwReg8188EU(adapt, HW_VAR_BCN_VALID, NULL);
 		DLBcnCount = 0;
 		poll = 0;
 		do {
@@ -619,7 +603,7 @@ void rtl8188e_set_FwJoinBssReport_cmd(struct adapter *adapt, u8 mstatus)
 				yield();
 				/* mdelay(10); */
 				/*  check rsvd page download OK. */
-				rtw_hal_get_hwreg(adapt, HW_VAR_BCN_VALID, (u8 *)(&bcn_valid));
+				GetHwReg8188EU(adapt, HW_VAR_BCN_VALID, (u8 *)(&bcn_valid));
 				poll++;
 			} while (!bcn_valid && (poll % 10) != 0 && !adapt->bSurpriseRemoved && !adapt->bDriverStopped);
 		} while (!bcn_valid && DLBcnCount <= 100 && !adapt->bSurpriseRemoved && !adapt->bDriverStopped);
@@ -653,7 +637,7 @@ void rtl8188e_set_FwJoinBssReport_cmd(struct adapter *adapt, u8 mstatus)
 
 		/*  Update RSVD page location H2C to Fw. */
 		if (bcn_valid) {
-			rtw_hal_set_hwreg(adapt, HW_VAR_BCN_VALID, NULL);
+			SetHwReg8188EU(adapt, HW_VAR_BCN_VALID, NULL);
 			DBG_88E("Set RSVD page location to Fw.\n");
 		}
 
@@ -667,7 +651,6 @@ void rtl8188e_set_FwJoinBssReport_cmd(struct adapter *adapt, u8 mstatus)
 
 void rtl8188e_set_p2p_ps_offload_cmd(struct adapter *adapt, u8 p2p_ps_state)
 {
-#ifdef CONFIG_88EU_P2P
 	struct hal_data_8188e *haldata = GET_HAL_DATA(adapt);
 	struct wifidirect_info	*pwdinfo = &adapt->wdinfo;
 	struct P2P_PS_Offload_t	*p2p_ps_offload = &haldata->p2p_ps_offload;
@@ -732,6 +715,4 @@ void rtl8188e_set_p2p_ps_offload_cmd(struct adapter *adapt, u8 p2p_ps_state)
 	}
 
 	FillH2CCmd_88E(adapt, H2C_PS_P2P_OFFLOAD, 1, (u8 *)p2p_ps_offload);
-#endif
-
 }
