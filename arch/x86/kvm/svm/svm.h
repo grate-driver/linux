@@ -103,6 +103,44 @@ struct kvm_vmcb_info {
 	uint64_t asid_generation;
 };
 
+/*
+ * This struct is not kept up-to-date, and it is only valid within
+ * svm_set_nested_state and nested_svm_vmrun.
+ */
+struct vmcb_save_area_cached {
+	u64 efer;
+	u64 cr4;
+	u64 cr3;
+	u64 cr0;
+	u64 dr7;
+	u64 dr6;
+};
+
+struct vmcb_ctrl_area_cached {
+	u32 intercepts[MAX_INTERCEPT];
+	u16 pause_filter_thresh;
+	u16 pause_filter_count;
+	u64 iopm_base_pa;
+	u64 msrpm_base_pa;
+	u64 tsc_offset;
+	u32 asid;
+	u8 tlb_ctl;
+	u32 int_ctl;
+	u32 int_vector;
+	u32 int_state;
+	u32 exit_code;
+	u32 exit_code_hi;
+	u64 exit_info_1;
+	u64 exit_info_2;
+	u32 exit_int_info;
+	u32 exit_int_info_err;
+	u64 nested_ctl;
+	u32 event_inj;
+	u32 event_inj_err;
+	u64 nested_cr3;
+	u64 virt_ext;
+};
+
 struct svm_nested_state {
 	struct kvm_vmcb_info vmcb02;
 	u64 hsave_msr;
@@ -118,7 +156,8 @@ struct svm_nested_state {
 	bool nested_run_pending;
 
 	/* cache for control fields of the guest */
-	struct vmcb_control_area ctl;
+	struct vmcb_ctrl_area_cached ctl;
+	struct vmcb_save_area_cached save;
 
 	bool initialized;
 };
@@ -140,6 +179,8 @@ struct vcpu_svm {
 	u64 next_rip;
 
 	u64 spec_ctrl;
+
+	u64 tsc_ratio_msr;
 	/*
 	 * Contains guest-controlled bits of VIRT_SPEC_CTRL, which will be
 	 * translated into the appropriate L2_CFG bits on the host to
@@ -160,7 +201,8 @@ struct vcpu_svm {
 	unsigned long int3_rip;
 
 	/* cached guest cpuid flags for faster access */
-	bool nrips_enabled	: 1;
+	bool nrips_enabled                : 1;
+	bool tsc_scaling_enabled          : 1;
 
 	u32 ldr_reg;
 	u32 dfr_reg;
@@ -289,6 +331,12 @@ static inline void vmcb_clr_intercept(struct vmcb_control_area *control, u32 bit
 }
 
 static inline bool vmcb_is_intercept(struct vmcb_control_area *control, u32 bit)
+{
+	WARN_ON_ONCE(bit >= 32 * MAX_INTERCEPT);
+	return test_bit(bit, (unsigned long *)&control->intercepts);
+}
+
+static inline bool vmcb12_is_intercept(struct vmcb_ctrl_area_cached *control, u32 bit)
 {
 	WARN_ON_ONCE(bit >= 32 * MAX_INTERCEPT);
 	return test_bit(bit, (unsigned long *)&control->intercepts);
@@ -446,17 +494,17 @@ static inline bool nested_svm_virtualize_tpr(struct kvm_vcpu *vcpu)
 
 static inline bool nested_exit_on_smi(struct vcpu_svm *svm)
 {
-	return vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_SMI);
+	return vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_SMI);
 }
 
 static inline bool nested_exit_on_intr(struct vcpu_svm *svm)
 {
-	return vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_INTR);
+	return vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_INTR);
 }
 
 static inline bool nested_exit_on_nmi(struct vcpu_svm *svm)
 {
-	return vmcb_is_intercept(&svm->nested.ctl, INTERCEPT_NMI);
+	return vmcb12_is_intercept(&svm->nested.ctl, INTERCEPT_NMI);
 }
 
 int enter_svm_guest_mode(struct kvm_vcpu *vcpu,
@@ -483,8 +531,12 @@ int nested_svm_check_permissions(struct kvm_vcpu *vcpu);
 int nested_svm_check_exception(struct vcpu_svm *svm, unsigned nr,
 			       bool has_error_code, u32 error_code);
 int nested_svm_exit_special(struct vcpu_svm *svm);
-void nested_load_control_from_vmcb12(struct vcpu_svm *svm,
+void nested_svm_update_tsc_ratio_msr(struct kvm_vcpu *vcpu);
+void svm_write_tsc_multiplier(struct kvm_vcpu *vcpu, u64 multiplier);
+void nested_copy_vmcb_control_to_cache(struct vcpu_svm *svm,
 				     struct vmcb_control_area *control);
+void nested_copy_vmcb_save_to_cache(struct vcpu_svm *svm,
+				  struct vmcb_save_area *save);
 void nested_sync_control_from_vmcb02(struct vcpu_svm *svm);
 void nested_vmcb02_compute_g_pat(struct vcpu_svm *svm);
 void svm_switch_vmcb(struct vcpu_svm *svm, struct kvm_vmcb_info *target_vmcb);
@@ -562,7 +614,7 @@ void sev_free_vcpu(struct kvm_vcpu *vcpu);
 int sev_handle_vmgexit(struct kvm_vcpu *vcpu);
 int sev_es_string_io(struct vcpu_svm *svm, int size, unsigned int port, int in);
 void sev_es_init_vmcb(struct vcpu_svm *svm);
-void sev_es_create_vcpu(struct vcpu_svm *svm);
+void sev_es_vcpu_reset(struct vcpu_svm *svm);
 void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector);
 void sev_es_prepare_guest_switch(struct vcpu_svm *svm, unsigned int cpu);
 void sev_es_unmap_ghcb(struct vcpu_svm *svm);

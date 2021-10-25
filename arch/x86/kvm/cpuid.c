@@ -53,8 +53,15 @@ static u32 xstate_required_size(u64 xstate_bv, bool compacted)
 	return ret;
 }
 
+/*
+ * This one is tied to SSB in the user API, and not
+ * visible in /proc/cpuinfo.
+ */
+#define KVM_X86_FEATURE_PSFD		(13*32+28) /* Predictive Store Forwarding Disable */
+
 #define F feature_bit
 #define SF(name) (boot_cpu_has(X86_FEATURE_##name) ? F(name) : 0)
+
 
 static inline struct kvm_cpuid_entry2 *cpuid_entry2_find(
 	struct kvm_cpuid_entry2 *entries, int nent, u32 function, u32 index)
@@ -500,7 +507,8 @@ void kvm_set_cpu_caps(void)
 	kvm_cpu_cap_mask(CPUID_8000_0008_EBX,
 		F(CLZERO) | F(XSAVEERPTR) |
 		F(WBNOINVD) | F(AMD_IBPB) | F(AMD_IBRS) | F(AMD_SSBD) | F(VIRT_SSBD) |
-		F(AMD_SSB_NO) | F(AMD_STIBP) | F(AMD_STIBP_ALWAYS_ON)
+		F(AMD_SSB_NO) | F(AMD_STIBP) | F(AMD_STIBP_ALWAYS_ON) |
+		__feature_bit(KVM_X86_FEATURE_PSFD)
 	);
 
 	/*
@@ -575,9 +583,27 @@ static struct kvm_cpuid_entry2 *do_host_cpuid(struct kvm_cpuid_array *array,
 
 	entry = &array->entries[array->nent++];
 
+	memset(entry, 0, sizeof(*entry));
 	entry->function = function;
 	entry->index = index;
-	entry->flags = 0;
+	switch (function & 0xC0000000) {
+	case 0x40000000:
+		/* Hypervisor leaves are always synthesized by __do_cpuid_func.  */
+		return entry;
+
+	case 0x80000000:
+		/*
+		 * 0x80000021 is sometimes synthesized by __do_cpuid_func, which
+		 * would result in out-of-bounds calls to do_host_cpuid.
+		 */
+		{
+			static int max_cpuid_80000000;
+			if (!READ_ONCE(max_cpuid_80000000))
+				WRITE_ONCE(max_cpuid_80000000, cpuid_eax(0x80000000));
+			if (function > READ_ONCE(max_cpuid_80000000))
+				return entry;
+		}
+	}
 
 	cpuid_count(entry->function, entry->index,
 		    &entry->eax, &entry->ebx, &entry->ecx, &entry->edx);
@@ -894,7 +920,13 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
 		entry->edx = 0;
 		break;
 	case 0x80000000:
-		entry->eax = min(entry->eax, 0x8000001f);
+		entry->eax = min(entry->eax, 0x80000021);
+		/*
+		 * NullSegClearsBase is not reported in CPUID on Zen2; in
+		 * that case, provide the CPUID leaf ourselves.
+		 */
+		if (!static_cpu_has_bug(X86_BUG_NULL_SEG))
+			entry->eax = max(entry->eax, 0x80000021);
 		break;
 	case 0x80000001:
 		cpuid_entry_override(entry, CPUID_8000_0001_EDX);
@@ -964,6 +996,15 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
 			 */
 			entry->ebx &= ~GENMASK(11, 6);
 		}
+		break;
+	case 0x80000020:
+		entry->eax = entry->ebx = entry->ecx = entry->edx = 0;
+		break;
+	case 0x80000021:
+		entry->ebx = entry->ecx = entry->edx = 0;
+		entry->eax &= BIT(6);
+		if (!static_cpu_has_bug(X86_BUG_NULL_SEG))
+			entry->eax |= BIT(6);
 		break;
 	/*Add support for Centaur's CPUID instruction*/
 	case 0xC0000000:
