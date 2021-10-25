@@ -309,6 +309,49 @@ union fpregs_state {
 	u8 __padding[PAGE_SIZE];
 };
 
+struct fpstate {
+	/* @kernel_size: The size of the kernel register image */
+	unsigned int		size;
+
+	/* @user_size: The size in non-compacted UABI format */
+	unsigned int		user_size;
+
+	/* @xfeatures:		xfeatures for which the storage is sized */
+	u64			xfeatures;
+
+	/* @user_xfeatures:	xfeatures valid in UABI buffers */
+	u64			user_xfeatures;
+
+	/* @is_valloc:		Indicator for dynamically allocated state */
+	unsigned int		is_valloc	: 1;
+
+	/* @is_guest:		Indicator for guest state (KVM) */
+	unsigned int		is_guest	: 1;
+
+	/*
+	 * @is_confidential:	Indicator for KVM confidential mode.
+	 *			The FPU registers are restored by the
+	 *			vmentry firmware from encrypted guest
+	 *			memory. On vmexit the FPU registers are
+	 *			saved by firmware to encrypted guest memory
+	 *			and the registers are scrubbed before
+	 *			returning to the host. So there is no
+	 *			content which is worth saving and restoring.
+	 *			The fpstate has to be there so that
+	 *			preemption and softirq FPU usage works
+	 *			without special casing.
+	 */
+	unsigned int		is_confidential	: 1;
+
+	/* @in_use:		State is in use */
+	unsigned int		in_use		: 1;
+
+	/* @regs: The register state union for all supported formats */
+	union fpregs_state	regs;
+
+	/* @regs is dynamically sized! Don't add anything after @regs! */
+} __aligned(64);
+
 /*
  * Highest level per task FPU state data structure that
  * contains the FPU register state plus various FPU
@@ -337,19 +380,86 @@ struct fpu {
 	unsigned long			avx512_timestamp;
 
 	/*
-	 * @state:
+	 * @fpstate:
 	 *
-	 * In-memory copy of all FPU registers that we save/restore
-	 * over context switches. If the task is using the FPU then
-	 * the registers in the FPU are more recent than this state
-	 * copy. If the task context-switches away then they get
-	 * saved here and represent the FPU state.
+	 * Pointer to the active struct fpstate. Initialized to
+	 * point at @__fpstate below.
 	 */
-	union fpregs_state		state;
+	struct fpstate			*fpstate;
+
 	/*
-	 * WARNING: 'state' is dynamically-sized.  Do not put
+	 * @__task_fpstate:
+	 *
+	 * Pointer to an inactive struct fpstate. Initialized to NULL. Is
+	 * used only for KVM support to swap out the regular task fpstate.
+	 */
+	struct fpstate			*__task_fpstate;
+
+	/*
+	 * @__fpstate:
+	 *
+	 * Initial in-memory storage for FPU registers which are saved in
+	 * context switch and when the kernel uses the FPU. The registers
+	 * are restored from this storage on return to user space if they
+	 * are not longer containing the tasks FPU register state.
+	 */
+	struct fpstate			__fpstate;
+	/*
+	 * WARNING: '__fpstate' is dynamically-sized.  Do not put
 	 * anything after it here.
 	 */
 };
+
+/*
+ * Guest pseudo FPU container
+ */
+struct fpu_guest {
+	/*
+	 * @fpstate:			Pointer to the allocated guest fpstate
+	 */
+	struct fpstate			*fpstate;
+};
+
+/*
+ * FPU state configuration data. Initialized at boot time. Read only after init.
+ */
+struct fpu_state_config {
+	/*
+	 * @max_size:
+	 *
+	 * The maximum size of the register state buffer. Includes all
+	 * supported features except independent managed features.
+	 */
+	unsigned int		max_size;
+
+	/*
+	 * @default_size:
+	 *
+	 * The default size of the register state buffer. Includes all
+	 * supported features except independent managed features and
+	 * features which have to be requested by user space before usage.
+	 */
+	unsigned int		default_size;
+
+	/*
+	 * @max_features:
+	 *
+	 * The maximum supported features bitmap. Does not include
+	 * independent managed features.
+	 */
+	u64 max_features;
+
+	/*
+	 * @default_features:
+	 *
+	 * The default supported features bitmap. Does not include
+	 * independent managed features and features which have to
+	 * be requested by user space before usage.
+	 */
+	u64 default_features;
+};
+
+/* FPU state configuration information */
+extern struct fpu_state_config fpu_kernel_cfg, fpu_user_cfg;
 
 #endif /* _ASM_X86_FPU_H */
