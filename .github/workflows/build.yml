@@ -61,6 +61,7 @@ jobs:
           if [ "${{ matrix.option }}" = "thumb2" ]; then
             export TUXMAKE_KCONFIG_OPTS="-K CONFIG_THUMB2_KERNEL=y"
           fi
+          touch .scmversion
           tuxmake --directory ./ -w sccache --target-arch=arm -k ${{ matrix.config }} ${{ matrix.additional_params }} ${TUXMAKE_KCONFIG_OPTS} | sed "s|^/home/runner/work/linux/linux/|::error::|"
           export ERRS=`grep "errors" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
           export WARNS=`grep "warnings" "${BUILD_PATH}"/metadata.json | cut -d":" -f2 | tr -d " ,"`
