@@ -83,6 +83,9 @@
 		#clock-cells = <0>;
 		clock-frequency = <32768>;
 		clock-output-names = "pmic-oscillator";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&clk32k_in_default>;
 	};
 
 	firmware {
@@ -177,6 +180,22 @@
 		pinctrl-0 = <&hp_det_default>;
 	};
 
+	brcm_wifi_pwrseq: wifi-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+
+		clocks = <&tegra_pmc TEGRA_PMC_CLK_BLINK>;
+		clock-names = "ext_clock";
+
+		reset-gpios = <&gpio TEGRA_GPIO(X, 7) GPIO_ACTIVE_LOW>,
+			      <&gpio TEGRA_GPIO(CC, 5) GPIO_ACTIVE_LOW>;
+
+		post-power-on-delay-ms = <300>;
+		power-off-delay-us = <300>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_pwrseq_default &x7_default &cc5_default>;
+	};
+
 	vdd_5v0_sys: regulator-5v0-sys {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_5v0";
@@ -221,6 +240,18 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdmmc3_vdd_default>;
 	};
+
+	vdd_3v3_com: regulator-vdd-3v3-com {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_3v3_com";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		gpio = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&vdd_3v3_com_default>;
+	};
 };
 
 &dsia {
@@ -253,6 +284,19 @@
 		reg = <0>;
 	};
 };
+
+// &gpio {
+// 	wifi-reset-0 {
+// 		gpio-hog;
+// 		gpios = <TEGRA_GPIO(X, 7) GPIO_ACTIVE_LOW>;
+// 		output-low;
+// 	};
+// 	wifi-reset-1 {
+// 		gpio-hog;
+// 		gpios = <TEGRA_GPIO(CC, 5) GPIO_ACTIVE_LOW>;
+// 		output-low;
+// 	};
+// };
 
 &i2c1 {
 	status = "okay";
@@ -601,7 +645,41 @@
 };
 
 &sdmmc1 {
-	/* WiFi */
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	status = "okay";
+
+	assigned-clocks = <&tegra_car TEGRA114_CLK_SDMMC1>;
+	assigned-clock-parents = <&tegra_car TEGRA114_CLK_PLL_C3>;
+	assigned-clock-rates = <50000000>;
+
+	max-frequency = <50000000>;
+	keep-power-in-suspend;
+	bus-width = <4>;
+	non-removable;
+
+	nvidia,default-tap = <0x2>;
+	nvidia,default-trim = <0x2>;
+
+	mmc-pwrseq = <&brcm_wifi_pwrseq>;
+	vmmc-supply = <&vdd_3v3_com>;
+	vqmmc-supply = <&tps65913_smps8>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc1_default>;
+
+	wifi@1 {
+		compatible = "brcm,bcm4329-fmac";
+		reg = <1>;
+
+		interrupt-parent = <&gpio>;
+		interrupts = <TEGRA_GPIO(U, 5) IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "host-wake";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_int_default>;
+	};
 };
 
 /* MicroSD card */
@@ -634,7 +712,37 @@
 };
 
 &uartc {
-	/* Bluetooth */
+	compatible = "nvidia,tegra114-hsuart", "nvidia,tegra30-hsuart";
+	status = "okay";
+
+	assigned-clocks = <&tegra_car TEGRA114_CLK_UARTC>;
+	assigned-clock-parents = <&tegra_car TEGRA114_CLK_PLL_P>;
+
+	nvidia,adjust-baud-rates = <0 9600 100>,
+					<9600 115200 200>,
+					<1000000 4000000 136>;
+
+	bluetooth {
+		compatible = "brcm,bcm4334-bt";
+		max-speed = <4000000>;
+
+		clocks = <&tegra_car TEGRA_PMC_CLK_BLINK>;
+		clock-names = "txco";
+
+		vbat-supply  = <&vdd_3v3_com>;
+		vddio-supply = <&tps65913_smps8>;
+
+		interrupt-parent = <&gpio>;
+		interrupts = <TEGRA_GPIO(U, 6) IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "host-wakeup";
+
+		device-wakeup-gpios = <&gpio TEGRA_GPIO(EE, 1) GPIO_ACTIVE_HIGH>;
+		shutdown-gpios = <&gpio TEGRA_GPIO(Q, 7) GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio TEGRA_GPIO(Q, 6) GPIO_ACTIVE_HIGH>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&bluetooth_default>;
+	};
 };
 
 &uartd {
@@ -663,6 +771,26 @@
 };
 
 &pinmux {
+	x7_default: x7-default {
+		gmi_ad0_pg0 {
+			nvidia,pins = "gpio_x7_aud_px7";
+			nvidia,function = "rsvd1";
+			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+	};
+
+	cc5_default: cc5-default {
+		clk2_req_pcc5 {
+			nvidia,pins = "clk2_req_pcc5";
+			nvidia,function = "dap";
+			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+	};
+
 	asus_pad_ec_default: asus-pad-ec-default {
 		ec-interrupt {
 			nvidia,pins = "kb_col5_pq5";
@@ -687,6 +815,44 @@
 			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 			nvidia,tristate = <TEGRA_PIN_DISABLE>;
 			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+	};
+
+	bluetooth_default: bluetooth-default {
+		host-wakeup-gpio {
+			nvidia,pins = "pu6";
+			nvidia,pull = <TEGRA_PIN_PULL_DOWN>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+		};
+		shutdown-gpio {
+			nvidia,pins = "kb_col7_pq7";
+			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+		reset-gpio {
+			nvidia,pins = "kb_col6_pq6";
+			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+		ext-wakeup-gpio {
+			nvidia,pins = "clk3_req_pee1";
+			nvidia,function = "rsvd2";
+			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+	};
+
+	clk32k_in_default: clk32k-in-default {
+		clk_32k_in {
+			nvidia,pins = "clk_32k_in";
+			nvidia,function = "clk";
+			nvidia,pull = <TEGRA_PIN_PULL_UP>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 		};
 	};
 
@@ -840,10 +1006,40 @@
 		};
 	};
 
+	vdd_3v3_com_default: vdd-3v3-com-default {
+		pu1 {
+			nvidia,pins = "pu1";
+			nvidia,function = "rsvd1";
+			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+	};
+
 	vdd_lcd_default: vdd-lcd-default {
 		sdmmc4_clk_pcc4 {
 			nvidia,pins = "sdmmc4_clk_pcc4";
 			nvidia,function = "sdmmc4";
+			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+		};
+	};
+
+	wifi_int_default: wifi-int-default {
+		pu5 {
+			nvidia,pins = "pu5";
+			nvidia,function = "pwm2";
+			nvidia,pull = <TEGRA_PIN_PULL_DOWN>;
+			nvidia,tristate = <TEGRA_PIN_DISABLE>;
+			nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+		};
+	};
+
+	wifi_pwrseq_default: wifi-pwrseq-default {
+		clk_32k_out_pa0 {
+			nvidia,pins = "clk_32k_out_pa0";
+			nvidia,function = "blink";
 			nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 			nvidia,tristate = <TEGRA_PIN_DISABLE>;
 			nvidia,enable-input = <TEGRA_PIN_DISABLE>;
