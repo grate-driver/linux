@@ -71,6 +71,13 @@ static int tegra_core_dev_init_opp_state(struct device *dev)
 	if (!rpm_enabled)
 		pm_runtime_enable(dev);
 
+	/* should never happen in practice */
+	if (!pm_runtime_enabled(dev)) {
+		dev_WARN(dev, "failed to enable runtime PM\n");
+		pm_runtime_disable(dev);
+		return -EINVAL;
+	}
+
 	/* first dummy rate-setting initializes voltage vote */
 	err = dev_pm_opp_set_rate(dev, rate);
 
