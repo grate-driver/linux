@@ -77,12 +77,6 @@ struct ltc2952_poweroff {
 
 #define to_ltc2952(p, m) container_of(p, struct ltc2952_poweroff, m)
 
-/*
- * This global variable is only needed for pm_power_off. We should
- * remove it entirely once we don't need the global state anymore.
- */
-static struct ltc2952_poweroff *ltc2952_data;
-
 /**
  * ltc2952_poweroff_timer_wde - Timer callback
  * Toggles the watchdog reset signal each wde_interval
@@ -152,9 +146,9 @@ static irqreturn_t ltc2952_poweroff_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static void ltc2952_poweroff_kill(void)
+static void ltc2952_poweroff_kill(void *gpio_kill)
 {
-	gpiod_set_value(ltc2952_data->gpio_kill, 1);
+	gpiod_set_value(gpio_kill, 1);
 }
 
 static void ltc2952_poweroff_default(struct ltc2952_poweroff *data)
@@ -167,6 +161,26 @@ static void ltc2952_poweroff_default(struct ltc2952_poweroff *data)
 
 	hrtimer_init(&data->timer_wde, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	data->timer_wde.function = ltc2952_poweroff_timer_wde;
+}
+
+static void ltc2952_poweroff_remove(void *cb_data)
+{
+	struct ltc2952_poweroff *data = cb_data;
+
+	hrtimer_cancel(&data->timer_trigger);
+	hrtimer_cancel(&data->timer_wde);
+
+	atomic_notifier_chain_unregister(&panic_notifier_list,
+					 &data->panic_notifier);
+}
+
+static int ltc2952_poweroff_notify_panic(struct notifier_block *nb,
+					 unsigned long code, void *unused)
+{
+	struct ltc2952_poweroff *data = to_ltc2952(nb, panic_notifier);
+
+	data->kernel_panic = true;
+	return NOTIFY_DONE;
 }
 
 static int ltc2952_poweroff_init(struct platform_device *pdev)
@@ -210,6 +224,15 @@ static int ltc2952_poweroff_init(struct platform_device *pdev)
 		data->gpio_trigger = NULL;
 	}
 
+	data->panic_notifier.notifier_call = ltc2952_poweroff_notify_panic;
+	atomic_notifier_chain_register(&panic_notifier_list,
+				       &data->panic_notifier);
+
+	ret = devm_add_action_or_reset(&pdev->dev, ltc2952_poweroff_remove,
+				       data);
+	if (ret)
+		return ret;
+
 	if (devm_request_irq(&pdev->dev, gpiod_to_irq(data->gpio_trigger),
 			     ltc2952_poweroff_handler,
 			     (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING),
@@ -241,27 +264,19 @@ static int ltc2952_poweroff_init(struct platform_device *pdev)
 		ltc2952_poweroff_start_wde(data);
 	}
 
+	ret = devm_register_simple_power_off_handler(&pdev->dev,
+						     ltc2952_poweroff_kill,
+						     data->gpio_kill);
+	if (ret)
+		return ret;
+
 	return 0;
-}
-
-static int ltc2952_poweroff_notify_panic(struct notifier_block *nb,
-					 unsigned long code, void *unused)
-{
-	struct ltc2952_poweroff *data = to_ltc2952(nb, panic_notifier);
-
-	data->kernel_panic = true;
-	return NOTIFY_DONE;
 }
 
 static int ltc2952_poweroff_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct ltc2952_poweroff *data;
-
-	if (pm_power_off) {
-		dev_err(&pdev->dev, "pm_power_off already registered");
-		return -EBUSY;
-	}
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -274,27 +289,8 @@ static int ltc2952_poweroff_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	/* TODO: remove ltc2952_data */
-	ltc2952_data = data;
-	pm_power_off = ltc2952_poweroff_kill;
-
-	data->panic_notifier.notifier_call = ltc2952_poweroff_notify_panic;
-	atomic_notifier_chain_register(&panic_notifier_list,
-				       &data->panic_notifier);
 	dev_info(&pdev->dev, "probe successful\n");
 
-	return 0;
-}
-
-static int ltc2952_poweroff_remove(struct platform_device *pdev)
-{
-	struct ltc2952_poweroff *data = platform_get_drvdata(pdev);
-
-	pm_power_off = NULL;
-	hrtimer_cancel(&data->timer_trigger);
-	hrtimer_cancel(&data->timer_wde);
-	atomic_notifier_chain_unregister(&panic_notifier_list,
-					 &data->panic_notifier);
 	return 0;
 }
 
@@ -306,7 +302,6 @@ MODULE_DEVICE_TABLE(of, of_ltc2952_poweroff_match);
 
 static struct platform_driver ltc2952_poweroff_driver = {
 	.probe = ltc2952_poweroff_probe,
-	.remove = ltc2952_poweroff_remove,
 	.driver = {
 		.name = "ltc2952-poweroff",
 		.of_match_table = of_ltc2952_poweroff_match,
