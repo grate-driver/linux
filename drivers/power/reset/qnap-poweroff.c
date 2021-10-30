@@ -13,6 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/serial_reg.h>
 #include <linux/of.h>
 #include <linux/io.h>
@@ -23,6 +24,12 @@
 struct power_off_cfg {
 	u32 baud;
 	char cmd;
+};
+
+struct qnap {
+	void __iomem *base;
+	unsigned long tclk;
+	const struct power_off_cfg *cfg;
 };
 
 static const struct power_off_cfg qnap_power_off_cfg = {
@@ -46,12 +53,13 @@ static const struct of_device_id qnap_power_off_of_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, qnap_power_off_of_match_table);
 
-static void __iomem *base;
-static unsigned long tclk;
-static const struct power_off_cfg *cfg;
-
-static void qnap_power_off(void)
+static void qnap_power_off(void *data)
 {
+	struct qnap *qnap = data;
+	void __iomem *base = qnap->base;
+	unsigned long tclk = qnap->tclk;
+	const struct power_off_cfg *cfg = qnap->cfg;
+
 	const unsigned divisor = ((tclk + (8 * cfg->baud)) / (16 * cfg->baud));
 
 	pr_err("%s: triggering power-off...\n", __func__);
@@ -73,11 +81,17 @@ static int qnap_power_off_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct resource *res;
+	struct qnap *qnap;
 	struct clk *clk;
 
 	const struct of_device_id *match =
 		of_match_node(qnap_power_off_of_match_table, np);
-	cfg = match->data;
+
+	qnap = devm_kzalloc(&pdev->dev, sizeof(*qnap), GFP_KERNEL);
+	if (!qnap)
+		return -ENOMEM;
+
+	qnap->cfg = match->data;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -85,8 +99,8 @@ static int qnap_power_off_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
-	if (!base) {
+	qnap->base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
+	if (!qnap->base) {
 		dev_err(&pdev->dev, "Unable to map resource");
 		return -EINVAL;
 	}
@@ -98,28 +112,14 @@ static int qnap_power_off_probe(struct platform_device *pdev)
 		return PTR_ERR(clk);
 	}
 
-	tclk = clk_get_rate(clk);
+	qnap->tclk = clk_get_rate(clk);
 
-	/* Check that nothing else has already setup a handler */
-	if (pm_power_off) {
-		dev_err(&pdev->dev, "pm_power_off already claimed for %ps",
-			pm_power_off);
-		return -EBUSY;
-	}
-	pm_power_off = qnap_power_off;
-
-	return 0;
-}
-
-static int qnap_power_off_remove(struct platform_device *pdev)
-{
-	pm_power_off = NULL;
-	return 0;
+	return devm_register_simple_power_off_handler(&pdev->dev,
+						      qnap_power_off, qnap);
 }
 
 static struct platform_driver qnap_power_off_driver = {
 	.probe	= qnap_power_off_probe,
-	.remove	= qnap_power_off_remove,
 	.driver	= {
 		.name	= "qnap_power_off",
 		.of_match_table = of_match_ptr(qnap_power_off_of_match_table),
