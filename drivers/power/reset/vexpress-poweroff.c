@@ -27,28 +27,18 @@ static void vexpress_reset_do(struct device *dev, const char *what)
 	dev_emerg(dev, "Unable to %s (%d)\n", what, err);
 }
 
-static struct device *vexpress_power_off_device;
-static atomic_t vexpress_restart_nb_refcnt = ATOMIC_INIT(0);
-
-static void vexpress_power_off(void)
+static void vexpress_power_off(void *dev)
 {
-	vexpress_reset_do(vexpress_power_off_device, "power off");
+	vexpress_reset_do(dev, "power off");
 }
 
 static struct device *vexpress_restart_device;
 
-static int vexpress_restart(struct notifier_block *this, unsigned long mode,
-			     void *cmd)
+static void vexpress_restart(struct restart_data *data)
 {
-	vexpress_reset_do(vexpress_restart_device, "restart");
-
-	return NOTIFY_DONE;
+	if (vexpress_restart_device == data->cb_data)
+		vexpress_reset_do(data->cb_data, "restart");
 }
-
-static struct notifier_block vexpress_restart_nb = {
-	.notifier_call = vexpress_restart,
-	.priority = 128,
-};
 
 static ssize_t vexpress_reset_active_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -88,24 +78,6 @@ static const struct of_device_id vexpress_reset_of_match[] = {
 	{}
 };
 
-static int _vexpress_register_restart_handler(struct device *dev)
-{
-	int err;
-
-	vexpress_restart_device = dev;
-	if (atomic_inc_return(&vexpress_restart_nb_refcnt) == 1) {
-		err = register_restart_handler(&vexpress_restart_nb);
-		if (err) {
-			dev_err(dev, "cannot register restart handler (err=%d)\n", err);
-			atomic_dec(&vexpress_restart_nb_refcnt);
-			return err;
-		}
-	}
-	device_create_file(dev, &dev_attr_active);
-
-	return 0;
-}
-
 static int vexpress_reset_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *match =
@@ -123,15 +95,29 @@ static int vexpress_reset_probe(struct platform_device *pdev)
 
 	switch ((enum vexpress_reset_func)match->data) {
 	case FUNC_SHUTDOWN:
-		vexpress_power_off_device = &pdev->dev;
-		pm_power_off = vexpress_power_off;
+		ret = devm_register_simple_power_off_handler(&pdev->dev,
+							     vexpress_power_off,
+							     &pdev->dev);
 		break;
 	case FUNC_RESET:
-		if (!vexpress_restart_device)
-			ret = _vexpress_register_restart_handler(&pdev->dev);
+		ret = devm_register_prioritized_restart_handler(&pdev->dev,
+								RESTART_PRIO_DEFAULT + 0,
+								vexpress_restart,
+								&pdev->dev);
+		if (!ret && !vexpress_restart_device) {
+			device_create_file(&pdev->dev, &dev_attr_active);
+			vexpress_restart_device = &pdev->dev;
+		}
 		break;
 	case FUNC_REBOOT:
-		ret = _vexpress_register_restart_handler(&pdev->dev);
+		ret = devm_register_prioritized_restart_handler(&pdev->dev,
+								RESTART_PRIO_DEFAULT + 1,
+								vexpress_restart,
+								&pdev->dev);
+		if (!ret) {
+			device_create_file(&pdev->dev, &dev_attr_active);
+			vexpress_restart_device = &pdev->dev;
+		}
 		break;
 	}
 
