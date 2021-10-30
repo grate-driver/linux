@@ -26,6 +26,7 @@
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
 #include <linux/printk.h>
+#include <linux/reboot.h>
 
 #include <soc/at91/at91sam9_ddrsdr.h>
 
@@ -97,12 +98,6 @@ struct shdwc {
 	void __iomem *pmc_base;
 };
 
-/*
- * Hold configuration here, cannot be more than one instance of the driver
- * since pm_power_off itself is global.
- */
-static struct shdwc *at91_shdwc;
-
 static const unsigned long long sdwc_dbc_period[] = {
 	0, 3, 32, 512, 4096, 32768,
 };
@@ -132,8 +127,10 @@ static void __init at91_wakeup_status(struct platform_device *pdev)
 	pr_info("AT91: Wake-Up source: %s\n", reason);
 }
 
-static void at91_poweroff(void)
+static void at91_poweroff(void *data)
 {
+	struct shdwc *at91_shdwc = data;
+
 	asm volatile(
 		/* Align to cache lines */
 		".balign 32\n\t"
@@ -329,10 +326,26 @@ static const struct of_device_id at91_pmc_ids[] = {
 	{ /* Sentinel. */ }
 };
 
+static void at91_shdwc_remove(void *data)
+{
+	struct shdwc *shdw = data;
+
+	/* Reset values to disable wake-up features  */
+	writel(0, shdw->shdwc_base + AT91_SHDW_MR);
+	writel(0, shdw->shdwc_base + AT91_SHDW_WUIR);
+
+	if (shdw->mpddrc_base)
+		iounmap(shdw->mpddrc_base);
+	iounmap(shdw->pmc_base);
+
+	clk_disable_unprepare(shdw->sclk);
+}
+
 static int __init at91_shdwc_probe(struct platform_device *pdev)
 {
 	struct resource *res;
 	const struct of_device_id *match;
+	struct shdwc *at91_shdwc;
 	struct device_node *np;
 	u32 ddr_type;
 	int ret;
@@ -411,7 +424,15 @@ static int __init at91_shdwc_probe(struct platform_device *pdev)
 		}
 	}
 
-	pm_power_off = at91_poweroff;
+	ret = devm_add_action_or_reset(&pdev->dev, at91_shdwc_remove,
+				       at91_shdwc);
+	if (ret)
+		return ret;
+
+	ret = devm_register_simple_power_off_handler(&pdev->dev, at91_poweroff,
+						     at91_shdwc);
+	if (ret)
+		return ret;
 
 	return 0;
 
@@ -423,28 +444,7 @@ clk_disable:
 	return ret;
 }
 
-static int __exit at91_shdwc_remove(struct platform_device *pdev)
-{
-	struct shdwc *shdw = platform_get_drvdata(pdev);
-
-	if (pm_power_off == at91_poweroff)
-		pm_power_off = NULL;
-
-	/* Reset values to disable wake-up features  */
-	writel(0, shdw->shdwc_base + AT91_SHDW_MR);
-	writel(0, shdw->shdwc_base + AT91_SHDW_WUIR);
-
-	if (shdw->mpddrc_base)
-		iounmap(shdw->mpddrc_base);
-	iounmap(shdw->pmc_base);
-
-	clk_disable_unprepare(shdw->sclk);
-
-	return 0;
-}
-
 static struct platform_driver at91_shdwc_driver = {
-	.remove = __exit_p(at91_shdwc_remove),
 	.driver = {
 		.name = "at91-shdwc",
 		.of_match_table = at91_shdwc_of_match,
