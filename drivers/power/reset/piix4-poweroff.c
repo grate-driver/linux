@@ -8,10 +8,7 @@
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/pci.h>
-#include <linux/pm.h>
-
-static struct pci_dev *pm_dev;
-static resource_size_t io_offset;
+#include <linux/reboot.h>
 
 enum piix4_pm_io_reg {
 	PIIX4_FUNC3IO_PMSTS			= 0x00,
@@ -25,10 +22,14 @@ enum piix4_pm_io_reg {
 
 static const int piix4_pm_io_region = PCI_BRIDGE_RESOURCES;
 
-static void piix4_poweroff(void)
+static void piix4_poweroff(void *data)
 {
+	struct pci_dev *pm_dev = data;
+	resource_size_t io_offset;
 	int spec_devid;
 	u16 sts;
+
+	io_offset = pci_resource_start(pm_dev, piix4_pm_io_region);
 
 	/* Ensure the power button status is clear */
 	while (1) {
@@ -59,13 +60,15 @@ static void piix4_poweroff(void)
 	pr_emerg("Unable to poweroff system\n");
 }
 
+static void piix4_release_region(void *dev)
+{
+	pci_release_region(dev, piix4_pm_io_region);
+}
+
 static int piix4_poweroff_probe(struct pci_dev *dev,
 				const struct pci_device_id *id)
 {
 	int res;
-
-	if (pm_dev)
-		return -EINVAL;
 
 	/* Request access to the PIIX4 PM IO registers */
 	res = pci_request_region(dev, piix4_pm_io_region,
@@ -76,20 +79,12 @@ static int piix4_poweroff_probe(struct pci_dev *dev,
 		return res;
 	}
 
-	pm_dev = dev;
-	io_offset = pci_resource_start(dev, piix4_pm_io_region);
-	pm_power_off = piix4_poweroff;
+	res = devm_add_action_or_reset(&dev->dev, piix4_release_region, dev);
+	if (res)
+		return res;
 
-	return 0;
-}
-
-static void piix4_poweroff_remove(struct pci_dev *dev)
-{
-	if (pm_power_off == piix4_poweroff)
-		pm_power_off = NULL;
-
-	pci_release_region(dev, piix4_pm_io_region);
-	pm_dev = NULL;
+	return devm_register_simple_power_off_handler(&dev->dev,
+						      piix4_poweroff, dev);
 }
 
 static const struct pci_device_id piix4_poweroff_ids[] = {
@@ -101,7 +96,6 @@ static struct pci_driver piix4_poweroff_driver = {
 	.name		= "piix4-poweroff",
 	.id_table	= piix4_poweroff_ids,
 	.probe		= piix4_poweroff_probe,
-	.remove		= piix4_poweroff_remove,
 };
 
 module_pci_driver(piix4_poweroff_driver);
