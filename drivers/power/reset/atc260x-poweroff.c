@@ -16,12 +16,9 @@
 struct atc260x_pwrc {
 	struct device *dev;
 	struct regmap *regmap;
-	struct notifier_block restart_nb;
+	struct sys_off_handler sys_off;
 	int (*do_poweroff)(const struct atc260x_pwrc *pwrc, bool restart);
 };
-
-/* Global variable needed only for pm_power_off */
-static struct atc260x_pwrc *atc260x_pwrc_data;
 
 static int atc2603c_do_poweroff(const struct atc260x_pwrc *pwrc, bool restart)
 {
@@ -165,21 +162,20 @@ static int atc2609a_init(const struct atc260x_pwrc *pwrc)
 	return ret;
 }
 
-static void atc260x_pwrc_pm_handler(void)
+static void atc260x_pwrc_pm_handler(struct power_off_data *data)
 {
+	struct atc260x_pwrc *atc260x_pwrc_data = data->cb_data;
+
 	atc260x_pwrc_data->do_poweroff(atc260x_pwrc_data, false);
 
 	WARN_ONCE(1, "Unable to power off system\n");
 }
 
-static int atc260x_pwrc_restart_handler(struct notifier_block *nb,
-					unsigned long mode, void *cmd)
+static void atc260x_pwrc_restart_handler(struct restart_data *data)
 {
-	struct atc260x_pwrc *pwrc = container_of(nb, struct atc260x_pwrc,
-						 restart_nb);
-	pwrc->do_poweroff(pwrc, true);
+	struct atc260x_pwrc *pwrc = data->cb_data;
 
-	return NOTIFY_DONE;
+	pwrc->do_poweroff(pwrc, true);
 }
 
 static int atc260x_pwrc_probe(struct platform_device *pdev)
@@ -194,8 +190,6 @@ static int atc260x_pwrc_probe(struct platform_device *pdev)
 
 	priv->dev = &pdev->dev;
 	priv->regmap = atc260x->regmap;
-	priv->restart_nb.notifier_call = atc260x_pwrc_restart_handler;
-	priv->restart_nb.priority = 192;
 
 	switch (atc260x->ic_type) {
 	case ATC2603C:
@@ -218,38 +212,16 @@ static int atc260x_pwrc_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
-	if (!pm_power_off) {
-		atc260x_pwrc_data = priv;
-		pm_power_off = atc260x_pwrc_pm_handler;
-	} else {
-		dev_warn(priv->dev, "Poweroff callback already assigned\n");
-	}
+	priv->sys_off.cb_data = priv;
+	priv->sys_off.restart_priority = RESTART_PRIO_HIGH;
+	priv->sys_off.restart_cb = atc260x_pwrc_restart_handler;
+	priv->sys_off.power_off_cb = atc260x_pwrc_pm_handler;
 
-	ret = register_restart_handler(&priv->restart_nb);
-	if (ret)
-		dev_err(priv->dev, "failed to register restart handler: %d\n",
-			ret);
-
-	return ret;
-}
-
-static int atc260x_pwrc_remove(struct platform_device *pdev)
-{
-	struct atc260x_pwrc *priv = platform_get_drvdata(pdev);
-
-	if (atc260x_pwrc_data == priv) {
-		pm_power_off = NULL;
-		atc260x_pwrc_data = NULL;
-	}
-
-	unregister_restart_handler(&priv->restart_nb);
-
-	return 0;
+	return devm_register_sys_off_handler(priv->dev, &priv->sys_off);
 }
 
 static struct platform_driver atc260x_pwrc_driver = {
 	.probe = atc260x_pwrc_probe,
-	.remove = atc260x_pwrc_remove,
 	.driver = {
 		.name = "atc260x-pwrc",
 	},
