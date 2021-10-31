@@ -35,37 +35,33 @@
 
 #define WDT_MUX_NUMBER			0x4
 
-static int rspll_offset;
-static struct regmap *pllctrl_regs;
+struct rsctrl_data {
+	struct regmap *pllctrl_regs;
+	int rspll_offset;
+};
 
 /**
  * rsctrl_enable_rspll_write - enable access to RSCTRL, RSCFG
  * To be able to access to RSCTRL, RSCFG registers
  * we have to write a key before
  */
-static inline int rsctrl_enable_rspll_write(void)
+static inline int rsctrl_enable_rspll_write(struct rsctrl_data *rd)
 {
-	return regmap_update_bits(pllctrl_regs, rspll_offset + RSCTRL_RG,
+	return regmap_update_bits(rd->pllctrl_regs, rd->rspll_offset + RSCTRL_RG,
 				  RSCTRL_KEY_MASK, RSCTRL_KEY);
 }
 
-static int rsctrl_restart_handler(struct notifier_block *this,
-				  unsigned long mode, void *cmd)
+static void rsctrl_restart_handler(struct restart_data *data)
 {
+	struct rsctrl_data *rd = data->cb_data;
+
 	/* enable write access to RSTCTRL */
-	rsctrl_enable_rspll_write();
+	rsctrl_enable_rspll_write(rd);
 
 	/* reset the SOC */
-	regmap_update_bits(pllctrl_regs, rspll_offset + RSCTRL_RG,
+	regmap_update_bits(rd->pllctrl_regs, rd->rspll_offset + RSCTRL_RG,
 			   RSCTRL_RESET_MASK, 0);
-
-	return NOTIFY_DONE;
 }
-
-static struct notifier_block rsctrl_restart_nb = {
-	.notifier_call = rsctrl_restart_handler,
-	.priority = 128,
-};
 
 static const struct of_device_id rsctrl_of_match[] = {
 	{.compatible = "ti,keystone-reset", },
@@ -83,14 +79,23 @@ static int rsctrl_probe(struct platform_device *pdev)
 	struct regmap *devctrl_regs;
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
+	struct regmap *pllctrl_regs;
+	struct rsctrl_data *rd;
+	int rspll_offset;
 
 	if (!np)
 		return -ENODEV;
+
+	rd = devm_kzalloc(dev, sizeof(*rd), GFP_KERNEL);
+	if (!rd)
+		return -ENOMEM;
 
 	/* get regmaps */
 	pllctrl_regs = syscon_regmap_lookup_by_phandle(np, "ti,syscon-pll");
 	if (IS_ERR(pllctrl_regs))
 		return PTR_ERR(pllctrl_regs);
+
+	rd->pllctrl_regs = pllctrl_regs;
 
 	devctrl_regs = syscon_regmap_lookup_by_phandle(np, "ti,syscon-dev");
 	if (IS_ERR(devctrl_regs))
@@ -102,6 +107,8 @@ static int rsctrl_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	rd->rspll_offset = rspll_offset;
+
 	ret = of_property_read_u32_index(np, "ti,syscon-dev", 1, &rsmux_offset);
 	if (ret) {
 		dev_err(dev, "couldn't read the rsmux offset!\n");
@@ -112,7 +119,7 @@ static int rsctrl_probe(struct platform_device *pdev)
 	val = of_property_read_bool(np, "ti,soft-reset");
 	val = val ? RSCFG_RSTYPE_SOFT : RSCFG_RSTYPE_HARD;
 
-	ret = rsctrl_enable_rspll_write();
+	ret = rsctrl_enable_rspll_write(rd);
 	if (ret)
 		return ret;
 
@@ -151,7 +158,8 @@ static int rsctrl_probe(struct platform_device *pdev)
 			return ret;
 	}
 
-	ret = register_restart_handler(&rsctrl_restart_nb);
+	ret = devm_register_simple_restart_handler(dev, rsctrl_restart_handler,
+						   rd);
 	if (ret)
 		dev_err(dev, "cannot register restart handler (err=%d)\n", ret);
 
