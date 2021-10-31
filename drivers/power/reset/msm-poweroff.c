@@ -11,41 +11,44 @@
 #include <linux/platform_device.h>
 #include <linux/module.h>
 #include <linux/reboot.h>
-#include <linux/pm.h>
 
-static void __iomem *msm_ps_hold;
-static int deassert_pshold(struct notifier_block *nb, unsigned long action,
-			   void *data)
+static void deassert_pshold(void __iomem *msm_ps_hold)
 {
 	writel(0, msm_ps_hold);
 	mdelay(10000);
-
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block restart_nb = {
-	.notifier_call = deassert_pshold,
-	.priority = 128,
-};
-
-static void do_msm_poweroff(void)
+static void do_msm_restart(struct restart_data *data)
 {
-	deassert_pshold(&restart_nb, 0, NULL);
+	deassert_pshold(data->cb_data);
+}
+
+static void do_msm_poweroff(void *msm_ps_hold)
+{
+	deassert_pshold(msm_ps_hold);
 }
 
 static int msm_restart_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	void __iomem *msm_ps_hold;
 	struct resource *mem;
+	int err;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	msm_ps_hold = devm_ioremap_resource(dev, mem);
 	if (IS_ERR(msm_ps_hold))
 		return PTR_ERR(msm_ps_hold);
 
-	register_restart_handler(&restart_nb);
+	err = devm_register_simple_restart_handler(&pdev->dev, do_msm_restart,
+						   msm_ps_hold);
+	if (err)
+		return err;
 
-	pm_power_off = do_msm_poweroff;
+	err = devm_register_simple_power_off_handler(&pdev->dev, do_msm_poweroff,
+						     msm_ps_hold);
+	if (err)
+		return err;
 
 	return 0;
 }
