@@ -96,12 +96,9 @@ struct oxnas_restart_context {
 	struct notifier_block restart_handler;
 };
 
-static int ox820_restart_handle(struct notifier_block *this,
-				 unsigned long mode, void *cmd)
+static void ox820_restart_handle(struct restart_data *data)
 {
-	struct oxnas_restart_context *ctx = container_of(this, struct
-							oxnas_restart_context,
-							restart_handler);
+	struct oxnas_restart_context *ctx = data->cb_data;
 	u32 value;
 
 	/*
@@ -190,7 +187,6 @@ static int ox820_restart_handle(struct notifier_block *this,
 	regmap_write(ctx->sys_ctrl, OX820_RST_SET_REGOFFSET, value);
 
 	pr_emerg("Unable to restart system\n");
-	return NOTIFY_DONE;
 }
 
 static int ox820_restart_probe(struct platform_device *pdev)
@@ -209,9 +205,9 @@ static int ox820_restart_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	ctx->sys_ctrl = sys_ctrl;
-	ctx->restart_handler.notifier_call = ox820_restart_handle;
-	ctx->restart_handler.priority = 192;
-	err = register_restart_handler(&ctx->restart_handler);
+
+	err = devm_register_prioritized_restart_handler(dev, RESTART_PRIO_HIGH,
+							ox820_restart_handle, ctx);
 	if (err)
 		dev_err(dev, "can't register restart notifier (err=%d)\n", err);
 
