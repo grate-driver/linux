@@ -59,8 +59,6 @@ struct jz4740_rtc {
 	spinlock_t lock;
 };
 
-static struct device *dev_for_power_off;
-
 static inline uint32_t jz4740_rtc_reg_read(struct jz4740_rtc *rtc, size_t reg)
 {
 	return readl(rtc->base + reg);
@@ -251,9 +249,9 @@ static void jz4740_rtc_poweroff(struct device *dev)
 	jz4740_rtc_reg_write(rtc, JZ_REG_RTC_HIBERNATE, 1);
 }
 
-static void jz4740_rtc_power_off(void)
+static void jz4740_rtc_power_off(void *dev)
 {
-	jz4740_rtc_poweroff(dev_for_power_off);
+	jz4740_rtc_poweroff(dev);
 	kernel_halt();
 }
 
@@ -387,12 +385,11 @@ static int jz4740_rtc_probe(struct platform_device *pdev)
 	}
 
 	if (of_device_is_system_power_controller(np)) {
-		dev_for_power_off = dev;
-
-		if (!pm_power_off)
-			pm_power_off = jz4740_rtc_power_off;
-		else
-			dev_warn(dev, "Poweroff handler already present!\n");
+		ret = devm_register_simple_power_off_handler(dev,
+							     jz4740_rtc_power_off,
+							     dev);
+		if (ret)
+			return ret;
 	}
 
 	return 0;
