@@ -20,15 +20,11 @@ struct syscon_reboot_context {
 	u32 offset;
 	u32 value;
 	u32 mask;
-	struct notifier_block restart_handler;
 };
 
-static int syscon_restart_handle(struct notifier_block *this,
-					unsigned long mode, void *cmd)
+static void syscon_restart_handle(struct restart_data *data)
 {
-	struct syscon_reboot_context *ctx =
-			container_of(this, struct syscon_reboot_context,
-					restart_handler);
+	struct syscon_reboot_context *ctx = data->cb_data;
 
 	/* Issue the reboot */
 	regmap_update_bits(ctx->map, ctx->offset, ctx->mask, ctx->value);
@@ -36,7 +32,6 @@ static int syscon_restart_handle(struct notifier_block *this,
 	mdelay(1000);
 
 	pr_emerg("Unable to restart system\n");
-	return NOTIFY_DONE;
 }
 
 static int syscon_reboot_probe(struct platform_device *pdev)
@@ -76,9 +71,9 @@ static int syscon_reboot_probe(struct platform_device *pdev)
 		ctx->mask = 0xFFFFFFFF;
 	}
 
-	ctx->restart_handler.notifier_call = syscon_restart_handle;
-	ctx->restart_handler.priority = 192;
-	err = register_restart_handler(&ctx->restart_handler);
+	err = devm_register_prioritized_restart_handler(dev, RESTART_PRIO_HIGH,
+							syscon_restart_handle,
+							ctx);
 	if (err)
 		dev_err(dev, "can't register restart notifier (err=%d)\n", err);
 
