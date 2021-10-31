@@ -17,6 +17,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/power_supply.h>
+#include <linux/reboot.h>
 #include <linux/regulator/of_regulator.h>
 #include <linux/regmap.h>
 #include <dt-bindings/regulator/active-semi,8865-regulator.h>
@@ -572,12 +573,10 @@ static struct act8865_regulator_data *act8865_get_regulator_data(
 	return NULL;
 }
 
-static struct i2c_client *act8865_i2c_client;
-static void act8865_power_off(void)
+static void act8865_power_off(void *data)
 {
-	struct act8865 *act8865;
+	struct act8865 *act8865 = data;
 
-	act8865 = i2c_get_clientdata(act8865_i2c_client);
 	regmap_write(act8865->regmap, act8865->off_reg, act8865->off_mask);
 	while (1);
 }
@@ -725,11 +724,15 @@ static int act8865_pmic_probe(struct i2c_client *client,
 	}
 
 	if (of_device_is_system_power_controller(dev->of_node)) {
-		if (!pm_power_off && (off_reg > 0)) {
-			act8865_i2c_client = client;
+		if (off_reg > 0) {
 			act8865->off_reg = off_reg;
 			act8865->off_mask = off_mask;
-			pm_power_off = act8865_power_off;
+
+			ret = devm_register_simple_power_off_handler(dev,
+								     act8865_power_off,
+								     act8865);
+			if (ret)
+				return ret;
 		} else {
 			dev_err(dev, "Failed to set poweroff capability, already defined\n");
 		}
