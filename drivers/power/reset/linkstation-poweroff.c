@@ -34,13 +34,10 @@
 
 struct power_off_cfg {
 	char *mdio_node_name;
-	void (*phy_set_reg)(bool restart);
+	void (*phy_set_reg)(struct phy_device *phydev, bool restart);
 };
 
-static struct phy_device *phydev;
-static const struct power_off_cfg *cfg;
-
-static void linkstation_mvphy_reg_intn(bool restart)
+static void linkstation_mvphy_reg_intn(struct phy_device *phydev, bool restart)
 {
 	int rc = 0, saved_page;
 	u16 data = 0;
@@ -79,7 +76,7 @@ err:
 		dev_err(&phydev->mdio.dev, "Write register failed, %d\n", rc);
 }
 
-static void readynas_mvphy_set_reg(bool restart)
+static void readynas_mvphy_set_reg(struct phy_device *phydev, bool restart)
 {
 	int rc = 0, saved_page;
 	u16 data = 0;
@@ -120,27 +117,6 @@ static const struct power_off_cfg readynas_power_off_cfg = {
 	.phy_set_reg = readynas_mvphy_set_reg,
 };
 
-static int linkstation_reboot_notifier(struct notifier_block *nb,
-				       unsigned long action, void *unused)
-{
-	if (action == SYS_RESTART)
-		cfg->phy_set_reg(true);
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block linkstation_reboot_nb = {
-	.notifier_call = linkstation_reboot_notifier,
-};
-
-static void linkstation_poweroff(void)
-{
-	unregister_reboot_notifier(&linkstation_reboot_nb);
-	cfg->phy_set_reg(false);
-
-	kernel_restart("Power off");
-}
-
 static const struct of_device_id ls_poweroff_of_match[] = {
 	{ .compatible = "buffalo,ls421d",
 	  .data = &linkstation_power_off_cfg,
@@ -154,19 +130,55 @@ static const struct of_device_id ls_poweroff_of_match[] = {
 	{ },
 };
 
-static int __init linkstation_poweroff_init(void)
+static const struct power_off_cfg *linkstation_cfg(void)
 {
-	struct mii_bus *bus;
-	struct device_node *dn;
 	const struct of_device_id *match;
+	struct device_node *dn;
 
 	dn = of_find_matching_node(NULL, ls_poweroff_of_match);
 	if (!dn)
-		return -ENODEV;
-	of_node_put(dn);
+		return NULL;
 
 	match = of_match_node(ls_poweroff_of_match, dn);
-	cfg = match->data;
+	of_node_put(dn);
+
+	return match->data;
+}
+
+static void linkstation_reboot(struct reboot_prep_data *data)
+{
+	const struct power_off_cfg *cfg = linkstation_cfg();
+	struct phy_device *phydev = data->cb_data;
+
+	if (data->mode == SYS_RESTART)
+		cfg->phy_set_reg(phydev, true);
+}
+
+static void linkstation_poweroff(struct power_off_data *data)
+{
+	const struct power_off_cfg *cfg = linkstation_cfg();
+	struct phy_device *phydev = data->cb_data;
+
+	cfg->phy_set_reg(phydev, false);
+
+	machine_restart("Power off");
+}
+
+static struct sys_off_handler linkstation_sys_off = {
+	.reboot_prepare_cb = linkstation_reboot,
+	.power_off_cb = linkstation_poweroff,
+};
+
+static int __init linkstation_poweroff_init(void)
+{
+	const struct power_off_cfg *cfg;
+	struct phy_device *phydev;
+	struct device_node *dn;
+	struct mii_bus *bus;
+
+	cfg = linkstation_cfg();
+	if (!cfg)
+		return -ENODEV;
 
 	dn = of_find_node_by_name(NULL, cfg->mdio_node_name);
 	if (!dn)
@@ -182,16 +194,14 @@ static int __init linkstation_poweroff_init(void)
 	if (!phydev)
 		return -EPROBE_DEFER;
 
-	register_reboot_notifier(&linkstation_reboot_nb);
-	pm_power_off = linkstation_poweroff;
+	linkstation_sys_off.cb_data = phydev;
 
-	return 0;
+	return register_sys_off_handler(&linkstation_sys_off);
 }
 
 static void __exit linkstation_poweroff_exit(void)
 {
-	pm_power_off = NULL;
-	unregister_reboot_notifier(&linkstation_reboot_nb);
+	unregister_sys_off_handler(&linkstation_sys_off);
 }
 
 module_init(linkstation_poweroff_init);
