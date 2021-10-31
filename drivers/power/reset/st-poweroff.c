@@ -29,19 +29,17 @@ struct reset_syscfg {
 #define STIH407_SYSCFG_4000	0x0
 #define STIH407_SYSCFG_4008	0x20
 
-static struct reset_syscfg stih407_reset = {
+static const struct reset_syscfg stih407_reset = {
 	.offset_rst = STIH407_SYSCFG_4000,
 	.mask_rst = BIT(0),
 	.offset_rst_msk = STIH407_SYSCFG_4008,
 	.mask_rst_msk = BIT(0)
 };
 
-
-static struct reset_syscfg *st_restart_syscfg;
-
-static int st_restart(struct notifier_block *this, unsigned long mode,
-		      void *cmd)
+static void st_restart(struct restart_data *data)
 {
+	struct reset_syscfg *st_restart_syscfg = data->cb_data;
+
 	/* reset syscfg updated */
 	regmap_update_bits(st_restart_syscfg->regmap,
 			   st_restart_syscfg->offset_rst,
@@ -53,19 +51,12 @@ static int st_restart(struct notifier_block *this, unsigned long mode,
 			   st_restart_syscfg->offset_rst_msk,
 			   st_restart_syscfg->mask_rst_msk,
 			   0);
-
-	return NOTIFY_DONE;
 }
-
-static struct notifier_block st_restart_nb = {
-	.notifier_call = st_restart,
-	.priority = 192,
-};
 
 static const struct of_device_id st_reset_of_match[] = {
 	{
 		.compatible = "st,stih407-restart",
-		.data = (void *)&stih407_reset,
+		.data = &stih407_reset,
 	},
 	{}
 };
@@ -73,14 +64,16 @@ static const struct of_device_id st_reset_of_match[] = {
 static int st_reset_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
-	const struct of_device_id *match;
+	struct reset_syscfg *st_restart_syscfg;
 	struct device *dev = &pdev->dev;
 
-	match = of_match_device(st_reset_of_match, dev);
-	if (!match)
-		return -ENODEV;
+	st_restart_syscfg = devm_kzalloc(dev, sizeof(*st_restart_syscfg),
+					 GFP_KERNEL);
+	if (!st_restart_syscfg)
+		return -ENOMEM;
 
-	st_restart_syscfg = (struct reset_syscfg *)match->data;
+	memcpy(st_restart_syscfg, of_match_device(st_reset_of_match, dev)->data,
+	       sizeof(*st_restart_syscfg));
 
 	st_restart_syscfg->regmap =
 		syscon_regmap_lookup_by_phandle(np, "st,syscfg");
@@ -89,7 +82,9 @@ static int st_reset_probe(struct platform_device *pdev)
 		return PTR_ERR(st_restart_syscfg->regmap);
 	}
 
-	return register_restart_handler(&st_restart_nb);
+	return devm_register_prioritized_restart_handler(dev, RESTART_PRIO_HIGH,
+							 st_restart,
+							 st_restart_syscfg);
 }
 
 static struct platform_driver st_reset_driver = {
