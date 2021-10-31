@@ -18,31 +18,22 @@
 
 #include <asm/proc-fns.h>
 
-static void __iomem *base;
-static u32 reboot_offset;
-
-static int hisi_restart_handler(struct notifier_block *this,
-				unsigned long mode, void *cmd)
+static void hisi_restart(struct restart_data *data)
 {
-	writel_relaxed(0xdeadbeef, base + reboot_offset);
+	writel_relaxed(0xdeadbeef, data->cb_data);
 
 	while (1)
 		cpu_do_idle();
-
-	return NOTIFY_DONE;
 }
-
-static struct notifier_block hisi_restart_nb = {
-	.notifier_call = hisi_restart_handler,
-	.priority = 128,
-};
 
 static int hisi_reboot_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
+	void __iomem *base;
+	u32 reboot_offset;
 	int err;
 
-	base = of_iomap(np, 0);
+	base = devm_platform_ioremap_resource(pdev, 0);
 	if (!base) {
 		WARN(1, "failed to map base address");
 		return -ENODEV;
@@ -50,16 +41,14 @@ static int hisi_reboot_probe(struct platform_device *pdev)
 
 	if (of_property_read_u32(np, "reboot-offset", &reboot_offset) < 0) {
 		pr_err("failed to find reboot-offset property\n");
-		iounmap(base);
 		return -EINVAL;
 	}
 
-	err = register_restart_handler(&hisi_restart_nb);
-	if (err) {
+	err = devm_register_simple_restart_handler(&pdev->dev, hisi_restart,
+						   base + reboot_offset);
+	if (err)
 		dev_err(&pdev->dev, "cannot register restart handler (err=%d)\n",
 			err);
-		iounmap(base);
-	}
 
 	return err;
 }
