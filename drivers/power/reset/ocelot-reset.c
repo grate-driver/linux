@@ -26,7 +26,6 @@ struct ocelot_reset_context {
 	void __iomem *base;
 	struct regmap *cpu_ctrl;
 	const struct reset_props *props;
-	struct notifier_block restart_handler;
 };
 
 #define BIT_OFF_INVALID				32
@@ -39,12 +38,9 @@ struct ocelot_reset_context {
 #define IF_SI_OWNER_SIBM			1
 #define IF_SI_OWNER_SIMC			2
 
-static int ocelot_restart_handle(struct notifier_block *this,
-				 unsigned long mode, void *cmd)
+static void ocelot_restart_handle(struct restart_data *data)
 {
-	struct ocelot_reset_context *ctx = container_of(this, struct
-							ocelot_reset_context,
-							restart_handler);
+	struct ocelot_reset_context *ctx = data->cb_data;
 	u32 if_si_owner_bit = ctx->props->if_si_owner_bit;
 
 	/* Make sure the core is not protected from reset */
@@ -63,7 +59,6 @@ static int ocelot_restart_handle(struct notifier_block *this,
 	writel(SOFT_CHIP_RST, ctx->base);
 
 	pr_emerg("Unable to restart system\n");
-	return NOTIFY_DONE;
 }
 
 static int ocelot_reset_probe(struct platform_device *pdev)
@@ -91,9 +86,10 @@ static int ocelot_reset_probe(struct platform_device *pdev)
 		return PTR_ERR(ctx->cpu_ctrl);
 	}
 
-	ctx->restart_handler.notifier_call = ocelot_restart_handle;
-	ctx->restart_handler.priority = 192;
-	err = register_restart_handler(&ctx->restart_handler);
+	err = devm_register_prioritized_restart_handler(&pdev->dev,
+							RESTART_PRIO_HIGH,
+							ocelot_restart_handle,
+							ctx);
 	if (err)
 		dev_err(dev, "can't register restart notifier (err=%d)\n", err);
 
