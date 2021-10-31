@@ -54,7 +54,7 @@ struct at91_reset {
 	void __iomem *rstc_base;
 	void __iomem *ramc_base[2];
 	struct clk *sclk;
-	struct notifier_block nb;
+	struct sys_off_handler sys_off;
 	u32 args;
 	u32 ramc_lpr;
 };
@@ -64,10 +64,9 @@ struct at91_reset {
 * reset register it can be left driving the data bus and
 * killing the chance of a subsequent boot from NAND
 */
-static int at91_reset(struct notifier_block *this, unsigned long mode,
-		      void *cmd)
+static void at91_reset(struct restart_data *data)
 {
-	struct at91_reset *reset = container_of(this, struct at91_reset, nb);
+	struct at91_reset *reset = data->cb_data;
 
 	asm volatile(
 		/* Align to cache lines */
@@ -98,8 +97,6 @@ static int at91_reset(struct notifier_block *this, unsigned long mode,
 		  "r" (reset->args),
 		  "r" (reset->ramc_lpr)
 		: "r4");
-
-	return NOTIFY_DONE;
 }
 
 static void __init at91_reset_status(struct platform_device *pdev,
@@ -213,8 +210,9 @@ static int __init at91_reset_probe(struct platform_device *pdev)
 	}
 
 	match = of_match_node(at91_reset_of_match, pdev->dev.of_node);
-	reset->nb.notifier_call = at91_reset;
-	reset->nb.priority = 192;
+	reset->sys_off.restart_priority = RESTART_PRIO_HIGH;
+	reset->sys_off.restart_cb = at91_reset;
+	reset->sys_off.cb_data = reset;
 	reset->args = (u32)match->data;
 
 	reset->sclk = devm_clk_get(&pdev->dev, NULL);
@@ -236,7 +234,7 @@ static int __init at91_reset_probe(struct platform_device *pdev)
 		       reset->rstc_base + AT91_RSTC_MR);
 	}
 
-	ret = register_restart_handler(&reset->nb);
+	ret = register_sys_off_handler(&reset->sys_off);
 	if (ret) {
 		clk_disable_unprepare(reset->sclk);
 		return ret;
@@ -251,7 +249,7 @@ static int __exit at91_reset_remove(struct platform_device *pdev)
 {
 	struct at91_reset *reset = platform_get_drvdata(pdev);
 
-	unregister_restart_handler(&reset->nb);
+	unregister_sys_off_handler(&reset->sys_off);
 	clk_disable_unprepare(reset->sclk);
 
 	return 0;
