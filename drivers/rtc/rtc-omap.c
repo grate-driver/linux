@@ -24,6 +24,7 @@
 #include <linux/pinctrl/pinconf-generic.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/reboot.h>
 #include <linux/rtc.h>
 
 /*
@@ -149,6 +150,7 @@ struct omap_rtc {
 	bool is_suspending;
 	const struct omap_rtc_device_type *type;
 	struct pinctrl_dev *pctldev;
+	struct sys_off_handler sys_off;
 };
 
 static inline u8 rtc_read(struct omap_rtc *rtc, unsigned int reg)
@@ -400,8 +402,6 @@ static int omap_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alm)
 	return 0;
 }
 
-static struct omap_rtc *omap_rtc_power_off_rtc;
-
 /**
  * omap_rtc_power_off_program: Set the pmic power off sequence. The RTC
  * generates pmic_pwr_enable control, which can be used to control an external
@@ -409,7 +409,7 @@ static struct omap_rtc *omap_rtc_power_off_rtc;
  */
 int omap_rtc_power_off_program(struct device *dev)
 {
-	struct omap_rtc *rtc = omap_rtc_power_off_rtc;
+	struct omap_rtc *rtc = dev_get_drvdata(dev);
 	struct rtc_time tm;
 	unsigned long now;
 	int seconds;
@@ -478,8 +478,9 @@ EXPORT_SYMBOL(omap_rtc_power_off_program);
  *
  * Called with local interrupts disabled.
  */
-static void omap_rtc_power_off(void)
+static void omap_rtc_power_off(struct power_off_data *data)
 {
+	struct omap_rtc *omap_rtc_power_off_rtc = data->cb_data;
 	struct rtc_device *rtc = omap_rtc_power_off_rtc->rtc;
 	u32 val;
 
@@ -892,10 +893,12 @@ static int omap_rtc_probe(struct platform_device *pdev)
 	devm_rtc_nvmem_register(rtc->rtc, &omap_rtc_nvmem_config);
 
 	if (rtc->is_pmic_controller) {
-		if (!pm_power_off) {
-			omap_rtc_power_off_rtc = rtc;
-			pm_power_off = omap_rtc_power_off;
-		}
+		rtc->sys_off.cb_data = rtc;
+		rtc->sys_off.power_off_cb = omap_rtc_power_off;
+
+		ret = register_sys_off_handler(&rtc->sys_off);
+		if (ret)
+			goto err;
 	}
 
 	return 0;
@@ -915,11 +918,8 @@ static int omap_rtc_remove(struct platform_device *pdev)
 	struct omap_rtc *rtc = platform_get_drvdata(pdev);
 	u8 reg;
 
-	if (pm_power_off == omap_rtc_power_off &&
-			omap_rtc_power_off_rtc == rtc) {
-		pm_power_off = NULL;
-		omap_rtc_power_off_rtc = NULL;
-	}
+	if (rtc->is_pmic_controller)
+		unregister_sys_off_handler(&rtc->sys_off);
 
 	device_init_wakeup(&pdev->dev, 0);
 
