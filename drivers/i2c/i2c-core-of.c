@@ -142,6 +142,26 @@ struct i2c_client *of_find_i2c_device_by_node(struct device_node *node)
 }
 EXPORT_SYMBOL(of_find_i2c_device_by_node);
 
+/* must call put_device() when done with returned i2c_client device */
+struct i2c_client *of_get_i2c_device_by_phandle(struct device *dev,
+						const char *name, int index)
+{
+	struct device_node *np;
+	struct i2c_client *i2c;
+
+	np = of_parse_phandle(dev_of_node(dev), name, index);
+	if (!np) {
+		dev_err(dev, "can't resolve phandle %s:%d\n", name, index);
+		return ERR_PTR(-ENODEV);
+	}
+
+	i2c = of_find_i2c_device_by_node(np);
+	of_node_put(np);
+
+	return i2c ?: ERR_PTR(-EPROBE_DEFER);
+}
+EXPORT_SYMBOL_GPL(of_get_i2c_device_by_phandle);
+
 /* must call put_device() when done with returned i2c_adapter device */
 struct i2c_adapter *of_find_i2c_adapter_by_node(struct device_node *node)
 {
@@ -178,6 +198,26 @@ struct i2c_adapter *of_get_i2c_adapter_by_node(struct device_node *node)
 	return adapter;
 }
 EXPORT_SYMBOL(of_get_i2c_adapter_by_node);
+
+/* must call i2c_put_adapter() when done with returned i2c_adapter device */
+struct i2c_adapter *of_get_i2c_adapter_by_phandle(struct device *dev,
+						  const char *name, int index)
+{
+	struct i2c_adapter *adapter;
+	struct device_node *np;
+
+	np = of_parse_phandle(dev_of_node(dev), name, index);
+	if (!np) {
+		dev_err(dev, "can't resolve phandle %s:%d\n", name, index);
+		return ERR_PTR(-ENODEV);
+	}
+
+	adapter = of_get_i2c_adapter_by_node(np);
+	of_node_put(np);
+
+	return adapter ?: ERR_PTR(-EPROBE_DEFER);
+}
+EXPORT_SYMBOL_GPL(of_get_i2c_adapter_by_phandle);
 
 static const struct of_device_id*
 i2c_of_match_device_sysfs(const struct of_device_id *matches,
