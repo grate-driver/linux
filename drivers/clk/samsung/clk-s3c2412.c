@@ -25,8 +25,6 @@
 #define CLKSRC		0x1c
 #define SWRST		0x30
 
-static void __iomem *reg_base;
-
 /*
  * list of controller registers to be saved and restored during a
  * suspend/resume cycle.
@@ -156,9 +154,10 @@ static struct samsung_clock_alias s3c2412_aliases[] __initdata = {
 	ALIAS(MSYSCLK, NULL, "fclk"),
 };
 
-static int s3c2412_restart(struct notifier_block *this,
-			   unsigned long mode, void *cmd)
+static void s3c2412_restart(struct restart_data *data)
 {
+	void __iomem *reg_base = data->cb_data;
+
 	/* errata "Watch-dog/Software Reset Problem" specifies that
 	 * this reset must be done with the SYSCLK sourced from
 	 * EXTCLK instead of FOUT to avoid a glitch in the reset
@@ -170,12 +169,11 @@ static int s3c2412_restart(struct notifier_block *this,
 
 	__raw_writel(0x00, reg_base + CLKSRC);
 	__raw_writel(0x533C2412, reg_base + SWRST);
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block s3c2412_restart_handler = {
-	.notifier_call = s3c2412_restart,
-	.priority = 129,
+static struct sys_off_handler s3c2412_restart_handler = {
+	.restart_cb = s3c2412_restart,
+	.restart_priority = RESTART_PRIO_DEFAULT + 1,
 };
 
 /*
@@ -207,8 +205,8 @@ void __init s3c2412_common_clk_init(struct device_node *np, unsigned long xti_f,
 				    unsigned long ext_f, void __iomem *base)
 {
 	struct samsung_clk_provider *ctx;
+	void __iomem *reg_base = base;
 	int ret;
-	reg_base = base;
 
 	if (np) {
 		reg_base = of_iomap(np, 0);
@@ -242,7 +240,9 @@ void __init s3c2412_common_clk_init(struct device_node *np, unsigned long xti_f,
 
 	samsung_clk_of_add_provider(np, ctx);
 
-	ret = register_restart_handler(&s3c2412_restart_handler);
+	s3c2412_restart_handler.cb_data = reg_base;
+
+	ret = register_sys_off_handler(&s3c2412_restart_handler);
 	if (ret)
 		pr_warn("cannot register restart handler, %d\n", ret);
 }
