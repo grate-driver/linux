@@ -597,22 +597,17 @@ void rockchip_clk_protect_critical(const char *const clocks[],
 }
 EXPORT_SYMBOL_GPL(rockchip_clk_protect_critical);
 
-static void __iomem *rst_base;
-static unsigned int reg_restart;
 static void (*cb_restart)(void);
-static int rockchip_restart_notify(struct notifier_block *this,
-				   unsigned long mode, void *cmd)
+static void rockchip_restart_cb(struct restart_data *data)
 {
 	if (cb_restart)
 		cb_restart();
 
-	writel(0xfdb9, rst_base + reg_restart);
-	return NOTIFY_DONE;
+	writel(0xfdb9, data->cb_data);
 }
 
-static struct notifier_block rockchip_restart_handler = {
-	.notifier_call = rockchip_restart_notify,
-	.priority = 128,
+static struct sys_off_handler rockchip_restart_handler = {
+	.restart_cb = rockchip_restart_cb,
 };
 
 void
@@ -622,10 +617,11 @@ rockchip_register_restart_notifier(struct rockchip_clk_provider *ctx,
 {
 	int ret;
 
-	rst_base = ctx->reg_base;
-	reg_restart = reg;
 	cb_restart = cb;
-	ret = register_restart_handler(&rockchip_restart_handler);
+
+	rockchip_restart_handler.cb_data = ctx->reg_base + reg;
+
+	ret = register_sys_off_handler(&rockchip_restart_handler);
 	if (ret)
 		pr_err("%s: cannot register restart handler, %d\n",
 		       __func__, ret);
