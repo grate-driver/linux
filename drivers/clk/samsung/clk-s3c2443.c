@@ -39,8 +39,6 @@ enum supported_socs {
 	S3C2450,
 };
 
-static void __iomem *reg_base;
-
 /*
  * list of controller registers to be saved and restored during a
  * suspend/resume cycle.
@@ -308,16 +306,16 @@ static struct samsung_clock_alias s3c2450_aliases[] __initdata = {
 	ALIAS(PCLK_I2C1, "s3c2410-i2c.1", "i2c"),
 };
 
-static int s3c2443_restart(struct notifier_block *this,
-			   unsigned long mode, void *cmd)
+static void s3c2443_restart(struct restart_data *data)
 {
+	void __iomem *reg_base = data->cb_data;
+
 	__raw_writel(0x533c2443, reg_base + SWRST);
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block s3c2443_restart_handler = {
-	.notifier_call = s3c2443_restart,
-	.priority = 129,
+static struct sys_off_handler s3c2443_restart_handler = {
+	.restart_cb = s3c2443_restart,
+	.restart_priority = RESTART_PRIO_DEFAULT + 1,
 };
 
 /*
@@ -344,8 +342,8 @@ void __init s3c2443_common_clk_init(struct device_node *np, unsigned long xti_f,
 				    void __iomem *base)
 {
 	struct samsung_clk_provider *ctx;
+	void __iomem *reg_base = base;
 	int ret;
-	reg_base = base;
 
 	if (np) {
 		reg_base = of_iomap(np, 0);
@@ -414,7 +412,9 @@ void __init s3c2443_common_clk_init(struct device_node *np, unsigned long xti_f,
 
 	samsung_clk_of_add_provider(np, ctx);
 
-	ret = register_restart_handler(&s3c2443_restart_handler);
+	s3c2443_restart_handler.cb_data = reg_base;
+
+	ret = register_sys_off_handler(&s3c2443_restart_handler);
 	if (ret)
 		pr_warn("cannot register restart handler, %d\n", ret);
 }
