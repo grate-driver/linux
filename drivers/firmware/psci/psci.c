@@ -296,10 +296,9 @@ static int get_set_conduit_method(struct device_node *np)
 	return 0;
 }
 
-static int psci_sys_reset(struct notifier_block *nb, unsigned long action,
-			  void *data)
+static void psci_sys_reset(struct restart_data *data)
 {
-	if ((reboot_mode == REBOOT_WARM || reboot_mode == REBOOT_SOFT) &&
+	if ((data->mode == REBOOT_WARM || data->mode == REBOOT_SOFT) &&
 	    psci_system_reset2_supported) {
 		/*
 		 * reset_type[31] = 0 (architectural)
@@ -310,19 +309,18 @@ static int psci_sys_reset(struct notifier_block *nb, unsigned long action,
 	} else {
 		invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
 	}
-
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block psci_sys_reset_nb = {
-	.notifier_call = psci_sys_reset,
-	.priority = 129,
-};
-
-static void psci_sys_poweroff(void)
+static void psci_sys_poweroff(struct power_off_data *data)
 {
 	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
 }
+
+static struct sys_off_handler psci_sys_off = {
+	.restart_cb = psci_sys_reset,
+	.restart_priority = RESTART_PRIO_DEFAULT + 1,
+	.power_off_cb = psci_sys_poweroff,
+};
 
 static int __init psci_features(u32 psci_func_id)
 {
@@ -485,9 +483,7 @@ static void __init psci_0_2_set_functions(void)
 		.migrate_info_type = psci_migrate_info_type,
 	};
 
-	register_restart_handler(&psci_sys_reset_nb);
-
-	pm_power_off = psci_sys_poweroff;
+	register_sys_off_handler(&psci_sys_off);
 }
 
 /*
