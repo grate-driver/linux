@@ -15,6 +15,7 @@
 #include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/notifier.h>
+#include <linux/reboot.h>
 #include <uapi/linux/watchdog.h>
 
 struct watchdog_ops;
@@ -77,8 +78,7 @@ struct watchdog_ops {
  * @max_hw_heartbeat_ms:
  *		Hardware limit for maximum timeout, in milli-seconds.
  *		Replaces max_timeout if specified.
- * @reboot_nb:	The notifier block to stop watchdog on reboot.
- * @restart_nb:	The notifier block to register a restart function.
+ * @sys_off:	Reboot handler to register a stop and restart functions.
  * @driver_data:Pointer to the drivers private data.
  * @wd_data:	Pointer to watchdog core internal data.
  * @status:	Field that contains the devices internal status bits.
@@ -105,8 +105,7 @@ struct watchdog_device {
 	unsigned int max_timeout;
 	unsigned int min_hw_heartbeat_ms;
 	unsigned int max_hw_heartbeat_ms;
-	struct notifier_block reboot_nb;
-	struct notifier_block restart_nb;
+	struct sys_off_handler sys_off;
 	struct notifier_block pm_nb;
 	void *driver_data;
 	struct watchdog_core_data *wd_data;
