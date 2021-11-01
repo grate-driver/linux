@@ -15,6 +15,7 @@
 #include <linux/platform_data/x86/pmc_atom.h>
 #include <linux/platform_device.h>
 #include <linux/pci.h>
+#include <linux/reboot.h>
 #include <linux/seq_file.h>
 
 struct pmc_bit_map {
@@ -43,6 +44,7 @@ struct pmc_dev {
 	struct dentry *dbgfs_dir;
 #endif /* CONFIG_DEBUG_FS */
 	bool init;
+	struct sys_off_handler sys_off;
 };
 
 static struct pmc_dev pmc_device;
@@ -234,7 +236,7 @@ int pmc_atom_write(int offset, u32 value)
 }
 EXPORT_SYMBOL_GPL(pmc_atom_write);
 
-static void pmc_power_off(void)
+static void pmc_power_off(struct power_off_data *data)
 {
 	u16	pm1_cnt_port;
 	u32	pm1_cnt_value;
@@ -467,8 +469,10 @@ static int pmc_setup_dev(struct pci_dev *pdev, const struct pci_device_id *ent)
 	acpi_base_addr &= ACPI_BASE_ADDR_MASK;
 
 	/* Install power off function */
-	if (acpi_base_addr != 0 && pm_power_off == NULL)
-		pm_power_off = pmc_power_off;
+	if (acpi_base_addr != 0) {
+		pmc->sys_off.power_off_cb = pmc_power_off;
+		register_sys_off_handler(&pmc->sys_off);
+	}
 
 	pci_read_config_dword(pdev, PMC_BASE_ADDR_OFFSET, &pmc->base_addr);
 	pmc->base_addr &= PMC_BASE_ADDR_MASK;
