@@ -227,12 +227,6 @@ config POWER_RESET_VEXPRESS
 	  Power off and reset support for the ARM Ltd. Versatile
 	  Express boards.
 
-config POWER_RESET_XGENE
-	bool "APM SoC X-Gene reset driver"
-	depends on ARM64
-	help
-	  Reboot support for the APM SoC X-Gene Eval boards.
-
 config POWER_RESET_KEYSTONE
 	bool "Keystone reset driver"
 	depends on ARCH_KEYSTONE || COMPILE_TEST
