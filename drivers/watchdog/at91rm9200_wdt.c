@@ -52,8 +52,7 @@ static unsigned long at91wdt_busy;
 
 /* ......................................................................... */
 
-static int at91rm9200_restart(struct notifier_block *this,
-					unsigned long mode, void *cmd)
+static void at91rm9200_restart(struct restart_data *data)
 {
 	/*
 	 * Perform a hardware reset with the use of the Watchdog timer.
@@ -65,12 +64,11 @@ static int at91rm9200_restart(struct notifier_block *this,
 	mdelay(2000);
 
 	pr_emerg("Unable to restart system\n");
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block at91rm9200_restart_nb = {
-	.notifier_call = at91rm9200_restart,
-	.priority = 192,
+static struct sys_off_handler at91rm9200_sys_off = {
+	.restart_cb = at91rm9200_restart,
+	.restart_priority = RESTART_PRIO_HIGH,
 };
 
 /*
@@ -249,7 +247,7 @@ static int at91wdt_probe(struct platform_device *pdev)
 	if (res)
 		return res;
 
-	res = register_restart_handler(&at91rm9200_restart_nb);
+	res = register_sys_off_handler(&at91rm9200_sys_off);
 	if (res)
 		dev_warn(dev, "failed to register restart handler\n");
 
@@ -260,17 +258,11 @@ static int at91wdt_probe(struct platform_device *pdev)
 
 static int at91wdt_remove(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	int res;
-
-	res = unregister_restart_handler(&at91rm9200_restart_nb);
-	if (res)
-		dev_warn(dev, "failed to unregister restart handler\n");
-
+	unregister_sys_off_handler(&at91rm9200_sys_off);
 	misc_deregister(&at91wdt_miscdev);
 	at91wdt_miscdev.parent = NULL;
 
-	return res;
+	return 0;
 }
 
 static void at91wdt_shutdown(struct platform_device *pdev)
