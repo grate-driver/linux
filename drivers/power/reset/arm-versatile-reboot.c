@@ -9,6 +9,7 @@
 #include <linux/reboot.h>
 #include <linux/regmap.h>
 #include <linux/of.h>
+#include <linux/slab.h>
 
 #define INTEGRATOR_HDR_CTRL_OFFSET	0x0C
 #define INTEGRATOR_HDR_LOCK_OFFSET	0x14
@@ -33,9 +34,11 @@ enum versatile_reboot {
 	REALVIEW_REBOOT_PBX,
 };
 
-/* Pointer to the system controller */
-static struct regmap *syscon_regmap;
-static enum versatile_reboot versatile_reboot_type;
+struct versatile_data {
+	struct sys_off_handler sys_off;
+	struct regmap *syscon_regmap;
+	enum versatile_reboot type;
+};
 
 static const struct of_device_id versatile_reboot_of_match[] = {
 	{
@@ -69,9 +72,12 @@ static const struct of_device_id versatile_reboot_of_match[] = {
 	{},
 };
 
-static int versatile_reboot(struct notifier_block *this, unsigned long mode,
-			    void *cmd)
+static void versatile_reboot(struct restart_data *data)
 {
+	struct versatile_data *vd = data->cb_data;
+	struct regmap *syscon_regmap = vd->syscon_regmap;
+	enum versatile_reboot versatile_reboot_type = vd->type;
+
 	/* Unlock the reset register */
 	/* Then hit reset on the different machines */
 	switch (versatile_reboot_type) {
@@ -124,18 +130,13 @@ static int versatile_reboot(struct notifier_block *this, unsigned long mode,
 		break;
 	}
 	dsb();
-
-	return NOTIFY_DONE;
 }
-
-static struct notifier_block versatile_reboot_nb = {
-	.notifier_call = versatile_reboot,
-	.priority = 192,
-};
 
 static int __init versatile_reboot_probe(void)
 {
 	const struct of_device_id *reboot_id;
+	struct regmap *syscon_regmap;
+	struct versatile_data *vd;
 	struct device_node *np;
 	int err;
 
@@ -143,15 +144,26 @@ static int __init versatile_reboot_probe(void)
 						 &reboot_id);
 	if (!np)
 		return -ENODEV;
-	versatile_reboot_type = (enum versatile_reboot)reboot_id->data;
 
 	syscon_regmap = syscon_node_to_regmap(np);
 	if (IS_ERR(syscon_regmap))
 		return PTR_ERR(syscon_regmap);
 
-	err = register_restart_handler(&versatile_reboot_nb);
-	if (err)
+	vd = kzalloc(sizeof(*vd), GFP_KERNEL);
+	if (!vd)
+		return -ENOMEM;
+
+	vd->sys_off.cb_data = vd;
+	vd->sys_off.restart_cb = versatile_reboot;
+	vd->sys_off.restart_priority = RESTART_PRIO_HIGH;
+	vd->type = (enum versatile_reboot)reboot_id->data;
+	vd->syscon_regmap = syscon_regmap;
+
+	err = register_sys_off_handler(&vd->sys_off);
+	if (err) {
+		kfree(vd);
 		return err;
+	}
 
 	pr_info("versatile reboot driver registered\n");
 	return 0;
