@@ -967,11 +967,19 @@ int i2c_handle_smbus_host_notify(struct i2c_adapter *adap, unsigned short addr);
 /* must call put_device() when done with returned i2c_client device */
 struct i2c_client *of_find_i2c_device_by_node(struct device_node *node);
 
+/* must call put_device() when done with returned i2c_client device */
+struct i2c_client *of_get_i2c_device_by_phandle(struct device *dev,
+						const char *name, int index);
+
 /* must call put_device() when done with returned i2c_adapter device */
 struct i2c_adapter *of_find_i2c_adapter_by_node(struct device_node *node);
 
 /* must call i2c_put_adapter() when done with returned i2c_adapter device */
 struct i2c_adapter *of_get_i2c_adapter_by_node(struct device_node *node);
+
+/* must call i2c_put_adapter() when done with returned i2c_adapter device */
+struct i2c_adapter *of_get_i2c_adapter_by_phandle(struct device *dev,
+						  const char *name, int index);
 
 const struct of_device_id
 *i2c_of_match_device(const struct of_device_id *matches,
