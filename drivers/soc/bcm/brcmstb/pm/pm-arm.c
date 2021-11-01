@@ -30,9 +30,9 @@
 #include <linux/of_address.h>
 #include <linux/panic_notifier.h>
 #include <linux/platform_device.h>
-#include <linux/pm.h>
 #include <linux/printk.h>
 #include <linux/proc_fs.h>
+#include <linux/reboot.h>
 #include <linux/sizes.h>
 #include <linux/slab.h>
 #include <linux/sort.h>
@@ -330,7 +330,7 @@ static void brcmstb_do_pmsm_power_down(unsigned long base_cmd, bool onewrite)
 }
 
 /* Support S5 cold boot out of "poweroff" */
-static void brcmstb_pm_poweroff(void)
+static void brcmstb_pm_poweroff(struct power_off_data *data)
 {
 	brcmstb_pm_handshake();
 
@@ -353,6 +353,10 @@ static void brcmstb_pm_poweroff(void)
 
 	brcmstb_do_pmsm_power_down(PM_COLD_CONFIG, false);
 }
+
+static struct sys_off_handler brcmstb_sys_off = {
+	.power_off_cb = brcmstb_pm_poweroff,
+};
 
 static void *brcmstb_pm_copy_to_sram(void *fn, size_t len)
 {
@@ -805,7 +809,7 @@ static int brcmstb_pm_probe(struct platform_device *pdev)
 	atomic_notifier_chain_register(&panic_notifier_list,
 				       &brcmstb_pm_panic_nb);
 
-	pm_power_off = brcmstb_pm_poweroff;
+	register_sys_off_handler(&brcmstb_sys_off);
 	suspend_set_ops(&brcmstb_pm_ops);
 
 	return 0;
