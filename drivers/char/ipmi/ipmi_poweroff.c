@@ -19,7 +19,7 @@
 #include <linux/proc_fs.h>
 #include <linux/string.h>
 #include <linux/completion.h>
-#include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/kdev_t.h>
 #include <linux/ipmi.h>
 #include <linux/ipmi_smi.h>
@@ -43,9 +43,6 @@ static int ready;
 static struct ipmi_user *ipmi_user;
 static int ipmi_ifnum;
 static void (*specific_poweroff_func)(struct ipmi_user *user);
-
-/* Holds the old poweroff function so we can restore it on removal. */
-static void (*old_poweroff_func)(void);
 
 static int set_param_ifnum(const char *val, const struct kernel_param *kp)
 {
@@ -542,7 +539,7 @@ static struct poweroff_function poweroff_functions[] = {
 
 
 /* Called on a powerdown request. */
-static void ipmi_poweroff_function(void)
+static void ipmi_poweroff_function(struct power_off_data *data)
 {
 	if (!ready)
 		return;
@@ -550,6 +547,10 @@ static void ipmi_poweroff_function(void)
 	/* Use run-to-completion mode, since interrupts may be off. */
 	specific_poweroff_func(ipmi_user);
 }
+
+static struct sys_off_handler ipmi_sys_off = {
+	.power_off_cb = ipmi_poweroff_function,
+};
 
 /* Wait for an IPMI interface to be installed, the first one installed
    will be grabbed by this code and used to perform the powerdown. */
@@ -625,9 +626,7 @@ static void ipmi_po_new_smi(int if_num, struct device *device)
  found:
 	pr_info("Found a %s style poweroff function\n",
 		poweroff_functions[i].platform_type);
-	specific_poweroff_func = poweroff_functions[i].poweroff_func;
-	old_poweroff_func = pm_power_off;
-	pm_power_off = ipmi_poweroff_function;
+	register_sys_off_handler(&ipmi_sys_off);
 	ready = 1;
 }
 
@@ -641,7 +640,7 @@ static void ipmi_po_smi_gone(int if_num)
 
 	ready = 0;
 	ipmi_destroy_user(ipmi_user);
-	pm_power_off = old_poweroff_func;
+	unregister_sys_off_handler(&ipmi_sys_off);
 }
 
 static struct ipmi_smi_watcher smi_watcher = {
@@ -727,10 +726,10 @@ static void __exit ipmi_poweroff_cleanup(void)
 	ipmi_smi_watcher_unregister(&smi_watcher);
 
 	if (ready) {
+		unregister_sys_off_handler(&ipmi_sys_off);
 		rv = ipmi_destroy_user(ipmi_user);
 		if (rv)
 			pr_err("could not cleanup the IPMI user: 0x%x\n", rv);
-		pm_power_off = old_poweroff_func;
 	}
 }
 module_exit(ipmi_poweroff_cleanup);
