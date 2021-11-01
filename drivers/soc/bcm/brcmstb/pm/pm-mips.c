@@ -11,6 +11,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/delay.h>
+#include <linux/reboot.h>
 #include <linux/suspend.h>
 #include <asm/bmips.h>
 #include <asm/tlbflush.h>
@@ -151,7 +152,7 @@ static void  brcmstb_pm_handshake(void)
 	mdelay(3);
 }
 
-static void brcmstb_pm_s5(void)
+static void brcmstb_pm_s5(struct power_off_data *data)
 {
 	void __iomem *base = ctrl.aon_ctrl_base;
 
@@ -176,6 +177,10 @@ static void brcmstb_pm_s5(void)
 	"	wait\n"
 	: : : "memory");
 }
+
+static struct sys_off_handler brcmstb_sys_off = {
+	.power_off_cb = brcmstb_pm_s5,
+};
 
 static int brcmstb_pm_s3(void)
 {
@@ -435,8 +440,7 @@ static int brcmstb_pm_init(void)
 	ctrl.timers_base = base;
 
 	/* s3 cold boot aka s5 */
-	pm_power_off = brcmstb_pm_s5;
-
+	register_sys_off_handler(&brcmstb_sys_off);
 	suspend_set_ops(&brcmstb_pm_ops);
 
 	return 0;
