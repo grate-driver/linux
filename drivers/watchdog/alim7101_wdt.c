@@ -303,8 +303,7 @@ static struct miscdevice wdt_miscdev = {
 	.fops	=	&wdt_fops,
 };
 
-static int wdt_restart_handle(struct notifier_block *this, unsigned long mode,
-			      void *cmd)
+static void wdt_restart_handle(struct restart_data *data)
 {
 	/*
 	 * Cobalt devices have no way of rebooting themselves other
@@ -316,26 +315,16 @@ static int wdt_restart_handle(struct notifier_block *this, unsigned long mode,
 	/* loop until the watchdog fires */
 	while (true)
 		;
-
-	return NOTIFY_DONE;
 }
-
-static struct notifier_block wdt_restart_handler = {
-	.notifier_call = wdt_restart_handle,
-	.priority = 128,
-};
 
 /*
  *	Notifier for system down
  */
 
-static int wdt_notify_sys(struct notifier_block *this,
-					unsigned long code, void *unused)
+static void wdt_notify_sys(struct reboot_prep_data *data)
 {
-	if (code == SYS_DOWN || code == SYS_HALT)
+	if (data->mode == SYS_DOWN || data->mode == SYS_HALT)
 		wdt_turnoff();
-
-	return NOTIFY_DONE;
 }
 
 /*
@@ -343,8 +332,9 @@ static int wdt_notify_sys(struct notifier_block *this,
  *	turn the timebomb registers off.
  */
 
-static struct notifier_block wdt_notifier = {
-	.notifier_call = wdt_notify_sys,
+static struct sys_off_handler wdt_sys_off = {
+	.reboot_prepare_cb = wdt_notify_sys,
+	.restart_cb = wdt_restart_handle,
 };
 
 static void __exit alim7101_wdt_unload(void)
@@ -352,8 +342,7 @@ static void __exit alim7101_wdt_unload(void)
 	wdt_turnoff();
 	/* Deregister */
 	misc_deregister(&wdt_miscdev);
-	unregister_reboot_notifier(&wdt_notifier);
-	unregister_restart_handler(&wdt_restart_handler);
+	unregister_sys_off_handler(&wdt_sys_off);
 	pci_dev_put(alim7101_pmu);
 }
 
@@ -400,23 +389,17 @@ static int __init alim7101_wdt_init(void)
 			timeout);
 	}
 
-	rc = register_reboot_notifier(&wdt_notifier);
+	rc = register_sys_off_handler(&wdt_sys_off);
 	if (rc) {
-		pr_err("cannot register reboot notifier (err=%d)\n", rc);
+		pr_err("cannot register sys-off notifier (err=%d)\n", rc);
 		goto err_out;
-	}
-
-	rc = register_restart_handler(&wdt_restart_handler);
-	if (rc) {
-		pr_err("cannot register restart handler (err=%d)\n", rc);
-		goto err_out_reboot;
 	}
 
 	rc = misc_register(&wdt_miscdev);
 	if (rc) {
 		pr_err("cannot register miscdev on minor=%d (err=%d)\n",
 		       wdt_miscdev.minor, rc);
-		goto err_out_restart;
+		goto err_out_sys_off;
 	}
 
 	if (nowayout)
@@ -426,10 +409,8 @@ static int __init alim7101_wdt_init(void)
 		timeout, nowayout);
 	return 0;
 
-err_out_restart:
-	unregister_restart_handler(&wdt_restart_handler);
-err_out_reboot:
-	unregister_reboot_notifier(&wdt_notifier);
+err_out_sys_off:
+	unregister_sys_off_handler(&wdt_sys_off);
 err_out:
 	pci_dev_put(alim7101_pmu);
 	return rc;
