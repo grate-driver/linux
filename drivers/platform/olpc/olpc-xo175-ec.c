@@ -247,6 +247,8 @@ struct olpc_xo175_ec {
 	/* Debug handling. */
 	char logbuf[LOG_BUF_SIZE];
 	int logbuf_len;
+
+	struct sys_off_handler sys_off;
 };
 
 static struct platform_device *olpc_ec;
@@ -581,7 +583,7 @@ static int olpc_xo175_ec_set_event_mask(unsigned int mask)
 	return olpc_ec_cmd(CMD_WRITE_EXT_SCI_MASK, args, 2, NULL, 0);
 }
 
-static void olpc_xo175_ec_power_off(void)
+static void olpc_xo175_ec_power_off(struct power_off_data *data)
 {
 	while (1) {
 		olpc_ec_cmd(CMD_POWER_OFF, NULL, 0, NULL, 0);
@@ -650,9 +652,9 @@ static struct olpc_ec_driver olpc_xo175_ec_driver = {
 
 static int olpc_xo175_ec_remove(struct spi_device *spi)
 {
-	if (pm_power_off == olpc_xo175_ec_power_off)
-		pm_power_off = NULL;
+	struct olpc_xo175_ec *priv = spi_get_drvdata(spi);
 
+	unregister_sys_off_handler(&priv->sys_off);
 	spi_slave_abort(spi);
 
 	platform_device_unregister(olpc_ec);
@@ -717,8 +719,8 @@ static int olpc_xo175_ec_probe(struct spi_device *spi)
 	/* Enable all EC events while we're awake */
 	olpc_xo175_ec_set_event_mask(EC_ALL_EVENTS);
 
-	if (pm_power_off == NULL)
-		pm_power_off = olpc_xo175_ec_power_off;
+	priv->sys_off.power_off_cb = olpc_xo175_ec_power_off;
+	register_sys_off_handler(&priv->sys_off);
 
 	dev_info(&spi->dev, "OLPC XO-1.75 Embedded Controller driver\n");
 
