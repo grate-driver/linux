@@ -83,7 +83,7 @@ struct ti_sci_desc {
  * struct ti_sci_info - Structure representing a TI SCI instance
  * @dev:	Device pointer
  * @desc:	SoC description for this instance
- * @nb:	Reboot Notifier block
+ * @sys_off:	Reboot Notifier
  * @d:		Debugfs file entry
  * @debug_region: Memory region where the debug message are available
  * @debug_region_size: Debug region size
@@ -99,7 +99,7 @@ struct ti_sci_desc {
  */
 struct ti_sci_info {
 	struct device *dev;
-	struct notifier_block nb;
+	struct sys_off_handler sys_off;
 	const struct ti_sci_desc *desc;
 	struct dentry *d;
 	void __iomem *debug_region;
@@ -119,7 +119,6 @@ struct ti_sci_info {
 
 #define cl_to_ti_sci_info(c)	container_of(c, struct ti_sci_info, cl)
 #define handle_to_ti_sci_info(h) container_of(h, struct ti_sci_info, handle)
-#define reboot_to_ti_sci_info(n) container_of(n, struct ti_sci_info, nb)
 
 #ifdef CONFIG_DEBUG_FS
 
@@ -3252,16 +3251,11 @@ devm_ti_sci_get_resource(const struct ti_sci_handle *handle, struct device *dev,
 }
 EXPORT_SYMBOL_GPL(devm_ti_sci_get_resource);
 
-static int tisci_reboot_handler(struct notifier_block *nb, unsigned long mode,
-				void *cmd)
+static void tisci_restart_handler(struct restart_data *data)
 {
-	struct ti_sci_info *info = reboot_to_ti_sci_info(nb);
-	const struct ti_sci_handle *handle = &info->handle;
+	const struct ti_sci_handle *handle = data->cb_data;
 
 	ti_sci_cmd_core_reboot(handle);
-
-	/* call fail OR pass, we should not be here in the first place */
-	return NOTIFY_BAD;
 }
 
 /* Description for K2G */
@@ -3406,10 +3400,11 @@ static int ti_sci_probe(struct platform_device *pdev)
 	ti_sci_setup_ops(info);
 
 	if (reboot) {
-		info->nb.notifier_call = tisci_reboot_handler;
-		info->nb.priority = 128;
+		info->sys_off.restart_chaining_disallowed = true;
+		info->sys_off.restart_cb = tisci_restart_handler;
+		info->sys_off.cb_data = &info->handle;
 
-		ret = register_restart_handler(&info->nb);
+		ret = register_sys_off_handler(&info->sys_off);
 		if (ret) {
 			dev_err(dev, "reboot registration fail(%d)\n", ret);
 			return ret;
@@ -3445,8 +3440,8 @@ static int ti_sci_remove(struct platform_device *pdev)
 
 	info = platform_get_drvdata(pdev);
 
-	if (info->nb.notifier_call)
-		unregister_restart_handler(&info->nb);
+	if (info->sys_off.restart_cb)
+		unregister_sys_off_handler(&info->sys_off);
 
 	mutex_lock(&ti_sci_list_mutex);
 	if (info->users)
