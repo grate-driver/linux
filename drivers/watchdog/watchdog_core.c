@@ -152,38 +152,31 @@ int watchdog_init_timeout(struct watchdog_device *wdd,
 }
 EXPORT_SYMBOL_GPL(watchdog_init_timeout);
 
-static int watchdog_reboot_notifier(struct notifier_block *nb,
-				    unsigned long code, void *data)
+static void watchdog_reboot_notifier(struct reboot_prep_data *data)
 {
-	struct watchdog_device *wdd;
+	struct watchdog_device *wdd = data->cb_data;
 
-	wdd = container_of(nb, struct watchdog_device, reboot_nb);
-	if (code == SYS_DOWN || code == SYS_HALT) {
+	if (data->mode == SYS_DOWN || data->mode == SYS_HALT) {
 		if (watchdog_active(wdd) || watchdog_hw_running(wdd)) {
 			int ret;
 
 			ret = wdd->ops->stop(wdd);
-			if (ret)
-				return NOTIFY_BAD;
+			if (ret) {
+				data->stop_chain = true;
+				return;
+			}
 		}
 	}
-
-	return NOTIFY_DONE;
 }
 
-static int watchdog_restart_notifier(struct notifier_block *nb,
-				     unsigned long action, void *data)
+static void watchdog_restart_notifier(struct restart_data *data)
 {
-	struct watchdog_device *wdd = container_of(nb, struct watchdog_device,
-						   restart_nb);
-
+	struct watchdog_device *wdd = data->cb_data;
 	int ret;
 
-	ret = wdd->ops->restart(wdd, action, data);
+	ret = wdd->ops->restart(wdd, data->mode, (void *)data->cmd);
 	if (ret)
-		return NOTIFY_BAD;
-
-	return NOTIFY_DONE;
+		data->stop_chain = true;
 }
 
 static int watchdog_pm_notifier(struct notifier_block *nb, unsigned long mode,
@@ -229,7 +222,7 @@ static int watchdog_pm_notifier(struct notifier_block *nb, unsigned long mode,
  */
 void watchdog_set_restart_priority(struct watchdog_device *wdd, int priority)
 {
-	wdd->restart_nb.priority = priority;
+	wdd->sys_off.restart_priority = priority;
 }
 EXPORT_SYMBOL_GPL(watchdog_set_restart_priority);
 
@@ -294,30 +287,37 @@ static int __watchdog_register_device(struct watchdog_device *wdd)
 			clear_bit(WDOG_STOP_ON_REBOOT, &wdd->status);
 	}
 
+	wdd->sys_off.cb_data = wdd;
+
+	if (wdd->ops->restart) {
+		/*
+		 * Older restart handler used zero for the lowest priority
+		 * by default. Zero priority is reserved for sys-off handlers
+		 * and falls back to default 128. Use the low priority level
+		 * instead to preserve the old behaviour.
+		 */
+		if (!wdd->sys_off.restart_priority)
+			wdd->sys_off.restart_priority = RESTART_PRIO_LOW;
+
+		wdd->sys_off.restart_cb = watchdog_restart_notifier;
+	}
+
 	if (test_bit(WDOG_STOP_ON_REBOOT, &wdd->status)) {
 		if (!wdd->ops->stop)
 			pr_warn("watchdog%d: stop_on_reboot not supported\n", wdd->id);
-		else {
-			wdd->reboot_nb.notifier_call = watchdog_reboot_notifier;
-
-			ret = register_reboot_notifier(&wdd->reboot_nb);
-			if (ret) {
-				pr_err("watchdog%d: Cannot register reboot notifier (%d)\n",
-					wdd->id, ret);
-				watchdog_dev_unregister(wdd);
-				ida_simple_remove(&watchdog_ida, id);
-				return ret;
-			}
-		}
+		else
+			wdd->sys_off.reboot_prepare_cb = watchdog_reboot_notifier;
 	}
 
-	if (wdd->ops->restart) {
-		wdd->restart_nb.notifier_call = watchdog_restart_notifier;
-
-		ret = register_restart_handler(&wdd->restart_nb);
-		if (ret)
-			pr_warn("watchdog%d: Cannot register restart handler (%d)\n",
-				wdd->id, ret);
+	if (wdd->sys_off.restart_cb || wdd->sys_off.reboot_prepare_cb) {
+		ret = register_sys_off_handler(&wdd->sys_off);
+		if (ret) {
+			pr_err("watchdog%d: Cannot register sys-off handler (%d)\n",
+			       wdd->id, ret);
+			watchdog_dev_unregister(wdd);
+			ida_simple_remove(&watchdog_ida, id);
+			return ret;
+		}
 	}
 
 	if (test_bit(WDOG_NO_PING_ON_SUSPEND, &wdd->status)) {
@@ -371,11 +371,8 @@ static void __watchdog_unregister_device(struct watchdog_device *wdd)
 	if (wdd == NULL)
 		return;
 
-	if (wdd->ops->restart)
-		unregister_restart_handler(&wdd->restart_nb);
-
-	if (test_bit(WDOG_STOP_ON_REBOOT, &wdd->status))
-		unregister_reboot_notifier(&wdd->reboot_nb);
+	if (wdd->sys_off.restart_cb || wdd->sys_off.reboot_prepare_cb)
+		unregister_sys_off_handler(&wdd->sys_off);
 
 	watchdog_dev_unregister(wdd);
 	ida_simple_remove(&watchdog_ida, wdd->id);
