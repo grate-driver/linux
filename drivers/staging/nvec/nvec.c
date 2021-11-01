@@ -26,6 +26,7 @@
 #include <linux/mfd/core.h>
 #include <linux/mutex.h>
 #include <linux/notifier.h>
+#include <linux/reboot.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
@@ -72,8 +73,6 @@ enum nvec_sleep_subcmds {
 #define GET_FIRMWARE_VERSION 0x15
 #define LID_SWITCH BIT(1)
 #define PWR_BUTTON BIT(15)
-
-static struct nvec_chip *nvec_power_handle;
 
 static const struct mfd_cell nvec_devices[] = {
 	{
@@ -753,8 +752,9 @@ static void nvec_disable_i2c_slave(struct nvec_chip *nvec)
 }
 #endif
 
-static void nvec_power_off(void)
+static void nvec_power_off(void *data)
 {
+	struct nvec_chip *nvec_power_handle = data;
 	char ap_pwr_down[] = { NVEC_SLEEP, AP_PWR_DOWN };
 
 	nvec_toggle_global_events(nvec_power_handle, false);
@@ -848,8 +848,9 @@ static int tegra_nvec_probe(struct platform_device *pdev)
 	nvec->nvec_status_notifier.notifier_call = nvec_status_notifier;
 	nvec_register_notifier(nvec, &nvec->nvec_status_notifier, 0);
 
-	nvec_power_handle = nvec;
-	pm_power_off = nvec_power_off;
+	err = devm_register_simple_power_off_handler(dev, nvec_power_off, nvec);
+	if (err)
+		return err;
 
 	/* Get Firmware Version */
 	err = nvec_write_sync(nvec, get_firmware_version, 2, &msg);
@@ -891,8 +892,6 @@ static int tegra_nvec_remove(struct platform_device *pdev)
 	nvec_unregister_notifier(nvec, &nvec->nvec_status_notifier);
 	cancel_work_sync(&nvec->rx_work);
 	cancel_work_sync(&nvec->tx_work);
-	/* FIXME: needs check whether nvec is responsible for power off */
-	pm_power_off = NULL;
 
 	return 0;
 }
