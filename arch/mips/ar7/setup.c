@@ -6,6 +6,7 @@
 #include <linux/init.h>
 #include <linux/ioport.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/time.h>
 
 #include <asm/reboot.h>
@@ -79,7 +80,7 @@ void __init plat_mem_setup(void)
 
 	_machine_restart = ar7_machine_restart;
 	_machine_halt = ar7_machine_halt;
-	pm_power_off = ar7_machine_power_off;
+	register_platform_power_off(ar7_machine_power_off);
 
 	io_base = (unsigned long)ioremap(AR7_REGS_BASE, 0x10000);
 	if (!io_base)
