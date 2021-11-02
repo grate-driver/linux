@@ -168,9 +168,6 @@ void machine_power_off(void)
 /* Used by the G5 thermal driver */
 EXPORT_SYMBOL_GPL(machine_power_off);
 
-void (*pm_power_off)(void);
-EXPORT_SYMBOL_GPL(pm_power_off);
-
 void machine_halt(void)
 {
 	machine_shutdown();
