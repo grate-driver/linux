@@ -12,6 +12,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
+#include <linux/reboot.h>
 #include <linux/regulator/machine.h>
 #include <linux/scatterlist.h>
 #include <linux/irq.h>
@@ -114,7 +115,7 @@ void __init x86_intel_mid_early_setup(void)
 	 */
 	x86_init.acpi.reduced_hw_early_init = x86_init_noop;
 
-	pm_power_off = intel_mid_power_off;
+	register_platform_power_off(intel_mid_power_off);
 	machine_ops.emergency_restart  = intel_mid_reboot;
 
 	/* Avoid searching for BIOS MP tables */
