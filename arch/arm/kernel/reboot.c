@@ -16,12 +16,6 @@
 typedef void (*phys_reset_t)(unsigned long, bool);
 
 /*
- * Function pointers to optional machine specific functions
- */
-void (*pm_power_off)(void);
-EXPORT_SYMBOL(pm_power_off);
-
-/*
  * A temporary stack to use for CPU reset. This is static so that we
  * don't clobber it with the identity mapping. When running with this
  * stack, any references to the current task *will not work* so you
