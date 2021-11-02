@@ -7,6 +7,7 @@
  */
 #include <linux/linkage.h>
 #include <linux/init.h>
+#include <linux/reboot.h>
 #include <linux/rtc/ds1286.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
@@ -187,7 +188,7 @@ static int __init reboot_setup(void)
 
 	_machine_restart = sgi_machine_restart;
 	_machine_halt = sgi_machine_halt;
-	pm_power_off = sgi_machine_power_off;
+	register_platform_power_off(sgi_machine_power_off);
 
 	res = request_irq(SGI_PANEL_IRQ, panel_int, 0, "Front Panel", NULL);
 	if (res) {
