@@ -13,6 +13,7 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/ata_platform.h>
 #include <linux/types.h>
 #include <linux/mtd/physmap.h>
@@ -382,7 +383,7 @@ static void __init highlander_setup(char **cmdline_p)
 
 	__raw_writew(__raw_readw(PA_IVDRCTL) | 0x01, PA_IVDRCTL);	/* Si13112 */
 
-	pm_power_off = r7780rp_power_off;
+	register_platform_power_off(r7780rp_power_off);
 }
 
 static unsigned char irl2irq[HL_NR_IRL];
