@@ -42,6 +42,7 @@
 #include <linux/pmu.h>
 #include <linux/irq.h>
 #include <linux/seq_file.h>
+#include <linux/reboot.h>
 #include <linux/root_dev.h>
 #include <linux/bitops.h>
 #include <linux/suspend.h>
@@ -584,7 +585,7 @@ static int __init pmac_probe(void)
 	DMA_MODE_WRITE = 2;
 #endif /* CONFIG_PPC32 */
 
-	pm_power_off = pmac_power_off;
+	register_platform_power_off(pmac_power_off);
 
 	pmac_init();
 
