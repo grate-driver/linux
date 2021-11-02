@@ -9,6 +9,7 @@
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/fs.h>
+#include <linux/reboot.h>
 #include <linux/root_dev.h>
 #include <linux/console.h>
 #include <linux/export.h>
@@ -269,7 +270,7 @@ static int __init ps3_probe(void)
 
 	ps3_os_area_save_params();
 
-	pm_power_off = ps3_power_off;
+	register_platform_power_off(ps3_power_off);
 
 	DBG(" <- %s:%d\n", __func__, __LINE__);
 	return 1;
