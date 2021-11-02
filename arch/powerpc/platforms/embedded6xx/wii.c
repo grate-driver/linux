@@ -15,6 +15,7 @@
 #include <linux/seq_file.h>
 #include <linux/of_platform.h>
 #include <linux/memblock.h>
+#include <linux/reboot.h>
 #include <mm/mmu_decl.h>
 
 #include <asm/io.h>
@@ -159,7 +160,7 @@ static int __init wii_probe(void)
 	if (!of_machine_is_compatible("nintendo,wii"))
 		return 0;
 
-	pm_power_off = wii_power_off;
+	register_platform_power_off(wii_power_off);
 
 	ug_udbg_init();
 
