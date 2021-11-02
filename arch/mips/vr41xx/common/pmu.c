@@ -10,6 +10,7 @@
 #include <linux/ioport.h>
 #include <linux/kernel.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/sched.h>
 #include <linux/types.h>
 
@@ -115,7 +116,7 @@ static int __init vr41xx_pmu_init(void)
 	cpu_wait = vr41xx_cpu_wait;
 	_machine_restart = vr41xx_restart;
 	_machine_halt = vr41xx_halt;
-	pm_power_off = vr41xx_halt;
+	register_platform_power_off(vr41xx_halt);
 
 	return 0;
 }
