@@ -26,6 +26,7 @@
 #include <linux/gpio/machine.h>
 #include <linux/gpio_keys.h>
 #include <linux/delay.h>
+#include <linux/reboot.h>
 #include <linux/regulator/machine.h>
 #include <linux/platform_data/i2c-pxa.h>
 
@@ -739,7 +740,7 @@ static void __init z2_init(void)
 	z2_keys_init();
 	z2_pmic_init();
 
-	pm_power_off = z2_power_off;
+	register_platform_power_off(z2_power_off);
 }
 
 MACHINE_START(ZIPIT2, "Zipit Z2")

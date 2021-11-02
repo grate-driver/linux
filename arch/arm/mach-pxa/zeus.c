@@ -29,6 +29,7 @@
 #include <linux/platform_data/pca953x.h>
 #include <linux/apm-emulation.h>
 #include <linux/regulator/fixed.h>
+#include <linux/reboot.h>
 #include <linux/regulator/machine.h>
 
 #include <asm/mach-types.h>
@@ -876,7 +877,7 @@ static void __init zeus_init(void)
 	__raw_writel(msc0, MSC0);
 	__raw_writel(msc1, MSC1);
 
-	pm_power_off = zeus_power_off;
+	register_platform_power_off(zeus_power_off);
 	zeus_setup_apm();
 
 	pxa2xx_mfp_config(ARRAY_AND_SIZE(zeus_pin_config));
