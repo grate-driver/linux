@@ -13,6 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/initrd.h>
 #include <linux/of_platform.h>
+#include <linux/reboot.h>
 
 #include <asm/time.h>
 #include <asm/prom.h>
@@ -147,7 +148,7 @@ static int __init linkstation_probe(void)
 	if (!of_machine_is_compatible("linkstation"))
 		return 0;
 
-	pm_power_off = linkstation_power_off;
+	register_platform_power_off(linkstation_power_off);
 
 	return 1;
 }
