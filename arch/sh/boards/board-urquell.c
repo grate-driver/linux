@@ -10,6 +10,7 @@
  */
 #include <linux/init.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/fb.h>
 #include <linux/smc91x.h>
 #include <linux/mtd/physmap.h>
@@ -201,7 +202,7 @@ static void __init urquell_setup(char **cmdline_p)
 {
 	printk(KERN_INFO "Renesas Technology Corp. Urquell support.\n");
 
-	pm_power_off = urquell_power_off;
+	register_platform_power_off(urquell_power_off);
 
 	register_smp_ops(&shx3_smp_ops);
 }
