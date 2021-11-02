@@ -13,6 +13,7 @@
 #include <linux/kexec.h>
 #include <linux/seq_file.h>
 #include <linux/of_platform.h>
+#include <linux/reboot.h>
 
 #include <asm/io.h>
 #include <asm/machdep.h>
@@ -54,7 +55,7 @@ static int __init gamecube_probe(void)
 	if (!of_machine_is_compatible("nintendo,gamecube"))
 		return 0;
 
-	pm_power_off = gamecube_power_off;
+	register_platform_power_off(gamecube_power_off);
 
 	ug_udbg_init();
 
