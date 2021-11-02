@@ -349,12 +349,6 @@ void machine_power_off(void)
 	_machine_power_off();
 }
 
-/*
- * Dummy power off function.
- */
-void (*pm_power_off)(void) = machine_power_off;
-EXPORT_SYMBOL_GPL(pm_power_off);
-
 void *restart_stack;
 
 unsigned long stack_alloc(void)
