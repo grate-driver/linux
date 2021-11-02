@@ -1045,7 +1045,7 @@ static int __init pSeries_probe(void)
 	    of_machine_is_compatible("IBM,CBEA"))
 		return 0;
 
-	pm_power_off = pseries_power_off;
+	register_platform_power_off(pseries_power_off);
 
 	pr_debug("Machine is%s LPAR !\n",
 	         (powerpc_firmware_features & FW_FEATURE_LPAR) ? "" : " not");
