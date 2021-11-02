@@ -118,7 +118,7 @@ static int gpio_halt_probe(struct platform_device *pdev)
 
 	/* Register our halt function */
 	ppc_md.halt = gpio_halt_cb;
-	pm_power_off = gpio_halt_cb;
+	register_platform_power_off(gpio_halt_cb);
 
 	printk(KERN_INFO "gpio-halt: registered GPIO %d (%d trigger, %d"
 	       " irq).\n", gpio, trigger, irq);
@@ -132,10 +132,11 @@ static int gpio_halt_remove(struct platform_device *pdev)
 		int gpio = of_get_gpio(halt_node, 0);
 		int irq = irq_of_parse_and_map(halt_node, 0);
 
+		unregister_platform_power_off(gpio_halt_cb);
+
 		free_irq(irq, halt_node);
 
 		ppc_md.halt = NULL;
-		pm_power_off = NULL;
 
 		gpio_free(gpio);
 
