@@ -9,6 +9,7 @@
 
 #include <linux/kernel.h>
 #include <linux/pci.h>
+#include <linux/reboot.h>
 #include <linux/kdev_t.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
@@ -161,7 +162,7 @@ static int __init corenet_generic_probe(void)
 
 			ppc_md.get_irq = ehv_pic_get_irq;
 			ppc_md.restart = fsl_hv_restart;
-			pm_power_off = fsl_hv_halt;
+			register_platform_power_off(fsl_hv_halt);
 			ppc_md.halt = fsl_hv_halt;
 #ifdef CONFIG_SMP
 			/*
