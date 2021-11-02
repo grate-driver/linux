@@ -19,6 +19,3 @@ void machine_halt(void)
 void machine_restart(char *cmd)
 {
 }
-
-void (*pm_power_off)(void) = NULL;
-EXPORT_SYMBOL(pm_power_off);
