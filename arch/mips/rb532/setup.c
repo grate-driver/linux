@@ -5,6 +5,7 @@
 
 #include <linux/init.h>
 #include <linux/export.h>
+#include <linux/reboot.h>
 
 #include <asm/bootinfo.h>
 #include <asm/reboot.h>
@@ -45,7 +46,7 @@ void __init plat_mem_setup(void)
 
 	_machine_restart = rb_machine_restart;
 	_machine_halt = rb_machine_halt;
-	pm_power_off = rb_machine_halt;
+	register_platform_power_off(rb_machine_halt);
 
 	set_io_port_base(KSEG1);
 
