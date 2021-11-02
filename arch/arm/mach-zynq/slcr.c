@@ -87,15 +87,9 @@ u32 zynq_slcr_get_device_id(void)
 /**
  * zynq_slcr_system_restart - Restart the entire system.
  *
- * @nb:		Pointer to restart notifier block (unused)
- * @action:	Reboot mode (unused)
- * @data:	Restart handler private data (unused)
- *
- * Return:	0 always
+ * @data:	Restart handler data (unused)
  */
-static
-int zynq_slcr_system_restart(struct notifier_block *nb,
-			     unsigned long action, void *data)
+static void zynq_slcr_system_restart(struct restart_data *data)
 {
 	u32 reboot;
 
@@ -107,12 +101,11 @@ int zynq_slcr_system_restart(struct notifier_block *nb,
 	zynq_slcr_read(&reboot, SLCR_REBOOT_STATUS_OFFSET);
 	zynq_slcr_write(reboot & 0xF0FFFFFF, SLCR_REBOOT_STATUS_OFFSET);
 	zynq_slcr_write(1, SLCR_PS_RST_CTRL_OFFSET);
-	return 0;
 }
 
-static struct notifier_block zynq_slcr_restart_nb = {
-	.notifier_call	= zynq_slcr_system_restart,
-	.priority	= 192,
+static struct sys_off_handler zynq_slcr_sys_off = {
+	.restart_cb = zynq_slcr_system_restart,
+	.restart_priority = RESTART_PRIO_HIGH,
 };
 
 /**
@@ -222,7 +215,7 @@ int __init zynq_early_slcr_init(void)
 	/* See AR#54190 design advisory */
 	regmap_update_bits(zynq_slcr_regmap, SLCR_L2C_RAM, 0x70707, 0x20202);
 
-	register_restart_handler(&zynq_slcr_restart_nb);
+	register_sys_off_handler(&zynq_slcr_sys_off);
 
 	pr_info("%pOFn mapped to %p\n", np, zynq_slcr_base);
 
