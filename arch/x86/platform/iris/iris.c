@@ -11,6 +11,7 @@
 #include <linux/moduleparam.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/delay.h>
@@ -33,8 +34,6 @@ static bool force;
 module_param(force, bool, 0);
 MODULE_PARM_DESC(force, "Set to one to force poweroff handler installation.");
 
-static void (*old_pm_power_off)(void);
-
 static void iris_power_off(void)
 {
 	outb(IRIS_GIO_PULSE, IRIS_GIO_OUTPUT);
@@ -56,15 +55,14 @@ static int iris_probe(struct platform_device *pdev)
 			"Power off handler not installed.\n");
 		return -ENODEV;
 	}
-	old_pm_power_off = pm_power_off;
-	pm_power_off = &iris_power_off;
+	register_platform_power_off(iris_power_off);
 	printk(KERN_INFO "Iris power_off handler installed.\n");
 	return 0;
 }
 
 static int iris_remove(struct platform_device *pdev)
 {
-	pm_power_off = old_pm_power_off;
+	unregister_platform_power_off(iris_power_off);
 	printk(KERN_INFO "Iris power_off handler uninstalled.\n");
 	return 0;
 }
