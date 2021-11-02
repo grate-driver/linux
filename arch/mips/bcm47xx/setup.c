@@ -34,6 +34,7 @@
 #include <linux/ethtool.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
+#include <linux/reboot.h>
 #include <linux/ssb/ssb.h>
 #include <linux/ssb/ssb_embedded.h>
 #include <linux/bcma/bcma_soc.h>
@@ -170,7 +171,7 @@ void __init plat_mem_setup(void)
 
 	_machine_restart = bcm47xx_machine_restart;
 	_machine_halt = bcm47xx_machine_halt;
-	pm_power_off = bcm47xx_machine_halt;
+	register_platform_power_off(bcm47xx_machine_halt);
 }
 
 #ifdef CONFIG_BCM47XX_BCMA
