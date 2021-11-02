@@ -12,6 +12,7 @@
 #include <linux/init.h>
 #include <generated/utsrelease.h>
 #include <linux/pci.h>
+#include <linux/reboot.h>
 #include <linux/of.h>
 #include <asm/dma.h>
 #include <asm/prom.h>
@@ -206,7 +207,7 @@ static int __init efika_probe(void)
 	DMA_MODE_READ = 0x44;
 	DMA_MODE_WRITE = 0x48;
 
-	pm_power_off = rtas_power_off;
+	register_platform_power_off(rtas_power_off);
 
 	return 1;
 }
