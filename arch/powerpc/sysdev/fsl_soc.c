@@ -155,23 +155,19 @@ EXPORT_SYMBOL(get_baudrate);
 #if defined(CONFIG_FSL_SOC_BOOKE) || defined(CONFIG_PPC_86xx)
 static __be32 __iomem *rstcr;
 
-static int fsl_rstcr_restart(struct notifier_block *this,
-			     unsigned long mode, void *cmd)
+static void fsl_rstcr_restart(struct restart_data *data)
 {
 	local_irq_disable();
 	/* set reset control register */
 	out_be32(rstcr, 0x2);	/* HRESET_REQ */
-
-	return NOTIFY_DONE;
 }
 
 static int __init setup_rstcr(void)
 {
 	struct device_node *np;
 
-	static struct notifier_block restart_handler = {
-		.notifier_call = fsl_rstcr_restart,
-		.priority = 128,
+	static struct sys_off_handler restart_handler = {
+		.restart_cb = fsl_rstcr_restart,
 	};
 
 	for_each_node_by_name(np, "global-utilities") {
@@ -181,7 +177,7 @@ static int __init setup_rstcr(void)
 				printk (KERN_ERR "Error: reset control "
 						"register not mapped!\n");
 			} else {
-				register_restart_handler(&restart_handler);
+				register_sys_off_handler(&restart_handler);
 			}
 			break;
 		}
