@@ -18,6 +18,7 @@
 #include <linux/pci.h>
 #include <linux/of_platform.h>
 #include <linux/gfp.h>
+#include <linux/reboot.h>
 
 #include <asm/prom.h>
 #include <asm/iommu.h>
@@ -430,7 +431,7 @@ static int __init pas_probe(void)
 	 * change the machine definition to fit
 	 */
 	if (of_machine_is_compatible("pasemi,nemo")) {
-		pm_power_off		= pas_shutdown;
+		register_platform_power_off(pas_shutdown);
 		ppc_md.name		= "A-EON Amigaone X1000";
 	}
 #endif
