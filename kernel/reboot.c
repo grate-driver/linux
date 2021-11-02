@@ -293,19 +293,6 @@ EXPORT_SYMBOL_GPL(kernel_halt);
  */
 static BLOCKING_NOTIFIER_HEAD(power_off_handler_list);
 
-/*
- * Temporary stub that prevents linkage failure while we're in process
- * of removing all uses of legacy pm_power_off() around the kernel.
- */
-void __weak (*pm_power_off)(void);
-
-static void dummy_pm_power_off(void)
-{
-	/* temporary stub until pm_power_off() is gone, see more below */
-}
-
-static struct notifier_block *pm_power_off_nb;
-
 /**
  *	register_power_off_handler - Register function to be called to power off
  *				     the system
@@ -350,11 +337,8 @@ static int register_power_off_handler(struct notifier_block *nb)
 	int ret;
 
 	ret = blocking_notifier_chain_register_unique_prio(&power_off_handler_list, nb);
-	if (ret && ret != -EBUSY)
+	if (ret != -EBUSY)
 		return ret;
-
-	if (!ret)
-		goto set_pm_power_off;
 
 	/*
 	 * Handler must have unique priority. Otherwise call order is
@@ -365,33 +349,11 @@ static int register_power_off_handler(struct notifier_block *nb)
 	 */
 	pr_err("failed to register power-off handler using unique priority\n");
 
-	ret = blocking_notifier_chain_register(&power_off_handler_list, nb);
-	if (ret)
-		return ret;
-
-	/*
-	 * Some drivers check whether pm_power_off was already installed.
-	 * Install dummy callback using new API to preserve old behaviour
-	 * for those drivers during period of transition to the new API.
-	 */
-set_pm_power_off:
-	if (!pm_power_off) {
-		pm_power_off = dummy_pm_power_off;
-		pm_power_off_nb = nb;
-	}
-
-	return 0;
+	return blocking_notifier_chain_register(&power_off_handler_list, nb);
 }
 
 static int unregister_power_off_handler(struct notifier_block *nb)
 {
-	if (nb == pm_power_off_nb) {
-		if (pm_power_off == dummy_pm_power_off)
-			pm_power_off = NULL;
-
-		pm_power_off_nb = NULL;
-	}
-
 	return blocking_notifier_chain_unregister(&power_off_handler_list, nb);
 }
 
@@ -809,10 +771,6 @@ EXPORT_SYMBOL_GPL(unregister_platform_power_off);
  */
 void do_kernel_power_off(void)
 {
-	/* legacy pm_power_off() is unchained and has highest priority */
-	if (pm_power_off && pm_power_off != dummy_pm_power_off)
-		return pm_power_off();
-
 	blocking_notifier_call_chain(&power_off_handler_list, POWEROFF_NORMAL,
 				     NULL);
 }
@@ -842,8 +800,7 @@ EXPORT_SYMBOL_GPL(kernel_power_off);
 
 bool kernel_can_power_off(void)
 {
-	if (!pm_power_off &&
-	    blocking_notifier_call_chain_is_empty(&power_off_handler_list))
+	if (blocking_notifier_call_chain_is_empty(&power_off_handler_list))
 		return false;
 
 	return true;
