@@ -197,6 +197,7 @@
 #include <linux/module.h>
 
 #include <linux/poll.h>
+#include <linux/reboot.h>
 #include <linux/types.h>
 #include <linux/stddef.h>
 #include <linux/timer.h>
@@ -1836,7 +1837,7 @@ static int apm(void *unused)
 
 	/* Install our power off handler.. */
 	if (power_off)
-		pm_power_off = apm_power_off;
+		register_platform_power_off(apm_power_off);
 
 	if (num_online_cpus() == 1 || smp) {
 #if defined(CONFIG_APM_DISPLAY_BLANK) && defined(CONFIG_VT)
@@ -2399,7 +2400,7 @@ static void __exit apm_exit(void)
 	misc_deregister(&apm_device);
 	remove_proc_entry("apm", NULL);
 	if (power_off)
-		pm_power_off = NULL;
+		unregister_platform_power_off(apm_power_off);
 	if (kapmd_task) {
 		kthread_stop(kapmd_task);
 		kapmd_task = NULL;
