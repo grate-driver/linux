@@ -26,6 +26,3 @@ void machine_power_off(void)
 	/* FIXME ::  power off ??? */
 	machine_halt();
 }
-
-void (*pm_power_off) (void) = NULL;
-EXPORT_SYMBOL(pm_power_off);
