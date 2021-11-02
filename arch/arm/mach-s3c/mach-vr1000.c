@@ -34,6 +34,7 @@
 #include <linux/platform_data/leds-s3c24xx.h>
 #include <linux/platform_data/i2c-s3c2410.h>
 #include <linux/platform_data/asoc-s3c24xx_simtec.h>
+#include <linux/reboot.h>
 
 #include "regs-gpio.h"
 #include "gpio-samsung.h"
@@ -322,7 +323,7 @@ static void vr1000_power_off(void)
 
 static void __init vr1000_map_io(void)
 {
-	pm_power_off = vr1000_power_off;
+	register_platform_power_off(vr1000_power_off);
 
 	s3c24xx_init_io(vr1000_iodesc, ARRAY_SIZE(vr1000_iodesc));
 	s3c24xx_init_uarts(vr1000_uartcfgs, ARRAY_SIZE(vr1000_uartcfgs));
