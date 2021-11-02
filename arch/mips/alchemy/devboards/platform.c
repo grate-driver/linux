@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 
 #include <asm/bootinfo.h>
 #include <asm/idle.h>
@@ -51,8 +52,8 @@ static void db1x_reset(char *c)
 
 static int __init db1x_late_setup(void)
 {
-	if (!pm_power_off)
-		pm_power_off = db1x_power_off;
+	if (!kernel_can_power_off())
+		register_platform_power_off(db1x_power_off);
 	if (!_machine_halt)
 		_machine_halt = db1x_power_off;
 	if (!_machine_restart)
