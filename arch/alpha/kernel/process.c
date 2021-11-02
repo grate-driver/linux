@@ -43,12 +43,6 @@
 #include "proto.h"
 #include "pci_impl.h"
 
-/*
- * Power off function, if any
- */
-void (*pm_power_off)(void) = machine_power_off;
-EXPORT_SYMBOL(pm_power_off);
-
 #ifdef CONFIG_ALPHA_WTINT
 /*
  * Sleep the CPU.
