@@ -9,6 +9,7 @@
 #include <linux/kernel.h>
 #include <linux/tty.h>
 #include <linux/proc_fs.h>
+#include <linux/reboot.h>
 #include <linux/string.h>
 #include <linux/pm.h>
 #include <linux/platform_data/sa11x0-serial.h>
@@ -392,7 +393,7 @@ static int __init simpad_init(void)
 	if (ret)
 		printk(KERN_WARNING "simpad: Unable to register cs3 GPIO device");
 
-	pm_power_off = simpad_power_off;
+	register_platform_power_off(simpad_power_off);
 
 	sa11x0_register_pcmcia(-1, &simpad_cf_gpio_table);
 	sa11x0_ppc_configure_mcp();
