@@ -8,6 +8,7 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <asm/reboot.h>
 #include <linux/export.h>
 
@@ -32,7 +33,7 @@ unsigned char ltq_boot_select(void)
 #define WDT_PW1		0x00BE0000
 #define WDT_PW2		0x00DC0000
 
-static void machine_restart(char *command)
+static void falcon_restart(char *command)
 {
 	local_irq_disable();
 
@@ -52,13 +53,13 @@ static void machine_restart(char *command)
 	unreachable();
 }
 
-static void machine_halt(void)
+static void falcon_halt(void)
 {
 	local_irq_disable();
 	unreachable();
 }
 
-static void machine_power_off(void)
+static void falcon_power_off(void)
 {
 	local_irq_disable();
 	unreachable();
@@ -66,9 +67,9 @@ static void machine_power_off(void)
 
 static int __init mips_reboot_setup(void)
 {
-	_machine_restart = machine_restart;
-	_machine_halt = machine_halt;
-	pm_power_off = machine_power_off;
+	_machine_restart = falcon_restart;
+	_machine_halt = falcon_halt;
+	register_platform_power_off(falcon_power_off);
 	return 0;
 }
 
