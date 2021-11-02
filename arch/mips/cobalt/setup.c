@@ -15,6 +15,7 @@
 #include <linux/ioport.h>
 #include <linux/memblock.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 
 #include <asm/bootinfo.h>
 #include <asm/reboot.h>
@@ -79,7 +80,7 @@ void __init plat_mem_setup(void)
 
 	_machine_restart = cobalt_machine_restart;
 	_machine_halt = cobalt_machine_halt;
-	pm_power_off = cobalt_machine_halt;
+	register_platform_power_off(cobalt_machine_halt);
 
 	set_io_port_base(CKSEG1ADDR(GT_DEF_PCI0_IO_BASE));
 
