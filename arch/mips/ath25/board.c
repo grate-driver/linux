@@ -11,6 +11,7 @@
 
 #include <linux/init.h>
 #include <linux/interrupt.h>
+#include <linux/reboot.h>
 #include <asm/irq_cpu.h>
 #include <asm/reboot.h>
 #include <asm/bootinfo.h>
@@ -194,7 +195,7 @@ static void ath25_halt(void)
 void __init plat_mem_setup(void)
 {
 	_machine_halt = ath25_halt;
-	pm_power_off = ath25_halt;
+	register_platform_power_off(ath25_halt);
 
 	if (is_ar5312())
 		ar5312_plat_mem_setup();
