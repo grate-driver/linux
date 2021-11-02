@@ -23,6 +23,7 @@
 #include <linux/gpio/machine.h>
 #include <linux/i2c.h>
 #include <linux/platform_data/i2c-pxa.h>
+#include <linux/reboot.h>
 #include <linux/regulator/machine.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/ads7846.h>
@@ -426,7 +427,7 @@ static void __init poodle_init(void)
 {
 	int ret = 0;
 
-	pm_power_off = poodle_poweroff;
+	register_platform_power_off(poodle_poweroff);
 
 	PCFR |= PCFR_OPDE;
 
