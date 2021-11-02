@@ -186,23 +186,21 @@ void xen_reboot(int reason)
 	BUG_ON(rc);
 }
 
-static int xen_restart(struct notifier_block *nb, unsigned long action,
-		       void *data)
+static void xen_restart(struct restart_data *data)
 {
 	xen_reboot(SHUTDOWN_reboot);
-
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block xen_restart_nb = {
-	.notifier_call = xen_restart,
-	.priority = 192,
-};
-
-static void xen_power_off(void)
+static void xen_power_off(struct power_off_data *data)
 {
 	xen_reboot(SHUTDOWN_poweroff);
 }
+
+static struct sys_off_handler xen_sys_off = {
+	.restart_cb = xen_restart,
+	.restart_priority = RESTART_PRIO_HIGH,
+	.power_off_cb = xen_power_off,
+};
 
 static irqreturn_t xen_arm_callback(int irq, void *arg)
 {
@@ -531,8 +529,8 @@ static int __init xen_pm_init(void)
 	if (!xen_domain())
 		return -ENODEV;
 
-	pm_power_off = xen_power_off;
-	register_restart_handler(&xen_restart_nb);
+	register_sys_off_handler(&xen_sys_off);
+
 	if (!xen_initial_domain()) {
 		struct timespec64 ts;
 		xen_read_wallclock(&ts);
