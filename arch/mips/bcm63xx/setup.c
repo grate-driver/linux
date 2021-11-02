@@ -12,6 +12,7 @@
 #include <linux/memblock.h>
 #include <linux/ioport.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <asm/bootinfo.h>
 #include <asm/time.h>
 #include <asm/reboot.h>
@@ -150,7 +151,7 @@ void __init plat_mem_setup(void)
 
 	_machine_halt = bcm63xx_machine_halt;
 	_machine_restart = __bcm63xx_machine_reboot;
-	pm_power_off = bcm63xx_machine_halt;
+	register_platform_power_off(bcm63xx_machine_halt);
 
 	set_io_port_base(0);
 	ioport_resource.start = 0;
