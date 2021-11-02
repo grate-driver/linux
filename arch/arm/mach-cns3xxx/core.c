@@ -12,6 +12,7 @@
 #include <linux/irqchip/arm-gic.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/usb/ehci_pdriver.h>
 #include <linux/usb/ohci_pdriver.h>
 #include <asm/mach/arch.h>
@@ -386,7 +387,7 @@ static void __init cns3xxx_init(void)
 		cns3xxx_pwr_soft_rst(CNS3XXX_PWR_SOFTWARE_RST(SDIO));
 	}
 
-	pm_power_off = cns3xxx_power_off;
+	register_platform_power_off(cns3xxx_power_off);
 
 	of_platform_default_populate(NULL, cns3xxx_auxdata, NULL);
 }
