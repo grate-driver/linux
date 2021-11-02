@@ -163,10 +163,9 @@ static int mcu_probe(struct i2c_client *client)
 	if (ret)
 		goto err;
 
-	/* XXX: this is potentially racy, but there is no lock for pm_power_off */
-	if (!pm_power_off) {
+	if (!glob_mcu) {
 		glob_mcu = mcu;
-		pm_power_off = mcu_power_off;
+		register_platform_power_off(mcu_power_off);
 		dev_info(&client->dev, "will provide power-off service\n");
 	}
 
@@ -192,7 +191,7 @@ static int mcu_remove(struct i2c_client *client)
 	device_remove_file(&client->dev, &dev_attr_status);
 
 	if (glob_mcu == mcu) {
-		pm_power_off = NULL;
+		unregister_platform_power_off(mcu_power_off);
 		glob_mcu = NULL;
 	}
 
