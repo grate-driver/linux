@@ -3,9 +3,6 @@
 
 #include <linux/reboot.h>
 
-void (*pm_power_off)(void);
-EXPORT_SYMBOL(pm_power_off);
-
 void machine_power_off(void)
 {
 	local_irq_disable();
