@@ -29,6 +29,7 @@
 #include <linux/compiler.h>
 #include <linux/sort.h>
 #include <linux/psci.h>
+#include <linux/reboot.h>
 
 #include <asm/unified.h>
 #include <asm/cp15.h>
@@ -80,7 +81,6 @@ extern void init_default_cache_policy(unsigned long);
 extern void paging_init(const struct machine_desc *desc);
 extern void early_mm_init(const struct machine_desc *);
 extern void adjust_lowmem_bounds(void);
-extern enum reboot_mode reboot_mode;
 extern void setup_dma_zone(const struct machine_desc *desc);
 
 unsigned int processor_id;
@@ -1077,18 +1077,17 @@ void __init hyp_mode_check(void)
 #endif
 }
 
-static void (*__arm_pm_restart)(enum reboot_mode reboot_mode, const char *cmd);
+typedef void (*arm_restart_cb)(enum reboot_mode reboot_mode, const char *cmd);
 
-static int arm_restart(struct notifier_block *nb, unsigned long action,
-		       void *data)
+static void arm_restart(struct restart_data *data)
 {
-	__arm_pm_restart(action, data);
-	return NOTIFY_DONE;
+	arm_restart_cb cb = data->cb_data;
+
+	cb(data->mode, data->cmd);
 }
 
-static struct notifier_block arm_restart_nb = {
-	.notifier_call = arm_restart,
-	.priority = 128,
+static struct sys_off_handler arm_sys_off = {
+	.restart_cb = arm_restart,
 };
 
 void __init setup_arch(char **cmdline_p)
@@ -1157,8 +1156,8 @@ void __init setup_arch(char **cmdline_p)
 	request_standard_resources(mdesc);
 
 	if (mdesc->restart) {
-		__arm_pm_restart = mdesc->restart;
-		register_restart_handler(&arm_restart_nb);
+		arm_sys_off.cb_data = mdesc->restart;
+		register_sys_off_handler(&arm_sys_off);
 	}
 
 	unflatten_device_tree();
