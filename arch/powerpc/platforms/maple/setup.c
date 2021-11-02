@@ -32,6 +32,7 @@
 #include <linux/pmu.h>
 #include <linux/irq.h>
 #include <linux/seq_file.h>
+#include <linux/reboot.h>
 #include <linux/root_dev.h>
 #include <linux/serial.h>
 #include <linux/smp.h>
@@ -165,7 +166,7 @@ static void __init maple_use_rtas_reboot_and_halt_if_present(void)
 	if (rtas_service_present("system-reboot") &&
 	    rtas_service_present("power-off")) {
 		ppc_md.restart = rtas_restart;
-		pm_power_off = rtas_power_off;
+		register_platform_power_off(rtas_power_off);
 		ppc_md.halt = rtas_halt;
 	}
 }
@@ -280,7 +281,7 @@ static int __init maple_probe(void)
 	    !of_machine_is_compatible("Momentum,Apache"))
 		return 0;
 
-	pm_power_off = maple_power_off;
+	register_platform_power_off(maple_power_off);
 
 	iommu_init_early_dart(&maple_pci_controller_ops);
 
