@@ -79,8 +79,7 @@ static int mpc85xx_exclude_device(struct pci_controller *hose,
 		return PCIBIOS_SUCCESSFUL;
 }
 
-static int mpc85xx_cds_restart(struct notifier_block *this,
-			       unsigned long mode, void *cmd)
+static void mpc85xx_cds_restart(struct restart_data *data)
 {
 	struct pci_dev *dev;
 	u_char tmp;
@@ -109,17 +108,16 @@ static int mpc85xx_cds_restart(struct notifier_block *this,
 	 *  disabled) or the VIA chip reset didn't work, just return
 	 *  and let default reset sequence happen.
 	 */
-	return NOTIFY_DONE;
 }
 
 static int mpc85xx_cds_restart_register(void)
 {
-	static struct notifier_block restart_handler;
+	static struct sys_off_handler restart_handler;
 
-	restart_handler.notifier_call = mpc85xx_cds_restart;
-	restart_handler.priority = 192;
+	restart_handler.restart_cb = mpc85xx_cds_restart;
+	restart_handler.restart_priority = RESTART_PRIO_HIGH;
 
-	return register_restart_handler(&restart_handler);
+	return register_sys_off_handler(&restart_handler);
 }
 machine_arch_initcall(mpc85xx_cds, mpc85xx_cds_restart_register);
 
