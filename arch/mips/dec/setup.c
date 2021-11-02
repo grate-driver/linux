@@ -18,6 +18,7 @@
 #include <linux/memblock.h>
 #include <linux/param.h>
 #include <linux/percpu-defs.h>
+#include <linux/reboot.h>
 #include <linux/sched.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
@@ -146,7 +147,7 @@ void __init plat_mem_setup(void)
 
 	_machine_restart = dec_machine_restart;
 	_machine_halt = dec_machine_halt;
-	pm_power_off = dec_machine_power_off;
+	register_platform_power_off(dec_machine_power_off);
 
 	ioport_resource.start = ~0UL;
 	ioport_resource.end = 0UL;
