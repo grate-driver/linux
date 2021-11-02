@@ -8,6 +8,7 @@
  */
 #include <linux/init.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 
 #include <asm/idle.h>
 #include <asm/reboot.h>
@@ -65,7 +66,7 @@ static int __init mips_reboot_setup(void)
 {
 	_machine_restart = loongson_restart;
 	_machine_halt = loongson_halt;
-	pm_power_off = loongson_poweroff;
+	register_platform_power_off(loongson_poweroff);
 
 	return 0;
 }
