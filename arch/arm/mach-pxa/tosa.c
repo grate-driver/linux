@@ -936,7 +936,7 @@ static void __init tosa_init(void)
 
 	init_gpio_reset(TOSA_GPIO_ON_RESET, 0, 0);
 
-	pm_power_off = tosa_poweroff;
+	register_platform_power_off(tosa_poweroff);
 
 	PCFR |= PCFR_OPDE;
 
