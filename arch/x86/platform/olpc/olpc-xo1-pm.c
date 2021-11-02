@@ -10,6 +10,7 @@
 
 #include <linux/cs5535.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/export.h>
 #include <linux/pm.h>
 #include <linux/suspend.h>
@@ -137,7 +138,7 @@ static int xo1_pm_probe(struct platform_device *pdev)
 	/* If we have both addresses, we can override the poweroff hook */
 	if (pms_base && acpi_base) {
 		suspend_set_ops(&xo1_suspend_ops);
-		pm_power_off = xo1_power_off;
+		register_platform_power_off(xo1_power_off);
 		printk(KERN_INFO "OLPC XO-1 support registered\n");
 	}
 
@@ -146,12 +147,15 @@ static int xo1_pm_probe(struct platform_device *pdev)
 
 static int xo1_pm_remove(struct platform_device *pdev)
 {
+	if (pms_base && acpi_base) {
+		unregister_platform_power_off(xo1_power_off);
+		suspend_set_ops(NULL);
+	}
+
 	if (strcmp(pdev->name, "cs5535-pms") == 0)
 		pms_base = 0;
 	else if (strcmp(pdev->name, "olpc-xo1-pm-acpi") == 0)
 		acpi_base = 0;
-
-	pm_power_off = NULL;
 	return 0;
 }
 
