@@ -27,9 +27,6 @@ extern inline void arch_reset(char mode)
 	}
 }
 
-void (*pm_power_off) (void);
-EXPORT_SYMBOL(pm_power_off);
-
 static char reboot_mode_nds32 = 'h';
 
 int __init reboot_setup(char *str)
