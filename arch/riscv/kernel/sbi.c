@@ -7,6 +7,7 @@
 
 #include <linux/init.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <asm/sbi.h>
 #include <asm/smp.h>
 
@@ -170,7 +171,7 @@ static int __sbi_rfence_v01(int fid, const unsigned long *hart_mask,
 
 static void sbi_set_power_off(void)
 {
-	pm_power_off = sbi_shutdown;
+	register_platform_power_off(sbi_shutdown);
 }
 #else
 static void __sbi_set_timer_v01(uint64_t stime_value)
