@@ -11,6 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/mtd/physmap.h>
 #include <linux/mv643xx_eth.h>
 #include <linux/leds.h>
@@ -259,7 +260,7 @@ static void __init ls_hgl_init(void)
 	gpio_set_value(LS_HGL_GPIO_USB_POWER, 1);
 
 	/* register power-off method */
-	pm_power_off = ls_hgl_power_off;
+	register_platform_power_off(ls_hgl_power_off);
 
 	pr_info("%s: finished\n", __func__);
 }
