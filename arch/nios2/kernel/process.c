@@ -28,9 +28,6 @@
 asmlinkage void ret_from_fork(void);
 asmlinkage void ret_from_kernel_thread(void);
 
-void (*pm_power_off)(void) = NULL;
-EXPORT_SYMBOL(pm_power_off);
-
 void arch_cpu_idle(void)
 {
 	raw_local_irq_enable();
