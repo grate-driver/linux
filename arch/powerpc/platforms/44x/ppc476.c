@@ -20,6 +20,7 @@
 #include <linux/init.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
+#include <linux/reboot.h>
 #include <linux/rtc.h>
 
 #include <asm/machdep.h>
@@ -90,7 +91,7 @@ static int avr_probe(struct i2c_client *client)
 {
 	avr_i2c_client = client;
 	ppc_md.restart = avr_reset_system;
-	pm_power_off = avr_power_off_system;
+	register_platform_power_off(avr_power_off_system);
 	return 0;
 }
 
