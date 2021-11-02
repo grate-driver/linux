@@ -89,9 +89,6 @@ void arch_cpu_idle(void)
 		mtspr(SPR_PMR, mfspr(SPR_PMR) | SPR_PMR_DME);
 }
 
-void (*pm_power_off) (void) = machine_power_off;
-EXPORT_SYMBOL(pm_power_off);
-
 /*
  * When a process does an "exec", machine state like FPU and debug
  * registers need to be reset.  This is a hook function for that.
