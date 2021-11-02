@@ -5,6 +5,7 @@
  */
 #include <linux/init.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <asm/reboot.h>
 #include <asm/mach-pic32/pic32.h>
 
@@ -46,7 +47,7 @@ static int __init mips_reboot_setup(void)
 {
 	_machine_restart = pic32_machine_restart;
 	_machine_halt = pic32_machine_halt;
-	pm_power_off = pic32_machine_halt;
+	register_platform_power_off(pic32_machine_halt);
 
 	return 0;
 }
