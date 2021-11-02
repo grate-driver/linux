@@ -5,6 +5,7 @@
 
 #include <linux/io.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/sizes.h>
 #include <asm/idle.h>
 #include <asm/reboot.h>
@@ -43,7 +44,7 @@ static int __init ls1x_reboot_setup(void)
 
 	_machine_restart = ls1x_restart;
 	_machine_halt = ls1x_halt;
-	pm_power_off = ls1x_power_off;
+	register_platform_power_off(ls1x_power_off);
 
 	return 0;
 }
