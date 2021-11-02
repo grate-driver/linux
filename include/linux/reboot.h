@@ -70,8 +70,6 @@ int unregister_reboot_notifier(struct notifier_block *);
 
 int devm_register_reboot_notifier(struct device *, struct notifier_block *);
 
-int register_restart_handler(struct notifier_block *);
-int unregister_restart_handler(struct notifier_block *);
 void do_kernel_restart(char *cmd);
 
 /*
