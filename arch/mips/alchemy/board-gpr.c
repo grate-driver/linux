@@ -11,6 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/physmap.h>
 #include <linux/leds.h>
@@ -62,7 +63,7 @@ void __init board_setup(void)
 {
 	printk(KERN_INFO "Trapeze ITS GPR board\n");
 
-	pm_power_off = gpr_power_off;
+	register_platform_power_off(gpr_power_off);
 	_machine_halt = gpr_power_off;
 	_machine_restart = gpr_reset;
 
