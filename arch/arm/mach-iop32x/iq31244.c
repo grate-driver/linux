@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/pci.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/string.h>
 #include <linux/serial_core.h>
 #include <linux/serial_8250.h>
@@ -292,7 +293,7 @@ static void __init iq31244_init_machine(void)
 	platform_device_register(&iop3xx_dma_1_channel);
 
 	if (is_ep80219())
-		pm_power_off = ep80219_power_off;
+		register_platform_power_off(ep80219_power_off);
 
 	if (!is_80219())
 		platform_device_register(&iop3xx_aau_channel);
