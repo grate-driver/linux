@@ -352,7 +352,7 @@ static void __init n2100_init_machine(void)
 	i2c_register_board_info(0, n2100_i2c_devices,
 		ARRAY_SIZE(n2100_i2c_devices));
 
-	pm_power_off = n2100_power_off;
+	register_platform_power_off(n2100_power_off);
 }
 
 MACHINE_START(N2100, "Thecus N2100")
