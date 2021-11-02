@@ -14,6 +14,7 @@
 #include <linux/console.h>
 #include <linux/fb.h>
 #include <linux/screen_info.h>
+#include <linux/reboot.h>
 
 #ifdef CONFIG_FW_ARC
 #include <asm/fw/arc/types.h>
@@ -225,7 +226,7 @@ void __init plat_mem_setup(void)
 	}
 
 	_machine_restart = sni_machine_restart;
-	pm_power_off = sni_machine_power_off;
+	register_platform_power_off(sni_machine_power_off);
 
 	sni_display_setup();
 	sni_console_setup();
