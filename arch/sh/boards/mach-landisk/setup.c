@@ -11,6 +11,7 @@
  */
 #include <linux/init.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/ata_platform.h>
 #include <linux/pm.h>
 #include <linux/mm.h>
@@ -89,7 +90,7 @@ static void __init landisk_setup(char **cmdline_p)
 	__raw_writeb(__raw_readb(PA_LED) | 0x03, PA_LED);
 
 	printk(KERN_INFO "I-O DATA DEVICE, INC. \"LANDISK Series\" support.\n");
-	pm_power_off = landisk_power_off;
+	register_platform_power_off(landisk_power_off);
 }
 
 /*
