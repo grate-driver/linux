@@ -465,7 +465,7 @@ static void __init pnv_setup_machdep_opal(void)
 {
 	ppc_md.get_boot_time = opal_get_boot_time;
 	ppc_md.restart = pnv_restart;
-	pm_power_off = pnv_power_off;
+	register_platform_power_off(pnv_power_off);
 	ppc_md.halt = pnv_halt;
 	/* ppc_md.system_reset_exception gets filled in by pnv_smp_init() */
 	ppc_md.machine_check_exception = opal_machine_check;
