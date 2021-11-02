@@ -16,6 +16,7 @@
 #include <linux/mmzone.h>
 #include <linux/nodemask.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -77,5 +78,5 @@ void ip27_reboot_setup(void)
 {
 	_machine_restart = ip27_machine_restart;
 	_machine_halt = ip27_machine_halt;
-	pm_power_off = ip27_machine_power_off;
+	register_platform_power_off(ip27_machine_power_off);
 }
