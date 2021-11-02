@@ -11,6 +11,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/gpio.h>
 #include <linux/delay.h>
 #include <linux/pm.h>
@@ -50,7 +51,7 @@ void __init board_setup(void)
 {
 	u32 pin_func;
 
-	pm_power_off = xxs1500_power_off;
+	register_platform_power_off(xxs1500_power_off);
 	_machine_halt = xxs1500_power_off;
 	_machine_restart = xxs1500_reset;
 

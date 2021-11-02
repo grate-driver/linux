@@ -9,6 +9,7 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/leds.h>
 #include <linux/gpio.h>
 #include <linux/gpio/machine.h>
@@ -71,7 +72,7 @@ void __init board_setup(void)
 	alchemy_gpio_direction_output(211, 1);	/* green on */
 	alchemy_gpio_direction_output(212, 0);	/* red off */
 
-	pm_power_off = mtx1_power_off;
+	register_platform_power_off(mtx1_power_off);
 	_machine_halt = mtx1_power_off;
 	_machine_restart = mtx1_reset;
 
