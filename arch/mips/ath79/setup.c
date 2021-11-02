@@ -18,6 +18,7 @@
 #include <linux/of_clk.h>
 #include <linux/of_fdt.h>
 #include <linux/irqchip.h>
+#include <linux/reboot.h>
 
 #include <asm/bootinfo.h>
 #include <asm/idle.h>
@@ -236,7 +237,7 @@ void __init plat_mem_setup(void)
 
 	_machine_restart = ath79_restart;
 	_machine_halt = ath79_halt;
-	pm_power_off = ath79_halt;
+	register_platform_power_off(ath79_halt);
 }
 
 void __init plat_time_init(void)
