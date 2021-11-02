@@ -21,6 +21,7 @@
 #include <linux/gpio/driver.h>
 #include <linux/platform_device.h>
 #include <linux/platform_data/txx9/ndfmc.h>
+#include <linux/reboot.h>
 #include <linux/serial_core.h>
 #include <linux/mtd/physmap.h>
 #include <linux/leds.h>
@@ -488,7 +489,7 @@ void __init plat_mem_setup(void)
 	/* fallback restart/halt routines */
 	_machine_restart = (void (*)(char *))txx9_machine_halt;
 	_machine_halt = txx9_machine_halt;
-	pm_power_off = txx9_machine_halt;
+	register_platform_power_off(txx9_machine_halt);
 
 #ifdef CONFIG_PCI
 	pcibios_plat_setup = txx9_pcibios_setup;
