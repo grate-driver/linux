@@ -10,6 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
 #include <linux/pwm_backlight.h>
+#include <linux/reboot.h>
 #include <linux/serial_core.h>
 #include <linux/serial_s3c.h>
 #include <linux/spi/spi_gpio.h>
@@ -300,7 +301,7 @@ static int __init smartq_power_off_init(void)
 	/* leave power on */
 	gpio_direction_output(S3C64XX_GPK(15), 0);
 
-	pm_power_off = smartq_power_off;
+	register_platform_power_off(smartq_power_off);
 
 	return ret;
 }
