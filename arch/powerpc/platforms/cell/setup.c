@@ -249,7 +249,7 @@ static int __init cell_probe(void)
 	    !of_machine_is_compatible("IBM,CPBW-1.0"))
 		return 0;
 
-	pm_power_off = rtas_power_off;
+	register_platform_power_off(rtas_power_off);
 
 	return 1;
 }
