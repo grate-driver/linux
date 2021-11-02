@@ -7,6 +7,7 @@
  */
 #include <linux/init.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/sm501.h>
 #include <linux/sm501-regs.h>
 #include <linux/fb.h>
@@ -338,7 +339,7 @@ static void __init sh7785lcr_setup(char **cmdline_p)
 
 	printk(KERN_INFO "Renesas Technology Corp. R0P7785LC0011RL support.\n");
 
-	pm_power_off = sh7785lcr_power_off;
+	register_platform_power_off(sh7785lcr_power_off);
 
 	/* sm501 DRAM configuration */
 	sm501_reg = ioremap(SM107_REG_ADDR, SM501_DRAM_CONTROL);
