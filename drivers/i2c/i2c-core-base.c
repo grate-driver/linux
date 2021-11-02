@@ -2464,11 +2464,14 @@ EXPORT_SYMBOL(i2c_get_adapter);
 
 void i2c_put_adapter(struct i2c_adapter *adap)
 {
+	struct module *owner;
+
 	if (!adap)
 		return;
 
+	owner = adap->owner;
 	put_device(&adap->dev);
-	module_put(adap->owner);
+	module_put(owner);
 }
 EXPORT_SYMBOL(i2c_put_adapter);
 
