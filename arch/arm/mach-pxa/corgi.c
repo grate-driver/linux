@@ -25,6 +25,7 @@
 #include <linux/i2c.h>
 #include <linux/platform_data/i2c-pxa.h>
 #include <linux/io.h>
+#include <linux/reboot.h>
 #include <linux/regulator/machine.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/ads7846.h>
@@ -725,7 +726,7 @@ static void corgi_restart(enum reboot_mode mode, const char *cmd)
 
 static void __init corgi_init(void)
 {
-	pm_power_off = corgi_poweroff;
+	register_platform_power_off(corgi_poweroff);
 
 	/* Stop 3.6MHz and drive HIGH to PCMCIA and CS */
 	PCFR |= PCFR_OPDE;
