@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/pci.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/serial_core.h>
 #include <linux/serial_8250.h>
 #include <linux/mtd/physmap.h>
@@ -199,7 +200,7 @@ static int __init em7210_request_gpios(void)
 		return 0;
 	}
 
-	pm_power_off = em7210_power_off;
+	register_platform_power_off(em7210_power_off);
 
 	return 0;
 }
