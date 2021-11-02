@@ -18,6 +18,7 @@
 #include <linux/serial_core.h>
 #include <linux/serial_8250.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/physmap.h>
 #include <linux/mtd/partitions.h>
@@ -221,7 +222,7 @@ static void __init cns3420_init(void)
 	cns3xxx_ahci_init();
 	cns3xxx_sdhci_init();
 
-	pm_power_off = cns3xxx_power_off;
+	register_platform_power_off(cns3xxx_power_off);
 }
 
 static struct map_desc cns3420_io_desc[] __initdata = {
