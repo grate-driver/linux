@@ -46,9 +46,6 @@
 #include <asm/traps.h>
 #include <asm/setup.h>
 
-void (*pm_power_off)(void) = NULL;
-EXPORT_SYMBOL(pm_power_off);
-
 asmlinkage void ret_from_fork(void);
 asmlinkage void ret_from_kernel_thread(void);
 
