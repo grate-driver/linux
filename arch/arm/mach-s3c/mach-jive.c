@@ -17,6 +17,7 @@
 #include <linux/serial_core.h>
 #include <linux/serial_s3c.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/i2c.h>
 
 #include <video/ili9320.h>
@@ -667,7 +668,7 @@ static void __init jive_machine_init(void)
 	s3c_i2c0_set_platdata(&jive_i2c_cfg);
 	i2c_register_board_info(0, jive_i2c_devs, ARRAY_SIZE(jive_i2c_devs));
 
-	pm_power_off = jive_power_off;
+	register_platform_power_off(jive_power_off);
 
 	gpiod_add_lookup_table(&jive_lcdspi_gpiod_table);
 	gpiod_add_lookup_table(&jive_wm8750_gpiod_table);
