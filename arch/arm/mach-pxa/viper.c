@@ -29,6 +29,7 @@
 #include <linux/major.h>
 #include <linux/module.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <linux/sched.h>
 #include <linux/gpio.h>
 #include <linux/jiffies.h>
@@ -938,7 +939,7 @@ static void __init viper_init(void)
 {
 	u8 version;
 
-	pm_power_off = viper_power_off;
+	register_platform_power_off(viper_power_off);
 
 	pxa2xx_mfp_config(ARRAY_AND_SIZE(viper_pin_config));
 
