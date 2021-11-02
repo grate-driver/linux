@@ -173,7 +173,7 @@ static ATOMIC_NOTIFIER_HEAD(restart_handler_list);
  *	Currently always returns zero, as atomic_notifier_chain_register()
  *	always returns zero.
  */
-int register_restart_handler(struct notifier_block *nb)
+static int register_restart_handler(struct notifier_block *nb)
 {
 	int ret;
 
@@ -190,7 +190,6 @@ int register_restart_handler(struct notifier_block *nb)
 
 	return 0;
 }
-EXPORT_SYMBOL(register_restart_handler);
 
 /**
  *	unregister_restart_handler - Unregister previously registered
@@ -201,11 +200,10 @@ EXPORT_SYMBOL(register_restart_handler);
  *
  *	Returns zero on success, or %-ENOENT on failure.
  */
-int unregister_restart_handler(struct notifier_block *nb)
+static int unregister_restart_handler(struct notifier_block *nb)
 {
 	return WARN_ON(atomic_notifier_chain_unregister(&restart_handler_list, nb));
 }
-EXPORT_SYMBOL(unregister_restart_handler);
 
 /**
  *	do_kernel_restart - Execute kernel restart handler call chain
