@@ -41,6 +41,7 @@
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/physmap.h>
 
+#include <linux/reboot.h>
 #include <linux/regulator/machine.h>
 
 #include <linux/spi/spi.h>
@@ -558,7 +559,7 @@ static void __init gta02_machine_init(void)
 	gpiod_add_lookup_table(&gta02_audio_gpio_table);
 	gpiod_add_lookup_table(&gta02_mmc_gpio_table);
 	platform_add_devices(gta02_devices, ARRAY_SIZE(gta02_devices));
-	pm_power_off = gta02_poweroff;
+	register_platform_power_off(gta02_poweroff);
 
 	regulator_has_full_constraints();
 }
