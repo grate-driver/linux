@@ -9,6 +9,8 @@
 #include "tegra30-cpu-opp-microvolt.dtsi"
 
 / {
+    chassis-type = "convertible";
+
 	aliases {
 		mmc0 = &sdmmc4;	/* eMMC */
 		mmc1 = &sdmmc1; /* uSD slot */

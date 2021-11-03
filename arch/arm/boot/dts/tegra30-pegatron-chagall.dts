@@ -13,6 +13,7 @@
 / {
 	model = "Pegatron Chagall based tablet";
 	compatible = "pegatron,chagall", "nvidia,tegra30";
+    chassis-type = "tablet";
 
 	aliases {
 		mmc0 = &sdmmc4;	/* eMMC */
