@@ -1328,8 +1328,8 @@
 
 				ldo5 {
 					regulator-name = "vdd_1v3_cam_isp";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <1000000>;
+					regulator-min-microvolt = <1300000>;
+					regulator-max-microvolt = <1300000>;
 				};
 
 				ldo6 {
@@ -1414,6 +1414,17 @@
 		gpio = <&gpio TEGRA_GPIO(K, 5) GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		vin-supply = <&vdd_3v3_sys>;
+	};
+
+	vdd_5v0_bl: regulator-bl {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_5v0_bl";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-boot-on;
+		gpio = <&gpio TEGRA_GPIO(C, 6) GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&vdd_5v0_bat>;
 	};
 
 	hdmi_5v0_sys: regulator-hdmi {
@@ -1569,7 +1580,7 @@
 		compatible = "pwm-backlight";
 
 		enable-gpios = <&gpio TEGRA_GPIO(H, 2) GPIO_ACTIVE_HIGH>;
-		power-supply = <&vdd_5v0_sys>;
+		power-supply = <&vdd_5v0_bl>;
 		pwms = <&pwm 0 5000000>;
 
 		brightness-levels = <1 255>;
