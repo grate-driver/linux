@@ -480,8 +480,18 @@ static int host1x_device_add(struct host1x *host1x,
 	device->dev.dma_parms = &device->dma_parms;
 	dma_set_max_seg_size(&device->dev, UINT_MAX);
 
+	if (driver->init) {
+		err = driver->init(device);
+		if (err < 0) {
+			kfree(device);
+			return err;
+		}
+	}
+
 	err = host1x_device_parse_dt(device, driver);
 	if (err < 0) {
+		if (driver->deinit)
+			driver->deinit(device);
 		kfree(device);
 		return err;
 	}
@@ -513,10 +523,15 @@ static int host1x_device_add(struct host1x *host1x,
 static void host1x_device_del(struct host1x *host1x,
 			      struct host1x_device *device)
 {
+	struct host1x_driver *driver = device->driver;
+
 	if (device->registered) {
 		device->registered = false;
 		device_del(&device->dev);
 	}
+
+	if (driver->deinit)
+		driver->deinit(device);
 
 	put_device(&device->dev);
 }
