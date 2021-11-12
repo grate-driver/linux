@@ -530,9 +530,12 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 	disable_irq(dpaux->irq);
 
 	dpaux->aux.transfer = tegra_dpaux_transfer;
+	dpaux->aux.drm_dev = tegra_drm_device();
 	dpaux->aux.dev = &pdev->dev;
 
-	drm_dp_aux_init(&dpaux->aux);
+	err = drm_dp_aux_register(&dpaux->aux);
+	if (err < 0)
+		goto put_pm;
 
 	/*
 	 * Assume that by default the DPAUX/I2C pads will be used for HDMI,
@@ -544,7 +547,7 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 	 */
 	err = tegra_dpaux_pad_config(dpaux, DPAUX_PADCTL_FUNC_I2C);
 	if (err < 0)
-		return err;
+		goto dp_aux_unreg;
 
 #ifdef CONFIG_GENERIC_PINCONF
 	dpaux->desc.name = dev_name(&pdev->dev);
@@ -557,7 +560,8 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 	dpaux->pinctrl = devm_pinctrl_register(&pdev->dev, &dpaux->desc, dpaux);
 	if (IS_ERR(dpaux->pinctrl)) {
 		dev_err(&pdev->dev, "failed to register pincontrol\n");
-		return PTR_ERR(dpaux->pinctrl);
+		err = PTR_ERR(dpaux->pinctrl);
+		goto dp_aux_unreg;
 	}
 #endif
 	/* enable and clear all interrupts */
@@ -571,6 +575,14 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 	mutex_unlock(&dpaux_lock);
 
 	return 0;
+
+dp_aux_unreg:
+	drm_dp_aux_unregister(&dpaux->aux);
+put_pm:
+	pm_runtime_put_sync(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
+
+	return err;
 }
 
 static int tegra_dpaux_remove(struct platform_device *pdev)
@@ -578,6 +590,8 @@ static int tegra_dpaux_remove(struct platform_device *pdev)
 	struct tegra_dpaux *dpaux = platform_get_drvdata(pdev);
 
 	cancel_work_sync(&dpaux->work);
+
+	drm_dp_aux_unregister(&dpaux->aux);
 
 	/* make sure pads are powered down when not in use */
 	tegra_dpaux_pad_power_down(dpaux);
@@ -717,11 +731,6 @@ int drm_dp_aux_attach(struct drm_dp_aux *aux, struct tegra_output *output)
 	unsigned long timeout;
 	int err;
 
-	aux->drm_dev = output->connector.dev;
-	err = drm_dp_aux_register(aux);
-	if (err < 0)
-		return err;
-
 	output->connector.polled = DRM_CONNECTOR_POLL_HPD;
 	dpaux->output = output;
 
@@ -759,7 +768,6 @@ int drm_dp_aux_detach(struct drm_dp_aux *aux)
 	unsigned long timeout;
 	int err;
 
-	drm_dp_aux_unregister(aux);
 	disable_irq(dpaux->irq);
 
 	if (dpaux->output->panel) {
