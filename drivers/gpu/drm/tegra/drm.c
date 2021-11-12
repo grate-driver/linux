@@ -1133,21 +1133,42 @@ static bool host1x_drm_wants_iommu(struct host1x_device *dev)
 	return domain != NULL;
 }
 
-static int host1x_drm_probe(struct host1x_device *dev)
-{
-	struct tegra_drm *tegra;
-	struct drm_device *drm;
-	int err;
+static struct drm_device *terga_drm_dev;
 
-	drm = drm_dev_alloc(&tegra_drm_driver, &dev->dev);
+struct drm_device *tegra_drm_device(void)
+{
+	return terga_drm_dev;
+}
+
+static int host1x_drm_dev_init(struct host1x_device *dev)
+{
+	struct drm_device *drm = drm_dev_alloc(&tegra_drm_driver, &dev->dev);
 	if (IS_ERR(drm))
 		return PTR_ERR(drm);
 
+	dev_set_drvdata(&dev->dev, drm);
+	terga_drm_dev = drm;
+
+	return 0;
+}
+
+static void host1x_drm_dev_deinit(struct host1x_device *dev)
+{
+	struct drm_device *drm = dev_get_drvdata(&dev->dev);
+
+	terga_drm_dev = NULL;
+	drm_dev_put(drm);
+}
+
+static int host1x_drm_probe(struct host1x_device *dev)
+{
+	struct drm_device *drm = dev_get_drvdata(&dev->dev);
+	struct tegra_drm *tegra;
+	int err;
+
 	tegra = kzalloc(sizeof(*tegra), GFP_KERNEL);
-	if (!tegra) {
-		err = -ENOMEM;
-		goto put;
-	}
+	if (!tegra)
+		return -ENOMEM;
 
 	if (host1x_drm_wants_iommu(dev) && iommu_present(&platform_bus_type)) {
 		tegra->domain = iommu_domain_alloc(&platform_bus_type);
@@ -1164,7 +1185,6 @@ static int host1x_drm_probe(struct host1x_device *dev)
 	mutex_init(&tegra->clients_lock);
 	INIT_LIST_HEAD(&tegra->clients);
 
-	dev_set_drvdata(&dev->dev, drm);
 	drm->dev_private = tegra;
 	tegra->drm = drm;
 
@@ -1285,8 +1305,7 @@ domain:
 		iommu_domain_free(tegra->domain);
 free:
 	kfree(tegra);
-put:
-	drm_dev_put(drm);
+
 	return err;
 }
 
@@ -1319,7 +1338,6 @@ static int host1x_drm_remove(struct host1x_device *dev)
 	}
 
 	kfree(tegra);
-	drm_dev_put(drm);
 
 	return 0;
 }
@@ -1391,6 +1409,8 @@ static struct host1x_driver host1x_drm_driver = {
 	.probe = host1x_drm_probe,
 	.remove = host1x_drm_remove,
 	.subdevs = host1x_drm_subdevs,
+	.init = host1x_drm_dev_init,
+	.deinit = host1x_drm_dev_deinit,
 };
 
 static struct platform_driver * const drivers[] = {
