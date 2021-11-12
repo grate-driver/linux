@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "tegra124-nyan-big.dts"
+
+/ {
+	panel {
+		compatible = "auo,b133htn01";
+	};
+};
