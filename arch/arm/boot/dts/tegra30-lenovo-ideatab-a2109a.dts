@@ -1120,7 +1120,7 @@
 				gpio0 {
 					pins = "gpio0";
 					function = "gpio";
-					drive-push-pull;
+					drive-push-pull = <1>;
 				};
 				gpio1 {
 					pins = "gpio1";
@@ -1130,22 +1130,22 @@
 				gpio2 {
 					pins = "gpio2";
 					function = "gpio";
-					drive-open-drain;
+					drive-open-drain = <1>;
 				};
 				gpio3 {
 					pins = "gpio3";
 					function = "fps-out";
-					drive-open-drain;
+					drive-open-drain = <1>;
 				};
 				gpio4 {
 					pins = "gpio4";
 					function = "32k-out1";
-					drive-push-pull;
+					drive-push-pull = <1>;
 				};
 				gpio5 {
 					pins = "gpio5";
 					function = "gpio";
-					drive-push-pull;
+					drive-push-pull = <1>;
 				};
 				gpio6 {
 					pins = "gpio6";
@@ -1155,7 +1155,7 @@
 				gpio7 {
 					pins = "gpio7";
 					function = "gpio";
-					drive-open-drain;
+					drive-open-drain = <1>;
 				};
 			};
 
