@@ -1223,9 +1223,9 @@
 			vcc1-supply = <&vdd_5v0_bat>;
 			vcc2-supply = <&vdd_5v0_bat>;
 			vcc3-supply = <&vdd_1v8_vio>;
-			vcc4-supply = <&vdd_5v0_bat>;
+			vcc4-supply = <&vdd_5v0_sys>;
 			vcc5-supply = <&vdd_5v0_bat>;
-			vcc6-supply = <&vddio_ddr>;
+			vcc6-supply = <&vdd_3v3_sys>;
 			vcc7-supply = <&vdd_5v0_bat>;
 			vccio-supply = <&vdd_5v0_bat>;
 

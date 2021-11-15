@@ -1246,7 +1246,7 @@
 			vcc1-supply = <&vdd_5v0_sys>;
 			vcc2-supply = <&vdd_5v0_sys>;
 			vcc3-supply = <&vdd_1v8_vio>;
-			vcc4-supply = <&vdd_5v0_sys>;
+			vcc4-supply = <&vdd_1v8_vio>;
 			vcc5-supply = <&vdd_5v0_sys>;
 			vcc6-supply = <&vddio_1v2_ddr>;
 			vcc7-supply = <&vdd_5v0_sys>;
