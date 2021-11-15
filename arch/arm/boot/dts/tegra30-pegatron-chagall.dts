@@ -1262,7 +1262,7 @@
 			};
 
 			regulators {
-				/* vdd1 is not used by chagall */
+				/* VDD1 is not used by Chagall */
 
 				vddio_1v2_ddr: vdd2 {
 					regulator-name = "vddio_1v2_ddr";
@@ -1530,7 +1530,7 @@
 		vmmc-supply = <&vdd_3v3_sys>;
 		vqmmc-supply = <&vdd_1v8_vio>;
 
-		/* Azurewave AW-AH663 BCM4330 */
+		/* Azurewave AW-AH663 BCM4330B1 */
 		wifi@1 {
 			compatible = "brcm,bcm4329-fmac";
 			reg = <1>;
