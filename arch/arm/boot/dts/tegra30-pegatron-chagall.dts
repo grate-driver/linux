@@ -1305,15 +1305,15 @@
 				/* uSD slot VDD */
 				vdd_usd: ldo2 {
 					regulator-name = "vdd_usd";
-					regulator-min-microvolt = <3100000>;
-					regulator-max-microvolt = <3100000>;
+					regulator-min-microvolt = <3200000>;
+					regulator-max-microvolt = <3200000>;
 				};
 
 				/* uSD slot VDDIO */
 				vddio_usd: ldo3 {
 					regulator-name = "vddio_usd";
-					regulator-min-microvolt = <1800000>;
-					regulator-max-microvolt = <3100000>;
+					regulator-min-microvolt = <1900000>;
+					regulator-max-microvolt = <3200000>;
 				};
 
 				ldo4 {
