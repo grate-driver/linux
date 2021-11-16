@@ -463,6 +463,68 @@ static void tegra_hdmi_write_aval(struct tegra_hdmi *hdmi, u32 value)
 	}
 }
 
+static int tegra_hdmi_setup_sw_cts(struct tegra_hdmi *hdmi,
+				   struct tegra_hdmi_audio_config *config)
+{
+	u32 value;
+	int err;
+
+	err = tegra_hdmi_get_audio_config(hdmi->format.sample_rate,
+					  hdmi->pixel_clock, config);
+	if (err < 0) {
+		dev_err(hdmi->dev,
+			"cannot set audio to %u Hz at %u Hz pixel clock\n",
+			hdmi->format.sample_rate, hdmi->pixel_clock);
+		return err;
+	}
+
+	dev_dbg(hdmi->dev, "audio: pixclk=%u, n=%u, cts=%u, aval=%u\n",
+		hdmi->pixel_clock, config->n, config->cts, config->aval);
+
+	tegra_hdmi_writel(hdmi, 0, HDMI_NV_PDISP_HDMI_ACR_CTRL);
+
+	value = AUDIO_N_RESETF | AUDIO_N_GENERATE_ALTERNATE |
+		AUDIO_N_VALUE(config->n - 1);
+	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_AUDIO_N);
+
+	tegra_hdmi_writel(hdmi, ACR_SUBPACK_N(config->n) | ACR_ENABLE,
+			  HDMI_NV_PDISP_HDMI_ACR_0441_SUBPACK_HIGH);
+
+	tegra_hdmi_writel(hdmi, ACR_SUBPACK_CTS(config->cts),
+			  HDMI_NV_PDISP_HDMI_ACR_0441_SUBPACK_LOW);
+
+	value = SPARE_HW_CTS | SPARE_FORCE_SW_CTS | SPARE_CTS_RESET_VAL(1);
+	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_HDMI_SPARE);
+
+	value = tegra_hdmi_readl(hdmi, HDMI_NV_PDISP_AUDIO_N);
+	value &= ~AUDIO_N_RESETF;
+	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_AUDIO_N);
+
+	return 0;
+}
+
+static int tegra_hdmi_setup_hw_cts(struct tegra_hdmi *hdmi)
+{
+	u32 value;
+
+	tegra_hdmi_writel(hdmi, 0, HDMI_NV_PDISP_HDMI_ACR_CTRL);
+
+	value = AUDIO_N_RESETF | AUDIO_N_GENERATE_ALTERNATE;
+	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_AUDIO_N);
+
+	tegra_hdmi_writel(hdmi, 0, HDMI_NV_PDISP_HDMI_ACR_0441_SUBPACK_HIGH);
+	tegra_hdmi_writel(hdmi, 0, HDMI_NV_PDISP_HDMI_ACR_0441_SUBPACK_LOW);
+
+	value = SPARE_HW_CTS | SPARE_CTS_RESET_VAL(1);
+	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_HDMI_SPARE);
+
+	value = tegra_hdmi_readl(hdmi, HDMI_NV_PDISP_AUDIO_N);
+	value &= ~AUDIO_N_RESETF;
+	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_AUDIO_N);
+
+	return 0;
+}
+
 static int tegra_hdmi_setup_audio(struct tegra_hdmi *hdmi)
 {
 	struct tegra_hdmi_audio_config config;
@@ -542,36 +604,19 @@ static int tegra_hdmi_setup_audio(struct tegra_hdmi *hdmi)
 		tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_SOR_AUDIO_SPARE0);
 	}
 
-	err = tegra_hdmi_get_audio_config(hdmi->format.sample_rate,
-					  hdmi->pixel_clock, &config);
-	if (err < 0) {
-		dev_err(hdmi->dev,
-			"cannot set audio to %u Hz at %u Hz pixel clock\n",
-			hdmi->format.sample_rate, hdmi->pixel_clock);
+	/*
+	 * Use manually selected N and CTS on Tegra30+.
+	 *
+	 * Use N derived from S/PDIF packet and CTS measured by HDMI controller
+	 * itself on Tegra20.
+	 */
+	if (hdmi->config->has_hda)
+		err = tegra_hdmi_setup_sw_cts(hdmi, &config);
+	else
+		err = tegra_hdmi_setup_hw_cts(hdmi);
+
+	if (err)
 		return err;
-	}
-
-	dev_dbg(hdmi->dev, "audio: pixclk=%u, n=%u, cts=%u, aval=%u\n",
-		hdmi->pixel_clock, config.n, config.cts, config.aval);
-
-	tegra_hdmi_writel(hdmi, 0, HDMI_NV_PDISP_HDMI_ACR_CTRL);
-
-	value = AUDIO_N_RESETF | AUDIO_N_GENERATE_ALTERNATE |
-		AUDIO_N_VALUE(config.n - 1);
-	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_AUDIO_N);
-
-	tegra_hdmi_writel(hdmi, ACR_SUBPACK_N(config.n) | ACR_ENABLE,
-			  HDMI_NV_PDISP_HDMI_ACR_0441_SUBPACK_HIGH);
-
-	tegra_hdmi_writel(hdmi, ACR_SUBPACK_CTS(config.cts),
-			  HDMI_NV_PDISP_HDMI_ACR_0441_SUBPACK_LOW);
-
-	value = SPARE_HW_CTS | SPARE_FORCE_SW_CTS | SPARE_CTS_RESET_VAL(1);
-	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_HDMI_SPARE);
-
-	value = tegra_hdmi_readl(hdmi, HDMI_NV_PDISP_AUDIO_N);
-	value &= ~AUDIO_N_RESETF;
-	tegra_hdmi_writel(hdmi, value, HDMI_NV_PDISP_AUDIO_N);
 
 	if (hdmi->config->has_hda)
 		tegra_hdmi_write_aval(hdmi, config.aval);
@@ -1262,8 +1307,10 @@ static void tegra_hdmi_encoder_enable(struct drm_encoder *encoder)
 		/*
 		 * Make sure that the audio format has been configured before
 		 * enabling audio, otherwise we may try to divide by zero.
-		*/
-		if (hdmi->format.sample_rate > 0) {
+		 *
+		 * Tegra20 doesn't have HDA, it uses S/PDIF in auto-config mode.
+		 */
+		if (hdmi->format.sample_rate > 0 || !hdmi->config->has_hda) {
 			err = tegra_hdmi_setup_audio(hdmi);
 			if (err < 0)
 				hdmi->dvi = true;
