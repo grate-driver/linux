@@ -13,6 +13,7 @@
 / {
 	model = "ASUS EeePad Transformer TF101";
 	compatible = "asus,tf101", "nvidia,tegra20";
+	chassis-type = "convertible";
 
 	aliases {
 		mmc0 = &sdmmc4; /* eMMC */

@@ -10,6 +10,7 @@
 / {
 	model = "Asus Transformer Pad TF701T";
 	compatible = "asus,tf701t", "nvidia,tegra114";
+	chassis-type = "convertible";
 
 	aliases {
 		mmc0 = &sdmmc4; /* eMMC */
