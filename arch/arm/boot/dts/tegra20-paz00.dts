@@ -264,6 +264,10 @@
 		};
 	};
 
+	spdif@70002400 {
+		status = "okay";
+	};
+
 	i2s@70002800 {
 		status = "okay";
 	};
