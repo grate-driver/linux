@@ -376,6 +376,10 @@
 		};
 	};
 
+	tegra_spdif: spdif@70002400 {
+		status = "okay";
+	};
+
 	tegra_i2s1: i2s@70002800 {
 		status = "okay";
 	};
