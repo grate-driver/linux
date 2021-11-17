@@ -1579,7 +1579,7 @@
 
 		brightness-levels = <1 255>;
 		num-interpolated-steps = <254>;
-		default-brightness-level = <15>;
+		default-brightness-level = <40>;
 	};
 
 	/* PMIC has a built-in 32KHz oscillator which is used by PMC */
