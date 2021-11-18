@@ -19,6 +19,8 @@
 #include <soc/tegra/common.h>
 #include <sound/hdmi-codec.h>
 
+#include <sound/hdmi-codec.h>
+
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_debugfs.h>
