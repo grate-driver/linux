@@ -1486,7 +1486,7 @@
 	sdmmc1: mmc@78000000 {
 		status = "okay";
 
-		/* SDR104 mode unsupported yet */
+		/* FIXME: Full clock speed doesn't work reliably */
 		max-frequency = <104000000>;
 
 		cd-gpios = <&gpio TEGRA_GPIO(I, 5) GPIO_ACTIVE_LOW>;
