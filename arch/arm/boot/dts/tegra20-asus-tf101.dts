@@ -405,7 +405,7 @@
 		compatible = "nvidia,tegra20-hsuart";
 		status = "okay";
 
-		/* Azurewave AW-NH665 BCM4329B1 */
+		/* Azurewave AW-NH615 BCM4329B1 */
 		bluetooth {
 			compatible = "brcm,bcm4329-bt";
 
@@ -821,6 +821,7 @@
 		vmmc-supply = <&vdd_3v3_sys>;
 		vqmmc-supply = <&vdd_3v3_sys>;
 
+		/* Azurewave AW-NH615 BCM4329B1 */
 		wifi@1 {
 			compatible = "brcm,bcm4329-fmac";
 			reg = <1>;
