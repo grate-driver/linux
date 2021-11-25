@@ -100,9 +100,8 @@ void snd_sof_pcm_period_elapsed(struct snd_pcm_substream *substream)
 }
 EXPORT_SYMBOL(snd_sof_pcm_period_elapsed);
 
-static int sof_pcm_dsp_pcm_free(struct snd_pcm_substream *substream,
-				struct snd_sof_dev *sdev,
-				struct snd_sof_pcm *spcm)
+int sof_pcm_dsp_pcm_free(struct snd_pcm_substream *substream, struct snd_sof_dev *sdev,
+			 struct snd_sof_pcm *spcm)
 {
 	struct sof_ipc_stream stream;
 	struct sof_ipc_reply reply;
@@ -814,6 +813,18 @@ int sof_pcm_dai_link_fixup(struct snd_soc_pcm_runtime *rtd, struct snd_pcm_hw_pa
 			"channels_min: %d channels_max: %d\n",
 			channels->min, channels->max);
 		break;
+	case SOF_DAI_MEDIATEK_AFE:
+		rate->min = dai->dai_config->afe.rate;
+		rate->max = dai->dai_config->afe.rate;
+		channels->min = dai->dai_config->afe.channels;
+		channels->max = dai->dai_config->afe.channels;
+
+		dev_dbg(component->dev,
+			"rate_min: %d rate_max: %d\n", rate->min, rate->max);
+		dev_dbg(component->dev,
+			"channels_min: %d channels_max: %d\n",
+			channels->min, channels->max);
+		break;
 	case SOF_DAI_IMX_SAI:
 		rate->min = dai->dai_config->sai.fsync_rate;
 		rate->max = dai->dai_config->sai.fsync_rate;
@@ -824,6 +835,42 @@ int sof_pcm_dai_link_fixup(struct snd_soc_pcm_runtime *rtd, struct snd_pcm_hw_pa
 			"rate_min: %d rate_max: %d\n", rate->min, rate->max);
 		dev_dbg(component->dev,
 			"channels_min: %d channels_max: %d\n",
+			channels->min, channels->max);
+		break;
+	case SOF_DAI_AMD_BT:
+		rate->min = dai->dai_config->acpbt.fsync_rate;
+		rate->max = dai->dai_config->acpbt.fsync_rate;
+		channels->min = dai->dai_config->acpbt.tdm_slots;
+		channels->max = dai->dai_config->acpbt.tdm_slots;
+
+		dev_dbg(component->dev,
+			"AMD_BT rate_min: %d rate_max: %d\n", rate->min, rate->max);
+		dev_dbg(component->dev,
+			"AMD_BT channels_min: %d channels_max: %d\n",
+			channels->min, channels->max);
+		break;
+	case SOF_DAI_AMD_SP:
+		rate->min = dai->dai_config->acpsp.fsync_rate;
+		rate->max = dai->dai_config->acpsp.fsync_rate;
+		channels->min = dai->dai_config->acpsp.tdm_slots;
+		channels->max = dai->dai_config->acpsp.tdm_slots;
+
+		dev_dbg(component->dev,
+			"AMD_SP rate_min: %d rate_max: %d\n", rate->min, rate->max);
+		dev_dbg(component->dev,
+			"AMD_SP channels_min: %d channels_max: %d\n",
+			channels->min, channels->max);
+		break;
+	case SOF_DAI_AMD_DMIC:
+		rate->min = dai->dai_config->acpdmic.fsync_rate;
+		rate->max = dai->dai_config->acpdmic.fsync_rate;
+		channels->min = dai->dai_config->acpdmic.tdm_slots;
+		channels->max = dai->dai_config->acpdmic.tdm_slots;
+
+		dev_dbg(component->dev,
+			"AMD_DMIC rate_min: %d rate_max: %d\n", rate->min, rate->max);
+		dev_dbg(component->dev,
+			"AMD_DMIC channels_min: %d channels_max: %d\n",
 			channels->min, channels->max);
 		break;
 	default:
@@ -869,6 +916,14 @@ static void sof_pcm_remove(struct snd_soc_component *component)
 	snd_soc_tplg_component_remove(component);
 }
 
+static int sof_pcm_ack(struct snd_soc_component *component,
+		       struct snd_pcm_substream *substream)
+{
+	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(component);
+
+	return snd_sof_pcm_platform_ack(sdev, substream);
+}
+
 void snd_sof_new_platform_drv(struct snd_sof_dev *sdev)
 {
 	struct snd_soc_component_driver *pd = &sdev->plat_drv;
@@ -887,6 +942,7 @@ void snd_sof_new_platform_drv(struct snd_sof_dev *sdev)
 	pd->hw_free = sof_pcm_hw_free;
 	pd->trigger = sof_pcm_trigger;
 	pd->pointer = sof_pcm_pointer;
+	pd->ack = sof_pcm_ack;
 
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_PROBES)
 	pd->compress_ops = &sof_probe_compressed_ops;
