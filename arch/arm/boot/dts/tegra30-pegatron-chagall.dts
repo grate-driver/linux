@@ -1288,6 +1288,7 @@
 
 				vdd_1v8_vio: vio {
 					regulator-name = "vdd_1v8_gen";
+					/* FIXME: eMMC won't work, if set to 1.8 V */
 					regulator-min-microvolt = <1500000>;
 					regulator-max-microvolt = <3300000>;
 					regulator-always-on;
