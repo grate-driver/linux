@@ -16,10 +16,6 @@
 #include <linux/uaccess.h>
 #include <linux/errno.h>
 
-#define arch_futex_atomic_op_inuser arch_futex_atomic_op_inuser
-#define futex_atomic_cmpxchg_inatomic futex_atomic_cmpxchg_inatomic
-#include <asm-generic/futex.h>
-
 #if XCHAL_HAVE_EXCLUSIVE
 #define __futex_atomic_op(insn, ret, old, uaddr, arg)	\
 	__asm__ __volatile(				\
@@ -109,7 +105,7 @@ static inline int arch_futex_atomic_op_inuser(int op, int oparg, int *oval,
 
 	return ret;
 #else
-	return arch_futex_atomic_op_inuser_local(op, oparg, oval, uaddr);
+	return -ENOSYS;
 #endif
 }
 
@@ -160,7 +156,7 @@ futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr,
 
 	return ret;
 #else
-	return futex_atomic_cmpxchg_inatomic_local(uval, uaddr, oldval, newval);
+	return -ENOSYS;
 #endif
 }
 
