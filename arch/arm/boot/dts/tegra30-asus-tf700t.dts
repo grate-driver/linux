@@ -252,6 +252,7 @@
 		operating-range-celsius = <0 45>;
 	};
 
+	/* FIXME: Sound only works, if booted from downstream kernel */
 	sound {
 		compatible = "asus,tegra-audio-rt5631-tf700t",
 			     "nvidia,tegra-audio-rt5631";

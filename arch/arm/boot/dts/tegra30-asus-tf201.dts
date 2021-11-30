@@ -138,6 +138,7 @@
 		vcc-supply = <&vdd_3v3_sys>;
 	};
 
+	/* FIXME: Sound only works, if booted from downstream kernel */
 	sound {
 		compatible = "asus,tegra-audio-rt5631-tf201",
 			     "nvidia,tegra-audio-rt5631";
