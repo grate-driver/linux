@@ -2720,6 +2720,7 @@
 		vcc-supply = <&vdd_3v3_sys>;
 	};
 
+	/* FIXME: Sound doesn't work yet */
 	sound {
 		compatible = "pegatron,tegra-audio-wm8903-chagall",
 			     "nvidia,tegra-audio-wm8903";
