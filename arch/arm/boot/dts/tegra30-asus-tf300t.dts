@@ -1013,6 +1013,7 @@
 		compatible = "innolux,g101ice-l01";
 	};
 
+	/* FIXME: Sound doesn't work yet */
 	sound {
 		compatible = "asus,tegra-audio-wm8903-tf300t",
 			     "nvidia,tegra-audio-wm8903";
