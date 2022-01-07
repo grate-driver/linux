@@ -6,6 +6,7 @@
 
 #include <linux/of_address.h>
 #include <linux/pm.h>
+#include <linux/reboot.h>
 #include <asm/reboot.h>
 
 #define	PM1_STS		0x0c /* Power Management 1 Status Register */
@@ -45,7 +46,7 @@ static int ls2k_reset_init(void)
 	}
 
 	_machine_restart = ls2k_restart;
-	pm_power_off = ls2k_poweroff;
+	register_platform_power_off(ls2k_poweroff);
 
 	return 0;
 }
