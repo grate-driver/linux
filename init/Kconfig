@@ -67,7 +67,13 @@ config HAS_RUST
 config RUSTC_VERSION
 	depends on HAS_RUST
 	int
-	default $(shell,$(srctree)/scripts/rust-version.sh $(RUSTC))
+	# Because some common tools like 'diff' don't support permissions of
+	# the files, 'rust-version.sh' in some trees that managed with such
+	# tools result in having no execution permission.  As a temporal work
+	# around, we specify the interpreter ('/bin/sh').  It will be unneeded
+	# once 'rust-version.sh' is merged in the mainline with its execution
+	# permission.
+	default $(shell,/bin/sh $(srctree)/scripts/rust-version.sh $(RUSTC))
 
 config CC_CAN_LINK
 	bool
