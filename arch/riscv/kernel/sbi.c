@@ -510,23 +510,25 @@ static void sbi_srst_reset(unsigned long type, unsigned long reason)
 		__func__, type, reason);
 }
 
-static int sbi_srst_reboot(struct notifier_block *this,
-			   unsigned long mode, void *cmd)
+static void sbi_srst_reboot(struct restart_data *data)
 {
-	sbi_srst_reset((mode == REBOOT_WARM || mode == REBOOT_SOFT) ?
+	sbi_srst_reset((data->mode == REBOOT_WARM || data->mode == REBOOT_SOFT) ?
 		       SBI_SRST_RESET_TYPE_WARM_REBOOT :
 		       SBI_SRST_RESET_TYPE_COLD_REBOOT,
 		       SBI_SRST_RESET_REASON_NONE);
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block sbi_srst_reboot_nb;
-
-static void sbi_srst_power_off(void)
+static void sbi_srst_power_off(struct power_off_data *data)
 {
 	sbi_srst_reset(SBI_SRST_RESET_TYPE_SHUTDOWN,
 		       SBI_SRST_RESET_REASON_NONE);
 }
+
+static struct sys_off_handler sbi_sys_off = {
+	.power_off_cb = sbi_srst_power_off,
+	.restart_cb = sbi_srst_reboot,
+	.restart_priority = RESTART_PRIO_HIGH,
+};
 
 /**
  * sbi_probe_extension() - Check if an SBI extension ID is supported or not.
@@ -638,10 +640,7 @@ void __init sbi_init(void)
 		if ((sbi_spec_version >= sbi_mk_version(0, 3)) &&
 		    (sbi_probe_extension(SBI_EXT_SRST) > 0)) {
 			pr_info("SBI SRST extension detected\n");
-			pm_power_off = sbi_srst_power_off;
-			sbi_srst_reboot_nb.notifier_call = sbi_srst_reboot;
-			sbi_srst_reboot_nb.priority = 192;
-			register_restart_handler(&sbi_srst_reboot_nb);
+			register_sys_off_handler(&sbi_sys_off);
 		}
 	} else {
 		__sbi_set_timer = __sbi_set_timer_v01;
