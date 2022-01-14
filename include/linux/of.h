@@ -366,15 +366,15 @@ extern int of_modalias_node(struct device_node *node, char *modalias, int len);
 extern void of_print_phandle_args(const char *msg, const struct of_phandle_args *args);
 extern struct device_node *of_parse_phandle(const struct device_node *np,
 					    const char *phandle_name,
-					    int index);
+					    unsigned int index);
 extern int of_parse_phandle_with_args(const struct device_node *np,
-	const char *list_name, const char *cells_name, int index,
+	const char *list_name, const char *cells_name, unsigned int index,
 	struct of_phandle_args *out_args);
 extern int of_parse_phandle_with_args_map(const struct device_node *np,
-	const char *list_name, const char *stem_name, int index,
+	const char *list_name, const char *stem_name, unsigned int index,
 	struct of_phandle_args *out_args);
 extern int of_parse_phandle_with_fixed_args(const struct device_node *np,
-	const char *list_name, int cells_count, int index,
+	const char *list_name, int cells_count, unsigned int index,
 	struct of_phandle_args *out_args);
 extern int of_count_phandle_with_args(const struct device_node *np,
 	const char *list_name, const char *cells_name);
@@ -867,7 +867,7 @@ static inline int of_property_read_string_helper(const struct device_node *np,
 
 static inline struct device_node *of_parse_phandle(const struct device_node *np,
 						   const char *phandle_name,
-						   int index)
+						   unsigned int index)
 {
 	return NULL;
 }
@@ -875,7 +875,7 @@ static inline struct device_node *of_parse_phandle(const struct device_node *np,
 static inline int of_parse_phandle_with_args(const struct device_node *np,
 					     const char *list_name,
 					     const char *cells_name,
-					     int index,
+					     unsigned int index,
 					     struct of_phandle_args *out_args)
 {
 	return -ENOSYS;
@@ -884,14 +884,14 @@ static inline int of_parse_phandle_with_args(const struct device_node *np,
 static inline int of_parse_phandle_with_args_map(const struct device_node *np,
 						 const char *list_name,
 						 const char *stem_name,
-						 int index,
+						 unsigned int index,
 						 struct of_phandle_args *out_args)
 {
 	return -ENOSYS;
 }
 
 static inline int of_parse_phandle_with_fixed_args(const struct device_node *np,
-	const char *list_name, int cells_count, int index,
+	const char *list_name, int cells_count, unsigned int index,
 	struct of_phandle_args *out_args)
 {
 	return -ENOSYS;

@@ -1423,11 +1423,12 @@ int of_phandle_iterator_args(struct of_phandle_iterator *it,
 static int __of_parse_phandle_with_args(const struct device_node *np,
 					const char *list_name,
 					const char *cells_name,
-					int cell_count, int index,
+					int cell_count, unsigned int index,
 					struct of_phandle_args *out_args)
 {
 	struct of_phandle_iterator it;
-	int rc, cur_index = 0;
+	unsigned int cur_index = 0;
+	int rc;
 
 	/* Loop over the phandles until all the requested entry is found */
 	of_for_each_phandle(&it, rc, np, list_name, cells_name, cell_count) {
@@ -1483,12 +1484,10 @@ static int __of_parse_phandle_with_args(const struct device_node *np,
  * of_node_put() on it when done.
  */
 struct device_node *of_parse_phandle(const struct device_node *np,
-				     const char *phandle_name, int index)
+				     const char *phandle_name,
+				     unsigned int index)
 {
 	struct of_phandle_args args;
-
-	if (index < 0)
-		return NULL;
 
 	if (__of_parse_phandle_with_args(np, phandle_name, NULL, 0,
 					 index, &args))
@@ -1531,13 +1530,10 @@ EXPORT_SYMBOL(of_parse_phandle);
  * of_parse_phandle_with_args(node3, "list", "#list-cells", 1, &args);
  */
 int of_parse_phandle_with_args(const struct device_node *np, const char *list_name,
-				const char *cells_name, int index,
+				const char *cells_name, unsigned int index,
 				struct of_phandle_args *out_args)
 {
 	int cell_count = -1;
-
-	if (index < 0)
-		return -EINVAL;
 
 	/* If cells_name is NULL we assume a cell count of 0 */
 	if (!cells_name)
@@ -1593,7 +1589,8 @@ EXPORT_SYMBOL(of_parse_phandle_with_args);
 int of_parse_phandle_with_args_map(const struct device_node *np,
 				   const char *list_name,
 				   const char *stem_name,
-				   int index, struct of_phandle_args *out_args)
+				   unsigned int index,
+				   struct of_phandle_args *out_args)
 {
 	char *cells_name, *map_name = NULL, *mask_name = NULL;
 	char *pass_name = NULL;
@@ -1605,9 +1602,6 @@ int of_parse_phandle_with_args_map(const struct device_node *np,
 	const __be32 *match_array = initial_match_array;
 	int i, ret, map_len, match;
 	u32 list_size, new_size;
-
-	if (index < 0)
-		return -EINVAL;
 
 	cells_name = kasprintf(GFP_KERNEL, "#%s-cells", stem_name);
 	if (!cells_name)
@@ -1764,10 +1758,9 @@ EXPORT_SYMBOL(of_parse_phandle_with_args_map);
  */
 int of_parse_phandle_with_fixed_args(const struct device_node *np,
 				const char *list_name, int cell_count,
-				int index, struct of_phandle_args *out_args)
+				unsigned int index,
+				struct of_phandle_args *out_args)
 {
-	if (index < 0)
-		return -EINVAL;
 	return __of_parse_phandle_with_args(np, list_name, NULL, cell_count,
 					   index, out_args);
 }
