@@ -2267,6 +2267,10 @@ out_free:
 	return ret;
 }
 
+void __weak arch__add_leaf_frame_record_opts(struct record_opts *opts __maybe_unused)
+{
+}
+
 static int parse_control_option(const struct option *opt,
 				const char *str,
 				int unset __maybe_unused)
@@ -2792,7 +2796,7 @@ int cmd_record(int argc, const char **argv)
 	symbol__init(NULL);
 
 	if (rec->opts.affinity != PERF_AFFINITY_SYS) {
-		rec->affinity_mask.nbits = cpu__max_cpu();
+		rec->affinity_mask.nbits = cpu__max_cpu().cpu;
 		rec->affinity_mask.bits = bitmap_zalloc(rec->affinity_mask.nbits);
 		if (!rec->affinity_mask.bits) {
 			pr_err("Failed to allocate thread mask for %zd cpus\n", rec->affinity_mask.nbits);
@@ -2898,6 +2902,10 @@ int cmd_record(int argc, const char **argv)
 	}
 
 	rec->opts.target.hybrid = perf_pmu__has_hybrid();
+
+	if (callchain_param.enabled && callchain_param.record_mode == CALLCHAIN_FP)
+		arch__add_leaf_frame_record_opts(&rec->opts);
+
 	err = -ENOMEM;
 	if (evlist__create_maps(rec->evlist, &rec->opts.target) < 0)
 		usage_with_options(record_usage, record_options);
