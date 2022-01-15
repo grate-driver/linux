@@ -1021,9 +1021,14 @@ static inline int of_parse_phandle_with_fixed_args(const struct device_node *np,
 
 /**
  * of_parse_phandle_with_optional_args() - Find a node pointed by phandle in a list
+ * @np:		pointer to a device tree node containing a list
+ * @list_name:	property name that contains a list
+ * @cells_name:	property name that specifies phandles' arguments count
+ * @index:	index of a phandle to parse out
+ * @out_args:	optional pointer to output arguments structure (will be filled)
  *
- * Same as of_parse_phandle_args() except that if the cells_name property is
- * not found, cell_count of 0 is assumed.
+ * Same as of_parse_phandle_with_args() except that if the cells_name property
+ * is not found, cell_count of 0 is assumed.
  *
  * This is used to useful, if you have a phandle which didn't have arguments
  * before and thus doesn't have a '#*-cells' property but is now migrated to
