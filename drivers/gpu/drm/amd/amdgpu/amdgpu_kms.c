@@ -164,8 +164,10 @@ int amdgpu_driver_load_kms(struct amdgpu_device *adev, unsigned long flags)
 	    !pci_is_thunderbolt_attached(to_pci_dev(dev->dev)))
 		flags |= AMD_IS_PX;
 
-	parent = pci_upstream_bridge(adev->pdev);
-	adev->has_pr3 = parent ? pci_pr3_present(parent) : false;
+	if (!(flags & AMD_IS_APU)) {
+		parent = pci_upstream_bridge(adev->pdev);
+		adev->has_pr3 = parent ? pci_pr3_present(parent) : false;
+	}
 
 	/* amdgpu_device_init should report only fatal error
 	 * like memory allocation failure or iomapping failure,
@@ -405,6 +407,10 @@ static int amdgpu_firmware_info(struct drm_amdgpu_info_firmware *fw_info,
 	case AMDGPU_INFO_FW_TOC:
 		fw_info->ver = adev->psp.toc.fw_version;
 		fw_info->feature = adev->psp.toc.feature_version;
+		break;
+	case AMDGPU_INFO_FW_CAP:
+		fw_info->ver = adev->psp.cap_fw_version;
+		fw_info->feature = adev->psp.cap_feature_version;
 		break;
 	default:
 		return -EINVAL;
@@ -1622,6 +1628,16 @@ static int amdgpu_debugfs_firmware_info_show(struct seq_file *m, void *unused)
 		return ret;
 	seq_printf(m, "TOC feature version: %u, firmware version: 0x%08x\n",
 		   fw_info.feature, fw_info.ver);
+
+	/* CAP */
+	if (adev->psp.cap_fw) {
+		query_fw.fw_type = AMDGPU_INFO_FW_CAP;
+		ret = amdgpu_firmware_info(&fw_info, &query_fw, adev);
+		if (ret)
+			return ret;
+		seq_printf(m, "CAP feature version: %u, firmware version: 0x%08x\n",
+				fw_info.feature, fw_info.ver);
+	}
 
 	seq_printf(m, "VBIOS version: %s\n", ctx->vbios_version);
 
