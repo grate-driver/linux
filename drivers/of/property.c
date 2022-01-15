@@ -1173,7 +1173,8 @@ static int of_link_to_phandle(struct device_node *con_np,
  * - NULL if no phandle found at index
  */
 static struct device_node *parse_prop_cells(struct device_node *np,
-					    const char *prop_name, int index,
+					    const char *prop_name,
+					    unsigned int index,
 					    const char *list_name,
 					    const char *cells_name)
 {
@@ -1191,7 +1192,8 @@ static struct device_node *parse_prop_cells(struct device_node *np,
 
 #define DEFINE_SIMPLE_PROP(fname, name, cells)				  \
 static struct device_node *parse_##fname(struct device_node *np,	  \
-					const char *prop_name, int index) \
+					 const char *prop_name,		  \
+					 unsigned int index)		  \
 {									  \
 	return parse_prop_cells(np, prop_name, index, name, cells);	  \
 }
@@ -1227,7 +1229,8 @@ static int strcmp_suffix(const char *str, const char *suffix)
  * - NULL if no phandle found at index
  */
 static struct device_node *parse_suffix_prop_cells(struct device_node *np,
-					    const char *prop_name, int index,
+					    const char *prop_name,
+					    unsigned int index,
 					    const char *suffix,
 					    const char *cells_name)
 {
@@ -1245,7 +1248,8 @@ static struct device_node *parse_suffix_prop_cells(struct device_node *np,
 
 #define DEFINE_SUFFIX_PROP(fname, suffix, cells)			     \
 static struct device_node *parse_##fname(struct device_node *np,	     \
-					const char *prop_name, int index)    \
+					 const char *prop_name,		     \
+					 unsigned int index)		     \
 {									     \
 	return parse_suffix_prop_cells(np, prop_name, index, suffix, cells); \
 }
@@ -1272,7 +1276,8 @@ static struct device_node *parse_##fname(struct device_node *np,	     \
  */
 struct supplier_bindings {
 	struct device_node *(*parse_prop)(struct device_node *np,
-					  const char *prop_name, int index);
+					  const char *prop_name,
+					  unsigned int index);
 	bool optional;
 	bool node_not_dev;
 };
@@ -1308,7 +1313,8 @@ DEFINE_SUFFIX_PROP(regulators, "-supply", NULL)
 DEFINE_SUFFIX_PROP(gpio, "-gpio", "#gpio-cells")
 
 static struct device_node *parse_gpios(struct device_node *np,
-				       const char *prop_name, int index)
+				       const char *prop_name,
+				       unsigned int index)
 {
 	if (!strcmp_suffix(prop_name, ",nr-gpios"))
 		return NULL;
@@ -1318,7 +1324,8 @@ static struct device_node *parse_gpios(struct device_node *np,
 }
 
 static struct device_node *parse_iommu_maps(struct device_node *np,
-					    const char *prop_name, int index)
+					    const char *prop_name,
+					    unsigned int index)
 {
 	if (strcmp(prop_name, "iommu-map"))
 		return NULL;
@@ -1327,7 +1334,8 @@ static struct device_node *parse_iommu_maps(struct device_node *np,
 }
 
 static struct device_node *parse_gpio_compat(struct device_node *np,
-					     const char *prop_name, int index)
+					     const char *prop_name,
+					     unsigned int index)
 {
 	struct of_phandle_args sup_args;
 
@@ -1349,7 +1357,8 @@ static struct device_node *parse_gpio_compat(struct device_node *np,
 }
 
 static struct device_node *parse_interrupts(struct device_node *np,
-					    const char *prop_name, int index)
+					    const char *prop_name,
+					    unsigned int index)
 {
 	struct of_phandle_args sup_args;
 

@@ -25,6 +25,8 @@ patternProperties:
   # Keep list in alphabetical order.
   "^70mai,.*":
     description: 70mai Co., Ltd.
+  "^8dev,.*":
+    description: 8devices, UAB
   "^abb,.*":
     description: ABB
   "^abilis,.*":
@@ -443,6 +445,8 @@ patternProperties:
     description: Freescale Semiconductor
   "^fujitsu,.*":
     description: Fujitsu Ltd.
+  "^fxtec,.*":
+    description: FX Technology Ltd.
   "^gardena,.*":
     description: GARDENA GmbH
   "^gateworks,.*":
@@ -519,6 +523,8 @@ patternProperties:
     description: HannStar Display Co.
   "^holtek,.*":
     description: Holtek Semiconductor, Inc.
+  "^huawei,.*":
+    description: Huawei Technologies Co., Ltd.
   "^hugsun,.*":
     description: Shenzhen Hugsun Technology Co. Ltd.
   "^hwacom,.*":
@@ -1211,6 +1217,8 @@ patternProperties:
     description: THine Electronics, Inc.
   "^thingyjp,.*":
     description: thingy.jp
+  "^thundercomm,.*":
+    description: Thundercomm Technology Co., Ltd.
   "^ti,.*":
     description: Texas Instruments
   "^tianma,.*":
@@ -1340,6 +1348,8 @@ patternProperties:
     description: Winbond Electronics corp.
   "^winlink,.*":
     description: WinLink Co., Ltd
+  "^wingtech,.*":
+    description: Wingtech Technology Co., Ltd.
   "^winstar,.*":
     description: Winstar Display Corp.
   "^wits,.*":
