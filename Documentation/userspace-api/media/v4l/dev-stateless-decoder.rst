@@ -271,6 +271,9 @@ A typical frame would thus be decoded using the following sequence:
           we are not sure that the current decode request is the last one needed
           to produce a fully decoded frame, then
           ``V4L2_BUF_FLAG_M2M_HOLD_CAPTURE_BUF`` must also be set.
+          ``V4L2_BUF_FLAG_KEYFRAME``, ``V4L2_BUF_FLAG_PFRAME`` and
+          ``V4L2_BUF_FLAG_BFRAME`` must be set if relevant to the coded
+          format.
 
       ``request_fd``
           must be set to the file descriptor of the decoding request.
