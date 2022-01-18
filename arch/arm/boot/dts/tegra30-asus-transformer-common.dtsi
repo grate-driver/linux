@@ -12,9 +12,9 @@
 	chassis-type = "convertible";
 
 	aliases {
-		mmc0 = "/mmc@78000600"; /* eMMC */
-		mmc1 = "/mmc@78000000"; /* uSD slot */
-		mmc2 = "/mmc@78000400"; /* WiFi */
+		mmc0 = &sdmmc4; /* eMMC */
+		mmc1 = &sdmmc1; /* uSD slot */
+		mmc2 = &sdmmc3; /* WiFi */
 
 		rtc0 = &pmic;
 		rtc1 = "/rtc@7000e000";
