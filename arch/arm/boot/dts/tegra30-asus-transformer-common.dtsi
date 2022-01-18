@@ -1471,6 +1471,8 @@
 			interrupt-parent = <&gpio>;
 			interrupts = <TEGRA_GPIO(O, 4) IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "host-wake";
+
+			reset-gpios = <&gpio TEGRA_GPIO(D, 3) GPIO_ACTIVE_LOW>;
 		};
 	};
 
