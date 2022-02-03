@@ -995,6 +995,20 @@
 		};
 	};
 
+	pad_battery: battery-pad {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <2940000>;
+		energy-full-design-microwatt-hours = <22000000>;
+		operating-range-celsius = <0 45>;
+	};
+
+	dock_battery: battery-dock {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <2260000>;
+		energy-full-design-microwatt-hours = <16000000>;
+		operating-range-celsius = <0 45>;
+	};
+
 	display-panel {
 		compatible = "innolux,g101ice-l01";
 	};
