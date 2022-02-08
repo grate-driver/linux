@@ -12,12 +12,16 @@
 
 #define ASUSEC_EXT_KEY_CODES 0x20
 
+#define ASUSEC_TOUCHPAD_ON   0xF4D4
+#define ASUSEC_TOUCHPAD_OFF  0xF5D4
+
 struct asusec_keys_data {
 	struct notifier_block nb;
 	struct asusec_info *ec;
 	struct input_dev *xidev;
 	bool special_key_pressed;
 	bool special_key_mode;
+	bool touchpad_enabled;
 	unsigned short keymap[ASUSEC_EXT_KEY_CODES * 2];
 };
 
@@ -208,6 +212,49 @@ static void asusec_keys_setup_keymap(struct asusec_keys_data *priv)
 	}
 }
 
+static ssize_t touchpad_show(struct device *dev,
+			     struct device_attribute *attr,
+			     char *buf)
+{
+	struct asusec_keys_data *priv = dev_get_drvdata(dev);
+
+	return sprintf(buf, "%d\n", priv->touchpad_enabled);
+}
+
+static ssize_t touchpad_store(struct device *dev,
+			      struct device_attribute *attr,
+			      const char *buf, size_t count)
+{
+	struct asusec_keys_data *priv = dev_get_drvdata(dev);
+	int state;
+
+	sscanf(buf, "%d", &state);
+
+	/* Set the Touchpad switch: 0 - Disable, 1 - Enable */
+	if (state) {
+		state = asusec_i2c_command(priv->ec, ASUSEC_TOUCHPAD_ON);
+		if (!state)
+			priv->touchpad_enabled = true;
+	} else {
+		state = asusec_i2c_command(priv->ec, ASUSEC_TOUCHPAD_OFF);
+		if (!state)
+			priv->touchpad_enabled = false;
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(touchpad);
+
+static struct attribute *asusec_keys_attributes[] = {
+	&dev_attr_touchpad.attr,
+	NULL
+};
+
+static const struct attribute_group asusec_keys_attr_group = {
+	.attrs = asusec_keys_attributes,
+};
+
 static int asusec_keys_probe(struct platform_device *pdev)
 {
 	struct asusec_info *ec = asusec_cell_to_ec(pdev);
@@ -242,6 +289,15 @@ static int asusec_keys_probe(struct platform_device *pdev)
 			ret);
 		return ret;
 	}
+
+	ret = asusec_i2c_command(priv->ec, ASUSEC_TOUCHPAD_ON);	
+	if (!ret)
+		priv->touchpad_enabled = true;
+
+	ret = devm_device_add_group(&pdev->dev, &asusec_keys_attr_group);
+	if (ret)
+		return dev_err_probe(&pdev->dev, ret,
+				     "failed to create sysfs attributes\n");
 
 	asusec_input_handler.private = priv;
 
