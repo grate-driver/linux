@@ -308,7 +308,7 @@ int afs_fetch_data(struct afs_vnode *vnode, struct afs_read *req)
 	return afs_do_sync_operation(op);
 }
 
-static void afs_req_issue_op(struct netfs_io_subrequest *subreq)
+static void afs_issue_read(struct netfs_io_subrequest *subreq)
 {
 	struct afs_vnode *vnode = AFS_FS_I(subreq->rreq->inode);
 	struct afs_read *fsreq;
@@ -357,7 +357,7 @@ static int afs_symlink_readpage(struct file *file, struct page *page)
 	return ret;
 }
 
-static void afs_init_rreq(struct netfs_io_request *rreq, struct file *file)
+static void afs_init_request(struct netfs_io_request *rreq, struct file *file)
 {
 	rreq->netfs_priv = key_get(afs_file_key(file));
 }
@@ -388,10 +388,10 @@ static void afs_priv_cleanup(struct address_space *mapping, void *netfs_priv)
 }
 
 const struct netfs_request_ops afs_req_ops = {
-	.init_rreq		= afs_init_rreq,
+	.init_request		= afs_init_request,
 	.begin_cache_operation	= afs_begin_cache_operation,
 	.check_write_begin	= afs_check_write_begin,
-	.issue_op		= afs_req_issue_op,
+	.issue_read		= afs_issue_read,
 	.cleanup		= afs_priv_cleanup,
 };
 

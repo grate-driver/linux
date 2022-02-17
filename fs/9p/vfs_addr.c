@@ -28,10 +28,10 @@
 #include "fid.h"
 
 /**
- * v9fs_req_issue_op - Issue a read from 9P
+ * v9fs_issue_read - Issue a read from 9P
  * @subreq: The read to make
  */
-static void v9fs_req_issue_op(struct netfs_io_subrequest *subreq)
+static void v9fs_issue_read(struct netfs_io_subrequest *subreq)
 {
 	struct netfs_io_request *rreq = subreq->rreq;
 	struct p9_fid *fid = rreq->netfs_priv;
@@ -52,11 +52,11 @@ static void v9fs_req_issue_op(struct netfs_io_subrequest *subreq)
 }
 
 /**
- * v9fs_init_rreq - Initialise a read request
+ * v9fs_init_request - Initialise a read request
  * @rreq: The read request
  * @file: The file being read from
  */
-static void v9fs_init_rreq(struct netfs_io_request *rreq, struct file *file)
+static void v9fs_init_request(struct netfs_io_request *rreq, struct file *file)
 {
 	struct p9_fid *fid = file->private_data;
 
@@ -92,9 +92,9 @@ static int v9fs_begin_cache_operation(struct netfs_io_request *rreq)
 }
 
 const struct netfs_request_ops v9fs_req_ops = {
-	.init_rreq		= v9fs_init_rreq,
+	.init_request		= v9fs_init_request,
 	.begin_cache_operation	= v9fs_begin_cache_operation,
-	.issue_op		= v9fs_req_issue_op,
+	.issue_read		= v9fs_issue_read,
 	.cleanup		= v9fs_req_cleanup,
 };
 

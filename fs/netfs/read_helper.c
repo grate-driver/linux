@@ -36,11 +36,11 @@ static void netfs_put_subrequest(struct netfs_io_subrequest *subreq,
 		__netfs_put_subrequest(subreq, was_async);
 }
 
-static struct netfs_io_request *netfs_alloc_read_request(
+static struct netfs_io_request *netfs_alloc_request(
 	struct address_space *mapping,
 	struct file *file,
 	loff_t start, size_t len,
-	enum netfs_read_origin origin)
+	enum netfs_io_origin origin)
 {
 	static atomic_t debug_ids;
 	struct inode *inode = file ? file_inode(file) : mapping->host;
@@ -61,21 +61,20 @@ static struct netfs_io_request *netfs_alloc_read_request(
 		INIT_WORK(&rreq->work, netfs_rreq_work);
 		refcount_set(&rreq->usage, 1);
 		__set_bit(NETFS_RREQ_IN_PROGRESS, &rreq->flags);
-		if (ctx->ops->init_rreq)
-			ctx->ops->init_rreq(rreq, file);
+		if (ctx->ops->init_request)
+			ctx->ops->init_request(rreq, file);
 		netfs_stat(&netfs_n_rh_rreq);
 	}
 
 	return rreq;
 }
 
-static void netfs_get_read_request(struct netfs_io_request *rreq)
+static void netfs_get_request(struct netfs_io_request *rreq)
 {
 	refcount_inc(&rreq->usage);
 }
 
-static void netfs_rreq_clear_subreqs(struct netfs_io_request *rreq,
-				     bool was_async)
+static void netfs_clear_subrequests(struct netfs_io_request *rreq, bool was_async)
 {
 	struct netfs_io_subrequest *subreq;
 
@@ -87,11 +86,11 @@ static void netfs_rreq_clear_subreqs(struct netfs_io_request *rreq,
 	}
 }
 
-static void netfs_free_read_request(struct work_struct *work)
+static void netfs_free_request(struct work_struct *work)
 {
 	struct netfs_io_request *rreq =
 		container_of(work, struct netfs_io_request, work);
-	netfs_rreq_clear_subreqs(rreq, false);
+	netfs_clear_subrequests(rreq, false);
 	if (rreq->netfs_priv)
 		rreq->netfs_ops->cleanup(rreq->mapping, rreq->netfs_priv);
 	trace_netfs_rreq(rreq, netfs_rreq_trace_free);
@@ -101,15 +100,15 @@ static void netfs_free_read_request(struct work_struct *work)
 	netfs_stat_d(&netfs_n_rh_rreq);
 }
 
-static void netfs_put_read_request(struct netfs_io_request *rreq, bool was_async)
+static void netfs_put_request(struct netfs_io_request *rreq, bool was_async)
 {
 	if (refcount_dec_and_test(&rreq->usage)) {
 		if (was_async) {
-			rreq->work.func = netfs_free_read_request;
+			rreq->work.func = netfs_free_request;
 			if (!queue_work(system_unbound_wq, &rreq->work))
 				BUG();
 		} else {
-			netfs_free_read_request(&rreq->work);
+			netfs_free_request(&rreq->work);
 		}
 	}
 }
@@ -127,14 +126,14 @@ static struct netfs_io_subrequest *netfs_alloc_subrequest(
 		INIT_LIST_HEAD(&subreq->rreq_link);
 		refcount_set(&subreq->usage, 2);
 		subreq->rreq = rreq;
-		netfs_get_read_request(rreq);
+		netfs_get_request(rreq);
 		netfs_stat(&netfs_n_rh_sreq);
 	}
 
 	return subreq;
 }
 
-static void netfs_get_read_subrequest(struct netfs_io_subrequest *subreq)
+static void netfs_get_subrequest(struct netfs_io_subrequest *subreq)
 {
 	refcount_inc(&subreq->usage);
 }
@@ -147,7 +146,7 @@ static void __netfs_put_subrequest(struct netfs_io_subrequest *subreq,
 	trace_netfs_sreq(subreq, netfs_sreq_trace_free);
 	kfree(subreq);
 	netfs_stat_d(&netfs_n_rh_sreq);
-	netfs_put_read_request(rreq, was_async);
+	netfs_put_request(rreq, was_async);
 }
 
 /*
@@ -222,7 +221,7 @@ static void netfs_read_from_server(struct netfs_io_request *rreq,
 				   struct netfs_io_subrequest *subreq)
 {
 	netfs_stat(&netfs_n_rh_download);
-	rreq->netfs_ops->issue_op(subreq);
+	rreq->netfs_ops->issue_read(subreq);
 }
 
 /*
@@ -231,8 +230,8 @@ static void netfs_read_from_server(struct netfs_io_request *rreq,
 static void netfs_rreq_completed(struct netfs_io_request *rreq, bool was_async)
 {
 	trace_netfs_rreq(rreq, netfs_rreq_trace_done);
-	netfs_rreq_clear_subreqs(rreq, was_async);
-	netfs_put_read_request(rreq, was_async);
+	netfs_clear_subrequests(rreq, was_async);
+	netfs_put_request(rreq, was_async);
 }
 
 /*
@@ -312,7 +311,7 @@ static void netfs_rreq_do_write_to_cache(struct netfs_io_request *rreq)
 	atomic_inc(&rreq->nr_copy_ops);
 
 	list_for_each_entry_safe(subreq, p, &rreq->subrequests, rreq_link) {
-		if (!test_bit(NETFS_SREQ_WRITE_TO_CACHE, &subreq->flags)) {
+		if (!test_bit(NETFS_SREQ_COPY_TO_CACHE, &subreq->flags)) {
 			list_del_init(&subreq->rreq_link);
 			netfs_put_subrequest(subreq, false);
 		}
@@ -342,7 +341,7 @@ static void netfs_rreq_do_write_to_cache(struct netfs_io_request *rreq)
 
 		atomic_inc(&rreq->nr_copy_ops);
 		netfs_stat(&netfs_n_rh_write);
-		netfs_get_read_subrequest(subreq);
+		netfs_get_subrequest(subreq);
 		trace_netfs_sreq(subreq, netfs_sreq_trace_write);
 		cres->ops->write(cres, subreq->start, &iter,
 				 netfs_rreq_copy_terminated, subreq);
@@ -384,9 +383,9 @@ static void netfs_rreq_unlock(struct netfs_io_request *rreq)
 	XA_STATE(xas, &rreq->mapping->i_pages, start_page);
 
 	if (test_bit(NETFS_RREQ_FAILED, &rreq->flags)) {
-		__clear_bit(NETFS_RREQ_WRITE_TO_CACHE, &rreq->flags);
+		__clear_bit(NETFS_RREQ_COPY_TO_CACHE, &rreq->flags);
 		list_for_each_entry(subreq, &rreq->subrequests, rreq_link) {
-			__clear_bit(NETFS_SREQ_WRITE_TO_CACHE, &subreq->flags);
+			__clear_bit(NETFS_SREQ_COPY_TO_CACHE, &subreq->flags);
 		}
 	}
 
@@ -414,7 +413,7 @@ static void netfs_rreq_unlock(struct netfs_io_request *rreq)
 				pg_failed = true;
 				break;
 			}
-			if (test_bit(NETFS_SREQ_WRITE_TO_CACHE, &subreq->flags))
+			if (test_bit(NETFS_SREQ_COPY_TO_CACHE, &subreq->flags))
 				folio_start_fscache(folio);
 			pg_failed |= subreq_failed;
 			if (pgend < iopos + subreq->len)
@@ -459,13 +458,13 @@ static void netfs_rreq_unlock(struct netfs_io_request *rreq)
 static void netfs_rreq_short_read(struct netfs_io_request *rreq,
 				  struct netfs_io_subrequest *subreq)
 {
-	__clear_bit(NETFS_SREQ_SHORT_READ, &subreq->flags);
+	__clear_bit(NETFS_SREQ_SHORT_IO, &subreq->flags);
 	__set_bit(NETFS_SREQ_SEEK_DATA_READ, &subreq->flags);
 
 	netfs_stat(&netfs_n_rh_short_read);
 	trace_netfs_sreq(subreq, netfs_sreq_trace_resubmit_short);
 
-	netfs_get_read_subrequest(subreq);
+	netfs_get_subrequest(subreq);
 	atomic_inc(&rreq->nr_outstanding);
 	if (subreq->source == NETFS_READ_FROM_CACHE)
 		netfs_read_from_cache(rreq, subreq, NETFS_READ_HOLE_CLEAR);
@@ -499,10 +498,10 @@ static bool netfs_rreq_perform_resubmissions(struct netfs_io_request *rreq)
 			subreq->error = 0;
 			netfs_stat(&netfs_n_rh_download_instead);
 			trace_netfs_sreq(subreq, netfs_sreq_trace_download_instead);
-			netfs_get_read_subrequest(subreq);
+			netfs_get_subrequest(subreq);
 			atomic_inc(&rreq->nr_outstanding);
 			netfs_read_from_server(rreq, subreq);
-		} else if (test_bit(NETFS_SREQ_SHORT_READ, &subreq->flags)) {
+		} else if (test_bit(NETFS_SREQ_SHORT_IO, &subreq->flags)) {
 			netfs_rreq_short_read(rreq, subreq);
 		}
 	}
@@ -559,7 +558,7 @@ again:
 	clear_bit_unlock(NETFS_RREQ_IN_PROGRESS, &rreq->flags);
 	wake_up_bit(&rreq->flags, NETFS_RREQ_IN_PROGRESS);
 
-	if (test_bit(NETFS_RREQ_WRITE_TO_CACHE, &rreq->flags))
+	if (test_bit(NETFS_RREQ_COPY_TO_CACHE, &rreq->flags))
 		return netfs_rreq_write_to_cache(rreq);
 
 	netfs_rreq_completed(rreq, was_async);
@@ -648,8 +647,8 @@ void netfs_subreq_terminated(struct netfs_io_subrequest *subreq,
 
 complete:
 	__clear_bit(NETFS_SREQ_NO_PROGRESS, &subreq->flags);
-	if (test_bit(NETFS_SREQ_WRITE_TO_CACHE, &subreq->flags))
-		set_bit(NETFS_RREQ_WRITE_TO_CACHE, &rreq->flags);
+	if (test_bit(NETFS_SREQ_COPY_TO_CACHE, &subreq->flags))
+		set_bit(NETFS_RREQ_COPY_TO_CACHE, &rreq->flags);
 
 out:
 	trace_netfs_sreq(subreq, netfs_sreq_trace_terminated);
@@ -680,7 +679,7 @@ incomplete:
 		__clear_bit(NETFS_SREQ_NO_PROGRESS, &subreq->flags);
 	}
 
-	__set_bit(NETFS_SREQ_SHORT_READ, &subreq->flags);
+	__set_bit(NETFS_SREQ_SHORT_IO, &subreq->flags);
 	set_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags);
 	goto out;
 
@@ -880,10 +879,10 @@ void netfs_readahead(struct readahead_control *ractl)
 	if (readahead_count(ractl) == 0)
 		return;
 
-	rreq = netfs_alloc_read_request(ractl->mapping, ractl->file,
-					readahead_pos(ractl),
-					readahead_length(ractl),
-					NETFS_READAHEAD);
+	rreq = netfs_alloc_request(ractl->mapping, ractl->file,
+				   readahead_pos(ractl),
+				   readahead_length(ractl),
+				   NETFS_READAHEAD);
 	if (!rreq)
 		return;
 
@@ -918,7 +917,7 @@ void netfs_readahead(struct readahead_control *ractl)
 	return;
 
 cleanup_free:
-	netfs_put_read_request(rreq, false);
+	netfs_put_request(rreq, false);
 	return;
 }
 EXPORT_SYMBOL(netfs_readahead);
@@ -948,8 +947,8 @@ int netfs_readpage(struct file *file, struct page *subpage)
 
 	_enter("%lx", folio_index(folio));
 
-	rreq = netfs_alloc_read_request(mapping, file, folio_file_pos(folio),
-					folio_size(folio), NETFS_READPAGE);
+	rreq = netfs_alloc_request(mapping, file, folio_file_pos(folio),
+				   folio_size(folio), NETFS_READPAGE);
 	if (!rreq)
 		goto nomem;
 
@@ -964,7 +963,7 @@ int netfs_readpage(struct file *file, struct page *subpage)
 	netfs_stat(&netfs_n_rh_readpage);
 	trace_netfs_read(rreq, rreq->start, rreq->len, netfs_read_trace_readpage);
 
-	netfs_get_read_request(rreq);
+	netfs_get_request(rreq);
 
 	atomic_set(&rreq->nr_outstanding, 1);
 	do {
@@ -978,7 +977,8 @@ int netfs_readpage(struct file *file, struct page *subpage)
 	 * process.
 	 */
 	do {
-		wait_var_event(&rreq->nr_outstanding, atomic_read(&rreq->nr_outstanding) == 1);
+		wait_var_event(&rreq->nr_outstanding,
+			       atomic_read(&rreq->nr_outstanding) == 1);
 		netfs_rreq_assess(rreq, false);
 	} while (test_bit(NETFS_RREQ_IN_PROGRESS, &rreq->flags));
 
@@ -988,7 +988,7 @@ int netfs_readpage(struct file *file, struct page *subpage)
 		ret = -EIO;
 	}
 out:
-	netfs_put_read_request(rreq, false);
+	netfs_put_request(rreq, false);
 	return ret;
 nomem:
 	folio_unlock(folio);
@@ -1124,8 +1124,8 @@ retry:
 	}
 
 	ret = -ENOMEM;
-	rreq = netfs_alloc_read_request(mapping, file, folio_file_pos(folio),
-					folio_size(folio), NETFS_READ_FOR_WRITE);
+	rreq = netfs_alloc_request(mapping, file, folio_file_pos(folio),
+				   folio_size(folio), NETFS_READ_FOR_WRITE);
 	if (!rreq)
 		goto error;
 	rreq->start		= folio_file_pos(folio);
@@ -1147,7 +1147,7 @@ retry:
 	 */
 	ractl._nr_pages = folio_nr_pages(folio);
 	netfs_rreq_expand(rreq, &ractl);
-	netfs_get_read_request(rreq);
+	netfs_get_request(rreq);
 
 	/* We hold the folio locks, so we can drop the references */
 	folio_get(folio);
@@ -1161,12 +1161,13 @@ retry:
 
 	} while (rreq->submitted < rreq->len);
 
-	/* Keep nr_outstanding incremented so that the ref always belongs to us, and
-	 * the service code isn't punted off to a random thread pool to
+	/* Keep nr_outstanding incremented so that the ref always belongs to
+	 * us, and the service code isn't punted off to a random thread pool to
 	 * process.
 	 */
 	for (;;) {
-		wait_var_event(&rreq->nr_outstanding, atomic_read(&rreq->nr_outstanding) == 1);
+		wait_var_event(&rreq->nr_outstanding,
+			       atomic_read(&rreq->nr_outstanding) == 1);
 		netfs_rreq_assess(rreq, false);
 		if (!test_bit(NETFS_RREQ_IN_PROGRESS, &rreq->flags))
 			break;
@@ -1178,7 +1179,7 @@ retry:
 		trace_netfs_failure(rreq, NULL, ret, netfs_fail_short_write_begin);
 		ret = -EIO;
 	}
-	netfs_put_read_request(rreq, false);
+	netfs_put_request(rreq, false);
 	if (ret < 0)
 		goto error;
 
@@ -1192,7 +1193,7 @@ have_folio_no_wait:
 	return 0;
 
 error_put:
-	netfs_put_read_request(rreq, false);
+	netfs_put_request(rreq, false);
 error:
 	folio_unlock(folio);
 	folio_put(folio);
