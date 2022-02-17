@@ -164,7 +164,7 @@ occurs, the request will get partially completed if sufficient data is read.
 
 Additionally, there is::
 
-  * void netfs_subreq_terminated(struct netfs_read_subrequest *subreq,
+  * void netfs_subreq_terminated(struct netfs_io_subrequest *subreq,
 				 ssize_t transferred_or_error,
 				 bool was_async);
 
@@ -180,7 +180,7 @@ Read Helper Structures
 The read helpers make use of a couple of structures to maintain the state of
 the read.  The first is a structure that manages a read request as a whole::
 
-	struct netfs_read_request {
+	struct netfs_io_request {
 		struct inode		*inode;
 		struct address_space	*mapping;
 		struct netfs_cache_resources cache_resources;
@@ -188,7 +188,7 @@ the read.  The first is a structure that manages a read request as a whole::
 		loff_t			start;
 		size_t			len;
 		loff_t			i_size;
-		const struct netfs_read_request_ops *netfs_ops;
+		const struct netfs_io_request_ops *netfs_ops;
 		unsigned int		debug_id;
 		...
 	};
@@ -235,8 +235,8 @@ The above fields are the ones the netfs can use.  They are:
 The second structure is used to manage individual slices of the overall read
 request::
 
-	struct netfs_read_subrequest {
-		struct netfs_read_request *rreq;
+	struct netfs_io_subrequest {
+		struct netfs_io_request *rreq;
 		loff_t			start;
 		size_t			len;
 		size_t			transferred;
@@ -292,16 +292,16 @@ Read Helper Operations
 The network filesystem must provide the read helpers with a table of operations
 through which it can issue requests and negotiate::
 
-	struct netfs_read_request_ops {
-		void (*init_rreq)(struct netfs_read_request *rreq, struct file *file);
-		int (*begin_cache_operation)(struct netfs_read_request *rreq);
-		void (*expand_readahead)(struct netfs_read_request *rreq);
-		bool (*clamp_length)(struct netfs_read_subrequest *subreq);
-		void (*issue_op)(struct netfs_read_subrequest *subreq);
-		bool (*is_still_valid)(struct netfs_read_request *rreq);
+	struct netfs_io_request_ops {
+		void (*init_rreq)(struct netfs_io_request *rreq, struct file *file);
+		int (*begin_cache_operation)(struct netfs_io_request *rreq);
+		void (*expand_readahead)(struct netfs_io_request *rreq);
+		bool (*clamp_length)(struct netfs_io_subrequest *subreq);
+		void (*issue_op)(struct netfs_io_subrequest *subreq);
+		bool (*is_still_valid)(struct netfs_io_request *rreq);
 		int (*check_write_begin)(struct file *file, loff_t pos, unsigned len,
 					 struct folio *folio, void **_fsdata);
-		void (*done)(struct netfs_read_request *rreq);
+		void (*done)(struct netfs_io_request *rreq);
 		void (*cleanup)(struct address_space *mapping, void *netfs_priv);
 	};
 
@@ -462,12 +462,12 @@ The network filesystem's ->begin_cache_operation() method is called to set up a
 cache and this must call into the cache to do the work.  If using fscache, for
 example, the cache would call::
 
-	int fscache_begin_read_operation(struct netfs_read_request *rreq,
+	int fscache_begin_read_operation(struct netfs_io_request *rreq,
 					 struct fscache_cookie *cookie);
 
 passing in the request pointer and the cookie corresponding to the file.
 
-The netfs_read_request object contains a place for the cache to hang its
+The netfs_io_request object contains a place for the cache to hang its
 state::
 
 	struct netfs_cache_resources {
@@ -485,7 +485,7 @@ operation table looks like the following::
 		void (*expand_readahead)(struct netfs_cache_resources *cres,
 					 loff_t *_start, size_t *_len, loff_t i_size);
 
-		enum netfs_read_source (*prepare_read)(struct netfs_read_subrequest *subreq,
+		enum netfs_io_source (*prepare_read)(struct netfs_io_subrequest *subreq,
 						       loff_t i_size);
 
 		int (*read)(struct netfs_cache_resources *cres,

@@ -31,9 +31,9 @@
  * v9fs_req_issue_op - Issue a read from 9P
  * @subreq: The read to make
  */
-static void v9fs_req_issue_op(struct netfs_read_subrequest *subreq)
+static void v9fs_req_issue_op(struct netfs_io_subrequest *subreq)
 {
-	struct netfs_read_request *rreq = subreq->rreq;
+	struct netfs_io_request *rreq = subreq->rreq;
 	struct p9_fid *fid = rreq->netfs_priv;
 	struct iov_iter to;
 	loff_t pos = subreq->start + subreq->transferred;
@@ -56,7 +56,7 @@ static void v9fs_req_issue_op(struct netfs_read_subrequest *subreq)
  * @rreq: The read request
  * @file: The file being read from
  */
-static void v9fs_init_rreq(struct netfs_read_request *rreq, struct file *file)
+static void v9fs_init_rreq(struct netfs_io_request *rreq, struct file *file)
 {
 	struct p9_fid *fid = file->private_data;
 
@@ -80,7 +80,7 @@ static void v9fs_req_cleanup(struct address_space *mapping, void *priv)
  * v9fs_begin_cache_operation - Begin a cache operation for a read
  * @rreq: The read request
  */
-static int v9fs_begin_cache_operation(struct netfs_read_request *rreq)
+static int v9fs_begin_cache_operation(struct netfs_io_request *rreq)
 {
 #ifdef CONFIG_9P_FSCACHE
 	struct fscache_cookie *cookie = v9fs_inode_cookie(V9FS_I(rreq->inode));
