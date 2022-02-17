@@ -16,9 +16,25 @@
 #define pr_fmt(fmt) "netfs: " fmt
 
 /*
+ * objects.c
+ */
+struct netfs_io_request *netfs_alloc_request(struct address_space *mapping,
+					     struct file *file,
+					     loff_t start, size_t len,
+					     enum netfs_io_origin origin);
+void netfs_get_request(struct netfs_io_request *rreq);
+void netfs_clear_subrequests(struct netfs_io_request *rreq, bool was_async);
+void netfs_put_request(struct netfs_io_request *rreq, bool was_async);
+struct netfs_io_subrequest *netfs_alloc_subrequest(struct netfs_io_request *rreq);
+void netfs_put_subrequest(struct netfs_io_subrequest *subreq, bool was_async);
+void netfs_get_subrequest(struct netfs_io_subrequest *subreq);
+
+/*
  * read_helper.c
  */
 extern unsigned int netfs_debug;
+
+void netfs_rreq_work(struct work_struct *work);
 
 /*
  * stats.c
