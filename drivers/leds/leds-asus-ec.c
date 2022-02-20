@@ -71,7 +71,7 @@ static int asusec_led_probe(struct platform_device *pdev)
 	ret = devm_led_classdev_register(&pdev->dev, amber_led);
 	if (ret)
 		return dev_err_probe(&pdev->dev, ret,
-				     "can't register AMBER LED\n");
+				     "failed to register amber LED\n");
 
 	green_led = devm_kzalloc(&pdev->dev, sizeof(*green_led), GFP_KERNEL);
 	if (!green_led)
@@ -89,7 +89,7 @@ static int asusec_led_probe(struct platform_device *pdev)
 	ret = devm_led_classdev_register(&pdev->dev, green_led);
 	if (ret)
 		return dev_err_probe(&pdev->dev, ret,
-				     "can't register GREEN LED\n");
+				     "failed to register green LED\n");
 
 	return 0;
 }
