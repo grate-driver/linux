@@ -4,7 +4,6 @@
  *
  * This looks suspiciously similar to i8042, but wrapped in
  * I2C/SMBus packets.
- *
  */
 
 #include <linux/i2c.h>
