@@ -319,7 +319,8 @@ static int chagall_battery_probe(struct i2c_client *client)
 
 	cg->battery = devm_power_supply_register(&client->dev, &chagall_battery_desc, &cfg);
 	if (IS_ERR(cg->battery))
-		return PTR_ERR(cg->battery);
+		return dev_err_probe(&client->dev, PTR_ERR(cg->battery),
+				     "failed to register power supply\n");
 
 	if (power_supply_get_battery_info(cg->battery, &cg->batt_info))
 		dev_warn(&client->dev,
