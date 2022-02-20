@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * ASUS EC driver - battery monitoring
- *
  */
 
 #include <linux/devm-helpers.h>
