@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * ASUS EC: DockRAM
- *
  */
 
 #include <asm/unaligned.h>
