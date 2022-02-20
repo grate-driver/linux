@@ -324,7 +324,7 @@ static int chagall_battery_probe(struct i2c_client *client)
 
 	if (power_supply_get_battery_info(cg->battery, &cg->batt_info))
 		dev_warn(&client->dev,
-			 "No monitored battery, some properties will be missing\n");
+			 "no monitored battery, some properties will be missing\n");
 
 	cg->amber_led.name = "power::amber";
 	cg->amber_led.max_brightness = 1;
@@ -334,7 +334,7 @@ static int chagall_battery_probe(struct i2c_client *client)
 	ret = devm_led_classdev_register(&client->dev, &cg->amber_led);
 	if (ret)
 		return dev_err_probe(&client->dev, ret,
-				     "can't register AMBER LED\n");
+				     "failed to register amber LED\n");
 
 	cg->white_led.name = "power::white";
 	cg->white_led.max_brightness = 1;
@@ -344,7 +344,7 @@ static int chagall_battery_probe(struct i2c_client *client)
 	ret = devm_led_classdev_register(&client->dev, &cg->white_led);
 	if (ret)
 		return dev_err_probe(&client->dev, ret,
-				     "can't register WHITE LED\n");
+				     "failed to register white LED\n");
 
 	led_set_brightness(&cg->amber_led, LED_OFF);
 	led_set_brightness(&cg->white_led, LED_OFF);
