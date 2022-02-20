@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * ASUS Transformer Pad - multimedia keys
- *
  */
 
 #include <linux/i2c.h>
