@@ -188,7 +188,7 @@ static ssize_t control_reg_show(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	return snprintf(buf, PAGE_SIZE, "%016llx\n", val);
+	return sysfs_emit(buf, "%016llx\n", val);
 }
 
 static ssize_t control_reg_store(struct device *dev,
