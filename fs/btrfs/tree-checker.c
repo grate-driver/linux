@@ -1855,3 +1855,59 @@ out:
 	return ret;
 }
 ALLOW_ERROR_INJECTION(btrfs_check_node, ERRNO);
+
+int btrfs_check_eb_owner(struct extent_buffer *eb, u64 root_owner)
+{
+	bool is_subvol = is_fstree(root_owner);
+	const u64 eb_owner = btrfs_header_owner(eb);
+
+	/*
+	 * Skip dummy fs, as selftest doesn't bother to create unique ebs for
+	 * each dummy root.
+	 */
+	if (test_bit(BTRFS_FS_STATE_DUMMY_FS_INFO, &eb->fs_info->fs_state))
+		return 0;
+
+	/*
+	 * These trees uses key.offset as their owner, our callers don't have
+	 * the extra capacity to pass key.offset here.  So we just skip them.
+	 */
+	if (root_owner == BTRFS_TREE_LOG_OBJECTID ||
+	    root_owner == BTRFS_TREE_RELOC_OBJECTID)
+		return 0;
+
+	/*
+	 * This happens for add_data_references() of balance, at that call site
+	 * we don't have owner info.
+	 * But we know all tree blocks there are subvolume tree blocks.
+	 */
+	if (root_owner == 0)
+		is_subvol = true;
+
+	if (!is_subvol) {
+		/* For non-subvolume trees, the eb owner should match root owner */
+		if (root_owner != eb_owner) {
+			btrfs_crit(eb->fs_info,
+"corrupted %s, root=%llu block=%llu owner mismatch, have %llu expect %llu",
+				btrfs_header_level(eb) == 0 ? "leaf" : "node",
+				root_owner, btrfs_header_bytenr(eb), eb_owner,
+				root_owner);
+			return -EUCLEAN;
+		}
+		return 0;
+	}
+
+	/*
+	 * For subvolume trees, owner can mismatch, but they should all belong
+	 * to subvolume trees.
+	 */
+	if (is_subvol != is_fstree(eb_owner)) {
+		btrfs_crit(eb->fs_info,
+"corrupted %s, root=%llu block=%llu owner mismatch, have %llu expect [%llu, %llu]",
+			btrfs_header_level(eb) == 0 ? "leaf" : "node",
+			root_owner, btrfs_header_bytenr(eb), eb_owner,
+			BTRFS_FIRST_FREE_OBJECTID, BTRFS_LAST_FREE_OBJECTID);
+		return -EUCLEAN;
+	}
+	return 0;
+}
