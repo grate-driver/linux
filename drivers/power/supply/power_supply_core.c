@@ -23,6 +23,7 @@
 #include <linux/thermal.h>
 #include <linux/fixp-arith.h>
 #include "power_supply.h"
+#include "samsung-sdi-battery.h"
 
 /* exported for the APM Power driver, APM emulation */
 struct class *power_supply_class;
@@ -577,6 +578,13 @@ int power_supply_get_battery_info(struct power_supply *psy,
 	int err, len, index;
 	const __be32 *list;
 	u32 min_max[2];
+
+	/* Try static batteries first */
+	err = samsung_sdi_battery_get_info(&psy->dev, battery_np, &info);
+	if (!err) {
+		*info_out = info;
+		return err;
+	}
 
 	info = devm_kmalloc(&psy->dev, sizeof(*info), GFP_KERNEL);
 	if (!info)
