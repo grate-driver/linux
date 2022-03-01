@@ -184,6 +184,18 @@ static void acpi_print_osc_error(acpi_handle handle,
 	pr_debug("\n");
 }
 
+/**
+ * acpi_run_osc - Evaluate the _OSC method for a given ACPI handle
+ * @handle: ACPI handle containing _OSC to evaluate
+ * @context: A structure specifying UUID, revision, and buffer for data
+ *
+ * Used for negotiating with firmware the capabilities that will be used
+ * by the OSPM.  Although the return type is acpi_status, the ACPI_SUCCESS
+ * macro can not be used to determine whether to free the buffer of
+ * returned data.
+ *
+ * The buffer must be freed when this function returns AE_OK or AE_SUPPORT.
+ */
 acpi_status acpi_run_osc(acpi_handle handle, struct acpi_osc_context *context)
 {
 	acpi_status status;
@@ -243,16 +255,19 @@ acpi_status acpi_run_osc(acpi_handle handle, struct acpi_osc_context *context)
 			acpi_print_osc_error(handle, context,
 				"_OSC invalid revision");
 		if (errors & OSC_CAPABILITIES_MASK_ERROR) {
+			acpi_print_osc_error(handle, context, "_OSC capabilities masked");
 			if (((u32 *)context->cap.pointer)[OSC_QUERY_DWORD]
-			    & OSC_QUERY_ENABLE)
-				goto out_success;
-			status = AE_SUPPORT;
-			goto out_kfree;
+			    & OSC_QUERY_ENABLE) {
+				status = AE_SUPPORT;
+				goto out_masked;
+			}
 		}
 		status = AE_ERROR;
 		goto out_kfree;
 	}
-out_success:
+
+	status =  AE_OK;
+out_masked:
 	context->ret.length = out_obj->buffer.length;
 	context->ret.pointer = kmemdup(out_obj->buffer.pointer,
 				       context->ret.length, GFP_KERNEL);
@@ -260,7 +275,6 @@ out_success:
 		status =  AE_NO_MEMORY;
 		goto out_kfree;
 	}
-	status =  AE_OK;
 
 out_kfree:
 	kfree(output.pointer);
