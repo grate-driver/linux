@@ -2,8 +2,6 @@
 /*
  * Copyright IBM Corp. 2008, 2009
  *
- *   Author(s): Heiko Carstens <heiko.carstens@de.ibm.com>,
- *
  */
 
 #include <linux/linkage.h>
@@ -28,20 +26,23 @@ ENDPROC(ftrace_stub)
 #define STACK_PTREGS_PSW	(STACK_PTREGS + __PT_PSW)
 #define STACK_PTREGS_ORIG_GPR2	(STACK_PTREGS + __PT_ORIG_GPR2)
 #define STACK_PTREGS_FLAGS	(STACK_PTREGS + __PT_FLAGS)
-#ifdef __PACK_STACK
-/* allocate just enough for r14, r15 and backchain */
+/* packed stack: allocate just enough for r14, r15 and backchain */
 #define TRACED_FUNC_FRAME_SIZE	24
-#else
-#define TRACED_FUNC_FRAME_SIZE	STACK_FRAME_OVERHEAD
-#endif
 
 	.macro	ftrace_regs_entry, allregs=0
 	stg	%r14,(__SF_GPRS+8*8)(%r15)	# save traced function caller
 
 	.if \allregs == 1
-	lghi	%r14,0				# save condition code
-	ipm	%r14				# don't put any instructions
-	sllg	%r14,%r14,16			# clobbering CC before this point
+	# save psw mask
+	# don't put any instructions clobbering CC before this point
+#ifdef CONFIG_HAVE_MARCH_Z10_FEATURES
+	epsw	%r1,%r14
+	risbg	%r14,%r1,0,31,32
+#else
+	epsw	%r14,%r1
+	sllg	%r14,%r14,32
+	lr	%r14,%r1
+#endif
 	.endif
 
 	lgr	%r1,%r15
@@ -57,7 +58,6 @@ ENDPROC(ftrace_stub)
 
 	.if \allregs == 1
 	stg	%r14,(STACK_PTREGS_PSW)(%r15)
-	stosm	(STACK_PTREGS_PSW)(%r15),0
 #ifdef CONFIG_HAVE_MARCH_Z10_FEATURES
 	mvghi	STACK_PTREGS_FLAGS(%r15),_PIF_FTRACE_FULL_REGS
 #else
