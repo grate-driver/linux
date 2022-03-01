@@ -21,6 +21,11 @@
 void netfs_rreq_unlock_folios(struct netfs_io_request *rreq);
 
 /*
+ * io.c
+ */
+int netfs_begin_read(struct netfs_io_request *rreq, bool sync);
+
+/*
  * main.c
  */
 extern unsigned int netfs_debug;
@@ -43,11 +48,6 @@ static inline void netfs_see_request(struct netfs_io_request *rreq,
 {
 	trace_netfs_rreq_ref(rreq->debug_id, refcount_read(&rreq->ref), what);
 }
-
-/*
- * read_helper.c
- */
-int netfs_begin_read(struct netfs_io_request *rreq, bool sync);
 
 /*
  * stats.c
