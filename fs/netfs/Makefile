@@ -2,6 +2,7 @@
 
 netfs-y := \
 	buffered_read.o \
+	main.o \
 	objects.o \
 	read_helper.o
 

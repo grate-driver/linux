@@ -21,6 +21,11 @@
 void netfs_rreq_unlock_folios(struct netfs_io_request *rreq);
 
 /*
+ * main.c
+ */
+extern unsigned int netfs_debug;
+
+/*
  * objects.c
  */
 struct netfs_io_request *netfs_alloc_request(struct address_space *mapping,
@@ -42,8 +47,6 @@ static inline void netfs_see_request(struct netfs_io_request *rreq,
 /*
  * read_helper.c
  */
-extern unsigned int netfs_debug;
-
 int netfs_begin_read(struct netfs_io_request *rreq, bool sync);
 
 /*
