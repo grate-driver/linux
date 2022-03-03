@@ -73,7 +73,7 @@ static struct nfs_open_dir_context *alloc_nfs_open_dir_context(struct inode *dir
 {
 	struct nfs_inode *nfsi = NFS_I(dir);
 	struct nfs_open_dir_context *ctx;
-	ctx = kmalloc(sizeof(*ctx), GFP_KERNEL);
+	ctx = kmalloc(sizeof(*ctx), GFP_KERNEL_ACCOUNT);
 	if (ctx != NULL) {
 		ctx->duped = 0;
 		ctx->attr_gencount = nfsi->attr_gencount;
@@ -1419,7 +1419,12 @@ int nfs_lookup_verify_inode(struct inode *inode, unsigned int flags)
 	if (flags & LOOKUP_REVAL)
 		goto out_force;
 out:
-	return (inode->i_nlink == 0) ? -ESTALE : 0;
+	if (inode->i_nlink > 0 ||
+	    (inode->i_nlink == 0 &&
+	     test_bit(NFS_INO_PRESERVE_UNLINKED, &NFS_I(inode)->flags)))
+		return 0;
+	else
+		return -ESTALE;
 out_force:
 	if (flags & LOOKUP_RCU)
 		return -ECHILD;
@@ -2330,7 +2335,8 @@ int nfs_unlink(struct inode *dir, struct dentry *dentry)
 
 	trace_nfs_unlink_enter(dir, dentry);
 	spin_lock(&dentry->d_lock);
-	if (d_count(dentry) > 1) {
+	if (d_count(dentry) > 1 && !test_bit(NFS_INO_PRESERVE_UNLINKED,
+					     &NFS_I(d_inode(dentry))->flags)) {
 		spin_unlock(&dentry->d_lock);
 		/* Start asynchronous writeout of the inode */
 		write_inode_now(d_inode(dentry), 0);
@@ -2989,11 +2995,8 @@ static int nfs_do_access(struct inode *inode, const struct cred *cred, int mask)
 	/*
 	 * Determine which access bits we want to ask for...
 	 */
-	cache.mask = NFS_ACCESS_READ | NFS_ACCESS_MODIFY | NFS_ACCESS_EXTEND;
-	if (nfs_server_capable(inode, NFS_CAP_XATTR)) {
-		cache.mask |= NFS_ACCESS_XAREAD | NFS_ACCESS_XAWRITE |
-		    NFS_ACCESS_XALIST;
-	}
+	cache.mask = NFS_ACCESS_READ | NFS_ACCESS_MODIFY | NFS_ACCESS_EXTEND |
+		     nfs_access_xattr_mask(NFS_SERVER(inode));
 	if (S_ISDIR(inode->i_mode))
 		cache.mask |= NFS_ACCESS_DELETE | NFS_ACCESS_LOOKUP;
 	else

@@ -49,6 +49,7 @@
 #include <linux/workqueue.h>
 #include <linux/bitops.h>
 #include <linux/jiffies.h>
+#include <linux/sched/mm.h>
 
 #include <linux/sunrpc/clnt.h>
 
@@ -666,7 +667,7 @@ nfs4_alloc_open_state(void)
 {
 	struct nfs4_state *state;
 
-	state = kzalloc(sizeof(*state), GFP_NOFS);
+	state = kzalloc(sizeof(*state), GFP_KERNEL_ACCOUNT);
 	if (!state)
 		return NULL;
 	refcount_set(&state->count, 1);
@@ -820,7 +821,7 @@ static void __nfs4_close(struct nfs4_state *state,
 
 void nfs4_close_state(struct nfs4_state *state, fmode_t fmode)
 {
-	__nfs4_close(state, fmode, GFP_NOFS, 0);
+	__nfs4_close(state, fmode, GFP_KERNEL, 0);
 }
 
 void nfs4_close_sync(struct nfs4_state *state, fmode_t fmode)
@@ -869,14 +870,15 @@ static struct nfs4_lock_state *nfs4_alloc_lock_state(struct nfs4_state *state, f
 	struct nfs4_lock_state *lsp;
 	struct nfs_server *server = state->owner->so_server;
 
-	lsp = kzalloc(sizeof(*lsp), GFP_NOFS);
+	lsp = kzalloc(sizeof(*lsp), GFP_KERNEL_ACCOUNT);
 	if (lsp == NULL)
 		return NULL;
 	nfs4_init_seqid_counter(&lsp->ls_seqid);
 	refcount_set(&lsp->ls_count, 1);
 	lsp->ls_state = state;
 	lsp->ls_owner = fl_owner;
-	lsp->ls_seqid.owner_id = ida_simple_get(&server->lockowner_id, 0, 0, GFP_NOFS);
+	lsp->ls_seqid.owner_id = ida_simple_get(&server->lockowner_id,
+						0, 0, GFP_KERNEL_ACCOUNT);
 	if (lsp->ls_seqid.owner_id < 0)
 		goto out_free;
 	INIT_LIST_HEAD(&lsp->ls_locks);
@@ -2560,8 +2562,16 @@ static void nfs4_layoutreturn_any_run(struct nfs_client *clp)
 
 static void nfs4_state_manager(struct nfs_client *clp)
 {
+	unsigned int memflags;
 	int status = 0;
 	const char *section = "", *section_sep = "";
+
+	/*
+	 * State recovery can deadlock if the direct reclaim code tries
+	 * start NFS writeback. So ensure memory allocations are all
+	 * GFP_NOFS.
+	 */
+	memflags = memalloc_nofs_save();
 
 	/* Ensure exclusive access to NFSv4 state */
 	do {
@@ -2657,6 +2667,7 @@ static void nfs4_state_manager(struct nfs_client *clp)
 			clear_bit(NFS4CLNT_RECLAIM_NOGRACE, &clp->cl_state);
 		}
 
+		memalloc_nofs_restore(memflags);
 		nfs4_end_drain_session(clp);
 		nfs4_clear_state_manager_bit(clp);
 
@@ -2674,6 +2685,7 @@ static void nfs4_state_manager(struct nfs_client *clp)
 			return;
 		if (test_and_set_bit(NFS4CLNT_MANAGER_RUNNING, &clp->cl_state) != 0)
 			return;
+		memflags = memalloc_nofs_save();
 	} while (refcount_read(&clp->cl_count) > 1 && !signalled());
 	goto out_drain;
 
@@ -2686,6 +2698,7 @@ out_error:
 			clp->cl_hostname, -status);
 	ssleep(1);
 out_drain:
+	memalloc_nofs_restore(memflags);
 	nfs4_end_drain_session(clp);
 	nfs4_clear_state_manager_bit(clp);
 }
