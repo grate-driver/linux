@@ -356,6 +356,7 @@ struct arm64_cpu_capabilities {
 		struct {	/* Feature register checking */
 			u32 sys_reg;
 			u8 field_pos;
+			u8 field_width;
 			u8 min_field_value;
 			u8 hwcap_type;
 			bool sign;
@@ -854,6 +855,7 @@ static inline unsigned int get_vmid_bits(u64 mmfr1)
 extern struct arm64_ftr_override id_aa64mmfr1_override;
 extern struct arm64_ftr_override id_aa64pfr1_override;
 extern struct arm64_ftr_override id_aa64isar1_override;
+extern struct arm64_ftr_override id_aa64isar2_override;
 
 u32 get_kvm_ipa_limit(void);
 void dump_cpu_features(void);
