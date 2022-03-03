@@ -14,6 +14,7 @@
 #include <linux/ftrace.h>
 #include <linux/bug.h>
 #include <linux/uaccess.h>
+#include <linux/kernel.h>
 #include <asm/module.h>
 #include <asm/firmware.h>
 #include <asm/code-patching.h>
@@ -277,6 +278,12 @@ static Elf64_Sym *find_dot_toc(Elf64_Shdr *sechdrs,
 	return NULL;
 }
 
+bool module_init_section(const char *name)
+{
+	/* We don't handle .init for the moment: always return false. */
+	return false;
+}
+
 int module_frob_arch_sections(Elf64_Ehdr *hdr,
 			      Elf64_Shdr *sechdrs,
 			      char *secstrings,
@@ -286,7 +293,6 @@ int module_frob_arch_sections(Elf64_Ehdr *hdr,
 
 	/* Find .toc and .stubs sections, symtab and strtab */
 	for (i = 1; i < hdr->e_shnum; i++) {
-		char *p;
 		if (strcmp(secstrings + sechdrs[i].sh_name, ".stubs") == 0)
 			me->arch.stubs_section = i;
 		else if (strcmp(secstrings + sechdrs[i].sh_name, ".toc") == 0) {
@@ -297,10 +303,6 @@ int module_frob_arch_sections(Elf64_Ehdr *hdr,
 		else if (strcmp(secstrings+sechdrs[i].sh_name,"__versions")==0)
 			dedotify_versions((void *)hdr + sechdrs[i].sh_offset,
 					  sechdrs[i].sh_size);
-
-		/* We don't handle .init for the moment: rename to _init */
-		while ((p = strstr(secstrings + sechdrs[i].sh_name, ".init")))
-			p[0] = '_';
 
 		if (sechdrs[i].sh_type == SHT_SYMTAB)
 			dedotify((void *)hdr + sechdrs[i].sh_offset,
@@ -428,7 +430,7 @@ static inline int create_stub(const Elf64_Shdr *sechdrs,
 	if (is_mprofile_ftrace_call(name))
 		return create_ftrace_stub(entry, addr, me);
 
-	for (i = 0; i < sizeof(ppc64_stub_insns) / sizeof(u32); i++) {
+	for (i = 0; i < ARRAY_SIZE(ppc64_stub_insns); i++) {
 		if (patch_instruction(&entry->jump[i],
 				      ppc_inst(ppc64_stub_insns[i])))
 			return 0;
