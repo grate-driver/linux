@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+#include <linux/efi.h>
 #include <linux/pci.h>
 #include <linux/acpi.h>
 #include <linux/init.h>
@@ -21,6 +22,7 @@ struct pci_root_info {
 
 static bool pci_use_crs = true;
 static bool pci_ignore_seg;
+bool pci_use_e820 = true;
 
 static int __init set_use_crs(const struct dmi_system_id *id)
 {
@@ -291,6 +293,63 @@ static bool resource_is_pcicfg_ioport(struct resource *res)
 		res->start == 0xCF8 && res->end == 0xCFF;
 }
 
+/*
+ * Some fw has a bug where the PCI bridge window returned by the ACPI resources
+ * partly overlaps with some other address range, causing issues. To workaround
+ * this Linux excludes E820 reserved addresses when allocating addresses from
+ * the PCI bridge window. 2 known examples of such firmware bugs are:
+ *
+ * 1. The returned window contains addresses which map to system RAM, see
+ * commit 4dc2287c1805 ("x86: avoid E820 regions when allocating address space").
+ *
+ * 2. The Lenovo X1 carbon gen 2 BIOS has an overlap between an EFI/E820
+ * reserved range and the ACPI provided PCI bridge window:
+ *  efi: mem46: [MMIO] range=[0x00000000dfa00000-0x00000000dfa0ffff] (0MB)
+ *  BIOS-e820: [mem 0x00000000dceff000-0x00000000dfa0ffff] reserved
+ *  pci_bus 0000:00: root bus resource [mem 0xdfa00000-0xfebfffff window]
+ * If Linux assigns the overlapping 0xdfa00000-0xdfa0ffff range to a PCI BAR
+ * then the system fails to resume after a suspend.
+ *
+ * Recently (2019) some systems have shown-up with EFI memmap MMIO entries
+ * covering the entire ACPI provided PCI bridge window. These memmap entries
+ * get converted into e820_table entries, causing all attempts to assign
+ * memory to PCI BARs which have not been setup by the BIOS to fail.
+ * For example see these dmesg snippets from a Lenovo IdeaPad 3 15IIL 81WE:
+ *  efi: mem63: [MMIO] range=[0x0000000065400000-0x00000000cfffffff] (1708MB)
+ *  BIOS-e820: [mem 0x000000004bc50000-0x00000000cfffffff] reserved
+ *  pci_bus 0000:00: root bus resource [mem 0x65400000-0xbfffffff window]
+ *  pci 0000:00:15.0: BAR 0: no space for [mem size 0x00001000 64bit]
+ *  pci 0000:00:15.0: BAR 0: failed to assign [mem size 0x00001000 64bit]
+ *
+ * To code below checks if the ACPI provided PCI bridge window is fully
+ * contained within in EFI memmap MMIO region and in that case disables
+ * the "exclude E820 reserved addresses" workaround to avoid this issue.
+ */
+static bool resource_is_efi_mmio_region(const struct resource *res)
+{
+	unsigned long long start, end;
+	efi_memory_desc_t *md;
+
+	if (!(res->flags & IORESOURCE_MEM))
+		return false;
+
+	if (!efi_enabled(EFI_MEMMAP))
+		return false;
+
+	for_each_efi_memory_desc(md) {
+		if (md->type != EFI_MEMORY_MAPPED_IO)
+			continue;
+
+		start = md->phys_addr;
+		end = start + (md->num_pages << EFI_PAGE_SHIFT) - 1;
+
+		if (res->start >= start && res->end <= end)
+			return true;
+	}
+
+	return false;
+}
+
 static int pci_acpi_root_prepare_resources(struct acpi_pci_root_info *ci)
 {
 	struct acpi_device *device = ci->bridge;
@@ -300,9 +359,16 @@ static int pci_acpi_root_prepare_resources(struct acpi_pci_root_info *ci)
 
 	status = acpi_pci_probe_root_resources(ci);
 	if (pci_use_crs) {
-		resource_list_for_each_entry_safe(entry, tmp, &ci->resources)
+		resource_list_for_each_entry_safe(entry, tmp, &ci->resources) {
 			if (resource_is_pcicfg_ioport(entry->res))
 				resource_list_destroy_entry(entry);
+			else if (resource_is_efi_mmio_region(entry->res)) {
+				dev_info(&device->dev,
+					"host bridge window %pR is marked by EFI as MMIO\n",
+					entry->res);
+				pci_use_e820 = false;
+			}
+		}
 		return status;
 	}
 

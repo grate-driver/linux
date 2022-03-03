@@ -184,6 +184,18 @@ static void acpi_print_osc_error(acpi_handle handle,
 	pr_debug("\n");
 }
 
+/**
+ * acpi_run_osc - Evaluate the _OSC method for a given ACPI handle
+ * @handle: ACPI handle containing _OSC to evaluate
+ * @context: A structure specifying UUID, revision, and buffer for data
+ *
+ * Used for negotiating with firmware the capabilities that will be used
+ * by the OSPM.  Although the return type is acpi_status, the ACPI_SUCCESS
+ * macro can not be used to determine whether to free the buffer of
+ * returned data.
+ *
+ * The buffer must be freed when this function returns AE_OK or AE_SUPPORT.
+ */
 acpi_status acpi_run_osc(acpi_handle handle, struct acpi_osc_context *context)
 {
 	acpi_status status;
@@ -243,16 +255,19 @@ acpi_status acpi_run_osc(acpi_handle handle, struct acpi_osc_context *context)
 			acpi_print_osc_error(handle, context,
 				"_OSC invalid revision");
 		if (errors & OSC_CAPABILITIES_MASK_ERROR) {
+			acpi_print_osc_error(handle, context, "_OSC capabilities masked");
 			if (((u32 *)context->cap.pointer)[OSC_QUERY_DWORD]
-			    & OSC_QUERY_ENABLE)
-				goto out_success;
-			status = AE_SUPPORT;
-			goto out_kfree;
+			    & OSC_QUERY_ENABLE) {
+				status = AE_SUPPORT;
+				goto out_masked;
+			}
 		}
 		status = AE_ERROR;
 		goto out_kfree;
 	}
-out_success:
+
+	status =  AE_OK;
+out_masked:
 	context->ret.length = out_obj->buffer.length;
 	context->ret.pointer = kmemdup(out_obj->buffer.pointer,
 				       context->ret.length, GFP_KERNEL);
@@ -260,7 +275,6 @@ out_success:
 		status =  AE_NO_MEMORY;
 		goto out_kfree;
 	}
-	status =  AE_OK;
 
 out_kfree:
 	kfree(output.pointer);
@@ -294,6 +308,8 @@ static void acpi_bus_osc_negotiate_platform_control(void)
 		.cap.pointer = capbuf,
 	};
 	acpi_handle handle;
+	acpi_status status;
+	int i;
 
 	capbuf[OSC_QUERY_DWORD] = OSC_QUERY_ENABLE;
 	capbuf[OSC_SUPPORT_DWORD] = OSC_SB_PR3_SUPPORT; /* _PR3 is in use */
@@ -329,10 +345,34 @@ static void acpi_bus_osc_negotiate_platform_control(void)
 	if (ACPI_FAILURE(acpi_get_handle(NULL, "\\_SB", &handle)))
 		return;
 
-	if (ACPI_FAILURE(acpi_run_osc(handle, &context)))
+	/*
+	 * Check if bits were masked, we need to negotiate
+	 * prevent potential endless loop by limited number of
+	 * negotiation cycles.
+	 */
+	for (i = 0; i < 5; i++) {
+		status = acpi_run_osc(handle, &context);
+		if (status == AE_OK || status == AE_SUPPORT) {
+			capbuf_ret = context.ret.pointer;
+			capbuf[OSC_SUPPORT_DWORD] = capbuf_ret[OSC_SUPPORT_DWORD];
+			kfree(context.ret.pointer);
+		}
+		if (status != AE_SUPPORT)
+			break;
+	}
+	if (ACPI_FAILURE(status))
 		return;
 
-	kfree(context.ret.pointer);
+	/*
+	 * Avoid problems with BIOS dynamically loading tables by indicating
+	 * support for CPPC even if it was masked.
+	 */
+#ifdef CONFIG_X86
+	if (boot_cpu_has(X86_FEATURE_HWP)) {
+		capbuf[OSC_SUPPORT_DWORD] |= OSC_SB_CPC_SUPPORT;
+		capbuf[OSC_SUPPORT_DWORD] |= OSC_SB_CPCV2_SUPPORT;
+	}
+#endif
 
 	/* Now run _OSC again with query flag clear */
 	capbuf[OSC_QUERY_DWORD] = 0;
@@ -1043,7 +1083,12 @@ struct bus_type acpi_bus_type = {
 	.remove		= acpi_device_remove,
 	.uevent		= acpi_device_uevent,
 };
-EXPORT_SYMBOL_GPL(acpi_bus_type);
+
+int acpi_bus_for_each_dev(int (*fn)(struct device *, void *), void *data)
+{
+	return bus_for_each_dev(&acpi_bus_type, NULL, data, fn);
+}
+EXPORT_SYMBOL_GPL(acpi_bus_for_each_dev);
 
 /* --------------------------------------------------------------------------
                              Initialization/Cleanup
