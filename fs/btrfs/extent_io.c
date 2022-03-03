@@ -2610,6 +2610,7 @@ static bool btrfs_check_repairable(struct inode *inode,
 	 * a good copy of the failed sector and if we succeed, we have setup
 	 * everything for repair_io_failure to do the rest for us.
 	 */
+	ASSERT(failed_mirror);
 	failrec->failed_mirror = failed_mirror;
 	failrec->this_mirror++;
 	if (failrec->this_mirror == failed_mirror)
@@ -2639,7 +2640,6 @@ int btrfs_repair_one_sector(struct inode *inode,
 	const int icsum = bio_offset >> fs_info->sectorsize_bits;
 	struct bio *repair_bio;
 	struct btrfs_bio *repair_bbio;
-	blk_status_t status;
 
 	btrfs_debug(fs_info,
 		   "repair read error: read error at %llu", start);
@@ -2678,13 +2678,13 @@ int btrfs_repair_one_sector(struct inode *inode,
 		    "repair read error: submitting new read to mirror %d",
 		    failrec->this_mirror);
 
-	status = submit_bio_hook(inode, repair_bio, failrec->this_mirror,
-				 failrec->bio_flags);
-	if (status) {
-		free_io_failure(failure_tree, tree, failrec);
-		bio_put(repair_bio);
-	}
-	return blk_status_to_errno(status);
+	/*
+	 * At this point we have a bio, so any errors from submit_bio_hook()
+	 * will be handled by the endio on the repair_bio, so we can't return an
+	 * error here.
+	 */
+	submit_bio_hook(inode, repair_bio, failrec->this_mirror, failrec->bio_flags);
+	return BLK_STS_OK;
 }
 
 static void end_page_read(struct page *page, bool uptodate, u64 start, u32 len)
@@ -3067,6 +3067,14 @@ static void end_bio_extent_readpage(struct bio *bio)
 			goto readpage_ok;
 
 		if (is_data_inode(inode)) {
+			/*
+			 * If we failed to submit the IO at all we'll have a
+			 * mirror_num == 0, in which case we need to just mark
+			 * the page with an error and unlock it and carry on.
+			 */
+			if (mirror == 0)
+				goto readpage_ok;
+
 			/*
 			 * btrfs_submit_read_repair() will handle all the good
 			 * and bad sectors, we just continue to the next bvec.
@@ -3534,7 +3542,7 @@ __get_extent_map(struct inode *inode, struct page *page, size_t pg_offset,
 	}
 
 	em = btrfs_get_extent(BTRFS_I(inode), page, pg_offset, start, len);
-	if (em_cached && !IS_ERR_OR_NULL(em)) {
+	if (em_cached && !IS_ERR(em)) {
 		BUG_ON(*em_cached);
 		refcount_inc(&em->refs);
 		*em_cached = em;
@@ -3563,7 +3571,6 @@ int btrfs_do_readpage(struct page *page, struct extent_map **em_cached,
 	u64 cur_end;
 	struct extent_map *em;
 	int ret = 0;
-	int nr = 0;
 	size_t pg_offset = 0;
 	size_t iosize;
 	size_t blocksize = inode->i_sb->s_blocksize;
@@ -3608,9 +3615,10 @@ int btrfs_do_readpage(struct page *page, struct extent_map **em_cached,
 		}
 		em = __get_extent_map(inode, page, pg_offset, cur,
 				      end - cur + 1, em_cached);
-		if (IS_ERR_OR_NULL(em)) {
+		if (IS_ERR(em)) {
 			unlock_extent(tree, cur, end);
 			end_page_read(page, false, cur, end + 1 - cur);
+			ret = PTR_ERR(em);
 			break;
 		}
 		extent_offset = cur - em->start;
@@ -3721,9 +3729,7 @@ int btrfs_do_readpage(struct page *page, struct extent_map **em_cached,
 					 end_bio_extent_readpage, 0,
 					 this_bio_flag,
 					 force_bio_submit);
-		if (!ret) {
-			nr++;
-		} else {
+		if (ret) {
 			unlock_extent(tree, cur, cur + iosize - 1);
 			end_page_read(page, false, cur, iosize);
 			goto out;
@@ -3951,7 +3957,7 @@ static noinline_for_stack int __extent_writepage_io(struct btrfs_inode *inode,
 		}
 
 		em = btrfs_get_extent(inode, NULL, 0, cur, end - cur + 1);
-		if (IS_ERR_OR_NULL(em)) {
+		if (IS_ERR(em)) {
 			btrfs_page_set_error(fs_info, page, cur, end - cur + 1);
 			ret = PTR_ERR_OR_ZERO(em);
 			break;
@@ -5390,7 +5396,7 @@ static struct extent_map *get_extent_skip_holes(struct btrfs_inode *inode,
 			break;
 		len = ALIGN(len, sectorsize);
 		em = btrfs_get_extent_fiemap(inode, offset, len);
-		if (IS_ERR_OR_NULL(em))
+		if (IS_ERR(em))
 			return em;
 
 		/* if this isn't a hole return it */
@@ -6841,14 +6847,24 @@ static void assert_eb_page_uptodate(const struct extent_buffer *eb,
 {
 	struct btrfs_fs_info *fs_info = eb->fs_info;
 
+	/*
+	 * If we are using the commit root we could potentially clear a page
+	 * Uptodate while we're using the extent buffer that we've previously
+	 * looked up.  We don't want to complain in this case, as the page was
+	 * valid before, we just didn't write it out.  Instead we want to catch
+	 * the case where we didn't actually read the block properly, which
+	 * would have !PageUptodate && !PageError, as we clear PageError before
+	 * reading.
+	 */
 	if (fs_info->sectorsize < PAGE_SIZE) {
-		bool uptodate;
+		bool uptodate, error;
 
 		uptodate = btrfs_subpage_test_uptodate(fs_info, page,
 						       eb->start, eb->len);
-		WARN_ON(!uptodate);
+		error = btrfs_subpage_test_error(fs_info, page, eb->start, eb->len);
+		WARN_ON(!uptodate && !error);
 	} else {
-		WARN_ON(!PageUptodate(page));
+		WARN_ON(!PageUptodate(page) && !PageError(page));
 	}
 }
 
