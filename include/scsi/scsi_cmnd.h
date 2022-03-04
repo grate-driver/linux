@@ -10,7 +10,6 @@
 #include <linux/timer.h>
 #include <linux/scatterlist.h>
 #include <scsi/scsi_device.h>
-#include <scsi/scsi_request.h>
 
 struct Scsi_Host;
 struct scsi_driver;
@@ -28,9 +27,6 @@ struct scsi_driver;
  * supports without specifying a cmd_len by ULD's
  */
 #define MAX_COMMAND_SIZE 16
-#if (MAX_COMMAND_SIZE > BLK_MAX_CDB)
-# error MAX_COMMAND_SIZE can not be bigger than BLK_MAX_CDB
-#endif
 
 struct scsi_data_buffer {
 	struct sg_table table;
@@ -71,7 +67,6 @@ enum scsi_cmnd_submitter {
 } __packed;
 
 struct scsi_cmnd {
-	struct scsi_request req;
 	struct scsi_device *device;
 	struct list_head eh_entry; /* entry for the host eh_abort_list/eh_cmd_q */
 	struct delayed_work abort_work;
@@ -100,9 +95,7 @@ struct scsi_cmnd {
 	unsigned short cmd_len;
 	enum dma_data_direction sc_data_direction;
 
-	/* These elements define the operation we are about to perform */
-	unsigned char *cmnd;
-
+	unsigned char cmnd[32]; /* SCSI CDB */
 
 	/* These elements define the operation we ultimately want to perform */
 	struct scsi_data_buffer sdb;
@@ -116,7 +109,8 @@ struct scsi_cmnd {
 				   (ie, between disconnect / 
 				   reconnects.   Probably == sector
 				   size */
-
+	unsigned resid_len;	/* residual count */
+	unsigned sense_len;
 	unsigned char *sense_buffer;
 				/* obtained by REQUEST SENSE when
 				 * CHECK CONDITION is received on original
@@ -204,12 +198,12 @@ static inline unsigned scsi_bufflen(struct scsi_cmnd *cmd)
 
 static inline void scsi_set_resid(struct scsi_cmnd *cmd, unsigned int resid)
 {
-	cmd->req.resid_len = resid;
+	cmd->resid_len = resid;
 }
 
 static inline unsigned int scsi_get_resid(struct scsi_cmnd *cmd)
 {
-	return cmd->req.resid_len;
+	return cmd->resid_len;
 }
 
 #define scsi_for_each_sg(cmd, sg, nseg, __i)			\
