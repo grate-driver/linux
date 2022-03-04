@@ -3479,6 +3479,9 @@ void free_unref_page_list(struct list_head *list)
 		 */
 		if (++batch_count == SWAP_CLUSTER_MAX) {
 			local_unlock_irqrestore(&pagesets.lock, flags);
+
+			cond_resched();
+
 			batch_count = 0;
 			local_lock_irqsave(&pagesets.lock, flags);
 		}
