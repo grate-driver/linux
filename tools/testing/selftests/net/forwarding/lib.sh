@@ -24,6 +24,7 @@ PING_COUNT=${PING_COUNT:=10}
 PING_TIMEOUT=${PING_TIMEOUT:=5}
 WAIT_TIMEOUT=${WAIT_TIMEOUT:=20}
 INTERFACE_TIMEOUT=${INTERFACE_TIMEOUT:=600}
+LOW_AGEING_TIME=${LOW_AGEING_TIME:=1000}
 REQUIRE_JQ=${REQUIRE_JQ:=yes}
 REQUIRE_MZ=${REQUIRE_MZ:=yes}
 
@@ -122,6 +123,14 @@ check_ethtool_lanes_support()
 	if [[ $? -ne 0 ]]; then
 		echo "SKIP: ethtool too old; it is missing lanes support"
 		exit $ksft_skip
+	fi
+}
+
+check_locked_port_support()
+{
+	if ! bridge -d link show | grep -q " locked"; then
+		echo "SKIP: iproute2 too old; Locked port feature not supported."
+		return $ksft_skip
 	fi
 }
 
