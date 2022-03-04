@@ -175,7 +175,7 @@ static inline void dup_anon_vma_name(struct vm_area_struct *orig_vma,
 static inline void free_anon_vma_name(struct vm_area_struct *vma)
 {
 	/*
-	 * Not using anon_vma_name because it generates a warning if vma->vm_mm
+	 * Not using anon_vma_name because it generates a warning if mmap_lock
 	 * is not held, which might be the case here.
 	 */
 	if (!vma->vm_file)
