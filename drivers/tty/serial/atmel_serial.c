@@ -8,6 +8,7 @@
  *
  *  DMA support added by Chip Coldwell.
  */
+#include <linux/circ_buf.h>
 #include <linux/tty.h>
 #include <linux/ioport.h>
 #include <linux/slab.h>
@@ -2671,6 +2672,30 @@ static struct console atmel_console = {
 	.index		= -1,
 	.data		= &atmel_uart,
 };
+
+static void atmel_serial_early_write(struct console *con, const char *s,
+				     unsigned int n)
+{
+	struct earlycon_device *dev = con->data;
+
+	uart_console_write(&dev->port, s, n, atmel_console_putchar);
+}
+
+static int __init atmel_early_console_setup(struct earlycon_device *device,
+					    const char *options)
+{
+	if (!device->port.membase)
+		return -ENODEV;
+
+	device->con->write = atmel_serial_early_write;
+
+	return 0;
+}
+
+OF_EARLYCON_DECLARE(atmel_serial, "atmel,at91rm9200-usart",
+		    atmel_early_console_setup);
+OF_EARLYCON_DECLARE(atmel_serial, "atmel,at91sam9260-usart",
+		    atmel_early_console_setup);
 
 #define ATMEL_CONSOLE_DEVICE	(&atmel_console)
 
