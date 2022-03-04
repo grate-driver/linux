@@ -983,7 +983,6 @@ static int me_pagecache_dirty(struct page_state *ps, struct page *p)
 static int me_swapcache_dirty(struct page_state *ps, struct page *p)
 {
 	int ret;
-	bool extra_pins = false;
 
 	ClearPageDirty(p);
 	/* Trigger EIO in shmem: */
@@ -992,10 +991,7 @@ static int me_swapcache_dirty(struct page_state *ps, struct page *p)
 	ret = delete_from_lru_cache(p) ? MF_FAILED : MF_DELAYED;
 	unlock_page(p);
 
-	if (ret == MF_DELAYED)
-		extra_pins = true;
-
-	if (has_extra_refcount(ps, p, extra_pins))
+	if (has_extra_refcount(ps, p, true))
 		ret = MF_FAILED;
 
 	return ret;
