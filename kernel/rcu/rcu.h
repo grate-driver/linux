@@ -24,6 +24,13 @@
 #define RCU_SEQ_STATE_MASK	((1 << RCU_SEQ_CTR_SHIFT) - 1)
 
 /*
+ * Low-order bit definitions for polled grace-period APIs.
+ */
+#define RCU_GET_STATE_FROM_EXPEDITED	0x1
+#define RCU_GET_STATE_USE_NORMAL	0x2
+#define RCU_GET_STATE_BAD_FOR_NORMAL	(RCU_GET_STATE_FROM_EXPEDITED | RCU_GET_STATE_USE_NORMAL)
+
+/*
  * Return the counter portion of a sequence number previously returned
  * by rcu_seq_snap() or rcu_seq_current().
  */
@@ -210,7 +217,9 @@ static inline bool rcu_stall_is_suppressed_at_boot(void)
 extern int rcu_cpu_stall_ftrace_dump;
 extern int rcu_cpu_stall_suppress;
 extern int rcu_cpu_stall_timeout;
+extern int rcu_exp_cpu_stall_timeout;
 int rcu_jiffies_till_stall_check(void);
+int rcu_exp_jiffies_till_stall_check(void);
 
 static inline bool rcu_stall_is_suppressed(void)
 {
@@ -523,6 +532,8 @@ static inline bool rcu_check_boost_fail(unsigned long gp_state, int *cpup) { ret
 static inline void show_rcu_gp_kthreads(void) { }
 static inline int rcu_get_gp_kthreads_prio(void) { return 0; }
 static inline void rcu_fwd_progress_check(unsigned long j) { }
+static inline void rcu_gp_slow_register(atomic_t *rgssp) { }
+static inline void rcu_gp_slow_unregister(atomic_t *rgssp) { }
 #else /* #ifdef CONFIG_TINY_RCU */
 bool rcu_dynticks_zero_in_eqs(int cpu, int *vp);
 unsigned long rcu_get_gp_seq(void);
@@ -535,13 +546,13 @@ void rcu_fwd_progress_check(unsigned long j);
 void rcu_force_quiescent_state(void);
 extern struct workqueue_struct *rcu_gp_wq;
 extern struct workqueue_struct *rcu_par_gp_wq;
+void rcu_gp_slow_register(atomic_t *rgssp);
+void rcu_gp_slow_unregister(atomic_t *rgssp);
 #endif /* #else #ifdef CONFIG_TINY_RCU */
 
 #ifdef CONFIG_RCU_NOCB_CPU
-bool rcu_is_nocb_cpu(int cpu);
 void rcu_bind_current_to_nocb(void);
 #else
-static inline bool rcu_is_nocb_cpu(int cpu) { return false; }
 static inline void rcu_bind_current_to_nocb(void) { }
 #endif
 

@@ -25,6 +25,32 @@ int sysctl_max_rcu_stall_to_panic __read_mostly;
 #define RCU_STALL_MIGHT_DIV		8
 #define RCU_STALL_MIGHT_MIN		(2 * HZ)
 
+int rcu_exp_jiffies_till_stall_check(void)
+{
+	int cpu_stall_timeout = READ_ONCE(rcu_exp_cpu_stall_timeout);
+	int exp_stall_delay_delta = 0;
+	int till_stall_check;
+
+	/*
+	 * Limit check must be consistent with the Kconfig limits for
+	 * CONFIG_RCU_EXP_CPU_STALL_TIMEOUT, so check the allowed range.
+	 * The minimum clamped value is "2UL", because at least one full
+	 * tick has to be guaranteed.
+	 */
+	till_stall_check = clamp(msecs_to_jiffies(cpu_stall_timeout), 2UL, 21UL * HZ);
+
+	if (jiffies_to_msecs(till_stall_check) != cpu_stall_timeout)
+		WRITE_ONCE(rcu_exp_cpu_stall_timeout, jiffies_to_msecs(till_stall_check));
+
+#ifdef CONFIG_PROVE_RCU
+	/* Add extra ~25% out of till_stall_check. */
+	exp_stall_delay_delta = ((till_stall_check * 25) / 100) + 1;
+#endif
+
+	return till_stall_check + exp_stall_delay_delta;
+}
+EXPORT_SYMBOL_GPL(rcu_exp_jiffies_till_stall_check);
+
 /* Limit-check stall timeouts specified at boottime and runtime. */
 int rcu_jiffies_till_stall_check(void)
 {
@@ -379,6 +405,15 @@ static bool rcu_is_gp_kthread_starving(unsigned long *jp)
 	return j > 2 * HZ;
 }
 
+static bool rcu_is_rcuc_kthread_starving(struct rcu_data *rdp, unsigned long *jp)
+{
+	unsigned long j = jiffies - READ_ONCE(rdp->rcuc_activity);
+
+	if (jp)
+		*jp = j;
+	return j > 2 * HZ;
+}
+
 /*
  * Print out diagnostic information for the specified stalled CPU.
  *
@@ -428,6 +463,29 @@ static void print_cpu_stall_info(int cpu)
 	       rdp->softirq_snap, kstat_softirqs_cpu(RCU_SOFTIRQ, cpu),
 	       data_race(rcu_state.n_force_qs) - rcu_state.n_force_qs_gpstart,
 	       falsepositive ? " (false positive?)" : "");
+}
+
+static void rcuc_kthread_dump(struct rcu_data *rdp)
+{
+	int cpu;
+	unsigned long j;
+	struct task_struct *rcuc;
+
+	rcuc = rdp->rcu_cpu_kthread_task;
+	if (!rcuc)
+		return;
+
+	cpu = task_cpu(rcuc);
+	if (cpu_is_offline(cpu) || idle_cpu(cpu))
+		return;
+
+	if (!rcu_is_rcuc_kthread_starving(rdp, &j))
+		return;
+
+	pr_err("%s kthread starved for %ld jiffies\n", rcuc->comm, j);
+	sched_show_task(rcuc);
+	if (!trigger_single_cpu_backtrace(cpu))
+		dump_cpu_task(cpu);
 }
 
 /* Complain about starvation of grace-period kthread.  */
@@ -600,6 +658,9 @@ static void print_cpu_stall(unsigned long gps)
 
 	rcu_check_gp_kthread_expired_fqs_timer();
 	rcu_check_gp_kthread_starvation();
+
+	if (!use_softirq)
+		rcuc_kthread_dump(rdp);
 
 	rcu_dump_cpu_stacks();
 
