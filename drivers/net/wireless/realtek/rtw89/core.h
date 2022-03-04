@@ -61,6 +61,15 @@ enum rtw89_subband {
 	RTW89_CH_5G_BAND_3 = 3,
 	RTW89_CH_5G_BAND_4 = 4,
 
+	RTW89_CH_6G_BAND_IDX0, /* Low */
+	RTW89_CH_6G_BAND_IDX1, /* Low */
+	RTW89_CH_6G_BAND_IDX2, /* Mid */
+	RTW89_CH_6G_BAND_IDX3, /* Mid */
+	RTW89_CH_6G_BAND_IDX4, /* High */
+	RTW89_CH_6G_BAND_IDX5, /* High */
+	RTW89_CH_6G_BAND_IDX6, /* Ultra-high */
+	RTW89_CH_6G_BAND_IDX7, /* Ultra-high */
+
 	RTW89_SUBBAND_NR,
 };
 
@@ -362,6 +371,25 @@ enum rtw89_hw_rate {
  */
 #define RTW89_5G_CH_NUM 53
 
+/* 6G channels,
+ * 1, 3, 5, 7, 9, 11, 13, 15,
+ * 17, 19, 21, 23, 25, 27, 29, 33,
+ * 35, 37, 39, 41, 43, 45, 47, 49,
+ * 51, 53, 55, 57, 59, 61, 65, 67,
+ * 69, 71, 73, 75, 77, 79, 81, 83,
+ * 85, 87, 89, 91, 93, 97, 99, 101,
+ * 103, 105, 107, 109, 111, 113, 115, 117,
+ * 119, 121, 123, 125, 129, 131, 133, 135,
+ * 137, 139, 141, 143, 145, 147, 149, 151,
+ * 153, 155, 157, 161, 163, 165, 167, 169,
+ * 171, 173, 175, 177, 179, 181, 183, 185,
+ * 187, 189, 193, 195, 197, 199, 201, 203,
+ * 205, 207, 209, 211, 213, 215, 217, 219,
+ * 221, 225, 227, 229, 231, 233, 235, 237,
+ * 239, 241, 243, 245, 247, 249, 251, 253,
+ */
+#define RTW89_6G_CH_NUM 120
+
 enum rtw89_rate_section {
 	RTW89_RS_CCK,
 	RTW89_RS_OFDM,
@@ -544,7 +572,8 @@ enum rtw89_ps_mode {
 };
 
 #define RTW89_2G_BW_NUM (RTW89_CHANNEL_WIDTH_40 + 1)
-#define RTW89_5G_BW_NUM (RTW89_CHANNEL_WIDTH_80 + 1)
+#define RTW89_5G_BW_NUM (RTW89_CHANNEL_WIDTH_160 + 1)
+#define RTW89_6G_BW_NUM (RTW89_CHANNEL_WIDTH_160 + 1)
 #define RTW89_PPE_BW_NUM (RTW89_CHANNEL_WIDTH_80 + 1)
 
 enum rtw89_ru_bandwidth {
@@ -560,12 +589,17 @@ enum rtw89_sc_offset {
 	RTW89_SC_20_LOWER	= 2,
 	RTW89_SC_20_UPMOST	= 3,
 	RTW89_SC_20_LOWEST	= 4,
+	RTW89_SC_20_UP2X	= 5,
+	RTW89_SC_20_LOW2X	= 6,
+	RTW89_SC_20_UP3X	= 7,
+	RTW89_SC_20_LOW3X	= 8,
 	RTW89_SC_40_UPPER	= 9,
 	RTW89_SC_40_LOWER	= 10,
 };
 
 struct rtw89_channel_params {
 	u8 center_chan;
+	u32 center_freq;
 	u8 primary_chan;
 	u8 bandwidth;
 	u8 pri_ch_idx;
@@ -2209,6 +2243,7 @@ struct rtw89_chip_info {
 	const struct rtw89_dle_mem *dle_mem;
 	u32 rf_base_addr[2];
 	u8 support_bands;
+	bool support_bw160;
 	u8 rf_path_num;
 	u8 tx_nss;
 	u8 rx_nss;
@@ -2236,10 +2271,15 @@ struct rtw89_chip_info {
 	const s8 (*txpwr_lmt_5g)[RTW89_5G_BW_NUM][RTW89_NTX_NUM]
 				[RTW89_RS_LMT_NUM][RTW89_BF_NUM]
 				[RTW89_REGD_NUM][RTW89_5G_CH_NUM];
+	const s8 (*txpwr_lmt_6g)[RTW89_6G_BW_NUM][RTW89_NTX_NUM]
+				[RTW89_RS_LMT_NUM][RTW89_BF_NUM]
+				[RTW89_REGD_NUM][RTW89_6G_CH_NUM];
 	const s8 (*txpwr_lmt_ru_2g)[RTW89_RU_NUM][RTW89_NTX_NUM]
 				   [RTW89_REGD_NUM][RTW89_2G_CH_NUM];
 	const s8 (*txpwr_lmt_ru_5g)[RTW89_RU_NUM][RTW89_NTX_NUM]
 				   [RTW89_REGD_NUM][RTW89_5G_CH_NUM];
+	const s8 (*txpwr_lmt_ru_6g)[RTW89_RU_NUM][RTW89_NTX_NUM]
+				   [RTW89_REGD_NUM][RTW89_6G_CH_NUM];
 
 	u8 txpwr_factor_rf;
 	u8 txpwr_factor_mac;
@@ -2369,6 +2409,7 @@ struct rtw89_hal {
 	u32 rx_fltr;
 	u8 cv;
 	u8 current_channel;
+	u32 current_freq;
 	u8 prev_primary_channel;
 	u8 current_primary_channel;
 	enum rtw89_subband current_subband;
@@ -2578,6 +2619,10 @@ struct rtw89_cfo_tracking_info {
 	s32 residual_cfo_acc;
 	u8 phy_cfotrk_state;
 	u8 phy_cfotrk_cnt;
+	bool divergence_lock_en;
+	u8 x_cap_lb;
+	u8 x_cap_ub;
+	u8 lock_cnt;
 };
 
 /* 2GL, 2GH, 5GL1, 5GH1, 5GM1, 5GM2, 5GH1, 5GH2 */
@@ -2869,7 +2914,7 @@ struct rtw89_dev {
 	int napi_budget_countdown;
 
 	/* HCI related data, keep last */
-	u8 priv[0] __aligned(sizeof(void *));
+	u8 priv[] __aligned(sizeof(void *));
 };
 
 static inline int rtw89_hci_tx_write(struct rtw89_dev *rtwdev,
@@ -3148,6 +3193,37 @@ static inline struct ieee80211_sta *rtwsta_to_sta_safe(struct rtw89_sta *rtwsta)
 static inline struct rtw89_sta *sta_to_rtwsta_safe(struct ieee80211_sta *sta)
 {
 	return sta ? (struct rtw89_sta *)sta->drv_priv : NULL;
+}
+
+static inline u8 rtw89_hw_to_rate_info_bw(enum rtw89_bandwidth hw_bw)
+{
+	if (hw_bw == RTW89_CHANNEL_WIDTH_160)
+		return RATE_INFO_BW_160;
+	else if (hw_bw == RTW89_CHANNEL_WIDTH_80)
+		return RATE_INFO_BW_80;
+	else if (hw_bw == RTW89_CHANNEL_WIDTH_40)
+		return RATE_INFO_BW_40;
+	else
+		return RATE_INFO_BW_20;
+}
+
+static inline
+enum rtw89_bandwidth nl_to_rtw89_bandwidth(enum nl80211_chan_width width)
+{
+	switch (width) {
+	default:
+		WARN(1, "Not support bandwidth %d\n", width);
+		fallthrough;
+	case NL80211_CHAN_WIDTH_20_NOHT:
+	case NL80211_CHAN_WIDTH_20:
+		return RTW89_CHANNEL_WIDTH_20;
+	case NL80211_CHAN_WIDTH_40:
+		return RTW89_CHANNEL_WIDTH_40;
+	case NL80211_CHAN_WIDTH_80:
+		return RTW89_CHANNEL_WIDTH_80;
+	case NL80211_CHAN_WIDTH_160:
+		return RTW89_CHANNEL_WIDTH_160;
+	}
 }
 
 static inline
