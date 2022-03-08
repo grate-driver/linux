@@ -4,6 +4,7 @@
  *
  */
 
+#include <linux/devm-helpers.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
@@ -260,6 +261,7 @@ static int asusec_battery_probe(struct platform_device *pdev)
 	struct asusec_battery_data *priv;
 	struct asusec_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct power_supply_config cfg = {};
+	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -292,18 +294,13 @@ static int asusec_battery_probe(struct platform_device *pdev)
 		dev_warn(&pdev->dev,
 			 "No monitored battery, some properties will be missing\n");
 
-	INIT_DELAYED_WORK(&priv->poll_work, asusec_battery_poll_work);
+	ret = devm_delayed_work_autocancel(&pdev->dev, &priv->poll_work,
+					   asusec_battery_poll_work);
+	if (ret)
+		return ret;
+
 	schedule_delayed_work(&priv->poll_work,
 			      msecs_to_jiffies(ASUSEC_BATTERY_DATA_FRESH_MSEC));
-
-	return 0;
-}
-
-static int asusec_battery_remove(struct platform_device *pdev)
-{
-	struct asusec_battery_data *priv = dev_get_drvdata(&pdev->dev);
-
-	cancel_delayed_work_sync(&priv->poll_work);
 
 	return 0;
 }
@@ -336,7 +333,6 @@ static struct platform_driver asusec_battery_driver = {
 		.pm = &asusec_battery_pm_ops,
 	},
 	.probe = asusec_battery_probe,
-	.remove = asusec_battery_remove,
 };
 module_platform_driver(asusec_battery_driver);
 
