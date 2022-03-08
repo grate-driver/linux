@@ -4,6 +4,7 @@
  */
 
 #include <linux/delay.h>
+#include <linux/devm-helpers.h>
 #include <linux/err.h>
 #include <linux/i2c.h>
 #include <linux/leds.h>
@@ -347,18 +348,13 @@ static int chagall_battery_probe(struct i2c_client *client)
 	led_set_brightness(&cg->amber_led, LED_OFF);
 	led_set_brightness(&cg->white_led, LED_OFF);
 
-	INIT_DELAYED_WORK(&cg->poll_work, chagall_battery_poll_work);
+	ret = devm_delayed_work_autocancel(&client->dev, &cg->poll_work,
+					   chagall_battery_poll_work);
+	if (ret)
+		return ret;
+
 	schedule_delayed_work(&cg->poll_work,
 			      msecs_to_jiffies(CHAGALL_BATTERY_DATA_REFRESH));
-
-	return 0;
-}
-
-static int chagall_battery_remove(struct i2c_client *client)
-{
-	struct chagall_battery_data *cg = i2c_get_clientdata(client);
-
-	cancel_delayed_work_sync(&cg->poll_work);
 
 	return 0;
 }
@@ -400,7 +396,6 @@ static struct i2c_driver chagall_battery_driver = {
 		.of_match_table = chagall_match,
 	},
 	.probe_new = chagall_battery_probe,
-	.remove = chagall_battery_remove,
 };
 module_i2c_driver(chagall_battery_driver);
 
