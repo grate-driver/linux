@@ -107,13 +107,16 @@ xfs_prealloc_blocks(
  * aside a few blocks which will not be reserved in delayed allocation.
  *
  * For each AG, we need to reserve enough blocks to replenish a totally empty
- * AGFL and 4 more to handle a potential split of the file's bmap btree.
+ * AGFL and enough to handle a potential split of a file's bmap btree.
  */
 unsigned int
 xfs_alloc_set_aside(
 	struct xfs_mount	*mp)
 {
-	return mp->m_sb.sb_agcount * (XFS_ALLOCBT_AGFL_RESERVE + 4);
+	unsigned int		bmbt_splits;
+
+	bmbt_splits = max(mp->m_bm_maxlevels[0], mp->m_bm_maxlevels[1]) - 1;
+	return mp->m_sb.sb_agcount * (XFS_ALLOCBT_AGFL_RESERVE + bmbt_splits);
 }
 
 /*
