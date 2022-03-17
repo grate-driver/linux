@@ -134,7 +134,8 @@ typedef struct xfs_mount {
 	uint			m_refc_maxlevels; /* max refcount btree level */
 	unsigned int		m_agbtree_maxlevels; /* max level of all AG btrees */
 	xfs_extlen_t		m_ag_prealloc_blocks; /* reserved ag blocks */
-	uint			m_alloc_set_aside; /* space we can't use */
+	/* space reserved to ensure bmbt splits always succeed */
+	unsigned int		m_bmbt_split_setaside;
 	uint			m_ag_max_usable; /* max space per AG */
 	int			m_dalign;	/* stripe unit */
 	int			m_swidth;	/* stripe width */
@@ -491,7 +492,7 @@ static inline uint64_t
 xfs_fdblocks_unavailable(
 	struct xfs_mount	*mp)
 {
-	return mp->m_alloc_set_aside + atomic64_read(&mp->m_allocbt_blks);
+	return mp->m_bmbt_split_setaside + atomic64_read(&mp->m_allocbt_blks);
 }
 
 extern int	xfs_mod_fdblocks(struct xfs_mount *mp, int64_t delta,

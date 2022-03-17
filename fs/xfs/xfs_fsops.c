@@ -190,7 +190,7 @@ xfs_growfs_data_private(
 	if (nagimax)
 		mp->m_maxagi = nagimax;
 	xfs_set_low_space_thresholds(mp);
-	mp->m_alloc_set_aside = xfs_alloc_set_aside(mp);
+	mp->m_bmbt_split_setaside = xfs_bmbt_split_setaside(mp);
 
 	if (delta > 0) {
 		/*

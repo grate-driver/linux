@@ -656,7 +656,7 @@ xfs_mountfs(
 	 * Compute the amount of space to set aside to handle btree splits near
 	 * ENOSPC now that we have calculated the btree maxlevels.
 	 */
-	mp->m_alloc_set_aside = xfs_alloc_set_aside(mp);
+	mp->m_bmbt_split_setaside = xfs_bmbt_split_setaside(mp);
 	mp->m_ag_max_usable = xfs_alloc_ag_max_usable(mp);
 
 	/*

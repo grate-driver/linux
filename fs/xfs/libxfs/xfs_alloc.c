@@ -110,7 +110,7 @@ xfs_prealloc_blocks(
  * AGFL and enough to handle a potential split of a file's bmap btree.
  */
 unsigned int
-xfs_alloc_set_aside(
+xfs_bmbt_split_setaside(
 	struct xfs_mount	*mp)
 {
 	unsigned int		bmbt_splits;
@@ -127,7 +127,7 @@ xfs_alloc_set_aside(
  *	- the AG superblock, AGF, AGI and AGFL
  *	- the AGF (bno and cnt) and AGI btree root blocks, and optionally
  *	  the AGI free inode and rmap btree root blocks.
- *	- blocks on the AGFL according to xfs_alloc_set_aside() limits
+ *	- blocks on the AGFL according to xfs_bmbt_split_setaside() limits
  *	- the rmapbt root block
  *
  * The AG headers are sector sized, so the amount of space they take up is
