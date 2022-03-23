@@ -190,7 +190,7 @@ xfs_growfs_data_private(
 	if (nagimax)
 		mp->m_maxagi = nagimax;
 	xfs_set_low_space_thresholds(mp);
-	mp->m_alloc_set_aside = xfs_alloc_set_aside(mp);
+	mp->m_bmbt_split_setaside = xfs_bmbt_split_setaside(mp);
 
 	if (delta > 0) {
 		/*
@@ -347,7 +347,7 @@ xfs_fs_counts(
 	cnt->allocino = percpu_counter_read_positive(&mp->m_icount);
 	cnt->freeino = percpu_counter_read_positive(&mp->m_ifree);
 	cnt->freedata = percpu_counter_read_positive(&mp->m_fdblocks) -
-						mp->m_alloc_set_aside;
+						xfs_fdblocks_unavailable(mp);
 
 	spin_lock(&mp->m_sb_lock);
 	cnt->freertx = mp->m_sb.sb_frextents;
@@ -379,6 +379,7 @@ xfs_reserve_blocks(
 	int64_t			fdblks_delta = 0;
 	uint64_t		request;
 	int64_t			free;
+	unsigned int		tries;
 	int			error = 0;
 
 	/* If inval is null, report current values and return */
@@ -430,11 +431,18 @@ xfs_reserve_blocks(
 	 * If the request is larger than the current reservation, reserve the
 	 * blocks before we update the reserve counters. Sample m_fdblocks and
 	 * perform a partial reservation if the request exceeds free space.
+	 *
+	 * The loop body estimates how many blocks it can request from fdblocks
+	 * to stash in the reserve pool.  This is a classic TOCTOU race since
+	 * fdblocks updates are not always coordinated via m_sb_lock.  We also
+	 * cannot tell if @free remaining unchanged between iterations is due
+	 * to an idle system or freed blocks being consumed immediately, so
+	 * we'll try a finite number of times to satisfy the request.
 	 */
 	error = -ENOSPC;
-	do {
+	for (tries = 0; tries < 30 && error == -ENOSPC; tries++) {
 		free = percpu_counter_sum(&mp->m_fdblocks) -
-						mp->m_alloc_set_aside;
+						xfs_fdblocks_unavailable(mp);
 		if (free <= 0)
 			break;
 
@@ -459,7 +467,7 @@ xfs_reserve_blocks(
 		spin_unlock(&mp->m_sb_lock);
 		error = xfs_mod_fdblocks(mp, -fdblks_delta, 0);
 		spin_lock(&mp->m_sb_lock);
-	} while (error == -ENOSPC);
+	}
 
 	/*
 	 * Update the reserve counters if blocks have been successfully

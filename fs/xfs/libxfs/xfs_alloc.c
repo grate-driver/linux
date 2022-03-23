@@ -82,6 +82,19 @@ xfs_prealloc_blocks(
 }
 
 /*
+ * The number of blocks per AG that we withhold from xfs_mod_fdblocks to
+ * guarantee that we can refill the AGFL prior to allocating space in a nearly
+ * full AG.  We require two blocks per free space btree because free space
+ * btrees shrink to a single block as the AG fills up, and any allocation can
+ * cause a btree split.  The rmap btree uses a per-AG reservation to withhold
+ * space from xfs_mod_fdblocks, so we do not account for that here.
+ */
+#define XFS_ALLOCBT_AGFL_RESERVE	4
+
+/*
+ * Compute the number of blocks that we set aside to guarantee the ability to
+ * refill the AGFL and handle a full bmap btree split.
+ *
  * In order to avoid ENOSPC-related deadlock caused by out-of-order locking of
  * AGF buffer (PV 947395), we place constraints on the relationship among
  * actual allocations for data blocks, freelist blocks, and potential file data
@@ -93,14 +106,17 @@ xfs_prealloc_blocks(
  * extents need to be actually allocated. To get around this, we explicitly set
  * aside a few blocks which will not be reserved in delayed allocation.
  *
- * We need to reserve 4 fsbs _per AG_ for the freelist and 4 more to handle a
- * potential split of the file's bmap btree.
+ * For each AG, we need to reserve enough blocks to replenish a totally empty
+ * AGFL and enough to handle a potential split of a file's bmap btree.
  */
 unsigned int
-xfs_alloc_set_aside(
+xfs_bmbt_split_setaside(
 	struct xfs_mount	*mp)
 {
-	return mp->m_sb.sb_agcount * (XFS_ALLOC_AGFL_RESERVE + 4);
+	unsigned int		bmbt_splits;
+
+	bmbt_splits = max(mp->m_bm_maxlevels[0], mp->m_bm_maxlevels[1]) - 1;
+	return mp->m_sb.sb_agcount * (XFS_ALLOCBT_AGFL_RESERVE + bmbt_splits);
 }
 
 /*
@@ -111,7 +127,7 @@ xfs_alloc_set_aside(
  *	- the AG superblock, AGF, AGI and AGFL
  *	- the AGF (bno and cnt) and AGI btree root blocks, and optionally
  *	  the AGI free inode and rmap btree root blocks.
- *	- blocks on the AGFL according to xfs_alloc_set_aside() limits
+ *	- blocks on the AGFL according to xfs_bmbt_split_setaside() limits
  *	- the rmapbt root block
  *
  * The AG headers are sector sized, so the amount of space they take up is
@@ -124,12 +140,12 @@ xfs_alloc_ag_max_usable(
 	unsigned int		blocks;
 
 	blocks = XFS_BB_TO_FSB(mp, XFS_FSS_TO_BB(mp, 4)); /* ag headers */
-	blocks += XFS_ALLOC_AGFL_RESERVE;
+	blocks += XFS_ALLOCBT_AGFL_RESERVE;
 	blocks += 3;			/* AGF, AGI btree root blocks */
 	if (xfs_has_finobt(mp))
 		blocks++;		/* finobt root block */
 	if (xfs_has_rmapbt(mp))
-		blocks++; 		/* rmap root block */
+		blocks++;		/* rmap root block */
 	if (xfs_has_reflink(mp))
 		blocks++;		/* refcount root block */
 

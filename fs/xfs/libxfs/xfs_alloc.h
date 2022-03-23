@@ -88,8 +88,7 @@ typedef struct xfs_alloc_arg {
 #define XFS_ALLOC_NOBUSY		(1 << 2)/* Busy extents not allowed */
 
 /* freespace limit calculations */
-#define XFS_ALLOC_AGFL_RESERVE	4
-unsigned int xfs_alloc_set_aside(struct xfs_mount *mp);
+unsigned int xfs_bmbt_split_setaside(struct xfs_mount *mp);
 unsigned int xfs_alloc_ag_max_usable(struct xfs_mount *mp);
 
 xfs_extlen_t xfs_alloc_longest_free_extent(struct xfs_perag *pag,
