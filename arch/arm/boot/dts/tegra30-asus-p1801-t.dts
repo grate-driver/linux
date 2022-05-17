@@ -2085,9 +2085,35 @@
 	vbus-supply = <&usb2_vbus>;
 };
 
-/* TODO: model USB hub and devices */
 &usb3 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* Genesys Logic 4-port USB2.0 Hub */
+	hub@1 {
+		compatible = "usb5e3,610";
+		reg = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* USBest Technology SiS HID Touch Controller */
+		device@1 {
+			compatible = "usb457,817";
+			reg = <1>;
+			reset-gpios = <&gpio TEGRA_GPIO(H, 6) GPIO_ACTIVE_LOW>;
+			power-gpios = <&gpio TEGRA_GPIO(S, 0) GPIO_ACTIVE_HIGH>;
+		};
+
+		/* Chicony USB2.0 HD UVC WebCam */
+		device@2 {
+			compatible = "usb4f2,b354";
+			reg = <2>;
+			power-gpios = <&gpio TEGRA_GPIO(BB, 4) GPIO_ACTIVE_HIGH>;
+		};
+
+		/* One USB port is externally accessible on the docking station */
+	};
 };
 
 &usb3_phy {
