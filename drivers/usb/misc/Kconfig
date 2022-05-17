@@ -295,3 +295,11 @@ config BRCM_USB_PINMAP
 	  This option enables support for remapping some USB external
 	  signals, which are typically on dedicated pins on the chip,
 	  to any gpio.
+
+config USB_PWRSEQ
+	tristate "USB power sequence driver support"
+	depends on GPIOLIB && OF
+	default n
+	help
+	  Say Y to enable support for USB devices which must follow a
+	  power sequence to get activated like in the Asus Portable AiO P1801-T.
