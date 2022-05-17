@@ -380,6 +380,17 @@
 		};
 	};
 
+	usb-touchscreen {
+		compatible = "usb457,817";
+		reset-gpios = <&gpio TEGRA_GPIO(H, 6) GPIO_ACTIVE_LOW>;
+		power-gpios = <&gpio TEGRA_GPIO(S, 0) GPIO_ACTIVE_HIGH>;
+	};
+
+	usb-webcam {
+		compatible = "usb4f2,b354";
+		power-gpios = <&gpio TEGRA_GPIO(BB, 4) GPIO_ACTIVE_HIGH>;
+	};
+
 	brcm_wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 
