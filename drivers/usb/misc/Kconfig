@@ -296,6 +296,14 @@ config BRCM_USB_PINMAP
 	  signals, which are typically on dedicated pins on the chip,
 	  to any gpio.
 
+config USB_PWRSEQ
+	tristate "USB power sequence driver support"
+	depends on GPIOLIB && OF
+	default n
+	help
+	  Say Y to enable support for USB devices which must follow a
+	  power sequence to get activated like in the Asus Portable AiO P1801-T.
+
 config USB_ONBOARD_HUB
 	tristate "Onboard USB hub support"
 	depends on OF || COMPILE_TEST
