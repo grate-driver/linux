@@ -15,11 +15,6 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 
-	memory@80000000 {
-		device_type = "memory";
-		reg = <0x80000000 0x0>;
-	};
-
 	pcie@3000 {
 		compatible = "nvidia,tegra30-pcie";
 		device_type = "pci";
@@ -252,7 +247,7 @@
 					     "winc",
 					     "cursor";
 
-			rgb {
+			rgb: rgb {
 				status = "disabled";
 			};
 		};
@@ -289,7 +284,7 @@
 			};
 		};
 
-		hdmi@54280000 {
+		hdmi: hdmi@54280000 {
 			compatible = "nvidia,tegra30-hdmi";
 			reg = <0x54280000 0x00040000>;
 			interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
@@ -358,7 +353,7 @@
 		interrupt-parent = <&intc>;
 	};
 
-	cache-controller@50043000 {
+	cache_controller: cache-controller@50043000 {
 		compatible = "arm,pl310-cache";
 		reg = <0x50043000 0x1000>;
 		arm,data-latency = <6 6 2>;
@@ -510,7 +505,7 @@
 		gpio-ranges = <&pinmux 0 0 248>;
 	};
 
-	vde@6001a000 {
+	vde: vde@6001a000 {
 		compatible = "nvidia,tegra30-vde", "nvidia,tegra20-vde";
 		reg = <0x6001a000 0x1000>, /* Syntax Engine */
 		      <0x6001b000 0x1000>, /* Video Bitstream Engine */
@@ -648,7 +643,7 @@
 		status = "disabled";
 	};
 
-	rtc@7000e000 {
+	tegra_rtc: rtc@7000e000 {
 		compatible = "nvidia,tegra30-rtc", "nvidia,tegra20-rtc";
 		reg = <0x7000e000 0x100>;
 		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
@@ -981,7 +976,7 @@
 		#thermal-sensor-cells = <1>;
 	};
 
-	hda@70030000 {
+	hda: hda@70030000 {
 		compatible = "nvidia,tegra30-hda";
 		reg = <0x70030000 0x10000>;
 		interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
@@ -1253,6 +1248,11 @@
 		nvidia,hsdiscon-level = <5>;
 		nvidia,pmc = <&tegra_pmc 1>;
 		status = "disabled";
+	};
+
+	memory: memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x0>;
 	};
 
 	cpus {
