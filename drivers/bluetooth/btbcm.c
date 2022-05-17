@@ -23,6 +23,7 @@
 #define BDADDR_BCM20702A1 (&(bdaddr_t) {{0x00, 0x00, 0xa0, 0x02, 0x70, 0x20}})
 #define BDADDR_BCM2076B1 (&(bdaddr_t) {{0x79, 0x56, 0x00, 0xa0, 0x76, 0x20}})
 #define BDADDR_BCM43430A0 (&(bdaddr_t) {{0xac, 0x1f, 0x12, 0xa0, 0x43, 0x43}})
+#define BDADDR_BCM43241B0 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0x1b, 0x24, 0x43}})
 #define BDADDR_BCM4324B3 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0xb3, 0x24, 0x43}})
 #define BDADDR_BCM4330B1 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0xb1, 0x30, 0x43}})
 #define BDADDR_BCM4334B0 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0xb0, 0x34, 0x43}})
@@ -81,6 +82,8 @@ int btbcm_check_bdaddr(struct hci_dev *hdev)
 	if (!bacmp(&bda->bdaddr, BDADDR_BCM20702A0) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM20702A1) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM2076B1) ||
+		// How is this supposed to work?
+		// !bacmp(&bda->bdaddr, BDADDR_BCM43241B0) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4324B3) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4330B1) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4334B0) ||
@@ -441,6 +444,7 @@ struct bcm_subver_table {
 static const struct bcm_subver_table bcm_uart_subver_table[] = {
 	{ 0x1111, "BCM4362A2"	},	/* 000.017.017 */
 	{ 0x4103, "BCM4330B1"	},	/* 002.001.003 */
+	// Same for the BCM43241B0
 	{ 0x410d, "BCM4334B0"	},	/* 002.001.013 */
 	{ 0x410e, "BCM43341B0"	},	/* 002.001.014 */
 	{ 0x4204, "BCM2076B1"	},	/* 002.002.004 */
