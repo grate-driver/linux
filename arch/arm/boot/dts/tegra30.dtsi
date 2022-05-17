@@ -1136,13 +1136,13 @@
 		resets = <&tegra_car 22>;
 		reset-names = "usb";
 		nvidia,needs-double-reset;
-		nvidia,phy = <&phy1>;
+		nvidia,phy = <&usb1_phy>;
 		power-domains = <&pd_core>;
 		operating-points-v2 = <&usbd_dvfs_opp_table>;
 		status = "disabled";
 	};
 
-	phy1: usb-phy@7d000000 {
+	usb1_phy: usb-phy@7d000000 {
 		compatible = "nvidia,tegra30-usb-phy";
 		reg = <0x7d000000 0x4000>,
 		      <0x7d000000 0x4000>;
@@ -1179,13 +1179,13 @@
 		clocks = <&tegra_car TEGRA30_CLK_USB2>;
 		resets = <&tegra_car 58>;
 		reset-names = "usb";
-		nvidia,phy = <&phy2>;
+		nvidia,phy = <&usb2_phy>;
 		power-domains = <&pd_core>;
 		operating-points-v2 = <&usb2_dvfs_opp_table>;
 		status = "disabled";
 	};
 
-	phy2: usb-phy@7d004000 {
+	usb2_phy: usb-phy@7d004000 {
 		compatible = "nvidia,tegra30-usb-phy";
 		reg = <0x7d004000 0x4000>,
 		      <0x7d000000 0x4000>;
@@ -1221,13 +1221,13 @@
 		clocks = <&tegra_car TEGRA30_CLK_USB3>;
 		resets = <&tegra_car 59>;
 		reset-names = "usb";
-		nvidia,phy = <&phy3>;
+		nvidia,phy = <&usb3_phy>;
 		power-domains = <&pd_core>;
 		operating-points-v2 = <&usb3_dvfs_opp_table>;
 		status = "disabled";
 	};
 
-	phy3: usb-phy@7d008000 {
+	usb3_phy: usb-phy@7d008000 {
 		compatible = "nvidia,tegra30-usb-phy";
 		reg = <0x7d008000 0x4000>,
 		      <0x7d000000 0x4000>;
