@@ -1556,6 +1556,7 @@ static struct bcm_device_data cyw55572_device_data = {
 
 static const struct of_device_id bcm_bluetooth_of_match[] = {
 	{ .compatible = "brcm,bcm20702a1" },
+	{ .compatible = "brcm,bcm43241b0-bt" },
 	{ .compatible = "brcm,bcm4329-bt" },
 	{ .compatible = "brcm,bcm4330-bt" },
 	{ .compatible = "brcm,bcm4334-bt" },
