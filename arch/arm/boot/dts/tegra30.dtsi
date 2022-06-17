@@ -15,11 +15,6 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 
-	memory@80000000 {
-		device_type = "memory";
-		reg = <0x80000000 0x0>;
-	};
-
 	pcie@3000 {
 		compatible = "nvidia,tegra30-pcie";
 		device_type = "pci";
@@ -289,7 +284,7 @@
 			};
 		};
 
-		hdmi@54280000 {
+		hdmi: hdmi@54280000 {
 			compatible = "nvidia,tegra30-hdmi";
 			reg = <0x54280000 0x00040000>;
 			interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
@@ -510,7 +505,7 @@
 		gpio-ranges = <&pinmux 0 0 248>;
 	};
 
-	vde@6001a000 {
+	vde: vde@6001a000 {
 		compatible = "nvidia,tegra30-vde", "nvidia,tegra20-vde";
 		reg = <0x6001a000 0x1000>, /* Syntax Engine */
 		      <0x6001b000 0x1000>, /* Video Bitstream Engine */
@@ -648,7 +643,7 @@
 		status = "disabled";
 	};
 
-	rtc@7000e000 {
+	rtc: rtc@7000e000 {
 		compatible = "nvidia,tegra30-rtc", "nvidia,tegra20-rtc";
 		reg = <0x7000e000 0x100>;
 		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
@@ -981,7 +976,7 @@
 		#thermal-sensor-cells = <1>;
 	};
 
-	hda@70030000 {
+	hda: hda@70030000 {
 		compatible = "nvidia,tegra30-hda";
 		reg = <0x70030000 0x10000>;
 		interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
@@ -1136,13 +1131,13 @@
 		resets = <&tegra_car 22>;
 		reset-names = "usb";
 		nvidia,needs-double-reset;
-		nvidia,phy = <&phy1>;
+		nvidia,phy = <&usb1_phy>;
 		power-domains = <&pd_core>;
 		operating-points-v2 = <&usbd_dvfs_opp_table>;
 		status = "disabled";
 	};
 
-	phy1: usb-phy@7d000000 {
+	usb1_phy: usb-phy@7d000000 {
 		compatible = "nvidia,tegra30-usb-phy";
 		reg = <0x7d000000 0x4000>,
 		      <0x7d000000 0x4000>;
@@ -1179,13 +1174,13 @@
 		clocks = <&tegra_car TEGRA30_CLK_USB2>;
 		resets = <&tegra_car 58>;
 		reset-names = "usb";
-		nvidia,phy = <&phy2>;
+		nvidia,phy = <&usb2_phy>;
 		power-domains = <&pd_core>;
 		operating-points-v2 = <&usb2_dvfs_opp_table>;
 		status = "disabled";
 	};
 
-	phy2: usb-phy@7d004000 {
+	usb2_phy: usb-phy@7d004000 {
 		compatible = "nvidia,tegra30-usb-phy";
 		reg = <0x7d004000 0x4000>,
 		      <0x7d000000 0x4000>;
@@ -1221,13 +1216,13 @@
 		clocks = <&tegra_car TEGRA30_CLK_USB3>;
 		resets = <&tegra_car 59>;
 		reset-names = "usb";
-		nvidia,phy = <&phy3>;
+		nvidia,phy = <&usb3_phy>;
 		power-domains = <&pd_core>;
 		operating-points-v2 = <&usb3_dvfs_opp_table>;
 		status = "disabled";
 	};
 
-	phy3: usb-phy@7d008000 {
+	usb3_phy: usb-phy@7d008000 {
 		compatible = "nvidia,tegra30-usb-phy";
 		reg = <0x7d008000 0x4000>,
 		      <0x7d000000 0x4000>;
@@ -1253,6 +1248,11 @@
 		nvidia,hsdiscon-level = <5>;
 		nvidia,pmc = <&tegra_pmc 1>;
 		status = "disabled";
+	};
+
+	memory: memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x0>;
 	};
 
 	cpus {
@@ -1298,10 +1298,10 @@
 			     <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 147 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-affinity = <&{/cpus/cpu@0}>,
-				     <&{/cpus/cpu@1}>,
-				     <&{/cpus/cpu@2}>,
-				     <&{/cpus/cpu@3}>;
+		interrupt-affinity = <&cpu0>,
+				     <&cpu1>,
+				     <&cpu2>,
+				     <&cpu3>;
 	};
 
 	thermal-zones {
