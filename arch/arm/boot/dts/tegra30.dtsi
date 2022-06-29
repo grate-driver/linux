@@ -247,7 +247,7 @@
 					     "winc",
 					     "cursor";
 
-			rgb {
+			rgb: rgb {
 				status = "disabled";
 			};
 		};
@@ -353,7 +353,7 @@
 		interrupt-parent = <&intc>;
 	};
 
-	cache-controller@50043000 {
+	cache_controller: cache-controller@50043000 {
 		compatible = "arm,pl310-cache";
 		reg = <0x50043000 0x1000>;
 		arm,data-latency = <6 6 2>;
@@ -643,7 +643,7 @@
 		status = "disabled";
 	};
 
-	rtc: rtc@7000e000 {
+	tegra_rtc: rtc@7000e000 {
 		compatible = "nvidia,tegra30-rtc", "nvidia,tegra20-rtc";
 		reg = <0x7000e000 0x100>;
 		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
