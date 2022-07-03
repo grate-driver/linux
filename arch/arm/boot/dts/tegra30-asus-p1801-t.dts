@@ -20,7 +20,7 @@
 		mmc2 = &sdmmc3; /* WiFi */
 
 		rtc0 = &pmic;
-		rtc1 = &rtc;
+		rtc1 = &tegra_rtc;
 
 		display0 = &hdmi;
 
@@ -74,7 +74,7 @@
 		clock-output-names = "pmic-oscillator";
 	};
 
-    connector {
+	connector {
 		compatible = "hdmi-connector";
 		label = "HDMI";
 		type = "a";
