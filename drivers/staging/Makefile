@@ -3,6 +3,7 @@
 
 obj-y				+= ramconsole/
 obj-y				+= media/
+obj-y				+= dsp/
 obj-$(CONFIG_PRISM2_USB)	+= wlan-ng/
 obj-$(CONFIG_FB_OLPC_DCON)	+= olpc_dcon/
 obj-$(CONFIG_RTL8192U)		+= rtl8192u/
