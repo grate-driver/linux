@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0
+config DSP_FM34NE
+	tristate "DSP FM34NE driver"
+	depends on I2C && GPIOLIB
+	help
+	  Say Y or M here if you want to add support for Fortemedia FM34NE
+	  DSP mainly used on ASUS T20/T30 Transformers.
