@@ -85,6 +85,25 @@
 		};
 	};
 
+	i2c@7000c000 {
+		/* Fortemedia FM34NE voice processor */
+		dsp@60 {
+			compatible = "asus,tf700t-dsp", "fortemedia,fm34";
+			reg = <0x60>;
+
+			bypass-gpios = <&gpio TEGRA_GPIO(BB, 6) GPIO_ACTIVE_HIGH>;
+			reset-gpios = <&gpio TEGRA_GPIO(O, 3) GPIO_ACTIVE_LOW>;
+
+			vdd-supply = <&vdd_1v8_vio>;
+
+			clocks = <&tegra_pmc TEGRA_PMC_CLK_OUT_1>;
+			clock-names = "mclk";
+
+			assigned-clocks = <&tegra_pmc TEGRA_PMC_CLK_OUT_1>;
+			assigned-clock-parents = <&tegra_car TEGRA30_CLK_EXTERN1>;
+		};
+	};
+
 	i2c@7000c400 {
 		/* Elantech ELAN-3024-7053 or 5184N FPC-1 REV: 2/3 touchscreen */
 		touchscreen@10 {
