@@ -493,6 +493,20 @@
 		status = "okay";
 		clock-frequency = <400000>;
 
+		/* Fortemedia FM34NE voice processor */
+		dsp@60 {
+			compatible = "asus,tf101-dsp", "fortemedia,fm34";
+			reg = <0x60>;
+
+			bypass-gpios = <&gpio TEGRA_GPIO(H, 3) GPIO_ACTIVE_HIGH>;
+			reset-gpios = <&gpio TEGRA_GPIO(H, 2) GPIO_ACTIVE_LOW>;
+
+			vdd-supply = <&vdd_1v8_sys>;
+
+			clocks = <&tegra_car TEGRA20_CLK_CDEV1>;
+			clock-names = "mclk";
+		};
+
 		/* Aichi AMI306 digital compass */
 		magnetometer@e {
 			compatible = "asahi-kasei,ak8974";
