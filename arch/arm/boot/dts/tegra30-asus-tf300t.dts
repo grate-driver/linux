@@ -68,6 +68,25 @@
 		};
 	};
 
+	i2c@7000c000 {
+		/* Fortemedia FM34NE voice processor */
+		dsp@60 {
+			compatible = "asus,tf300t-dsp", "fortemedia,fm34";
+			reg = <0x60>;
+
+			bypass-gpios = <&gpio TEGRA_GPIO(BB, 6) GPIO_ACTIVE_HIGH>;
+			reset-gpios = <&gpio TEGRA_GPIO(O, 3) GPIO_ACTIVE_LOW>;
+
+			vdd-supply = <&vdd_1v8_dsp>;
+
+			clocks = <&tegra_pmc TEGRA_PMC_CLK_OUT_1>;
+			clock-names = "mclk";
+
+			assigned-clocks = <&tegra_pmc TEGRA_PMC_CLK_OUT_1>;
+			assigned-clock-parents = <&tegra_car TEGRA30_CLK_EXTERN1>;
+		};
+	};
+
 	i2c@7000c400 {
 		/* Elantech EKTH1036 touchscreen */
 		touchscreen@10 {
@@ -1011,6 +1030,16 @@
 
 	display-panel {
 		compatible = "innolux,g101ice-l01";
+	};
+
+	vdd_1v8_dsp: regulator-dsp {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_1v8_dsp";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		gpio = <&gpio TEGRA_GPIO(P, 3) GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&vdd_1v8_vio>;
 	};
 
 	sound {
