@@ -55,9 +55,7 @@ static struct nvme_auth_dhgroup_map {
 
 const char *nvme_auth_dhgroup_name(u8 dhgroup_id)
 {
-	if ((dhgroup_id > ARRAY_SIZE(dhgroup_map)) ||
-	    !dhgroup_map[dhgroup_id].name ||
-	    !strlen(dhgroup_map[dhgroup_id].name))
+	if (dhgroup_id > ARRAY_SIZE(dhgroup_map))
 		return NULL;
 	return dhgroup_map[dhgroup_id].name;
 }
@@ -65,9 +63,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_dhgroup_name);
 
 const char *nvme_auth_dhgroup_kpp(u8 dhgroup_id)
 {
-	if ((dhgroup_id > ARRAY_SIZE(dhgroup_map)) ||
-	    !dhgroup_map[dhgroup_id].kpp ||
-	    !strlen(dhgroup_map[dhgroup_id].kpp))
+	if (dhgroup_id > ARRAY_SIZE(dhgroup_map))
 		return NULL;
 	return dhgroup_map[dhgroup_id].kpp;
 }
@@ -77,9 +73,10 @@ u8 nvme_auth_dhgroup_id(const char *dhgroup_name)
 {
 	int i;
 
+	if (!dhgroup_name || !strlen(dhgroup_name))
+		return NVME_AUTH_DHGROUP_INVALID;
 	for (i = 0; i < ARRAY_SIZE(dhgroup_map); i++) {
-		if (!dhgroup_map[i].name ||
-		    !strlen(dhgroup_map[i].name))
+		if (!strlen(dhgroup_map[i].name))
 			continue;
 		if (!strncmp(dhgroup_map[i].name, dhgroup_name,
 			     strlen(dhgroup_map[i].name)))
@@ -113,9 +110,7 @@ static struct nvme_dhchap_hash_map {
 
 const char *nvme_auth_hmac_name(u8 hmac_id)
 {
-	if ((hmac_id > ARRAY_SIZE(hash_map)) ||
-	    !hash_map[hmac_id].hmac ||
-	    !strlen(hash_map[hmac_id].hmac))
+	if (hmac_id > ARRAY_SIZE(hash_map))
 		return NULL;
 	return hash_map[hmac_id].hmac;
 }
@@ -123,9 +118,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_hmac_name);
 
 const char *nvme_auth_digest_name(u8 hmac_id)
 {
-	if ((hmac_id > ARRAY_SIZE(hash_map)) ||
-	    !hash_map[hmac_id].digest ||
-	    !strlen(hash_map[hmac_id].digest))
+	if (hmac_id > ARRAY_SIZE(hash_map))
 		return NULL;
 	return hash_map[hmac_id].digest;
 }
@@ -135,8 +128,11 @@ u8 nvme_auth_hmac_id(const char *hmac_name)
 {
 	int i;
 
+	if (!hmac_name || !strlen(hmac_name))
+		return NVME_AUTH_HASH_INVALID;
+
 	for (i = 0; i < ARRAY_SIZE(hash_map); i++) {
-		if (!hash_map[i].hmac || !strlen(hash_map[i].hmac))
+		if (!strlen(hash_map[i].hmac))
 			continue;
 		if (!strncmp(hash_map[i].hmac, hmac_name,
 			     strlen(hash_map[i].hmac)))
@@ -148,9 +144,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_hmac_id);
 
 size_t nvme_auth_hmac_hash_len(u8 hmac_id)
 {
-	if ((hmac_id > ARRAY_SIZE(hash_map)) ||
-	    !hash_map[hmac_id].hmac ||
-	    !strlen(hash_map[hmac_id].hmac))
+	if (hmac_id > ARRAY_SIZE(hash_map))
 		return 0;
 	return hash_map[hmac_id].len;
 }
