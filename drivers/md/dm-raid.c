@@ -3334,6 +3334,18 @@ static int raid_map(struct dm_target *ti, struct bio *bio)
 	if (unlikely(bio_end_sector(bio) > mddev->array_sectors))
 		return DM_MAPIO_REQUEUE;
 
+	/*
+	 * FIXME: must call bio_associate_blkg() to init bio->bi_blkg; otherwise
+	 * md_handle_request() can split @bio and recurse to submit_bio_noacct()
+	 * with a NULL bio->bi_blkg -- which will crash in blk_throtl_bio() when
+	 * it dereferences a NULL blkg_to_tg(bio->bi_blkg).
+	 *
+	 * Ideally DM target bio splitting should use dm_accept_partial_bio() but
+	 * the duality of the MD code will force DM specific branching in MD. And
+	 * even then refactoring MD code is not so simple (e.g. raid1 and raid10).
+	 */
+	bio_associate_blkg(bio);
+
 	md_handle_request(mddev, bio);
 
 	return DM_MAPIO_SUBMITTED;
