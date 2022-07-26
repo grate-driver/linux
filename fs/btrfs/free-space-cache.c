@@ -914,6 +914,8 @@ static int copy_free_space_cache(struct btrfs_block_group *block_group,
 	return ret;
 }
 
+static struct lock_class_key btrfs_free_space_inode_key;
+
 int load_free_space_cache(struct btrfs_block_group *block_group)
 {
 	struct btrfs_fs_info *fs_info = block_group->fs_info;
@@ -982,6 +984,14 @@ int load_free_space_cache(struct btrfs_block_group *block_group)
 		goto out;
 	}
 	spin_unlock(&block_group->lock);
+
+	/*
+	 * Reinitialize the class of struct inode's mapping->invalidate_lock for
+	 * free space inodes to prevent false positives related to locks for normal
+	 * inodes.
+	 */
+	lockdep_set_class(&(&inode->i_data)->invalidate_lock,
+			  &btrfs_free_space_inode_key);
 
 	ret = __load_free_space_cache(fs_info->tree_root, inode, &tmp_ctl,
 				      path, block_group->start);
@@ -3536,7 +3546,8 @@ int btrfs_find_space_cluster(struct btrfs_block_group *block_group,
 	 * data, keep it dense.
 	 */
 	if (btrfs_test_opt(fs_info, SSD_SPREAD)) {
-		cont1_bytes = min_bytes = bytes + empty_size;
+		cont1_bytes = bytes + empty_size;
+		min_bytes = cont1_bytes;
 	} else if (block_group->flags & BTRFS_BLOCK_GROUP_METADATA) {
 		cont1_bytes = bytes;
 		min_bytes = fs_info->sectorsize;
