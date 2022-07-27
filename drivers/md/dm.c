@@ -1693,7 +1693,7 @@ static void dm_split_and_process_bio(struct mapped_device *md,
 	 */
 	WARN_ON_ONCE(!dm_io_flagged(io, DM_IO_WAS_SPLIT));
 	io->split_bio = bio_split(bio, io->sectors, GFP_NOIO,
-				  &md->queue->bio_split);
+				  &md->disk->bio_split);
 	bio_chain(io->split_bio, bio);
 	trace_block_split(io->split_bio, bio->bi_iter.bi_sector);
 	submit_bio_noacct(bio);
