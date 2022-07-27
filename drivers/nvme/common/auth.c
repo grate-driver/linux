@@ -55,9 +55,7 @@ static struct nvme_auth_dhgroup_map {
 
 const char *nvme_auth_dhgroup_name(u8 dhgroup_id)
 {
-	if ((dhgroup_id > ARRAY_SIZE(dhgroup_map)) ||
-	    !dhgroup_map[dhgroup_id].name ||
-	    !strlen(dhgroup_map[dhgroup_id].name))
+	if (dhgroup_id >= ARRAY_SIZE(dhgroup_map))
 		return NULL;
 	return dhgroup_map[dhgroup_id].name;
 }
@@ -65,9 +63,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_dhgroup_name);
 
 const char *nvme_auth_dhgroup_kpp(u8 dhgroup_id)
 {
-	if ((dhgroup_id > ARRAY_SIZE(dhgroup_map)) ||
-	    !dhgroup_map[dhgroup_id].kpp ||
-	    !strlen(dhgroup_map[dhgroup_id].kpp))
+	if (dhgroup_id >= ARRAY_SIZE(dhgroup_map))
 		return NULL;
 	return dhgroup_map[dhgroup_id].kpp;
 }
@@ -77,9 +73,10 @@ u8 nvme_auth_dhgroup_id(const char *dhgroup_name)
 {
 	int i;
 
+	if (!dhgroup_name || !strlen(dhgroup_name))
+		return NVME_AUTH_DHGROUP_INVALID;
 	for (i = 0; i < ARRAY_SIZE(dhgroup_map); i++) {
-		if (!dhgroup_map[i].name ||
-		    !strlen(dhgroup_map[i].name))
+		if (!strlen(dhgroup_map[i].name))
 			continue;
 		if (!strncmp(dhgroup_map[i].name, dhgroup_name,
 			     strlen(dhgroup_map[i].name)))
@@ -113,9 +110,7 @@ static struct nvme_dhchap_hash_map {
 
 const char *nvme_auth_hmac_name(u8 hmac_id)
 {
-	if ((hmac_id > ARRAY_SIZE(hash_map)) ||
-	    !hash_map[hmac_id].hmac ||
-	    !strlen(hash_map[hmac_id].hmac))
+	if (hmac_id >= ARRAY_SIZE(hash_map))
 		return NULL;
 	return hash_map[hmac_id].hmac;
 }
@@ -123,9 +118,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_hmac_name);
 
 const char *nvme_auth_digest_name(u8 hmac_id)
 {
-	if ((hmac_id > ARRAY_SIZE(hash_map)) ||
-	    !hash_map[hmac_id].digest ||
-	    !strlen(hash_map[hmac_id].digest))
+	if (hmac_id >= ARRAY_SIZE(hash_map))
 		return NULL;
 	return hash_map[hmac_id].digest;
 }
@@ -135,8 +128,11 @@ u8 nvme_auth_hmac_id(const char *hmac_name)
 {
 	int i;
 
+	if (!hmac_name || !strlen(hmac_name))
+		return NVME_AUTH_HASH_INVALID;
+
 	for (i = 0; i < ARRAY_SIZE(hash_map); i++) {
-		if (!hash_map[i].hmac || !strlen(hash_map[i].hmac))
+		if (!strlen(hash_map[i].hmac))
 			continue;
 		if (!strncmp(hash_map[i].hmac, hmac_name,
 			     strlen(hash_map[i].hmac)))
@@ -148,9 +144,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_hmac_id);
 
 size_t nvme_auth_hmac_hash_len(u8 hmac_id)
 {
-	if ((hmac_id > ARRAY_SIZE(hash_map)) ||
-	    !hash_map[hmac_id].hmac ||
-	    !strlen(hash_map[hmac_id].hmac))
+	if (hmac_id >= ARRAY_SIZE(hash_map))
 		return 0;
 	return hash_map[hmac_id].len;
 }
@@ -278,26 +272,33 @@ u8 *nvme_auth_transform_key(struct nvme_dhchap_key *key, char *nqn)
 	shash->tfm = key_tfm;
 	ret = crypto_shash_setkey(key_tfm, key->key, key->len);
 	if (ret < 0)
-		goto out_free_shash;
+		goto out_free_transformed_key;
 	ret = crypto_shash_init(shash);
 	if (ret < 0)
-		goto out_free_shash;
+		goto out_free_transformed_key;
 	ret = crypto_shash_update(shash, nqn, strlen(nqn));
 	if (ret < 0)
-		goto out_free_shash;
+		goto out_free_transformed_key;
 	ret = crypto_shash_update(shash, "NVMe-over-Fabrics", 17);
 	if (ret < 0)
-		goto out_free_shash;
+		goto out_free_transformed_key;
 	ret = crypto_shash_final(shash, transformed_key);
+	if (ret < 0)
+		goto out_free_transformed_key;
+
+	kfree(shash);
+	crypto_free_shash(key_tfm);
+
+	return transformed_key;
+
+out_free_transformed_key:
+	kfree_sensitive(transformed_key);
 out_free_shash:
 	kfree(shash);
 out_free_key:
 	crypto_free_shash(key_tfm);
-	if (ret < 0) {
-		kfree_sensitive(transformed_key);
-		return ERR_PTR(ret);
-	}
-	return transformed_key;
+
+	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL_GPL(nvme_auth_transform_key);
 
@@ -346,7 +347,7 @@ int nvme_auth_augmented_challenge(u8 hmac_id, u8 *skey, size_t skey_len,
 
 	hmac_name = nvme_auth_hmac_name(hmac_id);
 	if (!hmac_name) {
-		pr_warn("%s: invalid hash algoritm %d\n",
+		pr_warn("%s: invalid hash algorithm %d\n",
 			__func__, hmac_id);
 		ret = -EINVAL;
 		goto out_free_key;
