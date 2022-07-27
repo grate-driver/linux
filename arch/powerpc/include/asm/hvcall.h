@@ -87,6 +87,7 @@
 #define H_P7		-60
 #define H_P8		-61
 #define H_P9		-62
+#define H_NOOP		-63
 #define H_TOO_BIG	-64
 #define H_UNSUPPORTED	-67
 #define H_OVERLAP	-68
@@ -324,7 +325,8 @@
 #define H_RPT_INVALIDATE	0x448
 #define H_SCM_FLUSH		0x44C
 #define H_GET_ENERGY_SCALE_INFO	0x450
-#define MAX_HCALL_OPCODE	H_GET_ENERGY_SCALE_INFO
+#define H_WATCHDOG		0x45C
+#define MAX_HCALL_OPCODE	H_WATCHDOG
 
 /* Scope args for H_SCM_UNBIND_ALL */
 #define H_UNBIND_SCOPE_ALL (0x1)
@@ -349,6 +351,14 @@
 
 /* Platform specific hcalls, used by KVM */
 #define H_RTAS			0xf000
+
+/*
+ * Platform specific hcalls, used by QEMU/SLOF. These are ignored by
+ * KVM and only kept here so we can identify them during tracing.
+ */
+#define H_LOGICAL_MEMOP  0xF001
+#define H_CAS            0XF002
+#define H_UPDATE_DT      0XF003
 
 /* "Platform specific hcalls", provided by PHYP */
 #define H_GET_24X7_CATALOG_PAGE	0xF078
