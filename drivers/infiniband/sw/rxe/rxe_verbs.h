@@ -9,7 +9,6 @@
 
 #include <linux/interrupt.h>
 #include <linux/workqueue.h>
-#include <rdma/rdma_user_rxe.h>
 #include "rxe_pool.h"
 #include "rxe_task.h"
 #include "rxe_hw_counters.h"
@@ -124,6 +123,7 @@ struct rxe_req_info {
 	int			need_rd_atomic;
 	int			wait_psn;
 	int			need_retry;
+	int			wait_for_rnr_timer;
 	int			noack_pkts;
 	struct rxe_task		task;
 };
@@ -155,7 +155,7 @@ struct resp_res {
 
 	union {
 		struct {
-			struct sk_buff	*skb;
+			u64		orig_val;
 		} atomic;
 		struct {
 			u64		va_org;
@@ -189,7 +189,6 @@ struct rxe_resp_info {
 	u32			resid;
 	u32			rkey;
 	u32			length;
-	u64			atomic_orig;
 
 	/* SRQ only */
 	struct {
