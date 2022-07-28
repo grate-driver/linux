@@ -98,8 +98,6 @@ struct ap_queue_table {
  * @matrix:	the adapters, usage domains and control domains assigned to the
  *		mediated matrix device.
  * @shadow_apcb:    the shadow copy of the APCB field of the KVM guest's CRYCB
- * @iommu_notifier: notifier block used for specifying callback function for
- *		    handling the VFIO_IOMMU_NOTIFY_DMA_UNMAP even
  * @kvm:	the struct holding guest's state
  * @pqap_hook:	the function pointer to the interception handler for the
  *		PQAP(AQIC) instruction.
@@ -115,7 +113,6 @@ struct ap_matrix_mdev {
 	struct list_head node;
 	struct ap_matrix matrix;
 	struct ap_matrix shadow_apcb;
-	struct notifier_block iommu_notifier;
 	struct kvm *kvm;
 	crypto_hook pqap_hook;
 	struct mdev_device *mdev;
@@ -129,7 +126,7 @@ struct ap_matrix_mdev {
  * struct vfio_ap_queue - contains the data associated with a queue bound to the
  *			  vfio_ap device driver
  * @matrix_mdev: the matrix mediated device
- * @saved_pfn: the guest PFN pinned for the guest
+ * @saved_iova: the notification indicator byte (nib) address
  * @apqn: the APQN of the AP queue device
  * @saved_isc: the guest ISC registered with the GIB interface
  * @mdev_qnode: allows the vfio_ap_queue struct to be added to a hashtable
@@ -137,7 +134,7 @@ struct ap_matrix_mdev {
  */
 struct vfio_ap_queue {
 	struct ap_matrix_mdev *matrix_mdev;
-	unsigned long saved_pfn;
+	dma_addr_t saved_iova;
 	int	apqn;
 #define VFIO_AP_ISC_INVALID 0xff
 	unsigned char saved_isc;
