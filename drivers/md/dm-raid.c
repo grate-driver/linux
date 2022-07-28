@@ -1369,7 +1369,7 @@ static int parse_raid_params(struct raid_set *rs, struct dm_arg_set *as,
 			}
 			rs->md.bitmap_info.daemon_sleep = value;
 		} else if (!strcasecmp(key, dm_raid_arg_name_by_flag(CTR_FLAG_DATA_OFFSET))) {
-			/* Userspace passes new data_offset after having extended the the data image LV */
+			/* Userspace passes new data_offset after having extended the data image LV */
 			if (test_and_set_bit(__CTR_FLAG_DATA_OFFSET, &rs->ctr_flags)) {
 				rs->ti->error = "Only one data_offset argument pair allowed";
 				return -EINVAL;
@@ -3336,6 +3336,18 @@ static int raid_map(struct dm_target *ti, struct bio *bio)
 	if (unlikely(bio_end_sector(bio) > mddev->array_sectors))
 		return DM_MAPIO_REQUEUE;
 
+	/*
+	 * FIXME: must call bio_associate_blkg() to init bio->bi_blkg; otherwise
+	 * md_handle_request() can split @bio and recurse to submit_bio_noacct()
+	 * with a NULL bio->bi_blkg -- which will crash in blk_throtl_bio() when
+	 * it dereferences a NULL blkg_to_tg(bio->bi_blkg).
+	 *
+	 * Ideally DM target bio splitting should use dm_accept_partial_bio() but
+	 * the duality of the MD code will force DM specific branching in MD. And
+	 * even then refactoring MD code is not so simple (e.g. raid1 and raid10).
+	 */
+	bio_associate_blkg(bio);
+
 	md_handle_request(mddev, bio);
 
 	return DM_MAPIO_SUBMITTED;
@@ -3509,7 +3521,7 @@ static void raid_status(struct dm_target *ti, status_type_t type,
 {
 	struct raid_set *rs = ti->private;
 	struct mddev *mddev = &rs->md;
-	struct r5conf *conf = mddev->private;
+	struct r5conf *conf = rs_is_raid456(rs) ? mddev->private : NULL;
 	int i, max_nr_stripes = conf ? conf->max_nr_stripes : 0;
 	unsigned long recovery;
 	unsigned int raid_param_cnt = 1; /* at least 1 for chunksize */
@@ -3820,7 +3832,7 @@ static void attempt_restore_of_faulty_devices(struct raid_set *rs)
 
 	memset(cleared_failed_devices, 0, sizeof(cleared_failed_devices));
 
-	for (i = 0; i < mddev->raid_disks; i++) {
+	for (i = 0; i < rs->raid_disks; i++) {
 		r = &rs->dev[i].rdev;
 		/* HM FIXME: enhance journal device recovery processing */
 		if (test_bit(Journal, &r->flags))
