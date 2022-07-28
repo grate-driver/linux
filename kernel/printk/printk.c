@@ -2843,6 +2843,16 @@ void console_unlock(void)
 	}
 
 	/*
+	 * On PREEMPT_RT it is not possible to invoke console drivers with
+	 * disabled interrupts and or preemption. Therefore all drivers are
+	 * skipped and the output can be retrieved from the buffer.
+	 */
+	if (IS_ENABLED(CONFIG_PREEMPT_RT)) {
+		__console_unlock();
+		return;
+	}
+
+	/*
 	 * Console drivers are called with interrupts disabled, so
 	 * @console_may_schedule should be cleared before; however, we may
 	 * end up dumping a lot of lines, for example, if called from
