@@ -343,7 +343,7 @@ static void __intel_pcie_remove(struct intel_pcie *pcie)
 static int intel_pcie_remove(struct platform_device *pdev)
 {
 	struct intel_pcie *pcie = platform_get_drvdata(pdev);
-	struct pcie_port *pp = &pcie->pci.pp;
+	struct dw_pcie_rp *pp = &pcie->pci.pp;
 
 	dw_pcie_host_deinit(pp);
 	__intel_pcie_remove(pcie);
@@ -351,7 +351,7 @@ static int intel_pcie_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static int __maybe_unused intel_pcie_suspend_noirq(struct device *dev)
+static int intel_pcie_suspend_noirq(struct device *dev)
 {
 	struct intel_pcie *pcie = dev_get_drvdata(dev);
 	int ret;
@@ -366,14 +366,14 @@ static int __maybe_unused intel_pcie_suspend_noirq(struct device *dev)
 	return ret;
 }
 
-static int __maybe_unused intel_pcie_resume_noirq(struct device *dev)
+static int intel_pcie_resume_noirq(struct device *dev)
 {
 	struct intel_pcie *pcie = dev_get_drvdata(dev);
 
 	return intel_pcie_host_setup(pcie);
 }
 
-static int intel_pcie_rc_init(struct pcie_port *pp)
+static int intel_pcie_rc_init(struct dw_pcie_rp *pp)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
 	struct intel_pcie *pcie = dev_get_drvdata(pci->dev);
@@ -403,7 +403,7 @@ static int intel_pcie_probe(struct platform_device *pdev)
 	const struct intel_pcie_soc *data;
 	struct device *dev = &pdev->dev;
 	struct intel_pcie *pcie;
-	struct pcie_port *pp;
+	struct dw_pcie_rp *pp;
 	struct dw_pcie *pci;
 	int ret;
 
@@ -442,8 +442,8 @@ static int intel_pcie_probe(struct platform_device *pdev)
 }
 
 static const struct dev_pm_ops intel_pcie_pm_ops = {
-	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(intel_pcie_suspend_noirq,
-				      intel_pcie_resume_noirq)
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(intel_pcie_suspend_noirq,
+				  intel_pcie_resume_noirq)
 };
 
 static const struct of_device_id of_intel_pcie_match[] = {
