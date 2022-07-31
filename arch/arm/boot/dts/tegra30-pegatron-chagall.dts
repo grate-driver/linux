@@ -2749,7 +2749,7 @@
 			"Int Spk", "RON",
 			"Int Spk", "LOP",
 			"Int Spk", "LON",
-			"IN1R", "Mic Jack",
+			"IN1R", "Headset Mic",
 			"DMICDAT", "Int Mic";
 
 		nvidia,i2s-controller = <&tegra_i2s1>;
