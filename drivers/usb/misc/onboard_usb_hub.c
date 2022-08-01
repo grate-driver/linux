@@ -274,7 +274,7 @@ static int onboard_hub_probe(struct platform_device *pdev)
 	INIT_WORK(&hub->attach_usb_driver_work, onboard_hub_attach_usb_driver);
 	schedule_work(&hub->attach_usb_driver_work);
 
-	return 0;
+	return devm_of_platform_populate(dev);
 }
 
 static int onboard_hub_remove(struct platform_device *pdev)
