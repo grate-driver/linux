@@ -309,7 +309,8 @@ static struct platform_driver onboard_hub_driver = {
 
 /************************** USB driver **************************/
 
-#define VENDOR_ID_REALTEK	0x0bda
+#define VENDOR_ID_GENESYS_LOGIC	0x05e3
+#define VENDOR_ID_REALTEK		0x0bda
 
 /*
  * Returns the onboard_hub platform device that is associated with the USB
@@ -383,6 +384,7 @@ static void onboard_hub_usbdev_disconnect(struct usb_device *udev)
 }
 
 static const struct usb_device_id onboard_hub_id_table[] = {
+	{ USB_DEVICE(VENDOR_ID_GENESYS_LOGIC, 0x0610) },
 	{ USB_DEVICE(VENDOR_ID_REALTEK, 0x0411) }, /* RTS5411 USB 3.1 */
 	{ USB_DEVICE(VENDOR_ID_REALTEK, 0x5411) }, /* RTS5411 USB 2.1 */
 	{ USB_DEVICE(VENDOR_ID_REALTEK, 0x0414) }, /* RTS5414 USB 3.2 */
