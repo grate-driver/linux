@@ -51,6 +51,17 @@ static struct snd_soc_jack_gpio tegra_machine_headset_jack_gpio = {
 };
 
 /* Mic Jack */
+static int headset_check(void *data)
+{
+	struct tegra_machine *machine = (struct tegra_machine *) data;
+
+	/* Detect mic insertion only if 3.5 jack is in */
+	if (gpiod_get_value_cansleep(machine->gpiod_hp_det) &&
+			gpiod_get_value_cansleep(machine->gpiod_mic_det))
+		return SND_JACK_MICROPHONE;
+
+	return 0;
+}
 
 static struct snd_soc_jack tegra_machine_mic_jack;
 
@@ -189,7 +200,12 @@ int tegra_asoc_machine_init(struct snd_soc_pcm_runtime *rtd)
 			return err;
 		}
 
+		tegra_machine_mic_jack_gpio.data = machine;
 		tegra_machine_mic_jack_gpio.desc = machine->gpiod_mic_det;
+
+		if (of_property_read_bool(card->dev->of_node,
+			"nvidia,coupled-mic-hp-det"))
+			tegra_machine_mic_jack_gpio.jack_status_check = headset_check;
 
 		err = snd_soc_jack_add_gpios(&tegra_machine_mic_jack, 1,
 					     &tegra_machine_mic_jack_gpio);
@@ -960,6 +976,7 @@ static const struct tegra_asoc_data tegra_rt5631_data = {
 	.add_common_dapm_widgets = true,
 	.add_common_controls = true,
 	.add_common_snd_ops = true,
+	.add_mic_jack = true,
 	.add_hp_jack = true,
 };
 
