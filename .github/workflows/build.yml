@@ -16,8 +16,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    permissions:
+      contents: write # for marvinpinto/action-automatic-releases
     strategy:
       fail-fast: false
       matrix:
