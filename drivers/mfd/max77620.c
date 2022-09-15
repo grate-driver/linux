@@ -120,7 +120,7 @@ static const struct mfd_cell max77663_children[] = {
 		.resources = gpio_resources,
 		.num_resources = ARRAY_SIZE(gpio_resources),
 	}, {
-		.name = "max77620-rtc",
+		.name = "max77663-rtc",
 		.resources = rtc_resources,
 		.num_resources = ARRAY_SIZE(rtc_resources),
 	}, {
