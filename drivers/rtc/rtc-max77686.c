@@ -691,6 +691,7 @@ static int max77686_init_rtc_regmap(struct max77686_rtc_info *info)
 {
 	struct device *parent = info->dev->parent;
 	struct i2c_client *parent_i2c = to_i2c_client(parent);
+	int rtc_i2c_addr;
 	int ret;
 
 	if (info->drv_data->rtc_irq_from_platform) {
@@ -714,8 +715,13 @@ static int max77686_init_rtc_regmap(struct max77686_rtc_info *info)
 		goto add_rtc_irq;
 	}
 
+	ret = device_property_read_u32(parent, "maxim,rtc-i2c-address",
+				       &rtc_i2c_addr);
+	if (ret)
+		rtc_i2c_addr = info->drv_data->rtc_i2c_addr;
+
 	info->rtc = devm_i2c_new_dummy_device(info->dev, parent_i2c->adapter,
-					      info->drv_data->rtc_i2c_addr);
+					      rtc_i2c_addr);
 	if (IS_ERR(info->rtc)) {
 		dev_err(info->dev, "Failed to allocate I2C device for RTC\n");
 		return PTR_ERR(info->rtc);
