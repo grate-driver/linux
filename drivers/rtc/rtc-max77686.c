@@ -18,6 +18,7 @@
 #include <linux/regmap.h>
 
 #define MAX77686_I2C_ADDR_RTC		(0x0C >> 1)
+#define MAX77663_I2C_ADDR_RTC		0x48
 #define MAX77620_I2C_ADDR_RTC		0x68
 #define MAX77714_I2C_ADDR_RTC		0x48
 #define MAX77686_INVALID_I2C_ADDR	(-1)
@@ -238,6 +239,27 @@ static const struct max77686_rtc_driver_data max77620_drv_data = {
 	.alarm_pending_status_reg = MAX77686_INVALID_REG,
 	.rtc_i2c_addr = MAX77620_I2C_ADDR_RTC,
 	.rtc_irq_chip = &max77686_rtc_irq_chip,
+	.regmap_config = &max77620_rtc_regmap_config,
+};
+
+static const struct regmap_irq_chip max77663_rtc_irq_chip = {
+	.name		= "max77663-rtc",
+	.status_base	= MAX77686_RTC_INT,
+	.mask_base	= MAX77686_RTC_INTM,
+	.num_regs	= 1,
+	.irqs		= max77686_rtc_irqs,
+	.num_irqs	= ARRAY_SIZE(max77686_rtc_irqs),
+};
+
+static const struct max77686_rtc_driver_data max77663_drv_data = {
+	.delay = 16000,
+	.mask  = 0x7f,
+	.map   = max77686_map,
+	.alarm_enable_reg  = false,
+	.rtc_irq_from_platform = true,
+	.alarm_pending_status_reg = MAX77686_INVALID_REG,
+	.rtc_i2c_addr = MAX77663_I2C_ADDR_RTC,
+	.rtc_irq_chip = &max77663_rtc_irq_chip,
 	.regmap_config = &max77620_rtc_regmap_config,
 };
 
@@ -866,6 +888,7 @@ static const struct platform_device_id rtc_id[] = {
 	{ "max77686-rtc", .driver_data = (kernel_ulong_t)&max77686_drv_data, },
 	{ "max77802-rtc", .driver_data = (kernel_ulong_t)&max77802_drv_data, },
 	{ "max77620-rtc", .driver_data = (kernel_ulong_t)&max77620_drv_data, },
+	{ "max77663-rtc", .driver_data = (kernel_ulong_t)&max77663_drv_data, },
 	{ "max77714-rtc", .driver_data = (kernel_ulong_t)&max77714_drv_data, },
 	{},
 };
