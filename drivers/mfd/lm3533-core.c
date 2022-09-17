@@ -21,7 +21,6 @@
 
 #include <linux/mfd/lm3533.h>
 
-
 #define LM3533_BOOST_OVP_MASK		0x06
 #define LM3533_BOOST_OVP_SHIFT		1
 
@@ -41,7 +40,6 @@
 #define LM3533_REG_BOOST_PWM		0x2c
 
 #define LM3533_REG_MAX			0xb2
-
 
 static struct mfd_cell lm3533_als_devs[] = {
 	{
@@ -227,12 +225,16 @@ static void lm3533_enable(struct lm3533 *lm3533)
 {
 	if (gpio_is_valid(lm3533->gpio_hwen))
 		gpio_set_value(lm3533->gpio_hwen, 1);
+
+	gpiod_set_value_cansleep(lm3533->enable_gpio, 1);
 }
 
 static void lm3533_disable(struct lm3533 *lm3533)
 {
 	if (gpio_is_valid(lm3533->gpio_hwen))
 		gpio_set_value(lm3533->gpio_hwen, 0);
+
+	gpiod_set_value_cansleep(lm3533->enable_gpio, 0);
 }
 
 enum lm3533_attribute_type {
@@ -383,11 +385,16 @@ static int lm3533_device_als_init(struct lm3533 *lm3533)
 	struct lm3533_platform_data *pdata = dev_get_platdata(lm3533->dev);
 	int ret;
 
-	if (!pdata->als)
+	if (!pdata->num_als)
 		return 0;
 
-	lm3533_als_devs[0].platform_data = pdata->als;
-	lm3533_als_devs[0].pdata_size = sizeof(*pdata->als);
+	if (pdata->num_als > ARRAY_SIZE(lm3533_als_devs))
+		pdata->num_als = ARRAY_SIZE(lm3533_als_devs);
+
+	if (pdata->als) {
+		lm3533_als_devs[0].platform_data = pdata->als;
+		lm3533_als_devs[0].pdata_size = sizeof(*pdata->als);
+	}
 
 	ret = mfd_add_devices(lm3533->dev, 0, lm3533_als_devs, 1, NULL,
 			      0, NULL);
@@ -407,15 +414,17 @@ static int lm3533_device_bl_init(struct lm3533 *lm3533)
 	int i;
 	int ret;
 
-	if (!pdata->backlights || pdata->num_backlights == 0)
+	if (!pdata->num_backlights)
 		return 0;
 
 	if (pdata->num_backlights > ARRAY_SIZE(lm3533_bl_devs))
 		pdata->num_backlights = ARRAY_SIZE(lm3533_bl_devs);
 
-	for (i = 0; i < pdata->num_backlights; ++i) {
-		lm3533_bl_devs[i].platform_data = &pdata->backlights[i];
-		lm3533_bl_devs[i].pdata_size = sizeof(pdata->backlights[i]);
+	if (pdata->backlights) {
+		for (i = 0; i < pdata->num_backlights; ++i) {
+			lm3533_bl_devs[i].platform_data = &pdata->backlights[i];
+			lm3533_bl_devs[i].pdata_size = sizeof(pdata->backlights[i]);
+		}
 	}
 
 	ret = mfd_add_devices(lm3533->dev, 0, lm3533_bl_devs,
@@ -436,15 +445,17 @@ static int lm3533_device_led_init(struct lm3533 *lm3533)
 	int i;
 	int ret;
 
-	if (!pdata->leds || pdata->num_leds == 0)
+	if (!pdata->num_leds)
 		return 0;
 
 	if (pdata->num_leds > ARRAY_SIZE(lm3533_led_devs))
 		pdata->num_leds = ARRAY_SIZE(lm3533_led_devs);
 
-	for (i = 0; i < pdata->num_leds; ++i) {
-		lm3533_led_devs[i].platform_data = &pdata->leds[i];
-		lm3533_led_devs[i].pdata_size = sizeof(pdata->leds[i]);
+	if (pdata->leds) {
+		for (i = 0; i < pdata->num_leds; ++i) {
+			lm3533_led_devs[i].platform_data = &pdata->leds[i];
+			lm3533_led_devs[i].pdata_size = sizeof(pdata->leds[i]);
+		}
 	}
 
 	ret = mfd_add_devices(lm3533->dev, 0, lm3533_led_devs,
@@ -471,6 +482,26 @@ static int lm3533_device_setup(struct lm3533 *lm3533,
 	return lm3533_set_boost_ovp(lm3533, pdata->boost_ovp);
 }
 
+static void lm3533_parse_nodes(struct lm3533 *lm3533,
+			      struct lm3533_platform_data *pdata)
+{
+	struct fwnode_handle *node;
+	const char *label;
+
+	device_for_each_child_node(lm3533->dev, node) {
+		fwnode_property_read_string(node, "compatible", &label);
+
+		if (!strcmp(label, lm3533_bl_devs[pdata->num_backlights].name))
+			pdata->num_backlights++;
+
+		if (!strcmp(label, lm3533_led_devs[pdata->num_leds].name))
+			pdata->num_leds++;
+
+		if (!strcmp(label, lm3533_als_devs[pdata->num_als].name))
+			pdata->num_als++;
+	}
+}
+
 static int lm3533_device_init(struct lm3533 *lm3533)
 {
 	struct lm3533_platform_data *pdata = dev_get_platdata(lm3533->dev);
@@ -479,8 +510,30 @@ static int lm3533_device_init(struct lm3533 *lm3533)
 	dev_dbg(lm3533->dev, "%s\n", __func__);
 
 	if (!pdata) {
-		dev_err(lm3533->dev, "no platform data\n");
-		return -EINVAL;
+		pdata = devm_kzalloc(lm3533->dev, sizeof(*pdata), GFP_KERNEL);
+		if (!pdata)
+			return -ENOMEM;
+
+		lm3533->enable_gpio = devm_gpiod_get_optional(lm3533->dev, "enable",
+							GPIOD_OUT_HIGH);
+		if (IS_ERR(lm3533->enable_gpio)) {
+			ret = PTR_ERR(lm3533->enable_gpio);
+			return ret;
+		}
+
+		ret = device_property_read_u32(lm3533->dev,
+					"ti,boost-ovp", &pdata->boost_ovp);
+		if (ret)
+			pdata->boost_ovp = LM3533_BOOST_OVP_16V;
+
+		ret = device_property_read_u32(lm3533->dev,
+					"ti,boost-freq", &pdata->boost_freq);
+		if (ret)
+			pdata->boost_freq = LM3533_BOOST_FREQ_500KHZ;
+
+		lm3533_parse_nodes(lm3533, pdata);
+
+		lm3533->dev->platform_data = pdata;
 	}
 
 	lm3533->gpio_hwen = pdata->gpio_hwen;
@@ -618,6 +671,12 @@ static int lm3533_i2c_remove(struct i2c_client *i2c)
 	return 0;
 }
 
+static const struct of_device_id lm3533_match_table[] = {
+	{ .compatible = "ti,lm3533" },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, lm3533_match_table);
+
 static const struct i2c_device_id lm3533_i2c_ids[] = {
 	{ "lm3533", 0 },
 	{ },
@@ -626,24 +685,14 @@ MODULE_DEVICE_TABLE(i2c, lm3533_i2c_ids);
 
 static struct i2c_driver lm3533_i2c_driver = {
 	.driver = {
-		   .name = "lm3533",
+		.name = "lm3533",
+		.of_match_table = lm3533_match_table,
 	},
 	.id_table	= lm3533_i2c_ids,
 	.probe		= lm3533_i2c_probe,
 	.remove		= lm3533_i2c_remove,
 };
-
-static int __init lm3533_i2c_init(void)
-{
-	return i2c_add_driver(&lm3533_i2c_driver);
-}
-subsys_initcall(lm3533_i2c_init);
-
-static void __exit lm3533_i2c_exit(void)
-{
-	i2c_del_driver(&lm3533_i2c_driver);
-}
-module_exit(lm3533_i2c_exit);
+module_i2c_driver(lm3533_i2c_driver);
 
 MODULE_AUTHOR("Johan Hovold <jhovold@gmail.com>");
 MODULE_DESCRIPTION("LM3533 Core");
