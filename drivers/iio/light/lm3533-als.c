@@ -16,7 +16,9 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/mfd/core.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
@@ -826,6 +828,54 @@ static const struct iio_info lm3533_als_info = {
 	.read_raw	= &lm3533_als_read_raw,
 };
 
+static int lm3533_parse_als(struct platform_device *pdev,
+			    struct lm3533_als_platform_data *pdata)
+{
+	struct device *dev = &pdev->dev;
+	int val, ret;
+
+	/* 1 - 127 (ignored in PWM-mode) */
+	ret = device_property_read_u32(dev, "resistor-value", &val);
+	if (ret) {
+		dev_info(dev, "resistor-value property is missing: ret %d\n", ret);
+		return ret;
+	}
+	pdata->r_select = val;
+
+	pdata->pwm_mode = device_property_read_bool(dev, "pwm-mode");
+
+	return 0;
+}
+
+static int lm3533_pass_of_node(struct platform_device *pdev,
+			       struct lm3533_als_platform_data *pdata)
+{
+	struct device *parent_dev = pdev->dev.parent;
+	struct device *dev = &pdev->dev;
+	struct fwnode_handle *node;
+	const char *label;
+	int val, ret;
+
+	device_for_each_child_node(parent_dev, node) {
+		fwnode_property_read_string(node, "compatible", &label);
+
+		if (!strcmp(label, pdev->name)) {
+			ret = fwnode_property_read_u32(node, "reg", &val);
+			if (ret) {
+				dev_info(dev, "reg property is missing: ret %d\n", ret);
+				return ret;
+			}
+
+			if (val == pdev->id) {
+				dev->fwnode = node;
+				dev->of_node = to_of_node(node);
+			}
+		}
+	}
+
+	return 0;
+}
+
 static int lm3533_als_probe(struct platform_device *pdev)
 {
 	struct lm3533 *lm3533;
@@ -838,10 +888,21 @@ static int lm3533_als_probe(struct platform_device *pdev)
 	if (!lm3533)
 		return -EINVAL;
 
-	pdata = pdev->dev.platform_data;
+	pdata = dev_get_platdata(&pdev->dev);
 	if (!pdata) {
-		dev_err(&pdev->dev, "no platform data\n");
-		return -EINVAL;
+		pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+		if (!pdata)
+			return -ENOMEM;
+
+		ret = lm3533_pass_of_node(pdev, pdata);
+		if (ret)
+			return dev_err_probe(&pdev->dev, ret,
+						 "failed to pass device node\n");
+
+		ret = lm3533_parse_als(pdev, pdata);
+		if (ret)
+			return dev_err_probe(&pdev->dev, ret,
+						 "failed to parse device-tree\n");
 	}
 
 	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*als));
