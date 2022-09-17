@@ -259,6 +259,68 @@ static int lm3533_bl_setup(struct lm3533_bl *bl,
 	return lm3533_ctrlbank_set_pwm(&bl->cb, pdata->pwm);
 }
 
+static int lm3533_parse_backlight(struct platform_device *pdev,
+				  struct lm3533_bl_platform_data *pdata)
+{
+	struct device *dev = &pdev->dev;
+	int val, ret;
+
+	/* 5000 - 29800 uA (800 uA step) */
+	ret = device_property_read_u32(dev, "max-current", &val);
+	if (ret) {
+		dev_info(dev, "max-current property is missing: ret %d\n", ret);
+		return ret;
+	}
+	pdata->max_current = val;
+
+	/* 0 - 255 */
+	ret = device_property_read_u32(dev, "default-brightness", &val);
+	if (ret) {
+		dev_info(dev, "default-brightness property is missing: ret %d\n", ret);
+		return ret;
+	}
+	pdata->default_brightness = val;
+
+	/* 0 - 0x3f */
+	ret = device_property_read_u32(dev, "pwm", &val);
+	if (ret) {
+		dev_info(dev, "pwm property is missing: ret %d\n", ret);
+		return ret;
+	}
+	pdata->pwm = val;
+
+	return 0;
+}
+
+static int lm3533_pass_of_node(struct platform_device *pdev,
+			       struct lm3533_bl_platform_data *pdata)
+{
+	struct device *parent_dev = pdev->dev.parent;
+	struct device *dev = &pdev->dev;
+	struct fwnode_handle *node;
+	const char *label;
+	int val, ret;
+
+	device_for_each_child_node(parent_dev, node) {
+		fwnode_property_read_string(node, "compatible", &label);
+
+		if (!strcmp(label, pdev->name)) {
+			ret = fwnode_property_read_u32(node, "reg", &val);
+			if (ret) {
+				dev_info(dev, "reg property is missing: ret %d\n", ret);
+				return ret;
+			}
+
+			if (val == pdev->id) {
+				dev->fwnode = node;
+				dev->of_node = to_of_node(node);
+			}
+		}
+	}
+
+	return 0;
+}
+
 static int lm3533_bl_probe(struct platform_device *pdev)
 {
 	struct lm3533 *lm3533;
@@ -276,8 +338,19 @@ static int lm3533_bl_probe(struct platform_device *pdev)
 
 	pdata = dev_get_platdata(&pdev->dev);
 	if (!pdata) {
-		dev_err(&pdev->dev, "no platform data\n");
-		return -EINVAL;
+		pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+		if (!pdata)
+			return -ENOMEM;
+
+		ret = lm3533_pass_of_node(pdev, pdata);
+		if (ret)
+			return dev_err_probe(&pdev->dev, ret,
+						 "failed to pass device node\n");
+
+		ret = lm3533_parse_backlight(pdev, pdata);
+		if (ret)
+			return dev_err_probe(&pdev->dev, ret,
+						 "failed to parse device-tree\n");
 	}
 
 	if (pdev->id < 0 || pdev->id >= LM3533_HVCTRLBANK_COUNT) {
@@ -300,7 +373,7 @@ static int lm3533_bl_probe(struct platform_device *pdev)
 	props.type = BACKLIGHT_RAW;
 	props.max_brightness = LM3533_BL_MAX_BRIGHTNESS;
 	props.brightness = pdata->default_brightness;
-	bd = devm_backlight_device_register(&pdev->dev, pdata->name,
+	bd = devm_backlight_device_register(&pdev->dev, dev_name(&pdev->dev),
 					pdev->dev.parent, bl, &lm3533_bl_ops,
 					&props);
 	if (IS_ERR(bd)) {
