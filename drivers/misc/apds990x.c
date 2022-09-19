@@ -180,8 +180,8 @@ static const u16 arates_hz[] = {10, 5, 2, 1};
 static const u8 apersis[] = {1, 2, 4, 5};
 
 /* Regulators */
-static const char reg_vcc[] = "Vdd";
-static const char reg_vled[] = "Vled";
+static const char reg_vcc[] = "vdd";
+static const char reg_vled[] = "vled";
 
 static int apds990x_read_byte(struct apds990x_chip *chip, u8 reg, u8 *data)
 {
@@ -1048,8 +1048,37 @@ static struct attribute *sysfs_attrs_ctrl[] = {
 };
 
 static const struct attribute_group apds990x_attribute_group[] = {
-	{.attrs = sysfs_attrs_ctrl },
+	{ .attrs = sysfs_attrs_ctrl },
 };
+
+static int apds990x_of_probe(struct i2c_client *client,
+				struct apds990x_chip *chip)
+{
+	struct apds990x_platform_data *pdata;
+	u32 ret, val;
+
+	pdata = devm_kzalloc(&client->dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata)
+		return -ENOMEM;
+
+	ret = device_property_read_u32(&client->dev, "avago,pdrive", &val);
+	if (ret) {
+		dev_info(&client->dev, "pdrive property is missing: ret %d\n", ret);
+		return ret;
+	}
+	pdata->pdrive = val;
+
+	ret = device_property_read_u32(&client->dev, "avago,ppcount", &val);
+	if (ret) {
+		dev_info(&client->dev, "ppcount property is missing: ret %d\n", ret);
+		return ret;
+	}
+	pdata->ppcount = val;
+
+	chip->pdata = pdata;
+
+	return 0;
+}
 
 static int apds990x_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
@@ -1066,13 +1095,10 @@ static int apds990x_probe(struct i2c_client *client,
 
 	init_waitqueue_head(&chip->wait);
 	mutex_init(&chip->mutex);
-	chip->pdata	= client->dev.platform_data;
 
-	if (chip->pdata == NULL) {
-		dev_err(&client->dev, "platform data is mandatory\n");
-		err = -EINVAL;
-		goto fail1;
-	}
+	chip->pdata = client->dev.platform_data;
+	if (!chip->pdata)
+		apds990x_of_probe(client, chip);
 
 	if (chip->pdata->cf.ga == 0) {
 		/* set uncovered sensor default parameters */
@@ -1161,8 +1187,7 @@ static int apds990x_probe(struct i2c_client *client,
 
 	err = request_threaded_irq(client->irq, NULL,
 				apds990x_irq,
-				IRQF_TRIGGER_FALLING | IRQF_TRIGGER_LOW |
-				IRQF_ONESHOT,
+				IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 				"apds990x", chip);
 	if (err) {
 		dev_err(&client->dev, "could not get IRQ %d\n",
@@ -1254,11 +1279,16 @@ static int apds990x_runtime_resume(struct device *dev)
 
 #endif
 
+static const struct of_device_id apds990x_match_table[] = {
+	{ .compatible = "avago,apds990x" },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, apds990x_match_table);
+
 static const struct i2c_device_id apds990x_id[] = {
 	{"apds990x", 0 },
 	{}
 };
-
 MODULE_DEVICE_TABLE(i2c, apds990x_id);
 
 static const struct dev_pm_ops apds990x_pm_ops = {
@@ -1272,12 +1302,12 @@ static struct i2c_driver apds990x_driver = {
 	.driver	 = {
 		.name	= "apds990x",
 		.pm	= &apds990x_pm_ops,
+		.of_match_table = apds990x_match_table,
 	},
 	.probe	  = apds990x_probe,
 	.remove	  = apds990x_remove,
 	.id_table = apds990x_id,
 };
-
 module_i2c_driver(apds990x_driver);
 
 MODULE_DESCRIPTION("APDS990X combined ALS and proximity sensor");
