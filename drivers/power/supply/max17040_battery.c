@@ -141,6 +141,7 @@ struct max17040_chip {
 	struct regmap			*regmap;
 	struct delayed_work		work;
 	struct power_supply		*battery;
+	struct power_supply_battery_info	*batt_info;
 	struct chip_data		data;
 
 	/* battery capacity */
@@ -400,6 +401,28 @@ static int max17040_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN:
 		val->intval = chip->low_soc_alert;
 		break;
+
+	case POWER_SUPPLY_PROP_TECHNOLOGY:
+		val->intval = chip->batt_info->technology;
+		break;
+	case POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN:
+		val->intval = chip->batt_info->energy_full_design_uwh;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		val->intval = chip->batt_info->charge_full_design_uah;
+		break;
+	case POWER_SUPPLY_PROP_TEMP_MIN:
+		if (chip->batt_info->temp_min == INT_MIN)
+			return -ENODATA;
+
+		val->intval = chip->batt_info->temp_min * 10;
+		break;
+	case POWER_SUPPLY_PROP_TEMP_MAX:
+		if (chip->batt_info->temp_max == INT_MAX)
+			return -ENODATA;
+
+		val->intval = chip->batt_info->temp_max * 10;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -418,6 +441,11 @@ static enum power_supply_property max17040_battery_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN,
+	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_TEMP_MIN,
+	POWER_SUPPLY_PROP_TEMP_MAX,
 };
 
 static const struct power_supply_desc max17040_battery_desc = {
@@ -468,6 +496,12 @@ static int max17040_probe(struct i2c_client *client,
 	if (IS_ERR(chip->battery)) {
 		dev_err(&client->dev, "failed: power supply register\n");
 		return PTR_ERR(chip->battery);
+	}
+
+	if (client->dev.of_node) {
+		if (power_supply_get_battery_info(chip->battery, &chip->batt_info))
+			dev_warn(&client->dev,
+				 "No monitored battery, some properties will be missing\n");
 	}
 
 	ret = max17040_get_version(chip);
