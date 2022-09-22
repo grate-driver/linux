@@ -1231,6 +1231,18 @@ config TI_TLC4541
 	  This driver can also be built as a module. If so, the module will be
 	  called ti-tlc4541.
 
+config TI_TSC2007_ADC
+	tristate "Texas Instruments TSC2007 ADC driver"
+	depends on I2C
+	select IIO_BUFFER
+	select IIO_TRIGGERED_BUFFER
+	help
+	  Say yes here to build support for ADC functionality of Texas
+	  Instruments TSC2007 touch screen controller.
+
+	  This driver can also be built as a module. If so, the module will be
+	  called ti-tsc2007-adc.
+
 config TI_TSC2046
 	tristate "Texas Instruments TSC2046 ADC driver"
 	depends on SPI
