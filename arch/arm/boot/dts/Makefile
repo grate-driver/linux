@@ -1420,6 +1420,7 @@ dtb-$(CONFIG_ARCH_TEGRA_3x_SOC) += \
 	tegra30-cardhu-a04.dtb \
 	tegra30-colibri-eval-v3.dtb \
 	tegra30-lenovo-ideatab-a2109a.dtb \
+	tegra30-lge-p895.dtb \
 	tegra30-microsoft-surface-rt.dtb \
 	tegra30-microsoft-surface-rt-efi.dtb \
 	tegra30-ouya.dtb \
