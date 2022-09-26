@@ -204,8 +204,10 @@ int tegra_asoc_machine_init(struct snd_soc_pcm_runtime *rtd)
 		tegra_machine_mic_jack_gpio.desc = machine->gpiod_mic_det;
 
 		if (of_property_read_bool(card->dev->of_node,
-			"nvidia,coupled-mic-hp-det"))
+			"nvidia,coupled-mic-hp-det")) {
+			tegra_machine_mic_jack_gpio.desc = machine->gpiod_hp_det;
 			tegra_machine_mic_jack_gpio.jack_status_check = headset_check;
+		};
 
 		err = snd_soc_jack_add_gpios(&tegra_machine_mic_jack, 1,
 					     &tegra_machine_mic_jack_gpio);
