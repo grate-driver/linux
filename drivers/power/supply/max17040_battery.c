@@ -18,6 +18,7 @@
 #include <linux/of_device.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
+#include <linux/iio/consumer.h>
 
 #define MAX17040_VCELL	0x02
 #define MAX17040_SOC	0x04
@@ -143,6 +144,7 @@ struct max17040_chip {
 	struct power_supply		*battery;
 	struct power_supply_battery_info	*batt_info;
 	struct chip_data		data;
+	struct iio_channel		*channel_temp;
 
 	/* battery capacity */
 	int soc;
@@ -416,6 +418,11 @@ static int max17040_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		val->intval = chip->batt_info->charge_full_design_uah;
 		break;
+	case POWER_SUPPLY_PROP_TEMP:
+		iio_read_channel_raw(chip->channel_temp,
+				     &val->intval);
+		val->intval *= 10;
+		break;
 	case POWER_SUPPLY_PROP_TEMP_MIN:
 		if (chip->batt_info->temp_min == INT_MIN)
 			return -ENODATA;
@@ -452,6 +459,7 @@ static enum power_supply_property max17040_battery_props[] = {
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_TEMP_MIN,
 	POWER_SUPPLY_PROP_TEMP_MAX,
 };
@@ -560,6 +568,23 @@ static int max17040_probe(struct i2c_client *client,
 		}
 	}
 
+	if (of_property_read_bool(client->dev.of_node, "io-channels")) {
+		chip->channel_temp = iio_channel_get(&client->dev, "temp");
+		if (IS_ERR(chip->channel_temp))
+			return dev_err_probe(&client->dev, PTR_ERR(chip->channel_temp),
+					     "failed to get temp\n");
+	};
+
+	return 0;
+}
+
+static int max17040_remove(struct i2c_client *client)
+{
+	struct max17040_chip *chip = i2c_get_clientdata(client);
+
+	if (chip->channel_temp)
+		iio_channel_release(chip->channel_temp);
+
 	return 0;
 }
 
@@ -642,6 +667,7 @@ static struct i2c_driver max17040_i2c_driver = {
 		.pm	= MAX17040_PM_OPS,
 	},
 	.probe		= max17040_probe,
+	.remove		= max17040_remove,
 	.id_table	= max17040_id,
 };
 module_i2c_driver(max17040_i2c_driver);
