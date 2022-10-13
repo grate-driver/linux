@@ -11,6 +11,7 @@
 
 #include <linux/delay.h>
 #include <linux/module.h>
+#include <linux/gpio.h>
 #include <linux/i2c.h>
 #include <linux/slab.h>
 #include <linux/mutex.h>
@@ -22,16 +23,16 @@
 
 /* registers definitions */
 #define REG_ENABLE		0x10
-#define REG_TORCH_BR	0xa0
-#define REG_FLASH_BR	0xb0
-#define REG_FLASH_TOUT	0xc0
+#define REG_TORCH_BR		0xa0
+#define REG_FLASH_BR		0xb0
+#define REG_FLASH_TOUT		0xc0
 #define REG_FLAG		0xd0
 #define REG_CONFIG1		0xe0
 
 /* fault mask */
-#define FAULT_TIMEOUT	(1<<0)
-#define FAULT_OVERTEMP	(1<<1)
-#define FAULT_SHORT_CIRCUIT	(1<<2)
+#define FAULT_TIMEOUT		BIT(0)
+#define FAULT_OVERTEMP		BIT(1)
+#define FAULT_SHORT_CIRCUIT	BIT(2)
 
 enum led_enable {
 	MODE_SHDN = 0x0,
@@ -54,6 +55,7 @@ struct lm3560_flash {
 	struct device *dev;
 	struct lm3560_platform_data *pdata;
 	struct regmap *regmap;
+	struct gpio_desc *hwen_gpio;
 	struct mutex lock;
 
 	enum v4l2_flash_led_mode led_mode;
@@ -356,12 +358,19 @@ static int lm3560_subdev_init(struct lm3560_flash *flash,
 	flash->subdev_led[led_no].flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	strscpy(flash->subdev_led[led_no].name, led_name,
 		sizeof(flash->subdev_led[led_no].name));
+
 	rval = lm3560_init_controls(flash, led_no);
-	if (rval)
+	if (rval) {
+		dev_err(flash->dev, "failed to init controls: %d\n", rval);
 		goto err_out;
+	}
+
 	rval = media_entity_pads_init(&flash->subdev_led[led_no].entity, 0, NULL);
-	if (rval < 0)
+	if (rval < 0) {
+		dev_err(flash->dev, "failed to init media entity pads: %d\n", rval);
 		goto err_out;
+	}
+
 	flash->subdev_led[led_no].entity.function = MEDIA_ENT_F_FLASH;
 
 	return rval;
@@ -391,6 +400,49 @@ static int lm3560_init_device(struct lm3560_flash *flash)
 	return rval;
 }
 
+static int lm3560_of_probe(struct lm3560_flash *flash)
+{
+	struct lm3560_platform_data *pdata;
+	struct fwnode_handle *node;
+	int ret, reg;
+
+	pdata = devm_kzalloc(flash->dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata)
+		return -ENODEV;
+
+	ret = device_property_read_u32(flash->dev,
+				       "ti,peak-current", &pdata->peak);
+	if (ret)
+		pdata->peak = LM3560_PEAK_3600mA;
+
+	ret = device_property_read_u32(flash->dev,
+				       "ti,max-flash-timeout",
+				       &pdata->max_flash_timeout);
+	if (ret)
+		pdata->max_flash_timeout = LM3560_FLASH_TOUT_MAX;
+
+	device_for_each_child_node(flash->dev, node) {
+		fwnode_property_read_u32(node, "reg", &reg);
+
+		if (reg == LM3560_LED0 || reg == LM3560_LED1) {
+			ret = device_property_read_u32(flash->dev,
+						       "ti,max-flash-current",
+						       &pdata->max_flash_brt[reg]);
+			if (ret)
+				pdata->max_flash_brt[reg] = LM3560_FLASH_TOUT_MAX;
+
+			ret = device_property_read_u32(flash->dev,
+						       "ti,max-torch-current",
+						       &pdata->max_torch_brt[reg]);
+			if (ret)
+				pdata->max_torch_brt[reg] = LM3560_TORCH_BRT_MAX;
+		}
+	}
+	flash->pdata = pdata;
+
+	return 0;
+}
+
 static int lm3560_probe(struct i2c_client *client,
 			const struct i2c_device_id *devid)
 {
@@ -399,44 +451,41 @@ static int lm3560_probe(struct i2c_client *client,
 	int rval;
 
 	flash = devm_kzalloc(&client->dev, sizeof(*flash), GFP_KERNEL);
-	if (flash == NULL)
+	if (!flash)
 		return -ENOMEM;
 
 	flash->regmap = devm_regmap_init_i2c(client, &lm3560_regmap);
-	if (IS_ERR(flash->regmap)) {
-		rval = PTR_ERR(flash->regmap);
-		return rval;
-	}
+	if (IS_ERR(flash->regmap))
+		return dev_err_probe(&client->dev, PTR_ERR(flash->regmap),
+				     "failed to init regmap\n");
 
-	/* if there is no platform data, use chip default value */
-	if (pdata == NULL) {
-		pdata = devm_kzalloc(&client->dev, sizeof(*pdata), GFP_KERNEL);
-		if (pdata == NULL)
-			return -ENODEV;
-		pdata->peak = LM3560_PEAK_3600mA;
-		pdata->max_flash_timeout = LM3560_FLASH_TOUT_MAX;
-		/* led 1 */
-		pdata->max_flash_brt[LM3560_LED0] = LM3560_FLASH_BRT_MAX;
-		pdata->max_torch_brt[LM3560_LED0] = LM3560_TORCH_BRT_MAX;
-		/* led 2 */
-		pdata->max_flash_brt[LM3560_LED1] = LM3560_FLASH_BRT_MAX;
-		pdata->max_torch_brt[LM3560_LED1] = LM3560_TORCH_BRT_MAX;
-	}
-	flash->pdata = pdata;
 	flash->dev = &client->dev;
 	mutex_init(&flash->lock);
 
+	/* if there is no platform data, try to read from device tree */
+	if (!pdata)
+		lm3560_of_probe(flash);
+
+	flash->hwen_gpio = devm_gpiod_get_optional(flash->dev, "enable",
+						   GPIOD_OUT_HIGH);
+	if (IS_ERR(flash->hwen_gpio))
+		return dev_err_probe(&client->dev, PTR_ERR(flash->hwen_gpio),
+				     "failed to get hwen gpio\n");
+
 	rval = lm3560_subdev_init(flash, LM3560_LED0, "lm3560-led0");
 	if (rval < 0)
-		return rval;
+		return dev_err_probe(&client->dev, rval,
+				     "failed to init led0 subdev\n");
 
 	rval = lm3560_subdev_init(flash, LM3560_LED1, "lm3560-led1");
 	if (rval < 0)
-		return rval;
+		return dev_err_probe(&client->dev, rval,
+				     "failed to init led1 subdev\n");
 
 	rval = lm3560_init_device(flash);
 	if (rval < 0)
-		return rval;
+		return dev_err_probe(&client->dev, rval,
+				     "failed to init device\n");
 
 	i2c_set_clientdata(client, flash);
 
@@ -454,22 +503,31 @@ static int lm3560_remove(struct i2c_client *client)
 		media_entity_cleanup(&flash->subdev_led[i].entity);
 	}
 
+	gpiod_set_value_cansleep(flash->hwen_gpio, 0);
+
 	return 0;
 }
+
+static const struct of_device_id lm3560_match[] = {
+	{ .compatible = "ti,lm3559" },
+	{ .compatible = "ti,lm3560" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, lm3560_match);
 
 static const struct i2c_device_id lm3560_id_table[] = {
 	{LM3559_NAME, 0},
 	{LM3560_NAME, 0},
 	{}
 };
-
 MODULE_DEVICE_TABLE(i2c, lm3560_id_table);
 
 static struct i2c_driver lm3560_i2c_driver = {
 	.driver = {
-		   .name = LM3560_NAME,
-		   .pm = NULL,
-		   },
+		.name = LM3560_NAME,
+		.pm = NULL,
+		.of_match_table = lm3560_match,
+	},
 	.probe = lm3560_probe,
 	.remove = lm3560_remove,
 	.id_table = lm3560_id_table,
