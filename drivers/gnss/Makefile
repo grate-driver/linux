@@ -9,6 +9,9 @@ gnss-y := core.o
 obj-$(CONFIG_GNSS_SERIAL)		+= gnss-serial.o
 gnss-serial-y := serial.o
 
+obj-$(CONFIG_GNSS_CSR_SERIAL)		+= gnss-csr.o
+gnss-csr-y := csr.o
+
 obj-$(CONFIG_GNSS_MTK_SERIAL)		+= gnss-mtk.o
 gnss-mtk-y := mtk.o
 
