@@ -43,7 +43,7 @@ DECLARE_STATIC_KEY_FALSE(tagged_addr_key);
 #define untagged_ptr(mm, ptr)	({					\
 	u64 __ptrval = (__force u64)(ptr);				\
 	__ptrval = untagged_addr(mm, __ptrval);				\
-	(__force __typeof__(*(ptr)) *)__ptrval;				\
+	(__force __typeof__(ptr))__ptrval;				\
 })
 #else
 #define untagged_addr(mm, addr)	(addr)
@@ -158,10 +158,8 @@ extern int __get_user_bad(void);
  */
 #define get_user(x,ptr)							\
 ({									\
-	__typeof__(*(ptr)) __user *__ptr_clean;				\
-	__ptr_clean = untagged_ptr(current->mm, ptr);			\
 	might_fault();							\
-	do_get_user_call(get_user,x,__ptr_clean);			\
+	do_get_user_call(get_user,x,untagged_ptr(current->mm, ptr));	\
 })
 
 /**
@@ -263,10 +261,8 @@ extern void __put_user_nocheck_8(void);
  * Return: zero on success, or -EFAULT on error.
  */
 #define put_user(x, ptr) ({						\
-	__typeof__(*(ptr)) __user *__ptr_clean;				\
-	__ptr_clean = untagged_ptr(current->mm, ptr);			\
 	might_fault();							\
-	do_put_user_call(put_user,x,__ptr_clean);			\
+	do_put_user_call(put_user,x,untagged_ptr(current->mm, ptr));	\
 })
 
 /**
