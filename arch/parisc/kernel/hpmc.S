@@ -44,14 +44,10 @@
 	 */
 
 	.import toc_stack,data
+	.import iodc_dbuf,data
 #define hpmc_stack	toc_stack	/* re-use the TOC stack */
-
+#define hpmc_iodc_buf	iodc_dbuf	/* re-use IODC buffer from firmware.c */
 #define HPMC_IODC_BUF_SIZE 0x8000
-
-	__PAGE_ALIGNED_BSS
-	.align 4096
-hpmc_iodc_buf:
-	.block HPMC_IODC_BUF_SIZE
 
 	.section .bss
 	.align 8
