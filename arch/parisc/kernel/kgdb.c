@@ -13,6 +13,7 @@
 #include <linux/notifier.h>
 #include <linux/kdebug.h>
 #include <linux/uaccess.h>
+#include <linux/serial_core.h>
 #include <asm/ptrace.h>
 #include <asm/traps.h>
 #include <asm/processor.h>
@@ -211,6 +212,13 @@ int kgdb_arch_handle_exception(int trap, int signo,
 
 /* KGDB console driver which uses PDC to read chars from keyboard */
 
+static int kgdb_pdc_read_char(void)
+{
+        int c = pdc_iodc_getc();
+
+        return (c <= 0) ? NO_POLL_CHAR : c;
+}
+
 static void kgdb_pdc_write_char(u8 chr)
 {
 	/* no need to print char. kgdb will do it. */
@@ -218,7 +226,7 @@ static void kgdb_pdc_write_char(u8 chr)
 
 static struct kgdb_io kgdb_pdc_io_ops = {
 	.name		= "kgdb_pdc",
-	.read_char	= pdc_iodc_getc,
+	.read_char	= kgdb_pdc_read_char,
 	.write_char	= kgdb_pdc_write_char,
 };
 
