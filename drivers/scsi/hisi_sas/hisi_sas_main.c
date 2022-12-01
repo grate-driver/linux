@@ -1323,7 +1323,6 @@ static void hisi_sas_refresh_port_id(struct hisi_hba *hisi_hba)
 
 static void hisi_sas_rescan_topology(struct hisi_hba *hisi_hba, u32 state)
 {
-	struct sas_ha_struct *sas_ha = &hisi_hba->sha;
 	struct asd_sas_port *_sas_port = NULL;
 	int phy_no;
 
@@ -1352,12 +1351,6 @@ static void hisi_sas_rescan_topology(struct hisi_hba *hisi_hba, u32 state)
 			hisi_sas_phy_down(hisi_hba, phy_no, 0, GFP_KERNEL);
 		}
 	}
-	/*
-	 * Ensure any bcast events are processed prior to calling async nexus
-	 * reset calls from hisi_sas_clear_nexus_ha() ->
-	 * hisi_sas_async_I_T_nexus_reset()
-	 */
-	sas_drain_work(sas_ha);
 }
 
 static void hisi_sas_reset_init_all_devices(struct hisi_hba *hisi_hba)
@@ -1701,13 +1694,15 @@ static int hisi_sas_debug_I_T_nexus_reset(struct domain_device *device)
 		return rc;
 	}
 
+	/* Remote phy */
 	if (rc)
 		return rc;
 
-	/* Remote phy */
 	if (dev_is_sata(device)) {
-		rc = sas_ata_wait_after_reset(device,
-					HISI_SAS_WAIT_PHYUP_TIMEOUT);
+		struct ata_link *link = &device->sata_dev.ap->link;
+
+		rc = ata_wait_after_reset(link, HISI_SAS_WAIT_PHYUP_TIMEOUT,
+					  smp_ata_check_ready_type);
 	} else {
 		msleep(2000);
 	}
@@ -1819,14 +1814,12 @@ static int hisi_sas_clear_nexus_ha(struct sas_ha_struct *sas_ha)
 	struct hisi_hba *hisi_hba = sas_ha->lldd_ha;
 	HISI_SAS_DECLARE_RST_WORK_ON_STACK(r);
 	ASYNC_DOMAIN_EXCLUSIVE(async);
-	int i, ret;
+	int i;
 
 	queue_work(hisi_hba->wq, &r.work);
 	wait_for_completion(r.completion);
-	if (!r.done) {
-		ret = TMF_RESP_FUNC_FAILED;
-		goto out;
-	}
+	if (!r.done)
+		return TMF_RESP_FUNC_FAILED;
 
 	for (i = 0; i < HISI_SAS_MAX_DEVICES; i++) {
 		struct hisi_sas_device *sas_dev = &hisi_hba->devices[i];
@@ -1843,9 +1836,7 @@ static int hisi_sas_clear_nexus_ha(struct sas_ha_struct *sas_ha)
 	async_synchronize_full_domain(&async);
 	hisi_sas_release_tasks(hisi_hba);
 
-	ret = TMF_RESP_FUNC_COMPLETE;
-out:
-	return ret;
+	return TMF_RESP_FUNC_COMPLETE;
 }
 
 static int hisi_sas_query_task(struct sas_task *task)
@@ -1993,12 +1984,8 @@ void hisi_sas_phy_bcast(struct hisi_sas_phy *phy)
 {
 	struct asd_sas_phy *sas_phy = &phy->sas_phy;
 	struct hisi_hba	*hisi_hba = phy->hisi_hba;
-	struct sas_ha_struct *sha = &hisi_hba->sha;
 
 	if (test_bit(HISI_SAS_RESETTING_BIT, &hisi_hba->flags))
-		return;
-
-	if (test_bit(SAS_HA_FROZEN, &sha->state))
 		return;
 
 	sas_notify_port_event(sas_phy, PORTE_BROADCAST_RCVD, GFP_ATOMIC);
