@@ -106,6 +106,12 @@ juno/dt-2
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.2/devicetree
 	broadcom/dt64
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.2/devicetree-arm64
+	apple/dt-2
+		https://github.com/AsahiLinux/linux tags/asahi-soc-dt-6.2-v2
+	dt/cleanup-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt-cleanup-6.2-2
+	patch
+		ARM: dts: pxa168: add timer reset and clock
 
 soc/drivers
 	patch
@@ -147,6 +153,9 @@ soc/drivers
 		https://github.com/AsahiLinux/linux tags/asahi-soc-rtkit-sart-6.2
 	broadcom/drivers
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.2/drivers
+	patch
+		pxa: Remove dev_err() after platform_get_irq()
+		ARM: mmp: fix timer_read delay
 
 arm/defconfig
 	at91/defconfig
