@@ -422,6 +422,38 @@ fail:
 }
 
 /**
+ * rpm_callback - Run a given runtime PM callback for a given device.
+ * @cb: Runtime PM callback to run.
+ * @dev: Device to run the callback for.
+ */
+static int rpm_callback(int (*cb)(struct device *), struct device *dev)
+{
+	int retval;
+
+	if (dev->power.memalloc_noio) {
+		unsigned int noio_flag;
+
+		/*
+		 * Deadlock might be caused if memory allocation with
+		 * GFP_KERNEL happens inside runtime_suspend and
+		 * runtime_resume callbacks of one block device's
+		 * ancestor or the block device itself. Network
+		 * device might be thought as part of iSCSI block
+		 * device, so network device and its ancestor should
+		 * be marked as memalloc_noio too.
+		 */
+		noio_flag = memalloc_noio_save();
+		retval = __rpm_callback(cb, dev);
+		memalloc_noio_restore(noio_flag);
+	} else {
+		retval = __rpm_callback(cb, dev);
+	}
+
+	dev->power.runtime_error = retval;
+	return retval != -EACCES ? retval : -EIO;
+}
+
+/**
  * rpm_idle - Notify device bus type if the device can be suspended.
  * @dev: Device to notify the bus type about.
  * @rpmflags: Flag bits.
@@ -484,7 +516,17 @@ static int rpm_idle(struct device *dev, int rpmflags)
 
 	dev->power.idle_notification = true;
 
-	retval = __rpm_callback(callback, dev);
+	if (dev->power.irq_safe)
+		spin_unlock(&dev->power.lock);
+	else
+		spin_unlock_irq(&dev->power.lock);
+
+	retval = callback(dev);
+
+	if (dev->power.irq_safe)
+		spin_lock(&dev->power.lock);
+	else
+		spin_lock_irq(&dev->power.lock);
 
 	dev->power.idle_notification = false;
 	wake_up_all(&dev->power.wait_queue);
@@ -492,38 +534,6 @@ static int rpm_idle(struct device *dev, int rpmflags)
  out:
 	trace_rpm_return_int_rcuidle(dev, _THIS_IP_, retval);
 	return retval ? retval : rpm_suspend(dev, rpmflags | RPM_AUTO);
-}
-
-/**
- * rpm_callback - Run a given runtime PM callback for a given device.
- * @cb: Runtime PM callback to run.
- * @dev: Device to run the callback for.
- */
-static int rpm_callback(int (*cb)(struct device *), struct device *dev)
-{
-	int retval;
-
-	if (dev->power.memalloc_noio) {
-		unsigned int noio_flag;
-
-		/*
-		 * Deadlock might be caused if memory allocation with
-		 * GFP_KERNEL happens inside runtime_suspend and
-		 * runtime_resume callbacks of one block device's
-		 * ancestor or the block device itself. Network
-		 * device might be thought as part of iSCSI block
-		 * device, so network device and its ancestor should
-		 * be marked as memalloc_noio too.
-		 */
-		noio_flag = memalloc_noio_save();
-		retval = __rpm_callback(cb, dev);
-		memalloc_noio_restore(noio_flag);
-	} else {
-		retval = __rpm_callback(cb, dev);
-	}
-
-	dev->power.runtime_error = retval;
-	return retval != -EACCES ? retval : -EIO;
 }
 
 /**
