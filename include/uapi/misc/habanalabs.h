@@ -789,6 +789,7 @@ enum hl_server_type {
  * HL_INFO_ENGINE_STATUS - Retrieve the status of all the h/w engines in the asic.
  * HL_INFO_PAGE_FAULT_EVENT - Retrieve parameters of captured page fault.
  * HL_INFO_USER_MAPPINGS - Retrieve user mappings, captured after page fault event.
+ * HL_INFO_FW_GENERIC_REQ - Send generic request to FW.
  */
 #define HL_INFO_HW_IP_INFO			0
 #define HL_INFO_HW_EVENTS			1
@@ -822,6 +823,7 @@ enum hl_server_type {
 #define HL_INFO_ENGINE_STATUS			32
 #define HL_INFO_PAGE_FAULT_EVENT		33
 #define HL_INFO_USER_MAPPINGS			34
+#define HL_INFO_FW_GENERIC_REQ			35
 
 #define HL_INFO_VERSION_MAX_LEN			128
 #define HL_INFO_CARD_NAME_MAX_LEN		16
@@ -1258,6 +1260,7 @@ enum gaudi_dcores {
  * @sec_attest_nonce: Nonce number used for attestation report.
  * @array_size: Number of array members copied to user buffer.
  *              Relevant for HL_INFO_USER_MAPPINGS info ioctl.
+ * @fw_sub_opcode: generic requests sub opcodes.
  * @pad: Padding to 64 bit.
  */
 struct hl_info_args {
@@ -1274,6 +1277,7 @@ struct hl_info_args {
 		__u32 user_buffer_actual_size;
 		__u32 sec_attest_nonce;
 		__u32 array_size;
+		__u32 fw_sub_opcode;
 	};
 
 	__u32 pad;
@@ -1851,15 +1855,24 @@ struct hl_mem_in {
 		/**
 		 * structure for exporting DMABUF object (used with
 		 * the HL_MEM_OP_EXPORT_DMABUF_FD op)
-		 * @handle: handle returned from HL_MEM_OP_ALLOC.
-		 *          in Gaudi, where we don't have MMU for the device memory, the
-		 *          driver expects a physical address (instead of a handle) in the
-		 *          device memory space.
-		 * @mem_size: size of memory allocation. Relevant only for GAUDI
+		 * @addr: for Gaudi1, the driver expects a physical address
+		 *        inside the device's DRAM. this is because in Gaudi1
+		 *        we don't have MMU that covers the device's DRAM.
+		 *        for all other ASICs, the driver expects a device
+		 *        virtual address that represents the start address of
+		 *        a mapped DRAM memory area inside the device.
+		 *        the address must be the same as was received from the
+		 *        driver during a previous HL_MEM_OP_MAP operation.
+		 * @mem_size: size of memory to export.
+		 * @offset: for Gaudi1, this value must be 0. For all other ASICs,
+		 *          the driver expects an offset inside of the memory area
+		 *          describe by addr. the offset represents the start
+		 *          address of that the exported dma-buf object describes.
 		 */
 		struct {
-			__u64 handle;
+			__u64 addr;
 			__u64 mem_size;
+			__u64 offset;
 		} export_dmabuf_fd;
 	};
 

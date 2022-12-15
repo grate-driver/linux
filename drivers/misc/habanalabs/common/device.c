@@ -428,8 +428,10 @@ static void hpriv_release(struct kref *ref)
 	 */
 	reset_device = hdev->reset_upon_device_release || hdev->reset_info.watchdog_active;
 
-	/* Unless device is reset in any case, check idle status and reset if device is not idle */
-	if (!reset_device && hdev->pdev && !hdev->pldm)
+	/* Check the device idle status and reset if not idle.
+	 * Skip it if already in reset, or if device is going to be reset in any case.
+	 */
+	if (!hdev->reset_info.in_reset && !reset_device && hdev->pdev && !hdev->pldm)
 		device_is_idle = hdev->asic_funcs->is_device_idle(hdev, idle_mask,
 							HL_BUSY_ENGINES_MASK_EXT_SIZE, NULL);
 	if (!device_is_idle) {
@@ -510,11 +512,6 @@ static int hl_device_release(struct inode *inode, struct file *filp)
 		put_pid(hpriv->taskpid);
 		return 0;
 	}
-
-	/* Each pending user interrupt holds the user's context, hence we
-	 * must release them all before calling hl_ctx_mgr_fini().
-	 */
-	hl_release_pending_user_interrupts(hpriv->hdev);
 
 	hl_ctx_mgr_fini(hdev, &hpriv->ctx_mgr);
 	hl_mem_mgr_fini(&hpriv->mem_mgr);
@@ -858,7 +855,7 @@ static int device_early_init(struct hl_device *hdev)
 	if (rc)
 		goto free_chip_info;
 
-	hl_mem_mgr_init(hdev->dev, &hdev->kernel_mem_mgr);
+	hl_mem_mgr_init(hdev->dev, &hdev->kernel_mem_mgr, 1);
 
 	hdev->reset_wq = create_singlethread_workqueue("hl_device_reset");
 	if (!hdev->reset_wq) {
@@ -1869,6 +1866,8 @@ out:
 	hl_notifier_event_send_all(hdev, event_mask);
 
 	hl_ctx_put(ctx);
+
+	hl_abort_waitings_for_completion(hdev);
 
 	return 0;
 

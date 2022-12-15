@@ -872,11 +872,13 @@ struct hl_mmap_mem_buf;
  * @dev: back pointer to the owning device
  * @lock: protects handles
  * @handles: an idr holding all active handles to the memory buffers in the system.
+ * @is_kernel_mem_mgr: indicate whether the memory manager is the per-device kernel memory manager
  */
 struct hl_mem_mgr {
 	struct device *dev;
 	spinlock_t lock;
 	struct idr handles;
+	u8 is_kernel_mem_mgr;
 };
 
 /**
@@ -935,6 +937,7 @@ struct hl_mmap_mem_buf {
  * @size: holds the CB's size.
  * @roundup_size: holds the cb size after roundup to page size.
  * @cs_cnt: holds number of CS that this CB participates in.
+ * @is_handle_destroyed: atomic boolean indicating whether or not the CB handle was destroyed.
  * @is_pool: true if CB was acquired from the pool, false otherwise.
  * @is_internal: internally allocated
  * @is_mmu_mapped: true if the CB is mapped to the device's MMU.
@@ -951,6 +954,7 @@ struct hl_cb {
 	u32			size;
 	u32			roundup_size;
 	atomic_t		cs_cnt;
+	atomic_t		is_handle_destroyed;
 	u8			is_pool;
 	u8			is_internal;
 	u8			is_mmu_mapped;
@@ -1540,8 +1544,9 @@ struct engines_data {
  * @check_if_razwi_happened: check if there was a razwi due to RR violation.
  * @access_dev_mem: access device memory
  * @set_dram_bar_base: set the base of the DRAM BAR
- * @set_engine_cores: set a config command to enigne cores
+ * @set_engine_cores: set a config command to engine cores
  * @send_device_activity: indication to FW about device availability
+ * @set_dram_properties: set DRAM related properties.
  */
 struct hl_asic_funcs {
 	int (*early_init)(struct hl_device *hdev);
@@ -1679,6 +1684,7 @@ struct hl_asic_funcs {
 	int (*set_engine_cores)(struct hl_device *hdev, u32 *core_ids,
 					u32 num_cores, u32 core_command);
 	int (*send_device_activity)(struct hl_device *hdev, bool open);
+	int (*set_dram_properties)(struct hl_device *hdev);
 };
 
 
@@ -1739,8 +1745,9 @@ struct hl_cs_counters_atomic {
  * struct hl_dmabuf_priv - a dma-buf private object.
  * @dmabuf: pointer to dma-buf object.
  * @ctx: pointer to the dma-buf owner's context.
- * @phys_pg_pack: pointer to physical page pack if the dma-buf was exported for
- *                memory allocation handle.
+ * @phys_pg_pack: pointer to physical page pack if the dma-buf was exported
+ *                where virtual memory is supported.
+ * @memhash_hnode: pointer to the memhash node. this object holds the export count.
  * @device_address: physical address of the device's memory. Relevant only
  *                  if phys_pg_pack is NULL (dma-buf was exported from address).
  *                  The total size can be taken from the dmabuf object.
@@ -1749,6 +1756,7 @@ struct hl_dmabuf_priv {
 	struct dma_buf			*dmabuf;
 	struct hl_ctx			*ctx;
 	struct hl_vm_phys_pg_pack	*phys_pg_pack;
+	struct hl_vm_hash_node		*memhash_hnode;
 	uint64_t			device_address;
 };
 
@@ -2076,12 +2084,16 @@ struct hl_cs_parser {
  *				hl_userptr).
  * @node: node to hang on the hash table in context object.
  * @vaddr: key virtual address.
+ * @handle: memory handle for device memory allocation.
  * @ptr: value pointer (hl_vm_phys_pg_list or hl_userptr).
+ * @export_cnt: number of exports from within the VA block.
  */
 struct hl_vm_hash_node {
 	struct hlist_node	node;
 	u64			vaddr;
+	u64			handle;
 	void			*ptr;
+	int			export_cnt;
 };
 
 /**
@@ -2109,10 +2121,10 @@ struct hl_vm_hw_block_list_node {
  * @pages: the physical page array.
  * @npages: num physical pages in the pack.
  * @total_size: total size of all the pages in this list.
+ * @exported_size: buffer exported size.
  * @node: used to attach to deletion list that is used when all the allocations are cleared
  *        at the teardown of the context.
  * @mapping_cnt: number of shared mappings.
- * @exporting_cnt: number of dma-buf exporting.
  * @asid: the context related to this list.
  * @page_size: size of each page in the pack.
  * @flags: HL_MEM_* flags related to this list.
@@ -2126,9 +2138,9 @@ struct hl_vm_phys_pg_pack {
 	u64			*pages;
 	u64			npages;
 	u64			total_size;
+	u64			exported_size;
 	struct list_head	node;
 	atomic_t		mapping_cnt;
-	u32			exporting_cnt;
 	u32			asid;
 	u32			page_size;
 	u32			flags;
@@ -3157,6 +3169,8 @@ struct hl_reset_info {
  * @edma_binning: contains mask of edma engines that is received from the f/w which
  *                   indicates which edma engines are binned-out
  * @device_release_watchdog_timeout_sec: device release watchdog timeout value in seconds.
+ * @rotator_binning: contains mask of rotators engines that is received from the f/w
+ *			which indicates which rotator engines are binned-out(Gaudi3 and above).
  * @id: device minor.
  * @id_control: minor of the control device.
  * @cdev_idx: char device index. Used for setting its name.
@@ -3214,6 +3228,7 @@ struct hl_reset_info {
  * @heartbeat: Controls if we want to enable the heartbeat mechanism vs. the f/w, which verifies
  *             that the f/w is always alive. Used only for testing.
  * @supports_ctx_switch: true if a ctx switch is required upon first submission.
+ * @support_preboot_binning: true if we support read binning info from preboot.
  */
 struct hl_device {
 	struct pci_dev			*pdev;
@@ -3322,6 +3337,7 @@ struct hl_device {
 	u32				decoder_binning;
 	u32				edma_binning;
 	u32				device_release_watchdog_timeout_sec;
+	u32				rotator_binning;
 	u16				id;
 	u16				id_control;
 	u16				cdev_idx;
@@ -3355,6 +3371,7 @@ struct hl_device {
 	u8				supports_mmu_prefetch;
 	u8				reset_upon_device_release;
 	u8				supports_ctx_switch;
+	u8				support_preboot_binning;
 
 	/* Parameters for bring-up */
 	u64				nic_ports_mask;
@@ -3729,6 +3746,7 @@ int hl_fw_cpucp_power_get(struct hl_device *hdev, u64 *power);
 void hl_fw_ask_hard_reset_without_linux(struct hl_device *hdev);
 void hl_fw_ask_halt_machine_without_linux(struct hl_device *hdev);
 int hl_fw_init_cpu(struct hl_device *hdev);
+int hl_fw_wait_preboot_ready(struct hl_device *hdev);
 int hl_fw_read_preboot_status(struct hl_device *hdev);
 int hl_fw_dynamic_send_protocol_cmd(struct hl_device *hdev,
 				struct fw_load_mgr *fw_loader,
@@ -3772,6 +3790,8 @@ int hl_fw_get_clk_rate(struct hl_device *hdev, u32 *cur_clk, u32 *max_clk);
 void hl_fw_set_pll_profile(struct hl_device *hdev);
 void hl_sysfs_add_dev_clk_attr(struct hl_device *hdev, struct attribute_group *dev_clk_attr_grp);
 void hl_sysfs_add_dev_vrm_attr(struct hl_device *hdev, struct attribute_group *dev_vrm_attr_grp);
+int hl_fw_send_generic_request(struct hl_device *hdev, enum hl_passthrough_type sub_opcode,
+						dma_addr_t buff, u32 *size);
 
 void hw_sob_get(struct hl_hw_sob *hw_sob);
 void hw_sob_put(struct hl_hw_sob *hw_sob);
@@ -3786,6 +3806,7 @@ void hl_dec_fini(struct hl_device *hdev);
 void hl_dec_ctx_fini(struct hl_ctx *ctx);
 
 void hl_release_pending_user_interrupts(struct hl_device *hdev);
+void hl_abort_waitings_for_completion(struct hl_device *hdev);
 int hl_cs_signal_sob_wraparound_handler(struct hl_device *hdev, u32 q_idx,
 			struct hl_hw_sob **hw_sob, u32 count, bool encaps_sig);
 
@@ -3799,7 +3820,7 @@ __printf(4, 5) int hl_snprintf_resize(char **buf, size_t *size, size_t *offset,
 char *hl_format_as_binary(char *buf, size_t buf_len, u32 n);
 const char *hl_sync_engine_to_string(enum hl_sync_engine_type engine_type);
 
-void hl_mem_mgr_init(struct device *dev, struct hl_mem_mgr *mmg);
+void hl_mem_mgr_init(struct device *dev, struct hl_mem_mgr *mmg, u8 is_kernel_mem_mgr);
 void hl_mem_mgr_fini(struct hl_mem_mgr *mmg);
 int hl_mem_mgr_mmap(struct hl_mem_mgr *mmg, struct vm_area_struct *vma,
 		    void *args);

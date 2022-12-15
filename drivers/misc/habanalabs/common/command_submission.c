@@ -1117,6 +1117,27 @@ void hl_release_pending_user_interrupts(struct hl_device *hdev)
 	wake_pending_user_interrupt_threads(interrupt);
 }
 
+static void force_complete_cs(struct hl_device *hdev)
+{
+	struct hl_cs *cs;
+
+	spin_lock(&hdev->cs_mirror_lock);
+
+	list_for_each_entry(cs, &hdev->cs_mirror_list, mirror_node) {
+		cs->fence->error = -EIO;
+		complete_all(&cs->fence->completion);
+	}
+
+	spin_unlock(&hdev->cs_mirror_lock);
+}
+
+void hl_abort_waitings_for_completion(struct hl_device *hdev)
+{
+	force_complete_cs(hdev);
+	force_complete_multi_cs(hdev);
+	hl_release_pending_user_interrupts(hdev);
+}
+
 static void job_wq_completion(struct work_struct *work)
 {
 	struct hl_cs_job *job = container_of(work, struct hl_cs_job,
@@ -2569,7 +2590,9 @@ report_results:
 		*status = CS_WAIT_STATUS_BUSY;
 	}
 
-	if (error == -ETIMEDOUT || error == -EIO)
+	if (completion_rc == -ERESTARTSYS)
+		rc = completion_rc;
+	else if (error == -ETIMEDOUT || error == -EIO)
 		rc = error;
 
 	return rc;
@@ -2699,7 +2722,8 @@ static int hl_cs_poll_fences(struct multi_cs_data *mcs_data, struct multi_cs_com
 			break;
 		default:
 			dev_err(hdev->dev, "Invalid fence status\n");
-			return -EINVAL;
+			rc = -EINVAL;
+			break;
 		}
 
 	}
@@ -2827,6 +2851,9 @@ static int hl_wait_multi_cs_completion(struct multi_cs_data *mcs_data,
 	/* update timestamp */
 	if (completion_rc > 0)
 		mcs_data->timestamp = mcs_compl->timestamp;
+
+	if (completion_rc == -ERESTARTSYS)
+		return completion_rc;
 
 	mcs_data->wait_status = completion_rc;
 
@@ -2973,14 +3000,14 @@ put_ctx:
 free_seq_arr:
 	kfree(cs_seq_arr);
 
-	if (rc)
-		return rc;
-
-	if (mcs_data.wait_status == -ERESTARTSYS) {
+	if (rc == -ERESTARTSYS) {
 		dev_err_ratelimited(hdev->dev,
 				"user process got signal while waiting for Multi-CS\n");
-		return -EINTR;
+		rc = -EINTR;
 	}
+
+	if (rc)
+		return rc;
 
 	/* update output args */
 	memset(args, 0, sizeof(*args));
@@ -3489,14 +3516,15 @@ static int hl_interrupt_wait_ioctl(struct hl_fpriv *hpriv, void *data)
 
 int hl_wait_ioctl(struct hl_fpriv *hpriv, void *data)
 {
+	struct hl_device *hdev = hpriv->hdev;
 	union hl_wait_cs_args *args = data;
 	u32 flags = args->in.flags;
 	int rc;
 
-	/* If the device is not operational, no point in waiting for any command submission or
-	 * user interrupt
+	/* If the device is not operational, or if an error has happened and user should release the
+	 * device, there is no point in waiting for any command submission or user interrupt.
 	 */
-	if (!hl_device_operational(hpriv->hdev, NULL))
+	if (!hl_device_operational(hpriv->hdev, NULL) || hdev->reset_info.watchdog_active)
 		return -EBUSY;
 
 	if (flags & HL_WAIT_CS_FLAGS_INTERRUPT)

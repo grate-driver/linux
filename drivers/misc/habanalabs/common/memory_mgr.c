@@ -25,8 +25,7 @@ struct hl_mmap_mem_buf *hl_mmap_mem_buf_get(struct hl_mem_mgr *mmg, u64 handle)
 	buf = idr_find(&mmg->handles, lower_32_bits(handle >> PAGE_SHIFT));
 	if (!buf) {
 		spin_unlock(&mmg->lock);
-		dev_warn(mmg->dev,
-			 "Buff get failed, no match to handle %#llx\n", handle);
+		dev_dbg(mmg->dev, "Buff get failed, no match to handle %#llx\n", handle);
 		return NULL;
 	}
 	kref_get(&buf->refcount);
@@ -309,14 +308,16 @@ put_mem:
  *
  * @dev: owner device pointer
  * @mmg: structure to initialize
+ * @is_kernel_mem_mgr: indicate whether the memory manager is the per-device kernel memory manager
  *
  * Initialize an instance of unified memory manager
  */
-void hl_mem_mgr_init(struct device *dev, struct hl_mem_mgr *mmg)
+void hl_mem_mgr_init(struct device *dev, struct hl_mem_mgr *mmg, u8 is_kernel_mem_mgr)
 {
 	mmg->dev = dev;
 	spin_lock_init(&mmg->lock);
 	idr_init(&mmg->handles);
+	mmg->is_kernel_mem_mgr = is_kernel_mem_mgr;
 }
 
 /**
