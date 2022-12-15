@@ -90,6 +90,12 @@ properties:
           - const: chipspark,rayeager-px2
           - const: rockchip,rk3066a
 
+      - description: Edgeble Neural Compute Module 2(Neu2) SoM based boards
+        items:
+          - const: edgeble,neural-compute-module-2-io   # Edgeble Neural Compute Module 2 IO Board
+          - const: edgeble,neural-compute-module-2      # Edgeble Neural Compute Module 2 SoM
+          - const: rockchip,rv1126
+
       - description: Elgin RV1108 R1
         items:
           - const: elgin,rv1108-r1
@@ -599,6 +605,13 @@ properties:
           - const: pine64,soquartz
           - const: rockchip,rk3566
 
+      - description: Radxa CM3 Industrial
+        items:
+          - enum:
+              - radxa,e25
+          - const: radxa,cm3i
+          - const: rockchip,rk3568
+
       - description: Radxa Rock
         items:
           - const: radxa,rock
@@ -688,6 +701,11 @@ properties:
         items:
           - const: rockchip,rk3036-evb
           - const: rockchip,rk3036
+
+      - description: Rockchip RK3128 Evaluation board
+        items:
+          - const: rockchip,rk3128-evb
+          - const: rockchip,rk3128
 
       - description: Rockchip RK3228 Evaluation board
         items:
