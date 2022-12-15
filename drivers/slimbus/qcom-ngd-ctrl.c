@@ -1663,7 +1663,10 @@ static int qcom_slim_ngd_ctrl_probe(struct platform_device *pdev)
 		goto err_pdr_lookup;
 	}
 
-	platform_driver_register(&qcom_slim_ngd_driver);
+	ret = platform_driver_register(&qcom_slim_ngd_driver);
+	if (ret < 0)
+		goto err_pdr_lookup;
+
 	return of_qcom_slim_ngd_register(dev, ctrl);
 
 err_pdr_alloc:
