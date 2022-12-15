@@ -8,49 +8,17 @@
 #include <linux/console.h>
 #include <linux/init.h>
 #include <linux/serial_core.h>
-#include <linux/kgdb.h>
 #include <asm/page.h>		/* for PAGE0 */
 #include <asm/pdc.h>		/* for iodc_call() proto and friends */
-
-static DEFINE_SPINLOCK(pdc_console_lock);
 
 static void pdc_console_write(struct console *co, const char *s, unsigned count)
 {
 	int i = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pdc_console_lock, flags);
 	do {
 		i += pdc_iodc_print(s + i, count - i);
 	} while (i < count);
-	spin_unlock_irqrestore(&pdc_console_lock, flags);
 }
-
-#ifdef CONFIG_KGDB
-static int kgdb_pdc_read_char(void)
-{
-	int c;
-	unsigned long flags;
-
-	spin_lock_irqsave(&pdc_console_lock, flags);
-	c = pdc_iodc_getc();
-	spin_unlock_irqrestore(&pdc_console_lock, flags);
-
-	return (c <= 0) ? NO_POLL_CHAR : c;
-}
-
-static void kgdb_pdc_write_char(u8 chr)
-{
-	if (PAGE0->mem_cons.cl_class != CL_DUPLEX)
-		pdc_console_write(NULL, &chr, 1);
-}
-
-static struct kgdb_io kgdb_pdc_io_ops = {
-	.name = "kgdb_pdc",
-	.read_char = kgdb_pdc_read_char,
-	.write_char = kgdb_pdc_write_char,
-};
-#endif
 
 static int __init pdc_earlycon_setup(struct earlycon_device *device,
 				     const char *opt)
@@ -64,10 +32,6 @@ static int __init pdc_earlycon_setup(struct earlycon_device *device,
 	earlycon_console = device->con;
 	earlycon_console->write = pdc_console_write;
 	device->port.iotype = UPIO_MEM32BE;
-
-#ifdef CONFIG_KGDB
-	kgdb_register_io_module(&kgdb_pdc_io_ops);
-#endif
 
 	return 0;
 }
