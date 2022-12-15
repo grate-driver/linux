@@ -45,7 +45,7 @@ int get_vaddr_frames(unsigned long start, unsigned int nr_frames, bool write,
 	if (WARN_ON_ONCE(nr_frames > vec->nr_allocated))
 		nr_frames = vec->nr_allocated;
 
-	start = untagged_addr(start);
+	start = untagged_addr(current->mm, start);
 
 	if (write)
 		gup_flags |= FOLL_WRITE;
