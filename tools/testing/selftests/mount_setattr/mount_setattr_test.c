@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <sys/vfs.h>
 #include <sys/statvfs.h>
+#include <sys/syscall.h>
 #include <sys/sysinfo.h>
 #include <stdlib.h>
 #include <unistd.h>
