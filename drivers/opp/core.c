@@ -2694,12 +2694,6 @@ int dev_pm_opp_xlate_performance_state(struct opp_table *src_table,
 	int dest_pstate = -EINVAL;
 	int i;
 
-	/* Both OPP tables must belong to genpds */
-	if (unlikely(!src_table->is_genpd || !dst_table->is_genpd)) {
-		pr_err("%s: Performance state is only valid for genpds.\n", __func__);
-		return -EINVAL;
-	}
-
 	/*
 	 * Normally the src_table will have the "required_opps" property set to
 	 * point to one of the OPPs in the dst_table, but in some cases the
@@ -2709,6 +2703,12 @@ int dev_pm_opp_xlate_performance_state(struct opp_table *src_table,
 	 */
 	if (!src_table || !src_table->required_opp_count)
 		return pstate;
+
+	/* Both OPP tables must belong to genpds */
+	if (unlikely(!src_table->is_genpd || !dst_table->is_genpd)) {
+		pr_err("%s: Performance state is only valid for genpds.\n", __func__);
+		return -EINVAL;
+	}
 
 	/* required-opps not fully initialized yet */
 	if (lazy_linking_pending(src_table))
