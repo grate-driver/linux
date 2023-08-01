@@ -72,6 +72,10 @@ properties:
       - items:
           - const: asus,tf300tg
           - const: nvidia,tegra30
+      - description: Asus VivoTab RT TF600T
+        items:
+          - const: asus,tf600t
+          - const: nvidia,tegra30
       - items:
           - const: asus,tf700t
           - const: nvidia,tegra30
