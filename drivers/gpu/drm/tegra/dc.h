@@ -269,9 +269,15 @@ int tegra_dc_rgb_exit(struct tegra_dc *dc);
 #define  DC_COM_CRC_CONTROL_ENABLE (1 << 0)
 #define DC_COM_CRC_CHECKSUM			0x301
 #define DC_COM_PIN_OUTPUT_ENABLE(x) (0x302 + (x))
+
 #define DC_COM_PIN_OUTPUT_POLARITY(x) (0x306 + (x))
-#define LVS_OUTPUT_POLARITY_LOW (1 << 28)
-#define LHS_OUTPUT_POLARITY_LOW (1 << 30)
+/* DC_COM_PIN_OUTPUT_POLARITY(1) bits */
+#define  LHS_OUTPUT_POLARITY_LOW (1 << 30)
+#define  LVS_OUTPUT_POLARITY_LOW (1 << 28)
+#define  LSC0_OUTPUT_POLARITY_LOW (1 << 24)
+/* DC_COM_PIN_OUTPUT_POLARITY(3) bits */
+#define  LSPI_OUTPUT_POLARITY_LOW (1 << 8)
+
 #define DC_COM_PIN_OUTPUT_DATA(x) (0x30a + (x))
 #define DC_COM_PIN_INPUT_ENABLE(x) (0x30e + (x))
 #define DC_COM_PIN_INPUT_DATA(x) (0x312 + (x))

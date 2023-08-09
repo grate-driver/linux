@@ -34,7 +34,7 @@ struct reg_entry {
 	unsigned long value;
 };
 
-static struct reg_entry rgb_enable[] = {
+static const struct reg_entry rgb_enable[] = {
 	{ DC_COM_PIN_OUTPUT_ENABLE(0),   0x00000000 },
 	{ DC_COM_PIN_OUTPUT_ENABLE(1),   0x00000000 },
 	{ DC_COM_PIN_OUTPUT_ENABLE(2),   0x00000000 },
@@ -99,33 +99,50 @@ static void tegra_rgb_encoder_disable(struct drm_encoder *encoder)
 
 static void tegra_rgb_encoder_enable(struct drm_encoder *encoder)
 {
+	struct drm_display_mode *mode = &encoder->crtc->state->adjusted_mode;
 	struct tegra_output *output = encoder_to_output(encoder);
+	struct drm_connector *connector = drm_panel_bridge_connector(output->bridge);
 	struct tegra_rgb *rgb = to_rgb(output);
 	u32 value;
-
-	/*
-	 * Temporal hack for S6E63M0
-	 *
-	 * Pins DATA_ENABLE, H_SYNC, V_SYNC, PIXEL_CLOCK are low polarity,
-	 * set this in the registers to make the panel working.
-	 */
-	if (of_machine_is_compatible("samsung,i927"))
-		rgb_enable[7].value = 0x00000100;
 
 	tegra_dc_write_regs(rgb->dc, rgb_enable, ARRAY_SIZE(rgb_enable));
 
 	value = DE_SELECT_ACTIVE | DE_CONTROL_NORMAL;
 	tegra_dc_writel(rgb->dc, value, DC_DISP_DATA_ENABLE_OPTIONS);
 
-	/* XXX: parameterize? */
+	/* configure H- and V-sync and pixel clock signal polarities */
 	value = tegra_dc_readl(rgb->dc, DC_COM_PIN_OUTPUT_POLARITY(1));
-	value &= ~LVS_OUTPUT_POLARITY_LOW;
-	value &= ~LHS_OUTPUT_POLARITY_LOW;
-	if (of_machine_is_compatible("samsung,i927")) {
-		value |= LVS_OUTPUT_POLARITY_LOW;
+
+	if (mode->flags & DRM_MODE_FLAG_PHSYNC)
+		value &= ~LHS_OUTPUT_POLARITY_LOW;
+
+	if (mode->flags & DRM_MODE_FLAG_NHSYNC)
 		value |= LHS_OUTPUT_POLARITY_LOW;
-	}
+
+	if (mode->flags & DRM_MODE_FLAG_PVSYNC)
+		value &= ~LVS_OUTPUT_POLARITY_LOW;
+
+	if (mode->flags & DRM_MODE_FLAG_NVSYNC)
+		value |= LVS_OUTPUT_POLARITY_LOW;
+
+	if (connector->display_info.bus_flags & DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE)
+		value &= ~LSC0_OUTPUT_POLARITY_LOW;
+
+	if (connector->display_info.bus_flags & DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE)
+		value |= LSC0_OUTPUT_POLARITY_LOW;
+
 	tegra_dc_writel(rgb->dc, value, DC_COM_PIN_OUTPUT_POLARITY(1));
+
+	/* configure DE signal polarities */
+	value = tegra_dc_readl(rgb->dc, DC_COM_PIN_OUTPUT_POLARITY(3));
+
+	if (connector->display_info.bus_flags & DRM_BUS_FLAG_DE_HIGH)
+		value &= ~LSPI_OUTPUT_POLARITY_LOW;
+
+	if (connector->display_info.bus_flags & DRM_BUS_FLAG_DE_LOW)
+		value |= LSPI_OUTPUT_POLARITY_LOW;
+
+	tegra_dc_writel(rgb->dc, value, DC_COM_PIN_OUTPUT_POLARITY(3));
 
 	/* XXX: parameterize? */
 	if (of_machine_is_compatible("samsung,i927")) {
