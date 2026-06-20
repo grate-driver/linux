@@ -395,8 +395,8 @@
 		DCVDD-supply = <&vdd_1v8_sys>;
 		MICVDD-supply = <&vdd_1v8_sys>;
 		PLLVDD-supply = <&vdd_1v8_sys>;
-		SPKVDD1-supply = <&vdd_1v8_sys>;
-		SPKVDD2-supply = <&vdd_1v8_sys>;
+		SPKVDD1-supply = <&vdd_5v0_sys>;
+		SPKVDD2-supply = <&vdd_5v0_sys>;
 	};
 
 	pmic: pmic@2d {
